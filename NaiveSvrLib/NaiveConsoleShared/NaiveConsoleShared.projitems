@@ -1,0 +1,19 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>a92bc4fa-7794-4694-a814-74f3ced1cfad</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>NaiveConsoleShared</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)ArgumentParser.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Console\Command.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Console\CommandHub.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Console\ConsoleClient.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Console\ConsoleHub.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Console\ConsoleSession.cs" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,44 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+VisualStudioVersion = 15.0.26730.16
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NaiveSocks", "NaiveSocks\NaiveSocks.csproj", "{489D2BC7-5344-4CBA-BBE0-F104F955199C}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NaiveSvrLib", "..\NaiveSvrLib\NaiveSvrLib\NaiveSvrLib.csproj", "{B6FDCE48-2582-4CBC-B1ED-4A6952E183D2}"
+EndProject
+Project("{D954291E-2A0B-460D-934E-DC6B0785DB48}") = "NaiveSocksShared", "NaiveSocksShared\NaiveSocksShared.shproj", "{FFFCF1F9-7C24-425B-BF68-A12F26ABB42D}"
+EndProject
+Global
+	GlobalSection(SharedMSBuildProjectFiles) = preSolution
+		NaiveSocksShared\NaiveSocksShared.projitems*{489d2bc7-5344-4cba-bbe0-f104f955199c}*SharedItemsImports = 4
+		..\NaiveSvrLib\NaiveConsoleShared\NaiveConsoleShared.projitems*{b6fdce48-2582-4cbc-b1ed-4a6952e183d2}*SharedItemsImports = 4
+		..\NaiveSvrLib\NaiveSvrShared\NaiveSvrShared.projitems*{b6fdce48-2582-4cbc-b1ed-4a6952e183d2}*SharedItemsImports = 4
+		NaiveSocksShared\NaiveSocksShared.projitems*{fffcf1f9-7c24-425b-bf68-a12f26abb42d}*SharedItemsImports = 13
+	EndGlobalSection
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release(Debug)|Any CPU = Release(Debug)|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{489D2BC7-5344-4CBA-BBE0-F104F955199C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{489D2BC7-5344-4CBA-BBE0-F104F955199C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{489D2BC7-5344-4CBA-BBE0-F104F955199C}.Release(Debug)|Any CPU.ActiveCfg = Release(Debug)|Any CPU
+		{489D2BC7-5344-4CBA-BBE0-F104F955199C}.Release(Debug)|Any CPU.Build.0 = Release(Debug)|Any CPU
+		{489D2BC7-5344-4CBA-BBE0-F104F955199C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{489D2BC7-5344-4CBA-BBE0-F104F955199C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B6FDCE48-2582-4CBC-B1ED-4A6952E183D2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B6FDCE48-2582-4CBC-B1ED-4A6952E183D2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B6FDCE48-2582-4CBC-B1ED-4A6952E183D2}.Release(Debug)|Any CPU.ActiveCfg = Release|Any CPU
+		{B6FDCE48-2582-4CBC-B1ED-4A6952E183D2}.Release(Debug)|Any CPU.Build.0 = Release|Any CPU
+		{B6FDCE48-2582-4CBC-B1ED-4A6952E183D2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B6FDCE48-2582-4CBC-B1ED-4A6952E183D2}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {0BAEFEEE-0666-494C-9B5A-A75BF2B43B94}
+	EndGlobalSection
+EndGlobal

@@ -1,0 +1,35 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+VisualStudioVersion = 15.0.26730.12
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{D954291E-2A0B-460D-934E-DC6B0785DB48}") = "NaiveSvrShared", "NaiveSvrShared\NaiveSvrShared.shproj", "{0B623DFC-5129-419C-BB03-823809F9178D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NaiveSvrLib", "NaiveSvrLib\NaiveSvrLib.csproj", "{B6FDCE48-2582-4CBC-B1ED-4A6952E183D2}"
+EndProject
+Project("{D954291E-2A0B-460D-934E-DC6B0785DB48}") = "NaiveConsoleShared", "NaiveConsoleShared\NaiveConsoleShared.shproj", "{A92BC4FA-7794-4694-A814-74F3CED1CFAD}"
+EndProject
+Global
+	GlobalSection(SharedMSBuildProjectFiles) = preSolution
+		NaiveSvrShared\NaiveSvrShared.projitems*{0b623dfc-5129-419c-bb03-823809f9178d}*SharedItemsImports = 13
+		NaiveConsoleShared\NaiveConsoleShared.projitems*{a92bc4fa-7794-4694-a814-74f3ced1cfad}*SharedItemsImports = 13
+		NaiveConsoleShared\NaiveConsoleShared.projitems*{b6fdce48-2582-4cbc-b1ed-4a6952e183d2}*SharedItemsImports = 4
+		NaiveSvrShared\NaiveSvrShared.projitems*{b6fdce48-2582-4cbc-b1ed-4a6952e183d2}*SharedItemsImports = 4
+	EndGlobalSection
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{B6FDCE48-2582-4CBC-B1ED-4A6952E183D2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B6FDCE48-2582-4CBC-B1ED-4A6952E183D2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B6FDCE48-2582-4CBC-B1ED-4A6952E183D2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B6FDCE48-2582-4CBC-B1ED-4A6952E183D2}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {E8DCA86D-29B7-4134-87A2-36D9C6726E32}
+	EndGlobalSection
+EndGlobal

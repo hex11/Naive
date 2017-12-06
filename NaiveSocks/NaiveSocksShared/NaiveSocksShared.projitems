@@ -1,0 +1,45 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>fffcf1f9-7c24-425b-bf68-a12f26abb42d</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>NaiveSocksShared</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)3rd\Poly1305.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)AllToOne.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)3rd\Chacha20.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Commands.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Controller.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)GUI\FormConnections.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)InAdapters\DirectInAdapter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)InAdapters\HttpInAdapter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)InAdapter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)InConnection.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)MyStream.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)InAdapters\NaiveInAdapter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)NaiveM\NaiveMOutAdapter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)NaiveM\NaiveMSocks.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)NaiveM\NaiveProtocol.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)NaiveM\NaiveMServerBase.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)OutAdapter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)OutAdapters\DirectOutAdapter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)OutAdapters\HttpOutAdapter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)OutAdapters\NNetworkAdapter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)OutAdapters\SocksOutAdapter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)OutAdapters\RouterAdapter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)OutAdapters\SSOutAdapter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)RrChannels.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Socks5Client.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Socks5Server.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)InAdapters\SocksInAdapter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)InAdapters\SSInAdapter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Utils.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="$(MSBuildThisFileDirectory)NaiveM\" />
+  </ItemGroup>
+</Project>

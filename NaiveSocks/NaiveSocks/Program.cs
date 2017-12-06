@@ -1,0 +1,171 @@
+﻿using System;
+using System.Diagnostics;
+using System.Threading;
+using Naive.Console;
+using Naive.HttpSvr;
+using Naive;
+using System.IO;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+using System.Linq;
+
+namespace NaiveSocks
+{
+    internal partial class Program
+    {
+        public static string configFileName = "naivesocks.tml";
+        public static string configFilePath = configFileName;
+
+        public static string specifiedConfigPath;
+
+        public static string[] GetConfigFilePaths()
+        {
+            string[] paths = {
+                ".",
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config"+ Path.DirectorySeparatorChar + "nsocks"),
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            };
+            for (int i = 0; i < paths.Length; i++) {
+                paths[i] = Path.Combine(paths[i], configFilePath);
+            }
+            return paths;
+        }
+
+        private const string NAME = "NaiveSocks" +
+#if DEBUG
+                    " (Debug)";
+#else
+                    "";
+#endif
+
+        private static string verstionText => "v0.tan90+1.1" + (__magic_is_packed ? " (single file edition)" : "");
+
+        private static string cmdHelpText => $@"{NAME} {verstionText}
+
+Usage: {NAME}.exe [-h|--help] [(-c|--config) FILE] [--no-cli] [--no-log-stdout]
+                  [--log-file FILE] [--log-stdout-no-time]
+";
+
+        private static bool __magic_is_packed;
+
+        private static void Main(string[] args)
+        {
+            Console.Title = NAME;
+            Logging.HistroyEnabled = false;
+            Logging.WriteLogToConsole = true;
+            CmdConsole.ConsoleOnStdIO.Lock = Logging.ConsoleLock;
+
+            var argumentParser = new ArgumentParser();
+            argumentParser.AddArg(ParasPara.OnePara, "-c", "--config");
+            argumentParser.AddArg(ParasPara.NoPara, "-h", "--help");
+            var ar = argumentParser.ParseArgs(args);
+            if (ar.ContainsKey("-h")) {
+                Console.Write(cmdHelpText);
+                return;
+            }
+            if (ar.ContainsKey("--no-log-stdout")) {
+                Logging.WriteLogToConsole = false;
+            }
+            if (ar.ContainsKey("--stdout-no-time") || ar.ContainsKey("--log-stdout-no-time")) {
+                Logging.WriteLogToConsoleWithTime = false;
+            }
+            if (ar.TryGetValue("--log-file", out var logFile)) {
+                Logging.info($"Logging file: {logFile.FirstParaOrThrow}");
+                initLogFile(logFile.FirstParaOrThrow);
+            }
+            if (ar.TryGetValue("-c", out var v)) {
+                specifiedConfigPath = v.FirstParaOrThrow;
+                Logging.info($"configuation file: {configFilePath}");
+            }
+
+            var controller = new Controller();
+            int count = 0;
+            void connectionChanged(InConnection connection)
+            {
+                lock (CmdConsole.ConsoleOnStdIO.Lock)
+                    Console.Title = $"{NAME} - current/total {controller.InConnections.Count}/{++count} connections";
+            }
+            controller.NewConnection += connectionChanged;
+            controller.EndConnection += connectionChanged;
+            Logging.info($"{NAME} {verstionText}");
+            if (specifiedConfigPath != null) {
+                Commands.loadController(controller, specifiedConfigPath);
+            } else {
+                controller.FuncGetConfigString = () => {
+                    var paths = GetConfigFilePaths();
+                    foreach (var item in paths) {
+                        if (File.Exists(item)) {
+                            Logging.info("using configuration file: " + item);
+                            controller.WorkingDirectory = Path.GetDirectoryName(item);
+                            return File.ReadAllText(item, System.Text.Encoding.UTF8);
+                        }
+                    }
+                    Logging.warning("configuration file not found. searched paths:\n\t" + string.Join("\n\t", paths));
+                    return null;
+                };
+                controller.Load();
+                controller.Start();
+            }
+            var cmdHub = new CommandHub();
+            cmdHub.Prompt = $"{NAME}>";
+            Commands.AddCommands(cmdHub, controller, null);
+            cmdHub.AddCmdHandler("gc", command => {
+                Logging.warning("GC...");
+                GC.Collect();
+                Logging.warning("GC OK.");
+            });
+            cmdHub.AddCmdHandler("stat", command => {
+                var proc = Process.GetCurrentProcess();
+                Logging.info($"TotalMemory: {GC.GetTotalMemory(command.args.Contains("gc")).ToString("0,0")}");
+                Logging.info($"WorkingSet: {proc.WorkingSet64.ToString("0,0")}");
+                Logging.info($"PrivateMemory: {proc.PrivateMemorySize64.ToString("0,0")}");
+                Logging.info($"CPUTime: {proc.TotalProcessorTime.TotalMilliseconds.ToString("0,0")} ms");
+                Logging.info($"Threads: {proc.Threads.Count}");
+            });
+            cmdHub.AddCmdHandler("newbie", (cmd) => Commands.NewbieWizard(cmd, controller, specifiedConfigPath ?? configFilePath));
+            if (Environment.OSVersion.Platform == PlatformID.Win32NT)
+                cmdHub.AddCmdHandler("openfolder", (cmd) => Process.Start("explorer", "."));
+#if NS_WINFORM
+            cmdHub.AddCmdHandler("gui", (cmd) => {
+                var form = new GUI.FormConnections();
+                Application.Run(form);
+            });
+#endif
+            if (ar.ContainsKey("--no-cli")) {
+                while (true)
+                    Thread.Sleep(int.MaxValue);
+            } else {
+                cmdHub.CmdLoop(CmdConsole.StdIO);
+            }
+        }
+
+        private static void initLogFile(string logFile)
+        {
+            var fs = File.Open(logFile, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
+            var sw = new StreamWriter(fs, NaiveUtils.UTF8Encoding);
+            var pendingFlush = false;
+            var delayFlush = new Func<Task>(async () => {
+                if (pendingFlush)
+                    return;
+                pendingFlush = true;
+                await Task.Delay(100);
+                lock (sw) {
+                    pendingFlush = false;
+                    sw.Flush();
+                }
+            });
+            Logging.Logged += (x) => {
+                lock (sw) {
+                    sw.Write(x.timestamp);
+                    sw.WriteLine(x.text);
+                    delayFlush();
+                }
+            };
+            lock (sw) {
+                sw.WriteLine("==========LOG BEGIN==========");
+                sw.Flush();
+            }
+        }
+    }
+}

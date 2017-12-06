@@ -1,0 +1,35 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>0b623dfc-5129-419c-bb03-823809f9178d</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>NaiveSvr</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\CompressedOutputStream.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\MsgStream.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\MultipartFormDataReader.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\NaiveHttpServer.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\NaiveMultiplexing.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\NaiveUtils.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\NaiveWebsiteRouter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\HttpAuthFilter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\HttpConnection.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\InputDataStream.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\Logging.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\OutputStream.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\HttpUtil.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\NaiveWebsiteServer.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\System.Web\CE.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\System.Web\Helpers.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\System.Web\HttpEncoder.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\System.Web\HttpUtility.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\WebSocket.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\WebSocketClient.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\WebSocketServer.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)NaiveTemplate\NaiveTemplate.cs" />
+  </ItemGroup>
+</Project>
