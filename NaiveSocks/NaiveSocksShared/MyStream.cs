@@ -254,9 +254,9 @@ namespace NaiveSocks
                             buf = new BytesSegment(msg.Data);
                         }
                     }
-                    ////Logging.info($"READ {read}: {streamfrom} -> {streamto}");
+                    //debug($"READ {read}: {streamfrom} -> {streamto}");
                     if (read == 0) {
-                        //Logging.info($"SHUTDOWN: {streamfrom} -> {streamto}");
+                        debug($"SHUTDOWN: {streamfrom} -> {streamto}");
                         if (!dontShutdown && !streamto.State.HasShutdown)
                             await streamto.Shutdown(SocketShutdown.Send).CAF();
                         break;
@@ -264,11 +264,15 @@ namespace NaiveSocks
                     await streamto.WriteAsync(new BytesSegment(buf.Bytes, buf.Offset, read)).CAF();
                     //await streamto.FlushAsync();
                 }
-                //Logging.info($"BREAK: {streamfrom} -> {streamto}");
             } finally {
-                //Logging.info($"CLOSE: {streamfrom} -> {streamto}");
+                debug($"CLOSE: {streamfrom} -> {streamto}");
                 bufhandle?.Dispose();
             }
+        }
+
+        static void debug(string str)
+        {
+            Logging.debug(str);
         }
 
 
@@ -308,14 +312,12 @@ namespace NaiveSocks
             public override string ToString() => $"{{Stream {BaseStream}}}";
         }
 
-        public class SocketWrapper : MyStream, IDisposable
+        public class SocketWrapper : MyStream
         {
             public SocketWrapper(Socket socket)
             {
                 this.Socket = socket;
                 this.EPPair = EPPair.FromSocket(socket);
-                recvE.Completed += RecvCompleted;
-                sendE.Completed += SendCompleted;
             }
 
             public EPPair EPPair { get; }
@@ -323,7 +325,14 @@ namespace NaiveSocks
 
             public override string ToString() => $"{{Socket {State} {EPPair.ToString()}}}";
 
-            SocketAsyncEventArgs recvE = new SocketAsyncEventArgs() { UserToken = new RecvUserToken() };
+            static ObjectPool<SocketAsyncEventArgs> recvArgPool = new ObjectPool<SocketAsyncEventArgs>(
+                createFunc: () => {
+                    var arg = new SocketAsyncEventArgs();
+                    arg.Completed += RecvCompletedCallback;
+                    arg.UserToken = new RecvUserToken();
+                    return arg;
+                }) { MaxCount = 48, DisposeFunc = x => x.Dispose() };
+
             class RecvUserToken
             {
                 public TaskCompletionSource<int> tcs;
@@ -338,72 +347,86 @@ namespace NaiveSocks
             public override Task<int> ReadAsync(BytesSegment bv)
             {
                 //return base.ReadAsync(bv);
-                var e = recvE;
+                var e = recvArgPool.GetValue();
                 var userToken = ((RecvUserToken)e.UserToken);
                 var tcs = new TaskCompletionSource<int>();
                 userToken.tcs = tcs;
                 var sw = userToken.sw = this;
                 e.SetBuffer(bv.Bytes, bv.Offset, bv.Len);
                 if (!Socket.ReceiveAsync(e)) { // if opearation completed synchronously
-                    userToken.Reset();
-                    if (e.SocketError == SocketError.Success) {
-                        int bytesTransferred = e.BytesTransferred;
-                        if (bytesTransferred == 0) {
-                            Logging.debug($"{sw}: remote shutdown");
-                            sw.State |= MyStreamState.RemoteShutdown;
-                        }
-                        tcs.SetResult(bytesTransferred);
-                    } else {
-                        throw new SocketException((int)e.SocketError);
-                    }
+                    RecvCompleted(e, userToken, this, tcs, true);
                 }
                 return tcs.Task;
             }
 
-            private static void RecvCompleted(object sender, SocketAsyncEventArgs e)
+            private static void RecvCompletedCallback(object sender, SocketAsyncEventArgs e)
             {
                 var userToken = (RecvUserToken)e.UserToken;
                 var sw = userToken.sw;
                 var tcs = userToken.tcs;
+                RecvCompleted(e, userToken, sw, tcs, false);
+            }
+
+            private static void RecvCompleted(SocketAsyncEventArgs e, RecvUserToken userToken, SocketWrapper sw, TaskCompletionSource<int> tcs, bool syncCompleted)
+            {
                 userToken.Reset();
-                if (e.SocketError == SocketError.Success) {
-                    int bytesTransferred = e.BytesTransferred;
+                e.SetBuffer(null, 0, 0);
+                SocketError socketError = e.SocketError;
+                int bytesTransferred = e.BytesTransferred;
+                recvArgPool.PutValue(e);
+                if (socketError == SocketError.Success) {
                     if (bytesTransferred == 0) {
                         Logging.debug($"{sw}: remote shutdown");
                         sw.State |= MyStreamState.RemoteShutdown;
                     }
                     tcs.SetResult(bytesTransferred);
                 } else {
-                    tcs.SetException(new SocketException((int)e.SocketError));
+                    var exception = new SocketException((int)socketError);
+                    if (syncCompleted)
+                        throw exception;
+                    tcs.SetException(exception);
                 }
             }
 
-            SocketAsyncEventArgs sendE = new SocketAsyncEventArgs();
+            static ObjectPool<SocketAsyncEventArgs> sendArgPool = new ObjectPool<SocketAsyncEventArgs>(
+                createFunc: () => {
+                    var arg = new SocketAsyncEventArgs();
+                    arg.Completed += SendCompletedCallback;
+                    return arg;
+                }) { MaxCount = 16, DisposeFunc = x => x.Dispose() };
 
             public override Task WriteAsync(BytesSegment bv)
             {
                 //return base.ReadAsync(bv);
-                var e = sendE;
+                var e = sendArgPool.GetValue();
                 var tcs = new TaskCompletionSource<int>();
                 e.UserToken = tcs;
                 e.SetBuffer(bv.Bytes, bv.Offset, bv.Len);
                 if (!Socket.SendAsync(e)) { // if opearation completed synchronously
-                    if (e.SocketError == SocketError.Success) {
-                        tcs.SetResult(0);
-                    } else {
-                        throw new SocketException((int)e.SocketError);
-                    }
+                    SendCompleted(e, tcs, true);
                 }
                 return tcs.Task;
             }
 
-            private static void SendCompleted(object sender, SocketAsyncEventArgs e)
+            private static void SendCompletedCallback(object sender, SocketAsyncEventArgs e)
             {
                 var tcs = e.UserToken as TaskCompletionSource<int>;
-                if (e.SocketError == SocketError.Success) {
+                SendCompleted(e, tcs, false);
+            }
+
+            private static void SendCompleted(SocketAsyncEventArgs e, TaskCompletionSource<int> tcs, bool syncCompleted)
+            {
+                e.UserToken = null;
+                e.SetBuffer(null, 0, 0);
+                SocketError socketError = e.SocketError;
+                sendArgPool.PutValue(e);
+                if (socketError == SocketError.Success) {
                     tcs.SetResult(0);
                 } else {
-                    tcs.SetException(new SocketException((int)e.SocketError));
+                    var exception = new SocketException((int)socketError);
+                    if (syncCompleted)
+                        throw exception;
+                    tcs.SetException(exception);
                 }
             }
 
@@ -422,32 +445,6 @@ namespace NaiveSocks
                 Socket.Shutdown(direction);
                 return NaiveUtils.CompletedTask;
             }
-
-            #region IDisposable Support
-            private bool disposedValue = false; // To detect redundant calls
-
-            public void Dispose()
-            {
-                if (!disposedValue) {
-                    try {
-                        recvE.Dispose();
-                    } catch (Exception) {
-                        ;
-                    }
-                    try {
-                        sendE.Dispose();
-                    } catch (Exception) {
-                        ;
-                    }
-                    disposedValue = true;
-                }
-            }
-
-            ~SocketWrapper()
-            {
-                Dispose();
-            }
-            #endregion
         }
     }
 

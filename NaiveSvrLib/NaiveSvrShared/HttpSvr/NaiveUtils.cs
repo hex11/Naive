@@ -1027,6 +1027,7 @@ namespace Naive.HttpSvr
     {
         private readonly Action<T> _resetFunc;
         private readonly Func<T> _createFunc;
+        public Action<T> DisposeFunc;
         private ConcurrentBag<T> _bag = new ConcurrentBag<T>();
         public int MaxCount { get; set; } = 5;
 
@@ -1042,10 +1043,15 @@ namespace Naive.HttpSvr
 
         public Handle Get()
         {
+            return new Handle(this, GetValue());
+        }
+
+        public T GetValue()
+        {
             if (!_bag.TryTake(out T obj)) {
                 obj = _createFunc();
             }
-            return new Handle(this, obj);
+            return obj;
         }
 
         private bool Put(T value)
@@ -1055,8 +1061,11 @@ namespace Naive.HttpSvr
                 _bag.Add(value);
                 return true;
             }
+            DisposeFunc(value);
             return false;
         }
+
+        public bool PutValue(T value) => Put(value);
 
         public class Handle : IDisposable
         {
