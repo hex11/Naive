@@ -10,7 +10,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)3rd\Poly1305.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)AllToOne.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)InverseMuxStream.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)3rd\Chacha20.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Controller.cs" />

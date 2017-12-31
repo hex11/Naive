@@ -27,8 +27,8 @@ namespace NaiveSocks
 
         public Dictionary<string, string> headers { get; set; }
 
-        public int xum { get; set; } = 1;
-        public int xum_delay { get; set; } = 20;
+        public int imux { get; set; } = 1;
+        public int imux_delay { get; set; } = 20;
 
         public int timeout { get; set; } = 30;
 
@@ -75,14 +75,17 @@ namespace NaiveSocks
         public override void SetConfig(TomlTable toml)
         {
             base.SetConfig(toml);
-            xum = toml.TryGetValue<int>("ato", xum);
-            xum_delay = toml.TryGetValue<int>("ato_delay", xum_delay);
+            imux = toml.TryGetValue<int>("ato", imux);
+            imux_delay = toml.TryGetValue<int>("ato_delay", imux_delay);
+            imux = toml.TryGetValue<int>("xum", imux);
+            imux_delay = toml.TryGetValue<int>("xum_delay", imux_delay);
         }
 
         static readonly string[] UAs = new[] {
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:57.0) Gecko/20100101 Firefox/57.0",
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/61.0.3163.100 Safari/537.36",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/62.0.3165.0 Safari/537.36"
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/62.0.3165.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/63.0.3239.84 Safari/537.36"
         };
 
         protected override void Init()
@@ -228,8 +231,8 @@ namespace NaiveSocks
                         Host = adapter.server,
                         KeyString = adapter.key,
                         Path = adapter.path,
-                        XumConnections = adapter.xum,
-                        XumConnectionsDelay = adapter.xum_delay,
+                        ImuxConnections = adapter.imux,
+                        ImuxConnectionsDelay = adapter.imux_delay,
                         Timeout = adapter.timeout
                     };
                     var nms = await NaiveMSocks.ConnectTo(settings);

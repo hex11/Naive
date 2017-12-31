@@ -185,12 +185,12 @@ namespace NaiveSocks
             }
         }
 
-        public static T TryGetValue<T>(this Nett.TomlTable table, string key, T defaul)
+        public static T TryGetValue<T>(this Nett.TomlTable table, string key, T @default)
         {
             if (table.TryGetValue(key, out var obj)) {
                 return obj.Get<T>();
             } else {
-                return defaul;
+                return @default;
             }
         }
     }

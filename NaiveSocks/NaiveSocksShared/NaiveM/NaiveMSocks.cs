@@ -46,8 +46,9 @@ namespace NaiveSocks
             public Dictionary<string, string> Headers { get; set; }
             public string UrlFormat { get; set; } = "{0}?token={1}";
 
-            public int XumConnections { get; set; } = 1;
-            public int XumConnectionsDelay { get; set; } = 0;
+            public int ImuxHttpConnections { get; set; } = 0;
+            public int ImuxConnections { get; set; } = 1;
+            public int ImuxConnectionsDelay { get; set; } = 0;
             public int Timeout { get; internal set; }
         }
 
@@ -67,7 +68,7 @@ namespace NaiveSocks
 
         public static async Task<NaiveMSocks> ConnectTo(ConnectingSettings settings)
         {
-            const string XumPrefix = "chs2:";
+            const string ImuxPrefix = "chs2:";
             var key = settings.Key;
             async Task<WebSocket> connect(string addStr)
             {
@@ -75,8 +76,7 @@ namespace NaiveSocks
                     additionalString = addStr
                 };
                 var reqbytes = req.ToBytes();
-                if (key != null)
-                    reqbytes = NaiveProtocol.EncryptOrDecryptBytes(true, key, reqbytes);
+                reqbytes = NaiveProtocol.EncryptOrDecryptBytes(true, key, reqbytes);
                 var reqPath = string.Format(settings.UrlFormat, settings.Path, HttpUtil.UrlEncode(Convert.ToBase64String(reqbytes)));
                 var ws = await WebSocketClient.ConnectToAsync(settings.Host, reqPath);
                 await ws.HandshakeAsync(false, settings.Headers);
@@ -87,17 +87,17 @@ namespace NaiveSocks
                 return ws;
             }
             IMsgStream msgStream;
-            int count = settings.XumConnections;
+            int count = settings.ImuxConnections;
             string sid = Guid.NewGuid().ToString("N").Substring(0, 8);
             if (count > 1) {
                 string strCount = count.ToString();
                 var tasks = Enumerable.Range(0, count).Select(x => NaiveUtils.RunAsyncTask(async () => {
-                    if (settings.XumConnectionsDelay > 0)
-                        await Task.Delay(settings.XumConnectionsDelay * x);
-                    return await connect(XumPrefix + NaiveUtils.SerializeArray(sid, strCount, x.ToString()));
+                    if (settings.ImuxConnectionsDelay > 0)
+                        await Task.Delay(settings.ImuxConnectionsDelay * x);
+                    return await connect(ImuxPrefix + NaiveUtils.SerializeArray(sid, strCount, x.ToString()));
                 })).ToArray();
                 var streams = await Task.WhenAll(tasks);
-                msgStream = new AllToOne(streams);
+                msgStream = new InverseMuxStream(streams);
             } else {
                 msgStream = await connect("channels");
             }
