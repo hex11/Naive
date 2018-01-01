@@ -27,7 +27,7 @@ namespace NaiveSocks
 
     public class ConnectHelper
     {
-        public static async Task<ConnectResult> Connect(IAdapter adapter, AddrPort dest, int timeout)
+        public static async Task<ConnectResult> Connect(IAdapter adapter, AddrPort dest, int timeoutSeconds)
         {
             var addrs = await Dns.GetHostAddressesAsync(dest.Host);
             if (addrs.Length == 0)
@@ -37,11 +37,11 @@ namespace NaiveSocks
             try {
                 destTcp.NoDelay = true;
                 var connectTask = destTcp.ConnectAsync(addr, dest.Port);
-                if (timeout > 0) {
-                    if (await Task.WhenAny(connectTask, Task.Delay(timeout * 1000)) != connectTask) {
+                if (timeoutSeconds > 0) {
+                    if (await Task.WhenAny(connectTask, Task.Delay(timeoutSeconds * 1000)) != connectTask) {
                         destTcp.Close();
                         return new ConnectResult(ConnectResults.Failed) {
-                            FailedReason = $"Connection timed out ({timeout} seconds)"
+                            FailedReason = $"Connection timed out ({timeoutSeconds} seconds)"
                         };
                     }
                 }

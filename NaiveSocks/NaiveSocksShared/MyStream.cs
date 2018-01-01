@@ -455,6 +455,8 @@ namespace NaiveSocks
             BaseStream = baseStream;
         }
 
+        public override string ToString() => $"{{MyStream2Stream on {BaseStream}}}";
+
         public IMyStream BaseStream { get; }
 
         public override bool CanRead => true;
@@ -485,6 +487,11 @@ namespace NaiveSocks
         public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
             return BaseStream.ReadAsync(new BytesSegment(buffer, offset, count));
+        }
+
+        public override void Close()
+        {
+            BaseStream.Close();
         }
 
         public override long Seek(long offset, SeekOrigin origin)

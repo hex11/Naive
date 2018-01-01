@@ -783,6 +783,8 @@ namespace Naive.HttpSvr
             Array.Reverse(bytes);
             return bytes;
         }
+        
+        public static string GenerateSecWebSocketKey() => Guid.NewGuid().ToString("D");
 
         public static string GetWebsocketAcceptKey(string wskey)
         {

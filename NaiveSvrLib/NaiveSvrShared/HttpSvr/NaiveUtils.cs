@@ -791,6 +791,32 @@ namespace Naive.HttpSvr
 
     public class HttpClient
     {
+        public Stream BaseStream { get; }
+
+        public HttpClient(Stream baseStream)
+        {
+            BaseStream = baseStream;
+        }
+
+        public async Task<HttpResponse> Request(HttpRequest request)
+        {
+            await WriteRequest(request);
+            return await ReadResponse();
+        }
+
+        public async Task<HttpResponse> ReadResponse()
+        {
+            var responseStr = await NaiveUtils.ReadStringUntil(BaseStream, NaiveUtils.DoubleCRLFBytes);
+            return ReadHttpResponseHeader(new StringReader(responseStr));
+        }
+
+        public async Task WriteRequest(HttpRequest request)
+        {
+            var tw = new StringWriter();
+            WriteHttpRequestHeader(tw, request);
+            await BaseStream.WriteAsync(NaiveUtils.GetUTF8Bytes(tw.ToString()));
+        }
+
         public static void WriteHttpRequestHeader(TextWriter output, HttpRequest request)
                         => WriteHttpRequestHeader(output, request.Method, request.Path, request.Headers);
         public static void WriteHttpRequestHeader(
@@ -822,19 +848,9 @@ namespace Naive.HttpSvr
             string uri,
             IDictionary<string, string> headers)
         {
-            if (uri.Contains(' ')) {
-                throw new Exception("spaces in uri is not allowed");
-            }
-            await output.WriteAsync($"{method} {uri} HTTP/1.1\r\n");
-            if (headers.TryGetValue("Host", out var host)) { // 'Host' first
-                await output.WriteAsync($"Host: {host}\r\n");
-            }
-            foreach (var item in headers) {
-                if (item.Key == "Host")
-                    continue;
-                await output.WriteAsync($"{item.Key}: {item.Value}\r\n");
-            }
-            await output.WriteAsync("\r\n");
+            var tw = new StringWriter();
+            WriteHttpRequestHeader(tw, method, uri, headers);
+            await output.WriteAsync(tw.ToString());
         }
 
         public static HttpResponse ReadHttpResponseHeader(TextReader input)

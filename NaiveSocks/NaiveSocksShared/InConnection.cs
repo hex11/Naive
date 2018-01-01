@@ -136,6 +136,7 @@ namespace NaiveSocks
         public ConnectResults Result;
         public IPEndPoint destEP;
         public string FailedReason;
+        public Exception Exception;
 
         public IMyStream Stream;
         public Task WhenCanRead = NaiveUtils.CompletedTask;
@@ -144,6 +145,13 @@ namespace NaiveSocks
 
         public AdapterRef Redirected;
         public bool IsRedirected => Redirected != null;
+
+        public void ThrowIfFailed()
+        {
+            if (Result != ConnectResults.Conneceted) {
+                throw Exception ?? new Exception("connect result: failed: " + FailedReason);
+            }
+        }
 
         public static ConnectResult RedirectTo(AdapterRef redirectTo)
         {

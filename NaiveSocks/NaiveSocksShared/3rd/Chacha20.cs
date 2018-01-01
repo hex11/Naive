@@ -1,8 +1,9 @@
-﻿// https://github.com/sbennett1990/ChaCha20-csharp/blob/master/ChaCha20Cipher.cs
+﻿// chacha20-ietf implementation
+// https://github.com/sbennett1990/ChaCha20-csharp/blob/master/ChaCha20Cipher.cs
 // (modified)
 
 /*
- * Copyright (c) 2015 Scott Bennett
+ * Copyright (c) 2015 Scott Bennett, 2017 - 2018 Hex Eleven
  * All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
@@ -78,9 +79,7 @@ namespace NaiveSocks
                 throw new ArgumentNullException("Key is null");
             }
             if (key.Length != 32) {
-                throw new ArgumentException(
-                    "Key length must be 32. Actual is " + key.Length.ToString()
-                );
+                throw new ArgumentException("Key length must be 32. Actual is " + key.Length.ToString());
             }
 
             // These are the same constants defined in the reference implementation
@@ -163,10 +162,9 @@ namespace NaiveSocks
             public fixed byte keyStreamBuffer[64];
         }
 
-        int keystreamBufferPos = 64;
         const int KeystreamBufferSize = 64;
-
-
+        int keystreamBufferPos = KeystreamBufferSize;
+        
         protected override void IVSetup(byte[] IV)
         {
             IVSetup(IV, 0);
@@ -216,7 +214,7 @@ namespace NaiveSocks
             }
             uint* ksAsUint = (uint*)keyStreamBuffer;
             for (int i = 0; i < 16; i++) {
-                ksAsUint[i] = Add(x[i], state[i]);
+                ksAsUint[i] = x[i] + state[i];
             }
             if (++state[12] == 0) {
                 /* Stopping at 2^70 bytes per nonce is the user's responsibility */
@@ -238,51 +236,6 @@ namespace NaiveSocks
         }
 
         /// <summary>
-        /// Unchecked integer exclusive or (XOR) operation. 
-        /// </summary>
-        /// <param name="v"></param>
-        /// <param name="w"></param>
-        /// <returns>The result of (v XOR w)</returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static uint XOr(uint v, uint w)
-        {
-            return v ^ w;
-        }
-
-        /// <summary>
-        /// Unchecked integer addition. The ChaCha spec defines certain operations 
-        /// to use 32-bit unsigned integer addition modulo 2^32. 
-        /// </summary>
-        /// <remarks>
-        /// <remarks>
-        /// See <a href="https://tools.ietf.org/html/rfc7539#page-4">ChaCha20 Spec Section 2.1</a>.
-        /// </remarks>
-        /// </remarks>
-        /// <param name="v"></param>
-        /// <param name="w"></param>
-        /// <returns>The result of (v + w) modulo 2^32</returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static uint Add(uint v, uint w)
-        {
-            return v + w;
-        }
-
-        /// <summary>
-        /// Add 1 to the input parameter using unchecked integer addition. The 
-        /// ChaCha spec defines certain operations to use 32-bit unsigned integer 
-        /// addition modulo 2^32. 
-        /// </summary>
-        /// <remarks>
-        /// See <a href="https://tools.ietf.org/html/rfc7539#page-4">ChaCha20 Spec Section 2.1</a>.
-        /// </remarks>
-        /// <param name="v"></param>
-        /// <returns>The result of (v + 1) modulo 2^32</returns>
-        public static uint AddOne(uint v)
-        {
-            return v + 1;
-        }
-
-        /// <summary>
         /// The ChaCha Quarter Round operation. It operates on four 32-bit unsigned 
         /// integers within the given buffer at indices a, b, c, and d. 
         /// </summary>
@@ -301,10 +254,10 @@ namespace NaiveSocks
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static unsafe void QuarterRound(uint* x, uint a, uint b, uint c, uint d)
         {
-            x[a] = Add(x[a], x[b]); x[d] = Rotate(XOr(x[d], x[a]), 16);
-            x[c] = Add(x[c], x[d]); x[b] = Rotate(XOr(x[b], x[c]), 12);
-            x[a] = Add(x[a], x[b]); x[d] = Rotate(XOr(x[d], x[a]), 8);
-            x[c] = Add(x[c], x[d]); x[b] = Rotate(XOr(x[b], x[c]), 7);
+            x[a] = x[a] + x[b]; x[d] = Rotate(x[d] ^ x[a], 16);
+            x[c] = x[c] + x[d]; x[b] = Rotate(x[b] ^ x[c], 12);
+            x[a] = x[a] + x[b]; x[d] = Rotate(x[d] ^ x[a], 8);
+            x[c] = x[c] + x[d]; x[b] = Rotate(x[b] ^ x[c], 7);
         }
 
         /// <summary>

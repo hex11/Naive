@@ -70,7 +70,10 @@ namespace NaiveSocks
         {
             const string ImuxPrefix = "chs2:";
             var key = settings.Key;
-            async Task<WebSocket> connect(string addStr)
+            if (settings.Headers?.ContainsKey("Host") == false) {
+                settings.Headers["Host"] = (settings.Host.Port == 80) ? settings.Host.Host : settings.Host.ToString();
+            }
+            async Task<IMsgStream> connect(string addStr, bool isHttp = false)
             {
                 var req = new NaiveProtocol.Request(new AddrPort("", 0)) {
                     additionalString = addStr
@@ -78,13 +81,37 @@ namespace NaiveSocks
                 var reqbytes = req.ToBytes();
                 reqbytes = NaiveProtocol.EncryptOrDecryptBytes(true, key, reqbytes);
                 var reqPath = string.Format(settings.UrlFormat, settings.Path, HttpUtil.UrlEncode(Convert.ToBase64String(reqbytes)));
-                var ws = await WebSocketClient.ConnectToAsync(settings.Host, reqPath);
-                await ws.HandshakeAsync(false, settings.Headers);
-                ws.ManagedPingTimeout = settings.Timeout / 2;
-                ws.ManagedCloseTimeout = settings.Timeout;
-                ws.AddToManaged();
-                ws.ApplyAesStreamFilter(key);
-                return ws;
+                if (isHttp) {
+                    var r = await ConnectHelper.Connect(null, settings.Host, 10);
+                    r.ThrowIfFailed();
+                    try {
+                        var stream = r.Stream;
+                        var stream2 = MyStream.ToStream(stream);
+                        var httpClient = new HttpClient(stream2);
+                        var response = await httpClient.Request(new HttpRequest() {
+                            Method = "GET",
+                            Path = settings.Path,
+                            Headers = settings.Headers
+                        });
+                        if (response.StatusCode != "200")
+                            throw new Exception($"remote response: '{response.StatusCode} {response.ReasonPhrase}'");
+                        if (!response.TestHeader(HttpHeaders.KEY_Transfer_Encoding, HttpHeaders.VALUE_Transfer_Encoding_chunked))
+                            throw new Exception("test header failed: Transfer-Encoding != chunked");
+                        var chunkedStream = InputDataStream.FromStreamChunked(stream2);
+                        throw new NotImplementedException();
+                    } catch (Exception) {
+                        MyStream.CloseWithTimeout(r.Stream);
+                        throw;
+                    }
+                } else {
+                    var ws = await WebSocketClient.ConnectToAsync(settings.Host, reqPath);
+                    await ws.HandshakeAsync(false, settings.Headers);
+                    ws.ManagedPingTimeout = settings.Timeout / 2;
+                    ws.ManagedCloseTimeout = settings.Timeout;
+                    ws.AddToManaged();
+                    ws.ApplyAesStreamFilter(key);
+                    return ws;
+                }
             }
             IMsgStream msgStream;
             int count = settings.ImuxConnections;

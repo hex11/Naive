@@ -73,7 +73,7 @@ namespace Naive.HttpSvr
         {
             var sw = new StreamWriter(BaseStream, Encoding.ASCII);
             var sr = new StreamReader(BaseStream, Encoding.ASCII);
-            var wskey = Guid.NewGuid().ToString("D");
+            var wskey = WebSocket.GenerateSecWebSocketKey();
             var headers = new Dictionary<string, string> {
                 ["Upgrade"] = "websocket",
                 ["Connection"] = "Upgrade",
@@ -90,7 +90,7 @@ namespace Naive.HttpSvr
             if (statusCode == "101"
                 && response.TestHeader("Connection", "Upgrade")
                 && response.TestHeader("Upgrade", "websocket")
-                && response.TestHeader("Sec-WebSocket-Accept", WebSocketServer.GetWebsocketAcceptKey(wskey))
+                && response.TestHeader("Sec-WebSocket-Accept", WebSocket.GetWebsocketAcceptKey(wskey))
             ) {
                 ConnectionState = States.Open;
                 if (enterRecvLoop)

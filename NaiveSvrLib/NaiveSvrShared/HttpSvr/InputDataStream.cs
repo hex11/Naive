@@ -11,19 +11,35 @@ namespace Naive.HttpSvr
     /// </summary>
     public class InputDataStream : ReadOnlyStream
     {
-        internal InputDataStream(HttpConnection p, long length)
+        internal InputDataStream(Stream baseStream, long length)
         {
-            this.p = p;
+            this.baseStream = baseStream;
             this.length = length;
         }
 
-        internal InputDataStream(HttpConnection p)
+        internal InputDataStream(HttpConnection p, long length) : this(p.baseStream, length)
+        { }
+
+        internal InputDataStream(HttpConnection p) : this(p, -1)
+        { }
+
+        public static InputDataStream FromStream(Stream baseStream, long length)
         {
-            this.p = p;
-            this.length = -1;
+            if (baseStream == null)
+                throw new ArgumentNullException(nameof(baseStream));
+            if (length < 0)
+                throw new ArgumentOutOfRangeException(nameof(length), "length < 0");
+            return new InputDataStream(baseStream, length);
         }
 
-        private HttpConnection p;
+        public static InputDataStream FromStreamChunked(Stream baseStream)
+        {
+            if (baseStream == null)
+                throw new ArgumentNullException(nameof(baseStream));
+            return new InputDataStream(baseStream, -1);
+        }
+
+        private Stream baseStream;
         private long length;
         private long readedLength = 0;
 
@@ -60,7 +76,7 @@ namespace Naive.HttpSvr
             } else {
                 int bytesToRead = (int)(count < RemainingLength ? count : RemainingLength);
                 if (bytesToRead > 0) {
-                    var ret = p.realInputStream.Read(buffer, offset, bytesToRead);
+                    var ret = baseStream.Read(buffer, offset, bytesToRead);
                     if (ret == 0)
                         throw new DisconnectedException("unexpected EOF while reading http request content.");
                     readedLength += ret;
@@ -81,7 +97,7 @@ namespace Naive.HttpSvr
                     throw new EndOfStreamException();
                 }
                 if (remainingChunkSize == 0) {
-                    var str = await NaiveUtils.ReadStringUntil(p.realInputStream, NaiveUtils.CRLFBytes, maxLength: 32, withPattern: false);
+                    var str = await NaiveUtils.ReadStringUntil(baseStream, NaiveUtils.CRLFBytes, maxLength: 32, withPattern: false);
                     remainingChunkSize = Convert.ToInt64(str, 16);
                     if (remainingChunkSize == 0) {
                         remainingChunkSize = -1; // EOF
@@ -89,7 +105,7 @@ namespace Naive.HttpSvr
                     }
                 }
                 int bytesToRead = (int)Math.Min(count, remainingChunkSize);
-                var ret = await p.realInputStream.ReadAsync(buffer, offset, bytesToRead, cancellationToken).CAF();
+                var ret = await baseStream.ReadAsync(buffer, offset, bytesToRead, cancellationToken).CAF();
                 if (ret == 0)
                     throw new DisconnectedException("unexpected EOF while reading chunked http request content.");
                 readedLength += ret;
@@ -97,14 +113,14 @@ namespace Naive.HttpSvr
                 if (remainingChunkSize == 0) {
                     var read = 0;
                     do { // read CRLF
-                        read += await p.realInputStream.ReadAsync(new byte[2], read, 2 - read);
+                        read += await baseStream.ReadAsync(new byte[2], read, 2 - read);
                     } while (read < 2);
                 }
                 return ret;
             } else {
                 int bytesToRead = (int)(count < RemainingLength ? count : RemainingLength);
                 if (bytesToRead > 0) {
-                    var ret = await p.realInputStream.ReadAsync(buffer, offset, bytesToRead, cancellationToken).CAF();
+                    var ret = await baseStream.ReadAsync(buffer, offset, bytesToRead, cancellationToken).CAF();
                     if (ret == 0)
                         throw new DisconnectedException("unexpected EOF while reading http request content.");
                     readedLength += ret;
