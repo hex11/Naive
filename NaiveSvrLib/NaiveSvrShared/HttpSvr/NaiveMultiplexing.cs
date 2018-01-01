@@ -150,7 +150,7 @@ namespace NaiveSocks
                 Logging.warning($"{this} stopped.");
             } catch (Exception e) {
                 if (e.IsConnectionException()) {
-                    Logging.error($"{this} stopped: {e.Message}");
+                    Logging.exception(e, Logging.Level.Error, $"{this} stopped.");
                 } else {
                     Logging.exception(e, Logging.Level.Error, $"{this} stopped with exception.");
                 }

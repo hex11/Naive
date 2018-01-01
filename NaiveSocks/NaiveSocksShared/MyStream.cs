@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Naive.HttpSvr;
 using System.Diagnostics;
 using System.Threading;
+using System.Collections.Generic;
 
 namespace NaiveSocks
 {
@@ -21,7 +22,7 @@ namespace NaiveSocks
 
     public interface IMyStreamWithByteViewSupport : IMyStream
     {
-        Task WriteAsync(BytesView bv);
+        Task WriteMultipleAsync(BytesView bv);
     }
 
     public struct MyStreamState
@@ -87,6 +88,16 @@ namespace NaiveSocks
             }
             return state == other.state;
         }
+
+        public static explicit operator MsgStreamStatus(MyStreamState v)
+        {
+            return (MsgStreamStatus)v.state;
+        }
+
+        public static explicit operator MyStreamState(MsgStreamStatus v)
+        {
+            return new MyStreamState((int)v);
+        }
     }
 
     public abstract class MyStream : /*Stream,*/ IMyStream
@@ -125,14 +136,11 @@ namespace NaiveSocks
 
         public static Stream ToStream(IMyStream myStream)
         {
+            if (myStream is Stream stream)
+                return stream;
             if (myStream is StreamWrapper sw)
                 return sw.BaseStream;
             return new StreamFromMyStream(myStream);
-        }
-
-        public Task RelayWith(IMyStream stream)
-        {
-            return Relay(this, stream);
         }
 
         public static async Task Relay(IMyStream left, IMyStream right, Task whenCanReadFromLeft = null)
@@ -251,7 +259,11 @@ namespace NaiveSocks
                             read = 0;
                         } else {
                             read = msg.Data.tlen;
-                            buf = new BytesSegment(msg.Data);
+                            if (msg.Data.nextNode == null) {
+                                buf = new BytesSegment(msg.Data);
+                            } else {
+                                buf = msg.Data.GetBytes();
+                            }
                         }
                     }
                     //debug($"READ {read}: {streamfrom} -> {streamto}");
@@ -312,7 +324,7 @@ namespace NaiveSocks
             public override string ToString() => $"{{Stream {BaseStream}}}";
         }
 
-        public class SocketWrapper : MyStream
+        public class SocketWrapper : MyStream, IMyStreamWithByteViewSupport
         {
             public SocketWrapper(Socket socket)
             {
@@ -397,11 +409,33 @@ namespace NaiveSocks
 
             public override Task WriteAsync(BytesSegment bv)
             {
-                //return base.ReadAsync(bv);
                 var e = sendArgPool.GetValue();
                 var tcs = new TaskCompletionSource<int>();
                 e.UserToken = tcs;
                 e.SetBuffer(bv.Bytes, bv.Offset, bv.Len);
+                if (!Socket.SendAsync(e)) { // if opearation completed synchronously
+                    SendCompleted(e, tcs, true);
+                }
+                return tcs.Task;
+            }
+
+            public Task WriteMultipleAsync(BytesView bv)
+            {
+                if (bv.nextNode == null)
+                    return WriteAsync(new BytesSegment(bv));
+                var e = sendArgPool.GetValue();
+                var tcs = new TaskCompletionSource<int>();
+                e.UserToken = tcs;
+                int count = 0;
+                foreach (var cur in bv) {
+                    if (cur.len > 0)
+                        count++;
+                }
+                var bufList = e.BufferList = new List<ArraySegment<byte>>(count);
+                foreach (var cur in bv) {
+                    if (cur.len > 0)
+                        bufList.Add(new ArraySegment<byte>(cur.bytes, cur.offset, cur.len));
+                }
                 if (!Socket.SendAsync(e)) { // if opearation completed synchronously
                     SendCompleted(e, tcs, true);
                 }
@@ -417,7 +451,10 @@ namespace NaiveSocks
             private static void SendCompleted(SocketAsyncEventArgs e, TaskCompletionSource<int> tcs, bool syncCompleted)
             {
                 e.UserToken = null;
-                e.SetBuffer(null, 0, 0);
+                if (e.BufferList == null)
+                    e.SetBuffer(null, 0, 0);
+                else
+                    e.BufferList = null;
                 SocketError socketError = e.SocketError;
                 sendArgPool.PutValue(e);
                 if (socketError == SocketError.Success) {
@@ -445,6 +482,38 @@ namespace NaiveSocks
                 Socket.Shutdown(direction);
                 return NaiveUtils.CompletedTask;
             }
+        }
+    }
+
+    static class MyStreamExt
+    {
+        public static Task WriteMultipleAsync(this IMyStream myStream, BytesView bv)
+        {
+            if (myStream is IMyStreamWithByteViewSupport bvs) {
+                return bvs.WriteMultipleAsync(bv);
+            } else {
+                return NaiveUtils.RunAsyncTask(async () => {
+                    foreach (var item in bv) {
+                        if (item.len > 0)
+                            await myStream.WriteAsync(new BytesSegment(item));
+                    }
+                });
+            }
+        }
+
+        public static Task WriteAsync(this IMyStream myStream, byte[] buf, int offset, int count)
+        {
+            return myStream.WriteAsync(new BytesSegment(buf, offset, count));
+        }
+
+        public static Task RelayWith(this IMyStream stream1, IMyStream stream2)
+        {
+            return MyStream.Relay(stream1, stream2);
+        }
+
+        public static Stream ToStream(this IMyStream myStream)
+        {
+            return MyStream.ToStream(myStream);
         }
     }
 
@@ -515,7 +584,7 @@ namespace NaiveSocks
         }
     }
 
-    public class MsgStreamToMyStream : IMyStream
+    public class MsgStreamToMyStream : IMyStream, IMyStreamWithByteViewSupport
     {
         public MsgStreamToMyStream(IMsgStream msgStream)
         {
@@ -527,16 +596,7 @@ namespace NaiveSocks
         public MyStreamState State
         {
             get {
-                switch (MsgStream.State) {
-                case MsgStreamStatus.Open:
-                    return MyStreamState.Open;
-                case MsgStreamStatus.Shutdown:
-                    return MyStreamState.LocalShutdown;
-                case MsgStreamStatus.RemoteShutdown:
-                    return MyStreamState.RemoteShutdown;
-                default:
-                    return MyStreamState.Closed;
-                }
+                return (MyStreamState)MsgStream.State;
             }
         }
 
@@ -578,6 +638,11 @@ namespace NaiveSocks
         public Task WriteAsync(BytesSegment bv)
         {
             return MsgStream.SendMsg(new Msg(new BytesView(bv.Bytes, bv.Offset, bv.Len)));
+        }
+
+        public Task WriteMultipleAsync(BytesView bv)
+        {
+            return MsgStream.SendMsg(new Msg(bv));
         }
 
         public Task FlushAsync()

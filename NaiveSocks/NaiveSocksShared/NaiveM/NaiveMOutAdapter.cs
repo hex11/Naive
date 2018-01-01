@@ -27,7 +27,9 @@ namespace NaiveSocks
 
         public Dictionary<string, string> headers { get; set; }
 
-        public int imux { get; set; } = 1;
+        public int imux_ws { get; set; } = 1;
+        public int imux_http { get; set; } = 0;
+        public int imux_wsso { get; set; } = 0;
         public int imux_delay { get; set; } = 20;
 
         public int timeout { get; set; } = 30;
@@ -75,10 +77,7 @@ namespace NaiveSocks
         public override void SetConfig(TomlTable toml)
         {
             base.SetConfig(toml);
-            imux = toml.TryGetValue<int>("ato", imux);
-            imux_delay = toml.TryGetValue<int>("ato_delay", imux_delay);
-            imux = toml.TryGetValue<int>("xum", imux);
-            imux_delay = toml.TryGetValue<int>("xum_delay", imux_delay);
+            imux_ws = toml.TryGetValue<int>("imux", imux_ws);
         }
 
         static readonly string[] UAs = new[] {
@@ -231,7 +230,9 @@ namespace NaiveSocks
                         Host = adapter.server,
                         KeyString = adapter.key,
                         Path = adapter.path,
-                        ImuxConnections = adapter.imux,
+                        ImuxConnections = adapter.imux_ws,
+                        ImuxHttpConnections = adapter.imux_http,
+                        ImuxWsSendOnlyConnections = adapter.imux_wsso,
                         ImuxConnectionsDelay = adapter.imux_delay,
                         Timeout = adapter.timeout
                     };

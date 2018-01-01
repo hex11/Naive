@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
@@ -12,7 +13,7 @@ using System.Threading.Tasks;
 
 namespace Naive.HttpSvr
 {
-    public class WebSocket : IDisposable, IMsgStream, IMsgStreamStringSupport
+    public class WebSocket : Filterable, IDisposable, IMsgStream, IMsgStreamStringSupport
     {
         static WebSocket()
         {
@@ -90,9 +91,6 @@ namespace Naive.HttpSvr
         public event Action<WebSocket> Closed;
         public event Action<WebSocket> Activated;
         public States ConnectionState = States.Opening;
-
-        public Action<BytesView> ReadFilter;
-        public Action<BytesView> WriteFilter;
 
         private static void StartTimeTask()
         {
@@ -778,12 +776,6 @@ namespace Naive.HttpSvr
             }
         }
 
-        private byte[] reverseBytes(byte[] bytes)
-        {
-            Array.Reverse(bytes);
-            return bytes;
-        }
-        
         public static string GenerateSecWebSocketKey() => Guid.NewGuid().ToString("D");
 
         public static string GetWebsocketAcceptKey(string wskey)
@@ -816,7 +808,317 @@ namespace Naive.HttpSvr
         }
 
 
-        #region Filters
+        public async Task StartVerify(bool recvFirst)
+        {
+            var rd = RandomNumberGenerator.Create();
+            var sha256 = SHA256.Create();
+            if (recvFirst) {
+                // 1
+                var rep = await ReadAsync().CAF(); // 1 <-
+                if (rep.len != 32)
+                    throw new Exception("handshake failed: wrong packet1 length");
+                var sendbuf = new byte[64];
+                var clihash = sha256.ComputeHash(rep.bv.GetBytes());
+                clihash.CopyTo(sendbuf, 0);
+                byte[] serverrandom = new byte[32];
+                rd.GetBytes(serverrandom);
+                serverrandom.CopyTo(sendbuf, 32);
+                await SendBytesAsync(sendbuf).CAF(); // 2 ->
+                rep = await ReadAsync().CAF(); // 3 <-
+                if (rep.len != 32)
+                    throw new Exception("handshake failed: wrong packet3 length");
+                if (sha256.ComputeHash(serverrandom).SequenceEqual(rep.payload.Take(32).ToArray()) == false)
+                    throw new Exception("handshake failed: wrong packet3");
+
+            } else {
+                byte[] clientrandom = new byte[32];
+                rd.GetBytes(clientrandom);
+                await SendBytesAsync(clientrandom.Clone() as byte[]).CAF(); // 1 -> : client random (32 bytes)
+                var rep = await ReadAsync().CAF(); // 2 <- : sha256 of client random (32 bytes) | server random (32 bytes)
+                if (rep.len != 64)
+                    throw new Exception("handshake failed: wrong packet2 length");
+                var excepted = sha256.ComputeHash(clientrandom);
+                if (excepted.SequenceEqual(rep.bv.GetBytes(0, 32)) == false)
+                    throw new Exception("handshake failed: wrong packet2");
+                var buf2 = rep.bv.GetBytes(32, 32);
+                await SendBytesAsync(sha256.ComputeHash(buf2)).CAF(); // 3 -> : sha256 of server random bytes (32 bytes)
+            }
+        }
+
+    }
+
+    public class BytesView
+    {
+        public byte[] bytes;
+        public int offset;
+        public int len;
+        public BytesView nextNode;
+
+        public BytesView()
+        {
+        }
+
+        public BytesView(byte[] bytes)
+        {
+            Set(bytes);
+        }
+
+        public BytesView(byte[] bytes, int offset, int len)
+        {
+            Set(bytes, offset, len);
+        }
+
+        public void Set(byte[] bytes)
+        {
+            this.bytes = bytes;
+            this.offset = 0;
+            this.len = bytes.Length;
+        }
+
+        public void Set(byte[] bytes, int offset, int len)
+        {
+            this.bytes = bytes;
+            this.offset = offset;
+            this.len = len;
+        }
+
+        public void Set(BytesView bv)
+        {
+            this.bytes = bv.bytes;
+            this.offset = bv.offset;
+            this.len = bv.len;
+        }
+
+        public BytesView Clone()
+        {
+            return new BytesView(bytes, offset, len) { nextNode = nextNode };
+        }
+
+        public void Sub(int startIndex)
+        {
+            // TODO
+            if (len < startIndex)
+                throw new NotImplementedException();
+            offset += startIndex;
+            len -= startIndex;
+        }
+
+        public byte[] GetBytes() => GetBytes(0, tlen);
+        public byte[] GetBytes(bool forceNew) => GetBytes(0, tlen, forceNew);
+        public byte[] GetBytes(int offset, int len) => GetBytes(offset, len, false);
+        public byte[] GetBytes(int offset, int len, bool forceNew)
+        {
+            if (!forceNew && offset == 0 & this.offset == 0 & len == bytes.Length) {
+                return bytes;
+            }
+            var buf = new Byte[len];
+            for (int i = 0; i < len; i++) {
+                buf[i] = this[offset + i];
+            }
+            return buf;
+        }
+
+        public BytesView lastNode
+        {
+            get {
+                var curnode = this;
+                while (curnode.nextNode != null) {
+                    curnode = curnode.nextNode;
+                }
+                return curnode;
+            }
+        }
+
+        public int tlen
+        {
+            get {
+                var len = 0;
+                var curnode = this;
+                do {
+                    len += curnode.len;
+                } while ((curnode = curnode.nextNode) != null);
+                return len;
+            }
+        }
+
+        public byte this[int index]
+        {
+            get {
+                if (index < 0) throw new ArgumentOutOfRangeException(nameof(index));
+                var pos = 0;
+                var curnode = this;
+                do {
+                    if (index < pos + curnode.len) {
+                        return curnode.bytes[curnode.offset + index - pos];
+                    }
+                    pos += curnode.len;
+                } while ((curnode = curnode.nextNode) != null);
+                throw new IndexOutOfRangeException();
+            }
+            set {
+                if (index < 0) throw new ArgumentOutOfRangeException(nameof(index));
+                var pos = 0;
+                var curnode = this;
+                do {
+                    if (index < pos + curnode.len) {
+                        curnode.bytes[curnode.offset + index - pos] = value;
+                        return;
+                    }
+                    pos += curnode.len;
+                } while ((curnode = curnode.nextNode) != null);
+            }
+        }
+
+        public override string ToString()
+        {
+            int n = 1;
+            var node = this;
+            while ((node = node.nextNode) != null) {
+                n++;
+            }
+            StringBuilder sb = new StringBuilder($"{{BytesView n={n} tlen={tlen}| ");
+            var tooLong = tlen > 12;
+            var shownSize = Math.Min(12, tlen);
+            for (int i = 0; i < shownSize; i++) {
+                sb.Append(this[i]);
+                sb.Append(',');
+            }
+            sb.Remove(sb.Length - 1, 1);
+            if (tooLong)
+                sb.Append("...");
+            sb.Append('}');
+            return sb.ToString();
+        }
+
+        public static implicit operator BytesView(byte[] bytes)
+        {
+            return new BytesView(bytes);
+        }
+
+        public BufferEnumerator GetEnumerator()
+        {
+            return new BufferEnumerator(this);
+        }
+
+        public struct BufferEnumerator : IEnumerator<BytesView>
+        {
+            public BufferEnumerator(BytesView firstNode)
+            {
+                FirstNode = firstNode;
+                Current = null;
+            }
+
+            BytesView FirstNode { get; }
+            public BytesView Current { get; private set; }
+
+            object IEnumerator.Current => Current;
+
+            public void Dispose()
+            {
+            }
+
+            public bool MoveNext()
+            {
+                if(Current == null) {
+                    Current = FirstNode;
+                    return true;
+                }
+                Current = Current.nextNode;
+                return Current != null;
+            }
+
+            public void Reset()
+            {
+                Current = null;
+            }
+        }
+    }
+
+    public struct BytesSegment
+    {
+        public byte[] Bytes;
+        public int Offset;
+        public int Len;
+
+        public BytesSegment(byte[] bytes)
+        {
+            this.Bytes = bytes;
+            this.Offset = 0;
+            this.Len = bytes.Length;
+        }
+
+        public BytesSegment(BytesView bv)
+        {
+            this.Bytes = bv.bytes;
+            this.Offset = bv.offset;
+            this.Len = bv.len;
+        }
+
+        public BytesSegment(byte[] bytes, int offset, int len)
+        {
+            this.Bytes = bytes;
+            this.Offset = offset;
+            this.Len = len;
+        }
+
+        public void Set(byte[] bytes)
+        {
+            this.Bytes = bytes;
+            this.Offset = 0;
+            this.Len = bytes.Length;
+        }
+
+        public void Set(byte[] bytes, int offset, int len)
+        {
+            this.Bytes = bytes;
+            this.Offset = offset;
+            this.Len = len;
+        }
+
+        public byte[] GetBytes()
+        {
+            return GetBytes(false);
+        }
+
+        public byte[] GetBytes(bool forceCreateNew)
+        {
+            if (!forceCreateNew && (Offset == 0 & Len == Bytes.Length)) {
+                return Bytes;
+            }
+            var buf = new Byte[Len];
+            Buffer.BlockCopy(Bytes, Offset, buf, 0, Len);
+            return buf;
+        }
+
+        public byte this[int index]
+        {
+            get => Bytes[Offset + index];
+            set => Bytes[Offset + index] = value;
+        }
+
+
+        public static implicit operator BytesSegment(byte[] bytes)
+        {
+            return new BytesSegment(bytes);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void CheckAsParameter()
+        {
+            if (Bytes == null)
+                throw new ArgumentNullException("Bytes");
+            if (Offset < 0 | Len < 0)
+                throw new ArgumentOutOfRangeException("Offset and Len cannot be less than zero");
+            if (Bytes.Length < Offset + Len)
+                throw new ArgumentException("Bytes.Length < Offset + Len");
+        }
+    }
+
+    public class Filterable
+    {
+
+        public Action<BytesView> ReadFilter;
+        public Action<BytesView> WriteFilter;
 
         public void ClearFilter()
         {
@@ -885,43 +1187,6 @@ namespace Naive.HttpSvr
         {
             AddWriteFilter(GetAesStreamFilter(true, key));
             AddReadFilter(GetAesStreamFilter(false, key));
-        }
-
-        public async Task StartVerify(bool recvFirst)
-        {
-            var rd = RandomNumberGenerator.Create();
-            var sha256 = SHA256.Create();
-            if (recvFirst) {
-                // 1
-                var rep = await ReadAsync().CAF(); // 1 <-
-                if (rep.len != 32)
-                    throw new Exception("handshake failed: wrong packet1 length");
-                var sendbuf = new byte[64];
-                var clihash = sha256.ComputeHash(rep.bv.GetBytes());
-                clihash.CopyTo(sendbuf, 0);
-                byte[] serverrandom = new byte[32];
-                rd.GetBytes(serverrandom);
-                serverrandom.CopyTo(sendbuf, 32);
-                await SendBytesAsync(sendbuf).CAF(); // 2 ->
-                rep = await ReadAsync().CAF(); // 3 <-
-                if (rep.len != 32)
-                    throw new Exception("handshake failed: wrong packet3 length");
-                if (sha256.ComputeHash(serverrandom).SequenceEqual(rep.payload.Take(32).ToArray()) == false)
-                    throw new Exception("handshake failed: wrong packet3");
-
-            } else {
-                byte[] clientrandom = new byte[32];
-                rd.GetBytes(clientrandom);
-                await SendBytesAsync(clientrandom.Clone() as byte[]).CAF(); // 1 -> : client random (32 bytes)
-                var rep = await ReadAsync().CAF(); // 2 <- : sha256 of client random (32 bytes) | server random (32 bytes)
-                if (rep.len != 64)
-                    throw new Exception("handshake failed: wrong packet2 length");
-                var excepted = sha256.ComputeHash(clientrandom);
-                if (excepted.SequenceEqual(rep.bv.GetBytes(0, 32)) == false)
-                    throw new Exception("handshake failed: wrong packet2");
-                var buf2 = rep.bv.GetBytes(32, 32);
-                await SendBytesAsync(sha256.ComputeHash(buf2)).CAF(); // 3 -> : sha256 of server random bytes (32 bytes)
-            }
         }
 
         public void ApplyDeflateFilter()
@@ -1208,237 +1473,6 @@ namespace Naive.HttpSvr
                     }
                 }
             };
-        }
-
-        #endregion
-    }
-
-    public class BytesView
-    {
-        public byte[] bytes;
-        public int offset;
-        public int len;
-        public BytesView nextNode;
-
-        public BytesView()
-        {
-        }
-
-        public BytesView(byte[] bytes)
-        {
-            Set(bytes);
-        }
-
-        public BytesView(byte[] bytes, int offset, int len)
-        {
-            Set(bytes, offset, len);
-        }
-
-        public void Set(byte[] bytes)
-        {
-            this.bytes = bytes;
-            this.offset = 0;
-            this.len = bytes.Length;
-        }
-
-        public void Set(byte[] bytes, int offset, int len)
-        {
-            this.bytes = bytes;
-            this.offset = offset;
-            this.len = len;
-        }
-
-        public void Set(BytesView bv)
-        {
-            this.bytes = bv.bytes;
-            this.offset = bv.offset;
-            this.len = bv.len;
-        }
-
-        public BytesView Clone()
-        {
-            return new BytesView(bytes, offset, len) { nextNode = nextNode };
-        }
-
-        public void Sub(int startIndex)
-        {
-            // TODO
-            if (len < startIndex)
-                throw new NotImplementedException();
-            offset += startIndex;
-            len -= startIndex;
-        }
-
-        public byte[] GetBytes() => GetBytes(0, tlen);
-        public byte[] GetBytes(bool forceNew) => GetBytes(0, tlen, forceNew);
-        public byte[] GetBytes(int offset, int len) => GetBytes(offset, len, false);
-        public byte[] GetBytes(int offset, int len, bool forceNew)
-        {
-            if (!forceNew && offset == 0 & this.offset == 0 & len == bytes.Length) {
-                return bytes;
-            }
-            var buf = new Byte[len];
-            for (int i = 0; i < len; i++) {
-                buf[i] = this[offset + i];
-            }
-            return buf;
-        }
-
-        public BytesView lastNode
-        {
-            get {
-                var curnode = this;
-                while (curnode.nextNode != null) {
-                    curnode = curnode.nextNode;
-                }
-                return curnode;
-            }
-        }
-
-        public int tlen
-        {
-            get {
-                var len = 0;
-                var curnode = this;
-                do {
-                    len += curnode.len;
-                } while ((curnode = curnode.nextNode) != null);
-                return len;
-            }
-        }
-
-        public byte this[int index]
-        {
-            get {
-                if (index < 0) throw new ArgumentOutOfRangeException(nameof(index));
-                var pos = 0;
-                var curnode = this;
-                do {
-                    if (index < pos + curnode.len) {
-                        return curnode.bytes[curnode.offset + index - pos];
-                    }
-                    pos += curnode.len;
-                } while ((curnode = curnode.nextNode) != null);
-                throw new IndexOutOfRangeException();
-            }
-            set {
-                if (index < 0) throw new ArgumentOutOfRangeException(nameof(index));
-                var pos = 0;
-                var curnode = this;
-                do {
-                    if (index < pos + curnode.len) {
-                        curnode.bytes[curnode.offset + index - pos] = value;
-                        return;
-                    }
-                    pos += curnode.len;
-                } while ((curnode = curnode.nextNode) != null);
-            }
-        }
-
-        public override string ToString()
-        {
-            int n = 1;
-            var node = this;
-            while ((node = node.nextNode) != null) {
-                n++;
-            }
-            StringBuilder sb = new StringBuilder($"{{BytesView n={n} tlen={tlen}| ");
-            var tooLong = tlen > 12;
-            var shownSize = Math.Min(12, tlen);
-            for (int i = 0; i < shownSize; i++) {
-                sb.Append(this[i]);
-                sb.Append(',');
-            }
-            sb.Remove(sb.Length - 1, 1);
-            if (tooLong)
-                sb.Append("...");
-            sb.Append('}');
-            return sb.ToString();
-        }
-
-        public static implicit operator BytesView(byte[] bytes)
-        {
-            return new BytesView(bytes);
-        }
-    }
-
-    public struct BytesSegment
-    {
-        public byte[] Bytes;
-        public int Offset;
-        public int Len;
-
-        public BytesSegment(byte[] bytes)
-        {
-            this.Bytes = bytes;
-            this.Offset = 0;
-            this.Len = bytes.Length;
-        }
-
-        public BytesSegment(BytesView bv)
-        {
-            this.Bytes = bv.bytes;
-            this.Offset = bv.offset;
-            this.Len = bv.len;
-        }
-
-        public BytesSegment(byte[] bytes, int offset, int len)
-        {
-            this.Bytes = bytes;
-            this.Offset = offset;
-            this.Len = len;
-        }
-
-        public void Set(byte[] bytes)
-        {
-            this.Bytes = bytes;
-            this.Offset = 0;
-            this.Len = bytes.Length;
-        }
-
-        public void Set(byte[] bytes, int offset, int len)
-        {
-            this.Bytes = bytes;
-            this.Offset = offset;
-            this.Len = len;
-        }
-
-        public byte[] GetBytes()
-        {
-            return GetBytes(false);
-        }
-
-        public byte[] GetBytes(bool forceCreateNew)
-        {
-            if (!forceCreateNew && (Offset == 0 & Len == Bytes.Length)) {
-                return Bytes;
-            }
-            var buf = new Byte[Len];
-            Buffer.BlockCopy(Bytes, Offset, buf, 0, Len);
-            return buf;
-        }
-
-        public byte this[int index]
-        {
-            get => Bytes[Offset + index];
-            set => Bytes[Offset + index] = value;
-        }
-
-
-        public static implicit operator BytesSegment(byte[] bytes)
-        {
-            return new BytesSegment(bytes);
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void CheckAsParameter()
-        {
-            if (Bytes == null)
-                throw new ArgumentNullException("Bytes");
-            if (Offset < 0 | Len < 0)
-                throw new ArgumentOutOfRangeException("Offset and Len cannot be less than zero");
-            if (Bytes.Length < Offset + Len)
-                throw new ArgumentException("Bytes.Length < Offset + Len");
         }
     }
 

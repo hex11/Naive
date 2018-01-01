@@ -132,7 +132,6 @@ namespace Naive.HttpSvr
         }
     }
 
-
     public abstract class ReadOnlyStream : Stream
     {
         public override bool CanRead => true;

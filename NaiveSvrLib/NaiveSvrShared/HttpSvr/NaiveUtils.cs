@@ -346,7 +346,7 @@ namespace Naive.HttpSvr
                 }
             }
             if (!withPattern) {
-                ms.SetLength(patternLength);
+                ms.SetLength(ms.Length - patternLength);
             }
             return ms.ToArray();
         }

@@ -2,6 +2,7 @@
 using System.Threading.Tasks;
 using Naive.HttpSvr;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace NaiveSocks
 {
@@ -33,24 +34,45 @@ namespace NaiveSocks
                     bool isXum = req.additionalString.StartsWith(XumPrefix);
                     ImuxSession imux = null;
                     if (isXum || req.additionalString == "channels") {
-                        var ws = new WebSocketServer(p);
-                        if ((await ws.HandleRequestAsync(false)).IsConnected == false)
-                            return;
-                        ws.AddToManaged();
-                        ws.ApplyAesStreamFilter(realKey);
                         IMsgStream msgStream;
                         if (isXum) {
                             var arr = NaiveUtils.DeserializeArray(req.additionalString.Substring(XumPrefix.Length));
                             var sessionId = arr[0];
-                            var connCount = Int32.Parse(arr[1]);
+                            int wsCount = Int32.Parse(arr[1]), wssoCount = 0, httpCount = 0;
                             var connId = Int32.Parse(arr[2]);
+                            if (arr.Count > 3) {
+                                wssoCount = Int32.Parse(arr[3]);
+                                httpCount = Int32.Parse(arr[4]);
+                            }
+                            var connCount = wsCount + wssoCount + httpCount;
                             if (connCount > imux_max) {
                                 Logging.warning($"{this}: {p.remoteEP}: IMUX count requesting ({connCount}) > imux_max ({imux_max})");
                                 return;
                             }
+                            IMsgStream wsOrHttp;
+                            if (connId < connCount - httpCount) {
+                                var ws = new WebSocketServer(p);
+                                if ((await ws.HandleRequestAsync(false)).IsConnected == false)
+                                    return;
+                                ws.AddToManaged();
+                                ws.ApplyAesStreamFilter(realKey);
+                                wsOrHttp = ws;
+                            } else {
+                                p.setStatusCode("200 OK");
+                                p.setHeader(HttpHeaders.KEY_Transfer_Encoding, HttpHeaders.VALUE_Transfer_Encoding_chunked);
+                                await p.EndResponseAsync();
+                                var baseStream = MyStream.FromStream(p.SwitchProtocol());
+                                var msf = new MsgStreamFilter(new HttpChunkedEncodingMsgStream(baseStream));
+                                msf.AddWriteFilter(Filterable.GetAesStreamFilter(true, realKey));
+                                wsOrHttp = msf;
+                            }
                             lock (atoDict) {
                                 if (atoDict.TryGetValue(sessionId, out imux) == false) {
-                                    imux = new ImuxSession(sessionId, connCount);
+                                    imux = new ImuxSession(sessionId, connCount) {
+                                        WsCount = wsCount,
+                                        WssoCount = wssoCount,
+                                        HttpCount = httpCount
+                                    };
                                     atoDict.Add(sessionId, imux);
                                     NaiveUtils.RunAsyncTask(async () => {
                                         await Task.Delay(10 * 1000);
@@ -60,7 +82,7 @@ namespace NaiveSocks
                                         }
                                     });
                                 }
-                                if (imux.SetWebsocket(ws, connId)) {
+                                if (imux.HandleConnection(wsOrHttp, connId)) {
                                     msgStream = imux.MuxStream;
                                     goto IMUX_OK;
                                 }
@@ -69,6 +91,11 @@ namespace NaiveSocks
                             return;
                             IMUX_OK:;
                         } else {
+                            var ws = new WebSocketServer(p);
+                            if ((await ws.HandleRequestAsync(false)).IsConnected == false)
+                                return;
+                            ws.AddToManaged();
+                            ws.ApplyAesStreamFilter(realKey);
                             msgStream = ws;
                         }
                         var nms = new NaiveMSocks(new NaiveMultiplexing(msgStream)) {
@@ -90,7 +117,7 @@ namespace NaiveSocks
                         }
                     }
                 } catch (Exception e) {
-                    Logging.exception(e, Logging.Level.Error);
+                    Logging.exception(e, Logging.Level.Error, "NaiveMHandler Url: " + p.Url);
                 } finally {
                     if (p.ConnectionState == HttpConnection.States.Processing) {
                         p.Handled = false;
@@ -103,23 +130,25 @@ namespace NaiveSocks
                 public ImuxSession(string sid, int count)
                 {
                     SessionId = sid;
-                    WebSockets = new WebSocketServer[count];
+                    Connections = new IMsgStream[count];
                 }
 
                 public string SessionId;
-                public WebSocketServer[] WebSockets;
-                public int Count => WebSockets.Length;
+                public IMsgStream[] Connections;
+                public int Count => Connections.Length;
                 public int ConnectedCount;
                 public InverseMuxStream MuxStream;
 
+                public int WssoCount, WsCount, HttpCount;
+
                 public TaskCompletionSource<object> WhenComplete = new TaskCompletionSource<object>();
 
-                public bool SetWebsocket(WebSocketServer wss, int id)
+                public bool HandleConnection(IMsgStream msgStream, int id)
                 {
-                    lock (WebSockets) {
-                        if (this.WebSockets[id] != null)
-                            throw new Exception();
-                        WebSockets[id] = wss;
+                    lock (Connections) {
+                        if (this.Connections[id] != null)
+                            throw new Exception($"imux sid {SessionId} id {id} already exists.");
+                        Connections[id] = msgStream;
                         ConnectedCount++;
                         return checkCount();
                     }
@@ -128,7 +157,13 @@ namespace NaiveSocks
                 bool checkCount()
                 {
                     if (ConnectedCount == Count) {
-                        MuxStream = new InverseMuxStream(this.WebSockets);
+                        if (WsCount == Count)
+                            MuxStream = new InverseMuxStream(this.Connections);
+                        else
+                            MuxStream = new InverseMuxStream(
+                                recvStreams: Connections.Take(WssoCount + WsCount),
+                                sendStreams: Connections.Skip(WssoCount)
+                                );
                         return true;
                     }
                     return false;

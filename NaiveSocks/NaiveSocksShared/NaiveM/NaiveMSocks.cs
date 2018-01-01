@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Naive.HttpSvr;
 using System.Diagnostics;
 using System.Collections.Generic;
+using System.IO;
 
 namespace NaiveSocks
 {
@@ -46,8 +47,9 @@ namespace NaiveSocks
             public Dictionary<string, string> Headers { get; set; }
             public string UrlFormat { get; set; } = "{0}?token={1}";
 
-            public int ImuxHttpConnections { get; set; } = 0;
             public int ImuxConnections { get; set; } = 1;
+            public int ImuxHttpConnections { get; set; } = 0;
+            public int ImuxWsSendOnlyConnections { get; set; } = 0;
             public int ImuxConnectionsDelay { get; set; } = 0;
             public int Timeout { get; internal set; }
         }
@@ -90,15 +92,16 @@ namespace NaiveSocks
                         var httpClient = new HttpClient(stream2);
                         var response = await httpClient.Request(new HttpRequest() {
                             Method = "GET",
-                            Path = settings.Path,
+                            Path = reqPath,
                             Headers = settings.Headers
                         });
                         if (response.StatusCode != "200")
                             throw new Exception($"remote response: '{response.StatusCode} {response.ReasonPhrase}'");
                         if (!response.TestHeader(HttpHeaders.KEY_Transfer_Encoding, HttpHeaders.VALUE_Transfer_Encoding_chunked))
                             throw new Exception("test header failed: Transfer-Encoding != chunked");
-                        var chunkedStream = InputDataStream.FromStreamChunked(stream2);
-                        throw new NotImplementedException();
+                        var msf = new MsgStreamFilter(new HttpChunkedEncodingMsgStream(stream));
+                        msf.AddReadFilter(Filterable.GetAesStreamFilter(false, key));
+                        return msf;
                     } catch (Exception) {
                         MyStream.CloseWithTimeout(r.Stream);
                         throw;
@@ -114,17 +117,31 @@ namespace NaiveSocks
                 }
             }
             IMsgStream msgStream;
-            int count = settings.ImuxConnections;
+            // [ wsso | ws | http ]
+            int wssoCount = settings.ImuxWsSendOnlyConnections; // sending only (index starting from 0)
+            int wsCount = settings.ImuxConnections; // sending and recving (index following by wssoCount)
+            int httpCount = settings.ImuxHttpConnections; // recving only
+            int count = wssoCount + wsCount + httpCount;
             string sid = Guid.NewGuid().ToString("N").Substring(0, 8);
             if (count > 1) {
-                string strCount = count.ToString();
+                int httpStart = count - httpCount;
                 var tasks = Enumerable.Range(0, count).Select(x => NaiveUtils.RunAsyncTask(async () => {
                     if (settings.ImuxConnectionsDelay > 0)
                         await Task.Delay(settings.ImuxConnectionsDelay * x);
-                    return await connect(ImuxPrefix + NaiveUtils.SerializeArray(sid, strCount, x.ToString()));
+                    return await connect(ImuxPrefix + NaiveUtils.SerializeArray(sid, wsCount.ToString(), x.ToString(), wssoCount.ToString(), httpCount.ToString()), x >= httpStart);
                 })).ToArray();
                 var streams = await Task.WhenAll(tasks);
-                msgStream = new InverseMuxStream(streams);
+                if (httpCount == 0 && wssoCount == 0) {
+                    msgStream = new InverseMuxStream(streams);
+                } else {
+                    foreach(WebSocket ws in streams.Take(wssoCount)) {
+                        ws.ReadAsync().Forget();
+                    }
+                    msgStream = new InverseMuxStream(
+                        sendStreams: streams.Take(wssoCount + wsCount),
+                        recvStreams: streams.Skip(wssoCount)
+                    );
+                }
             } else {
                 msgStream = await connect("channels");
             }
@@ -439,6 +456,158 @@ namespace NaiveSocks
                 }
             }
         }
+    }
 
+    public class MsgStreamFilter : Filterable, IMsgStream
+    {
+        public MsgStreamFilter(IMsgStream baseStream)
+        {
+            BaseStream = baseStream;
+        }
+
+        public IMsgStream BaseStream { get; }
+
+        public MsgStreamStatus State => BaseStream.State;
+
+        public Task Close(CloseOpt closeOpt)
+        {
+            return BaseStream.Close(closeOpt);
+        }
+
+        public async Task<Msg> RecvMsg(BytesView buf)
+        {
+            var msg = await BaseStream.RecvMsg(buf);
+            if (!msg.IsEOF && msg.Data.tlen > 0)
+                ReadFilter?.Invoke(msg.Data);
+            return msg;
+        }
+
+        public Task SendMsg(Msg msg)
+        {
+            if (!msg.IsEOF && msg.Data.tlen > 0)
+                WriteFilter?.Invoke(msg.Data);
+            return BaseStream.SendMsg(msg);
+        }
+    }
+
+
+    public class HttpChunkedEncodingMsgStream : IMsgStream
+    {
+        public HttpChunkedEncodingMsgStream(IMyStream baseStream)
+        {
+            this.BaseStream = baseStream;
+        }
+
+        public IMyStream BaseStream { get; }
+        private Stream asStream;
+
+        public MsgStreamStatus State => (MsgStreamStatus)BaseStream.State;
+
+        public Task Close(CloseOpt closeOpt)
+        {
+            if (closeOpt.CloseType == CloseType.Shutdown) {
+                return BaseStream.Shutdown(closeOpt.ShutdownType);
+            } else {
+                return BaseStream.Close();
+            }
+        }
+
+        byte[] _crlfBuffer = new byte[2];
+
+        public async Task<Msg> RecvMsg(BytesView buf)
+        {
+            if (asStream == null)
+                asStream = BaseStream.ToStream();
+            var lengthStr = await NaiveUtils.ReadStringUntil(asStream, NaiveUtils.CRLFBytes, maxLength: 32, withPattern: false);
+            var chunkSize = Convert.ToInt32(lengthStr, 16);
+            //Logging.debug("recv: " + chunkSize);
+            if (chunkSize == 0) {
+                return Msg.EOF;
+            }
+            var buffer = new byte[chunkSize];
+            var pos = 0;
+            var read = 0;
+            do {
+                pos += read = await BaseStream.ReadAsync(new BytesSegment(buffer, pos, chunkSize - pos)).CAF();
+                if (read == 0)
+                    throw new DisconnectedException("unexpected EOF while reading chunked http request content.");
+            } while (pos < chunkSize);
+            read = 0;
+            do { // read CRLF
+                read += await BaseStream.ReadAsync(new BytesSegment(_crlfBuffer, read, 2 - read));
+                if (read == 0)
+                    throw new DisconnectedException("unexpected EOF while reading chunked http request content.");
+            } while (read < 2);
+            if (_crlfBuffer[0] != '\r' && _crlfBuffer[1] != '\n') {
+                throw new Exception($"not a CRLF after chunked payload! {_crlfBuffer[0]} {_crlfBuffer[1]}");
+            }
+            return new Msg(buffer);
+        }
+
+
+
+        private readonly object _syncRootLastSendTask = new object();
+        private Task _latestSendTask;
+
+        public Task SendMsg(Msg msg)
+        {
+            lock (_syncRootLastSendTask) {
+                if (_latestSendTask == null || _latestSendTask.IsCompleted) {
+                    return _latestSendTask = _SendMsg(msg);
+                } else {
+                    return _latestSendTask = _SendMsg_await(_latestSendTask, msg);
+                }
+            }
+        }
+
+
+        private async Task _SendMsg_await(Task taskToWait, Msg msg)
+        {
+            try {
+                await taskToWait;
+            } catch (Exception) { }
+            await _SendMsg(msg);
+        }
+
+        public Task _SendMsg(Msg msg)
+        {
+            //Logging.debug("send: " + msg.Data.tlen);
+            var tlen = msg.Data.tlen;
+            var chunkHeader = getChunkSizeBytes(tlen);
+            if (BaseStream is IMyStreamWithByteViewSupport bvs && tlen > 128) {
+                var bv = new BytesView(chunkHeader) { nextNode = msg.Data };
+                bv.lastNode.nextNode = new BytesView(NaiveUtils.CRLFBytes);
+                return bvs.WriteMultipleAsync(bv);
+            } else {
+                var bufferSize = chunkHeader.Length + tlen + 2;
+                var buffer = new byte[bufferSize];
+                var cur = 0;
+                WriteToBuffer(buffer, ref cur, chunkHeader);
+                foreach (var item in msg.Data) {
+                    if (item.len > 0) {
+                        WriteToBuffer(buffer, ref cur, item.bytes, item.offset, item.len);
+                    }
+                }
+                WriteToBuffer(buffer, ref cur, NaiveUtils.CRLFBytes, 0, 2);
+                return BaseStream.WriteAsync(buffer);
+            }
+        }
+
+        void WriteToBuffer(byte[] buffer, ref int cur, byte[] src)
+        {
+            WriteToBuffer(buffer, ref cur, src, 0, src.Length);
+        }
+
+        void WriteToBuffer(byte[] buffer, ref int cur, byte[] src, int offset, int count)
+        {
+            Buffer.BlockCopy(src, offset, buffer, cur, count);
+            cur += count;
+        }
+
+        private static byte[] getChunkSizeBytes(int size)
+        {
+            string chunkSize = Convert.ToString(size, 16) + "\r\n";
+            return Encoding.UTF8.GetBytes(chunkSize);
+        }
     }
 }
