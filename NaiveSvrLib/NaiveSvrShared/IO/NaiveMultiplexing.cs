@@ -28,9 +28,7 @@ namespace NaiveSocks
         private int Id;
         public int Get()
         {
-            lock (this) {
-                return Id++;
-            }
+            return Interlocked.Increment(ref Id);
         }
     }
 

@@ -96,7 +96,7 @@ namespace NaiveSocks
                 }
             }
 
-            static IMyStream getStream(HttpConnection p) => p.socket != null ? MyStream.FromSocket(p.socket) : MyStream.FromStream(p.baseStream);
+            static IMyStream getStream(HttpConnection p) => p.myStream;
 
             private async Task handleHttp(HttpConnection p)
             {

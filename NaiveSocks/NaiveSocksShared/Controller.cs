@@ -18,6 +18,9 @@ namespace NaiveSocks
 
         public List<InConnection> InConnections = new List<InConnection>();
 
+        private int _totalHandledConnections;
+        public int TotalHandledConnections => _totalHandledConnections;
+
         public Dictionary<string, Type> RegisteredInTypes = new Dictionary<string, Type>();
         public Dictionary<string, Type> RegisteredOutTypes = new Dictionary<string, Type>();
         public Dictionary<string, Func<TomlTable, InAdapter>> RegisteredInCreators = new Dictionary<string, Func<TomlTable, InAdapter>>();
@@ -397,6 +400,7 @@ namespace NaiveSocks
 
         private void onConnectionBegin(InConnection inc, IAdapter outAdapter)
         {
+            System.Threading.Interlocked.Increment(ref _totalHandledConnections);
             if (LoggingLevel <= Logging.Level.None)
                 debug($"'{inc.InAdapter.Name}' {inc} -> '{outAdapter.Name}'");
             lock (InConnections)

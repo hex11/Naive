@@ -80,14 +80,26 @@ Usage: {NAME}.exe [-h|--help] [(-c|--config) FILE] [--no-cli] [--no-log-stdout]
             }
 
             var controller = new Controller();
-            int count = 0;
-            void connectionChanged(InConnection connection)
+            long lastPackets = 0, lastBytes = 0;
+            void updateTitle()
             {
-                lock (CmdConsole.ConsoleOnStdIO.Lock)
-                    Console.Title = $"{NAME} - current/total {controller.InConnections.Count}/{++count} connections";
+                lock (CmdConsole.ConsoleOnStdIO.Lock) {
+                    var p = MyStream.TotalCopiedPackets;
+                    var b = MyStream.TotalCopiedBytes;
+                    Console.Title = $"{NAME} - current/total {controller.InConnections.Count}/{controller.TotalHandledConnections} connections." +
+                        $" copied {p:N0} Δ{p - lastPackets:N0} packets / {b:N0} Δ{b - lastBytes:N0} bytes";
+                    lastPackets = p;
+                    lastBytes = b;
+                }
             }
-            controller.NewConnection += connectionChanged;
-            controller.EndConnection += connectionChanged;
+            //controller.NewConnection += x => updateTitle();
+            //controller.EndConnection += x => updateTitle();
+            NaiveUtils.RunAsyncTask(async () => {
+                while (true) {
+                    await Task.Delay(1000);
+                    updateTitle();
+                }
+            });
             Logging.info($"{NAME} {verstionText}");
             if (specifiedConfigPath != null) {
                 Commands.loadController(controller, specifiedConfigPath);

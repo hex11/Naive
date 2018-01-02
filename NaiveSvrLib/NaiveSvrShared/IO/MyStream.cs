@@ -113,7 +113,7 @@ namespace NaiveSocks
             }
         }
 
-        static Random rd = new Random();
+        private static Random rd = new Random();
 
         public virtual Task Shutdown(SocketShutdown direction)
         {
@@ -131,7 +131,7 @@ namespace NaiveSocks
 
         public virtual Task FlushAsync() => NaiveUtils.CompletedTask;
 
-        public static IMyStream FromSocket(Socket socket) => new SocketWrapper(socket);
+        public static IMyStream FromSocket(Socket socket) => new SocketStream(socket);
 
         public static IMyStream FromStream(Stream stream)
         {
@@ -150,6 +150,17 @@ namespace NaiveSocks
             if (myStream is StreamWrapper sw)
                 return sw.BaseStream;
             return new StreamFromMyStream(myStream);
+        }
+
+        private static long totalCopiedPackets, totalCopiedBytes;
+
+        public static long TotalCopiedPackets => totalCopiedPackets;
+        public static long TotalCopiedBytes => totalCopiedBytes;
+
+        private static void Copied(long bytes)
+        {
+            Interlocked.Increment(ref totalCopiedPackets);
+            Interlocked.Add(ref totalCopiedBytes, bytes);
         }
 
         public static async Task Relay(IMyStream left, IMyStream right, Task whenCanReadFromLeft = null)
@@ -283,6 +294,7 @@ namespace NaiveSocks
                         break;
                     }
                     await streamto.WriteAsync(new BytesSegment(buf.Bytes, buf.Offset, read)).CAF();
+                    Copied(read);
                     //await streamto.FlushAsync();
                 }
             } finally {
@@ -291,7 +303,7 @@ namespace NaiveSocks
             }
         }
 
-        static void debug(string str)
+        private static void debug(string str)
         {
             Logging.debug(str);
         }
@@ -332,167 +344,6 @@ namespace NaiveSocks
 
             public override string ToString() => $"{{Stream {BaseStream}}}";
         }
-
-        public class SocketWrapper : MyStream, IMyStreamByteViewSupport
-        {
-            public SocketWrapper(Socket socket)
-            {
-                this.Socket = socket;
-                this.EPPair = EPPair.FromSocket(socket);
-            }
-
-            public EPPair EPPair { get; }
-            public Socket Socket { get; }
-
-            public override string ToString() => $"{{Socket {State} {EPPair.ToString()}}}";
-
-            static ObjectPool<SocketAsyncEventArgs> recvArgPool = new ObjectPool<SocketAsyncEventArgs>(
-                createFunc: () => {
-                    var arg = new SocketAsyncEventArgs();
-                    arg.Completed += RecvCompletedCallback;
-                    arg.UserToken = new RecvUserToken();
-                    return arg;
-                }) { MaxCount = 48, DisposeFunc = x => x.Dispose() };
-
-            class RecvUserToken
-            {
-                public TaskCompletionSource<int> tcs;
-                public SocketWrapper sw;
-                public void Reset()
-                {
-                    tcs = null;
-                    sw = null;
-                }
-            }
-
-            public override Task<int> ReadAsync(BytesSegment bv)
-            {
-                //return base.ReadAsync(bv);
-                var e = recvArgPool.GetValue();
-                var userToken = ((RecvUserToken)e.UserToken);
-                var tcs = new TaskCompletionSource<int>();
-                userToken.tcs = tcs;
-                var sw = userToken.sw = this;
-                e.SetBuffer(bv.Bytes, bv.Offset, bv.Len);
-                if (!Socket.ReceiveAsync(e)) { // if opearation completed synchronously
-                    // TODO: for performance: put tcs into a pool. return Task.FromResult().
-                    RecvCompleted(e, userToken, this, tcs, true);
-                }
-                return tcs.Task;
-            }
-
-            private static void RecvCompletedCallback(object sender, SocketAsyncEventArgs e)
-            {
-                var userToken = (RecvUserToken)e.UserToken;
-                var sw = userToken.sw;
-                var tcs = userToken.tcs;
-                RecvCompleted(e, userToken, sw, tcs, false);
-            }
-
-            private static void RecvCompleted(SocketAsyncEventArgs e, RecvUserToken userToken, SocketWrapper sw, TaskCompletionSource<int> tcs, bool syncCompleted)
-            {
-                userToken.Reset();
-                e.SetBuffer(null, 0, 0);
-                SocketError socketError = e.SocketError;
-                int bytesTransferred = e.BytesTransferred;
-                recvArgPool.PutValue(e);
-                if (socketError == SocketError.Success) {
-                    if (bytesTransferred == 0) {
-                        Logging.debug($"{sw}: remote shutdown");
-                        sw.State |= MyStreamState.RemoteShutdown;
-                    }
-                    tcs.SetResult(bytesTransferred);
-                } else {
-                    var exception = new SocketException((int)socketError);
-                    if (syncCompleted)
-                        throw exception;
-                    tcs.SetException(exception);
-                }
-            }
-
-            static ObjectPool<SocketAsyncEventArgs> sendArgPool = new ObjectPool<SocketAsyncEventArgs>(
-                createFunc: () => {
-                    var arg = new SocketAsyncEventArgs();
-                    arg.Completed += SendCompletedCallback;
-                    return arg;
-                }) { MaxCount = 16, DisposeFunc = x => x.Dispose() };
-
-            public override Task WriteAsync(BytesSegment bv)
-            {
-                var e = sendArgPool.GetValue();
-                var tcs = new TaskCompletionSource<int>();
-                e.UserToken = tcs;
-                e.SetBuffer(bv.Bytes, bv.Offset, bv.Len);
-                if (!Socket.SendAsync(e)) { // if opearation completed synchronously
-                    SendCompleted(e, tcs, true);
-                }
-                return tcs.Task;
-            }
-
-            public Task WriteMultipleAsync(BytesView bv)
-            {
-                if (bv.nextNode == null)
-                    return WriteAsync(new BytesSegment(bv));
-                var e = sendArgPool.GetValue();
-                var tcs = new TaskCompletionSource<int>();
-                e.UserToken = tcs;
-                int count = 0;
-                foreach (var cur in bv) {
-                    if (cur.len > 0)
-                        count++;
-                }
-                var bufList = e.BufferList = new List<ArraySegment<byte>>(count);
-                foreach (var cur in bv) {
-                    if (cur.len > 0)
-                        bufList.Add(new ArraySegment<byte>(cur.bytes, cur.offset, cur.len));
-                }
-                if (!Socket.SendAsync(e)) { // if opearation completed synchronously
-                    SendCompleted(e, tcs, true);
-                }
-                return tcs.Task;
-            }
-
-            private static void SendCompletedCallback(object sender, SocketAsyncEventArgs e)
-            {
-                var tcs = e.UserToken as TaskCompletionSource<int>;
-                SendCompleted(e, tcs, false);
-            }
-
-            private static void SendCompleted(SocketAsyncEventArgs e, TaskCompletionSource<int> tcs, bool syncCompleted)
-            {
-                e.UserToken = null;
-                if (e.BufferList == null)
-                    e.SetBuffer(null, 0, 0);
-                else
-                    e.BufferList = null;
-                SocketError socketError = e.SocketError;
-                sendArgPool.PutValue(e);
-                if (socketError == SocketError.Success) {
-                    tcs.SetResult(0);
-                } else {
-                    var exception = new SocketException((int)socketError);
-                    if (syncCompleted)
-                        throw exception;
-                    tcs.SetException(exception);
-                }
-            }
-
-            public override Task Close()
-            {
-                Logging.debug($"{this}: close");
-                this.State = MyStreamState.Closed;
-                Socket.Close();
-                return NaiveUtils.CompletedTask;
-            }
-
-            public override Task Shutdown(SocketShutdown direction)
-            {
-                Logging.debug($"{this}: local shutdown");
-                this.State |= MyStreamState.LocalShutdown;
-                Socket.Shutdown(direction);
-                return NaiveUtils.CompletedTask;
-            }
-        }
     }
 
     public static class MyStreamExt
@@ -529,6 +380,188 @@ namespace NaiveSocks
         public static IMyStream ToMyStream(this Stream stream)
         {
             return MyStream.FromStream(stream);
+        }
+    }
+
+
+    public class SocketStream : MyStream, IMyStreamByteViewSupport
+    {
+        public SocketStream(Socket socket)
+        {
+            this.Socket = socket;
+            this.EPPair = EPPair.FromSocket(socket);
+        }
+
+        public EPPair EPPair { get; }
+        public Socket Socket { get; }
+
+        public override string ToString() => $"{{Socket {State} {EPPair.ToString()}}}";
+
+        private static readonly ObjectPool<SocketAsyncEventArgs> readArgPool = new ObjectPool<SocketAsyncEventArgs>(
+            createFunc: () => {
+                var arg = new SocketAsyncEventArgs();
+                arg.Completed += ReadCompletedCallback;
+                arg.UserToken = new ReadUserToken();
+                return arg;
+            }) {
+            MaxCount = 48,
+            DisposeFunc = x => x.Dispose()
+        };
+
+        private static readonly ObjectPool<SocketAsyncEventArgs> writeArgPool = new ObjectPool<SocketAsyncEventArgs>(
+            createFunc: () => {
+                var arg = new SocketAsyncEventArgs();
+                arg.Completed += WriteCompletedCallback;
+                return arg;
+            }) {
+            MaxCount = 16,
+            DisposeFunc = x => x.Dispose()
+        };
+
+        private class ReadUserToken
+        {
+            public TaskCompletionSource<int> tcs;
+            public SocketStream sw;
+            public void Reset()
+            {
+                tcs = null;
+                sw = null;
+            }
+        }
+
+        TaskCompletionSource<int> _unusedWriteTcs, _unusedReadTcs;
+
+        public override Task<int> ReadAsync(BytesSegment bv)
+        {
+            var e = readArgPool.GetValue();
+            var userToken = ((ReadUserToken)e.UserToken);
+            var tcs = _unusedReadTcs ?? new TaskCompletionSource<int>();
+            _unusedReadTcs = null;
+            userToken.tcs = tcs;
+            var sw = userToken.sw = this;
+            e.SetBuffer(bv.Bytes, bv.Offset, bv.Len);
+            if (!Socket.ReceiveAsync(e)) { // if opearation completed synchronously
+                var r = ReadCompleted(e, userToken, sw, out var ex);
+                if (r < 0)
+                    throw ex;
+                _unusedReadTcs = tcs;
+                return Task.FromResult(r);
+            }
+            return tcs.Task;
+        }
+
+        private static void ReadCompletedCallback(object sender, SocketAsyncEventArgs e)
+        {
+            var userToken = (ReadUserToken)e.UserToken;
+            var sw = userToken.sw;
+            var tcs = userToken.tcs;
+            var r = ReadCompleted(e, userToken, sw, out var ex);
+            if (r < 0)
+                tcs.SetException(ex);
+            else
+                tcs.SetResult(r);
+        }
+
+        private static int ReadCompleted(SocketAsyncEventArgs e, ReadUserToken userToken, SocketStream sw, out Exception exception)
+        {
+            userToken.Reset();
+            e.SetBuffer(null, 0, 0);
+            SocketError socketError = e.SocketError;
+            int bytesTransferred = e.BytesTransferred;
+            readArgPool.PutValue(e);
+            if (socketError == SocketError.Success) {
+                if (bytesTransferred == 0) {
+                    Logging.debug($"{sw}: remote shutdown");
+                    sw.State |= MyStreamState.RemoteShutdown;
+                }
+                exception = null;
+                return bytesTransferred;
+            } else {
+                exception = new SocketException((int)socketError);
+                return -1;
+            }
+        }
+
+        public override Task WriteAsync(BytesSegment bv)
+        {
+            var e = writeArgPool.GetValue();
+            e.SetBuffer(bv.Bytes, bv.Offset, bv.Len);
+            return SendAsync(e);
+        }
+
+        public Task WriteMultipleAsync(BytesView bv)
+        {
+            if (bv.nextNode == null)
+                return WriteAsync(new BytesSegment(bv));
+            var e = writeArgPool.GetValue();
+            int count = 0;
+            foreach (var cur in bv) {
+                if (cur.len > 0)
+                    count++;
+            }
+            var bufList = e.BufferList = new List<ArraySegment<byte>>(count);
+            foreach (var cur in bv) {
+                if (cur.len > 0)
+                    bufList.Add(new ArraySegment<byte>(cur.bytes, cur.offset, cur.len));
+            }
+            return SendAsync(e);
+        }
+
+        private Task SendAsync(SocketAsyncEventArgs e)
+        {
+            var tcs = _unusedWriteTcs ?? new TaskCompletionSource<int>();
+            _unusedWriteTcs = null;
+            e.UserToken = tcs;
+            if (!Socket.SendAsync(e)) { // if opearation completed synchronously
+                if (!WriteCompleted(e, out var ex))
+                    throw ex;
+                _unusedWriteTcs = tcs;
+                return NaiveUtils.CompletedTask;
+            }
+            return tcs.Task;
+        }
+
+        private static void WriteCompletedCallback(object sender, SocketAsyncEventArgs e)
+        {
+            var tcs = e.UserToken as TaskCompletionSource<int>;
+            if (WriteCompleted(e, out var ex))
+                tcs.SetResult(0);
+            else
+                tcs.SetException(ex);
+        }
+
+        private static bool WriteCompleted(SocketAsyncEventArgs e, out Exception exception)
+        {
+            e.UserToken = null;
+            if (e.BufferList == null)
+                e.SetBuffer(null, 0, 0);
+            else
+                e.BufferList = null;
+            SocketError socketError = e.SocketError;
+            writeArgPool.PutValue(e);
+            if (socketError == SocketError.Success) {
+                exception = null;
+                return true;
+            } else {
+                exception = new SocketException((int)socketError);
+                return false;
+            }
+        }
+
+        public override Task Close()
+        {
+            Logging.debug($"{this}: close");
+            this.State = MyStreamState.Closed;
+            Socket.Close();
+            return NaiveUtils.CompletedTask;
+        }
+
+        public override Task Shutdown(SocketShutdown direction)
+        {
+            Logging.debug($"{this}: local shutdown");
+            this.State |= MyStreamState.LocalShutdown;
+            Socket.Shutdown(direction);
+            return NaiveUtils.CompletedTask;
         }
     }
 
@@ -625,7 +658,7 @@ namespace NaiveSocks
             await MsgStream.Close(new CloseOpt(CloseType.Shutdown, direction)).CAF();
         }
 
-        BytesView latestMsg = null;
+        private BytesView latestMsg = null;
 
         public async Task<int> ReadAsync(BytesSegment bv)
         {
@@ -682,7 +715,7 @@ namespace NaiveSocks
             return Description ?? Another.Description;
         }
 
-        object _syncRoot = new object();
+        private object _syncRoot = new object();
 
         public LoopbackStream Another { get; }
 
@@ -696,25 +729,25 @@ namespace NaiveSocks
             Another = another;
         }
 
-        TaskCompletionSource<object> tcsNewBuffer;
-        void notifyNewBuffer()
+        private TaskCompletionSource<object> tcsNewBuffer;
+        private void notifyNewBuffer()
         {
             var tmp = tcsNewBuffer;
             tcsNewBuffer = null;
             tmp?.SetResult(null);
         }
 
-        TaskCompletionSource<object> tcsBufferEmptied;
-        void notifyBufferEmptied()
+        private TaskCompletionSource<object> tcsBufferEmptied;
+        private void notifyBufferEmptied()
         {
             var tmp = tcsBufferEmptied;
             tcsBufferEmptied = null;
             tmp?.SetResult(null);
         }
 
-        BytesSegment buffer;
+        private BytesSegment buffer;
 
-        bool recvEOF = false;
+        private bool recvEOF = false;
 
         public Task Close()
         {
