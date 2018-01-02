@@ -1,4 +1,5 @@
-﻿using System;
+﻿using NaiveSocks;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
@@ -15,8 +16,25 @@ namespace Naive.HttpSvr
 {
     public class HttpConnection : ObjectWithTags, IDisposable
     {
+        public HttpConnection(Stream stream, EPPair epPair, NaiveHttpServer server)
+        {
+            this.baseStream = stream;
+            this.myStream = stream.ToMyStream();
+            this.server = server;
+            this.epPair = epPair;
+        }
+
+        public HttpConnection(IMyStream myStream, EPPair epPair, NaiveHttpServer server)
+        {
+            this.baseStream = myStream.ToStream();
+            this.myStream = myStream;
+            this.server = server;
+            this.epPair = epPair;
+        }
+
         //public TcpClient tcpClient;
         public Stream baseStream;
+        public IMyStream myStream;
         public NaiveHttpServer server;
 
         public Socket socket;
@@ -29,8 +47,10 @@ namespace Naive.HttpSvr
         public TextWriter outputWriter;
 
         public InputDataStream inputDataStream;
-        public IPEndPoint remoteEP;
-        public IPEndPoint localEP;
+
+        public EPPair epPair;
+        public IPEndPoint remoteEP => epPair.RemoteEP;
+        public IPEndPoint localEP => epPair.LocalEP;
 
         public Hashtable RequestHeaders;
 
@@ -122,14 +142,6 @@ namespace Naive.HttpSvr
                 return connection?.Contains(VALUE_Connection_Keepalive) == true
                 || (HttpVersion == "HTTP/1.1" && connection?.Contains(VALUE_Connection_close) != true);
             }
-        }
-
-        public HttpConnection(Stream stream, EPPair ePPair, NaiveHttpServer server)
-        {
-            this.baseStream = stream;
-            this.server = server;
-            remoteEP = ePPair.RemoteEP;
-            localEP = ePPair.LocalEP;
         }
 
         public bool disconnecting = false;
@@ -425,7 +437,7 @@ namespace Naive.HttpSvr
         {
             server.log($"(#{id}|{remoteEP}({RequestCount})) {text}", level);
         }
-        
+
         public Stream SwitchProtocol()
         {
             ConnectionState = States.SwitchedProtocol;

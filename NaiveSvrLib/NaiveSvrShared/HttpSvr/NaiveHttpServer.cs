@@ -10,6 +10,7 @@ using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Net.Security;
+using NaiveSocks;
 
 namespace Naive.HttpSvr
 {
@@ -248,7 +249,8 @@ namespace Naive.HttpSvr
             HttpConnection connection = null;
             try {
                 epPair = EPPair.FromSocket(tcpClient.Client);
-                var stream = tcpClient.GetStream();
+                var myStream = MyStream.FromSocket(tcpClient.Client); //tcpClient.GetStream();
+                var stream = myStream.ToStream();
                 connection = this.CreateHttpConnectionObject(tcpClient, stream, epPair);
                 if (connection == null) {
                     try {

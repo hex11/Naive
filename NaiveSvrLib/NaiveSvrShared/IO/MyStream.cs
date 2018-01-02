@@ -137,6 +137,9 @@ namespace NaiveSocks
         {
             if (stream is IMyStream mystream)
                 return mystream;
+            if (stream is StreamFromMyStream sfms) {
+                return sfms.BaseStream;
+            }
             return new StreamWrapper(stream);
         }
 
@@ -372,6 +375,7 @@ namespace NaiveSocks
                 var sw = userToken.sw = this;
                 e.SetBuffer(bv.Bytes, bv.Offset, bv.Len);
                 if (!Socket.ReceiveAsync(e)) { // if opearation completed synchronously
+                    // TODO: for performance: put tcs into a pool. return Task.FromResult().
                     RecvCompleted(e, userToken, this, tcs, true);
                 }
                 return tcs.Task;
