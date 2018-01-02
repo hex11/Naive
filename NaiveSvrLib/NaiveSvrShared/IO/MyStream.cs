@@ -485,7 +485,7 @@ namespace NaiveSocks
         }
     }
 
-    static class MyStreamExt
+    public static class MyStreamExt
     {
         public static Task WriteMultipleAsync(this IMyStream myStream, BytesView bv)
         {
@@ -517,7 +517,7 @@ namespace NaiveSocks
         }
     }
 
-    class StreamFromMyStream : Stream
+    public class StreamFromMyStream : Stream
     {
         public StreamFromMyStream(IMyStream baseStream)
         {

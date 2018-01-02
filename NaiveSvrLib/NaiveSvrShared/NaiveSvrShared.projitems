@@ -10,10 +10,11 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\CompressedOutputStream.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\MsgStream.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IO\MsgStream.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\MultipartFormDataReader.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IO\MyStream.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\NaiveHttpServer.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\NaiveMultiplexing.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IO\NaiveMultiplexing.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\NaiveUtils.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\NaiveWebsiteRouter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\HttpAuthFilter.cs" />
@@ -31,5 +32,8 @@
     <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\WebSocketClient.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\WebSocketServer.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)NaiveTemplate\NaiveTemplate.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="$(MSBuildThisFileDirectory)IO\" />
   </ItemGroup>
 </Project>

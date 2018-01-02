@@ -19,7 +19,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)InAdapters\HttpInAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)InAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)InConnection.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)MyStream.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)InAdapters\NaiveInAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)NaiveM\NaiveMOutAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)NaiveM\NaiveMSocks.cs" />
