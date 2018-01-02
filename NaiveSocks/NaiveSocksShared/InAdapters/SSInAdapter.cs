@@ -21,7 +21,7 @@ namespace NaiveSocks
             return provider;
         }
 
-        // copy & plste from ss
+        // copy & plste from ss-csharp. (modified)
         public static void BytesToKey(byte[] password, byte[] key)
         {
             var result = new byte[16 + password.Length];
@@ -166,30 +166,29 @@ namespace NaiveSocks
                         var socket = client.Client;
                         var remoteEP = socket.RemoteEndPoint as IPEndPoint;
                         var dataStream = getEncryptionStream(MyStream.FromSocket(socket));
-                        var buf = new byte[3];
-                        var bs = new BytesSegment(buf);
-                        await dataStream.ReadAsync(bs).CAF();
-                        var addrType = (Socks5Server.AddrType)bs[0];
+                        var buf = new BytesSegment(new byte[3]);
+                        await dataStream.ReadAsync(buf).CAF(); // read ahead
+                        var addrType = (Socks5Server.AddrType)buf[0];
                         string addrString = null;
                         switch (addrType) {
                         case Socks5Server.AddrType.IPv4Address:
                         case Socks5Server.AddrType.IPv6Address:
                             var buf2 = new byte[addrType == Socks5Server.AddrType.IPv4Address ? 4 : 16];
-                            buf2[0] = bs[1];
-                            buf2[1] = bs[2];
+                            buf2[0] = buf[1];
+                            buf2[1] = buf[2];
                             await dataStream.ReadAllAsync(new BytesSegment(buf2, 2, buf2.Length - 2), buf2.Length - 2).CAF();
                             var ip = new IPAddress(buf2);
                             addrString = ip.ToString();
                             break;
                         case Socks5Server.AddrType.DomainName:
-                            var length = bs[1];
+                            var length = buf[1];
                             if (length == 0) {
                                 Logging.warning($"{this}: zero addr length ({remoteEP})");
                                 await Task.Delay(10 * 1000).CAF();
                                 return;
                             }
                             var dnBuf = new byte[length];
-                            dnBuf[0] = bs[2];
+                            dnBuf[0] = buf[2];
                             await dataStream.ReadAllAsync(new BytesSegment(dnBuf, 1, length - 1), length - 1).CAF();
                             addrString = Encoding.ASCII.GetString(dnBuf, 0, length);
                             break;
@@ -198,7 +197,7 @@ namespace NaiveSocks
                             await Task.Delay(10 * 1000 + NaiveUtils.Random.Next(20 * 1000)).CAF();
                             return;
                         }
-                        await dataStream.ReadAllAsync(new BytesSegment(buf), 2).CAF();
+                        await dataStream.ReadAllAsync(buf, 2).CAF();
                         int port = buf[0] << 8 | buf[1];
                         var dest = new AddrPort(addrString, port);
                         await Controller.HandleInConnection(InConnection.Create(this, dest, dataStream, $"remote={remoteEP}")).CAF();

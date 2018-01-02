@@ -50,7 +50,7 @@ namespace NaiveSocks
         {
             try {
                 var result = await ProtectedConnect(arg);
-                if (!result.IsRedirected && !result.Ok) {
+                if (!result.IsRedirected && !result.Ok && if_failed != null) {
                     Logging.error(ToString() + $": {arg} failed ({result.FailedReason}), redirecting to {if_failed}.");
                     return ConnectResult.RedirectTo(if_failed);
                 }

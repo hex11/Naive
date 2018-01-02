@@ -20,7 +20,7 @@ namespace NaiveSocks
         Task FlushAsync();
     }
 
-    public interface IMyStreamWithByteViewSupport : IMyStream
+    public interface IMyStreamByteViewSupport : IMyStream
     {
         Task WriteMultipleAsync(BytesView bv);
     }
@@ -131,8 +131,14 @@ namespace NaiveSocks
 
         public virtual Task FlushAsync() => NaiveUtils.CompletedTask;
 
-        public static MyStream FromSocket(Socket socket) => new SocketWrapper(socket);
-        public static MyStream FromStream(Stream stream) => new StreamWrapper(stream);
+        public static IMyStream FromSocket(Socket socket) => new SocketWrapper(socket);
+
+        public static IMyStream FromStream(Stream stream)
+        {
+            if (stream is IMyStream mystream)
+                return mystream;
+            return new StreamWrapper(stream);
+        }
 
         public static Stream ToStream(IMyStream myStream)
         {
@@ -324,7 +330,7 @@ namespace NaiveSocks
             public override string ToString() => $"{{Stream {BaseStream}}}";
         }
 
-        public class SocketWrapper : MyStream, IMyStreamWithByteViewSupport
+        public class SocketWrapper : MyStream, IMyStreamByteViewSupport
         {
             public SocketWrapper(Socket socket)
             {
@@ -489,7 +495,7 @@ namespace NaiveSocks
     {
         public static Task WriteMultipleAsync(this IMyStream myStream, BytesView bv)
         {
-            if (myStream is IMyStreamWithByteViewSupport bvs) {
+            if (myStream is IMyStreamByteViewSupport bvs) {
                 return bvs.WriteMultipleAsync(bv);
             } else {
                 return NaiveUtils.RunAsyncTask(async () => {
@@ -514,6 +520,11 @@ namespace NaiveSocks
         public static Stream ToStream(this IMyStream myStream)
         {
             return MyStream.ToStream(myStream);
+        }
+
+        public static IMyStream ToMyStream(this Stream stream)
+        {
+            return MyStream.FromStream(stream);
         }
     }
 
@@ -584,7 +595,7 @@ namespace NaiveSocks
         }
     }
 
-    public class MsgStreamToMyStream : IMyStream, IMyStreamWithByteViewSupport
+    public class MsgStreamToMyStream : IMyStream, IMyStreamByteViewSupport
     {
         public MsgStreamToMyStream(IMsgStream msgStream)
         {
@@ -697,7 +708,7 @@ namespace NaiveSocks
             tmp?.SetResult(null);
         }
 
-        MemoryStream memoryStream = new MemoryStream();
+        BytesSegment buffer;
 
         bool recvEOF = false;
 
@@ -729,7 +740,7 @@ namespace NaiveSocks
                 if (tcsNewBuffer?.Task.IsCompleted == false) {
                     throw new Exception("another recv task is running.");
                 }
-                if (memoryStream.Length == 0 & !recvEOF) {
+                if (buffer.Len == 0 & !recvEOF) {
                     tcsNewBuffer = new TaskCompletionSource<object>();
                     task = tcsNewBuffer.Task;
                 }
@@ -737,9 +748,14 @@ namespace NaiveSocks
             if (task != null)
                 await task;
             lock (_syncRoot) {
-                var read = (recvEOF && memoryStream.Length == 0) ? 0 : memoryStream.Read(bv.Bytes, bv.Offset, bv.Len);
-                if (memoryStream.Position == memoryStream.Length) {
-                    memoryStream.SetLength(0);
+                if (recvEOF && buffer.Len == 0) {
+                    return 0;
+                }
+                int read = Math.Min(bv.Len, buffer.Len);
+                buffer.CopyTo(bv, 0, read);
+                buffer = buffer.Sub(read);
+                if (buffer.Len == 0) {
+                    buffer = new BytesSegment();
                     notifyBufferEmptied();
                 }
                 return read;
@@ -751,8 +767,7 @@ namespace NaiveSocks
             lock (_syncRoot) {
                 if (recvEOF)
                     throw new Exception($"{this}: stream closed/shutdown.");
-                memoryStream.Write(bv.Bytes, bv.Offset, bv.Len);
-                memoryStream.Position = 0;
+                buffer = bv;
                 tcsBufferEmptied = new TaskCompletionSource<object>();
                 notifyNewBuffer();
                 return tcsBufferEmptied?.Task ?? NaiveUtils.CompletedTask;

@@ -1019,7 +1019,7 @@ namespace Naive.HttpSvr
 
             public bool MoveNext()
             {
-                if(Current == null) {
+                if (Current == null) {
                     Current = FirstNode;
                     return true;
                 }
@@ -1096,6 +1096,21 @@ namespace Naive.HttpSvr
             set => Bytes[Offset + index] = value;
         }
 
+        public BytesSegment Sub(int begin) => Sub(begin, Len - begin);
+        public BytesSegment Sub(int begin, int count)
+        {
+            return new BytesSegment(Bytes, Offset + begin, count);
+        }
+
+        public void CopyTo(BytesSegment dst, int srcBegin, int count)
+        {
+            Buffer.BlockCopy(Bytes, Offset + srcBegin, dst.Bytes, dst.Offset, count);
+        }
+
+        public void CopyTo(BytesSegment dst, int srcBegin, int count, int dstBegin)
+        {
+            Buffer.BlockCopy(Bytes, Offset + srcBegin, dst.Bytes, dst.Offset + dstBegin, count);
+        }
 
         public static implicit operator BytesSegment(byte[] bytes)
         {

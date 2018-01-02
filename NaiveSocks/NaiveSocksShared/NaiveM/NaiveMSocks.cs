@@ -574,7 +574,7 @@ namespace NaiveSocks
             //Logging.debug("send: " + msg.Data.tlen);
             var tlen = msg.Data.tlen;
             var chunkHeader = getChunkSizeBytes(tlen);
-            if (BaseStream is IMyStreamWithByteViewSupport bvs && tlen > 128) {
+            if (BaseStream is IMyStreamByteViewSupport bvs && tlen > 128) {
                 var bv = new BytesView(chunkHeader) { nextNode = msg.Data };
                 bv.lastNode.nextNode = new BytesView(NaiveUtils.CRLFBytes);
                 return bvs.WriteMultipleAsync(bv);
