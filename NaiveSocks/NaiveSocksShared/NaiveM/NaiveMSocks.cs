@@ -75,7 +75,7 @@ namespace NaiveSocks
             if (settings.Headers?.ContainsKey("Host") == false) {
                 settings.Headers["Host"] = (settings.Host.Port == 80) ? settings.Host.Host : settings.Host.ToString();
             }
-            async Task<IMsgStream> connect(string addStr, bool isHttp = false)
+            Task<IMsgStream> connect(string addStr, bool isHttp = false)
             {
                 var req = new NaiveProtocol.Request(new AddrPort("", 0)) {
                     additionalString = addStr
@@ -84,36 +84,9 @@ namespace NaiveSocks
                 reqbytes = NaiveProtocol.EncryptOrDecryptBytes(true, key, reqbytes);
                 var reqPath = string.Format(settings.UrlFormat, settings.Path, HttpUtil.UrlEncode(Convert.ToBase64String(reqbytes)));
                 if (isHttp) {
-                    var r = await ConnectHelper.Connect(null, settings.Host, 10);
-                    r.ThrowIfFailed();
-                    try {
-                        var stream = r.Stream;
-                        var stream2 = MyStream.ToStream(stream);
-                        var httpClient = new HttpClient(stream2);
-                        var response = await httpClient.Request(new HttpRequest() {
-                            Method = "GET",
-                            Path = reqPath,
-                            Headers = settings.Headers
-                        });
-                        if (response.StatusCode != "200")
-                            throw new Exception($"remote response: '{response.StatusCode} {response.ReasonPhrase}'");
-                        if (!response.TestHeader(HttpHeaders.KEY_Transfer_Encoding, HttpHeaders.VALUE_Transfer_Encoding_chunked))
-                            throw new Exception("test header failed: Transfer-Encoding != chunked");
-                        var msf = new MsgStreamFilter(new HttpChunkedEncodingMsgStream(stream));
-                        msf.AddReadFilter(Filterable.GetAesStreamFilter(false, key));
-                        return msf;
-                    } catch (Exception) {
-                        MyStream.CloseWithTimeout(r.Stream);
-                        throw;
-                    }
+                    return ConnectHttpChunked(settings, key, reqPath);
                 } else {
-                    var ws = await WebSocketClient.ConnectToAsync(settings.Host, reqPath);
-                    await ws.HandshakeAsync(false, settings.Headers);
-                    ws.ManagedPingTimeout = settings.Timeout / 2;
-                    ws.ManagedCloseTimeout = settings.Timeout;
-                    ws.AddToManaged();
-                    ws.ApplyAesStreamFilter(key);
-                    return ws;
+                    return ConnectWebSocket(settings, key, reqPath);
                 }
             }
             IMsgStream msgStream;
@@ -134,7 +107,7 @@ namespace NaiveSocks
                 if (httpCount == 0 && wssoCount == 0) {
                     msgStream = new InverseMuxStream(streams);
                 } else {
-                    foreach(WebSocket ws in streams.Take(wssoCount)) {
+                    foreach (WebSocket ws in streams.Take(wssoCount)) {
                         ws.ReadAsync().Forget();
                     }
                     msgStream = new InverseMuxStream(
@@ -147,6 +120,43 @@ namespace NaiveSocks
             }
             var ncs = new NaiveMSocks(new NaiveMultiplexing(msgStream));
             return ncs;
+        }
+
+        private static async Task<IMsgStream> ConnectWebSocket(ConnectingSettings settings, byte[] key, string reqPath)
+        {
+            var ws = await WebSocketClient.ConnectToAsync(settings.Host, reqPath);
+            await ws.HandshakeAsync(false, settings.Headers);
+            ws.ManagedPingTimeout = settings.Timeout / 2;
+            ws.ManagedCloseTimeout = settings.Timeout;
+            ws.AddToManaged();
+            ws.ApplyAesStreamFilter(key);
+            return ws;
+        }
+
+        private static async Task<IMsgStream> ConnectHttpChunked(ConnectingSettings settings, byte[] key, string reqPath)
+        {
+            var r = await ConnectHelper.Connect(null, settings.Host, 10);
+            r.ThrowIfFailed();
+            try {
+                var stream = r.Stream;
+                var stream2 = MyStream.ToStream(stream);
+                var httpClient = new HttpClient(stream2);
+                var response = await httpClient.Request(new HttpRequest() {
+                    Method = "GET",
+                    Path = reqPath,
+                    Headers = settings.Headers
+                });
+                if (response.StatusCode != "200")
+                    throw new Exception($"remote response: '{response.StatusCode} {response.ReasonPhrase}'");
+                if (!response.TestHeader(HttpHeaders.KEY_Transfer_Encoding, HttpHeaders.VALUE_Transfer_Encoding_chunked))
+                    throw new Exception("test header failed: Transfer-Encoding != chunked");
+                var msf = new MsgStreamFilter(new HttpChunkedEncodingMsgStream(stream));
+                msf.AddReadFilter(Filterable.GetAesStreamFilter(false, key));
+                return msf;
+            } catch (Exception) {
+                MyStream.CloseWithTimeout(r.Stream);
+                throw;
+            }
         }
 
         public async Task HandleInConnection(NaiveSocks.InConnection inConnection)

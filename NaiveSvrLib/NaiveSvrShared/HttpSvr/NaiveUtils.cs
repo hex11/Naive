@@ -521,6 +521,18 @@ namespace Naive.HttpSvr
             return asyncTask();
         }
 
+        public static async Task SetTimeout(int timeout, Func<Task> asyncTask)
+        {
+            await Task.Delay(timeout);
+            await asyncTask();
+        }
+
+        public static async void SetTimeout(int timeout, Action action)
+        {
+            await Task.Delay(timeout);
+            action();
+        }
+
         public static void Forget(this Task task)
         {
             // nothing to do
@@ -1043,7 +1055,6 @@ namespace Naive.HttpSvr
     {
         private readonly Action<T> _resetFunc;
         private readonly Func<T> _createFunc;
-        public Action<T> DisposeFunc;
         private ConcurrentBag<T> _bag = new ConcurrentBag<T>();
         public int MaxCount { get; set; } = 5;
 
@@ -1077,7 +1088,6 @@ namespace Naive.HttpSvr
                 _bag.Add(value);
                 return true;
             }
-            DisposeFunc(value);
             return false;
         }
 

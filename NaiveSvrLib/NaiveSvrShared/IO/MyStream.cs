@@ -404,8 +404,7 @@ namespace NaiveSocks
                 arg.UserToken = new ReadUserToken();
                 return arg;
             }) {
-            MaxCount = 48,
-            DisposeFunc = x => x.Dispose()
+            MaxCount = 48
         };
 
         private static readonly ObjectPool<SocketAsyncEventArgs> writeArgPool = new ObjectPool<SocketAsyncEventArgs>(
@@ -414,8 +413,7 @@ namespace NaiveSocks
                 arg.Completed += WriteCompletedCallback;
                 return arg;
             }) {
-            MaxCount = 16,
-            DisposeFunc = x => x.Dispose()
+            MaxCount = 16
         };
 
         private class ReadUserToken
@@ -468,7 +466,8 @@ namespace NaiveSocks
             e.SetBuffer(null, 0, 0);
             SocketError socketError = e.SocketError;
             int bytesTransferred = e.BytesTransferred;
-            readArgPool.PutValue(e);
+            if (!readArgPool.PutValue(e))
+                e.Dispose();
             if (socketError == SocketError.Success) {
                 if (bytesTransferred == 0) {
                     Logging.debug($"{sw}: remote shutdown");
@@ -538,7 +537,8 @@ namespace NaiveSocks
             else
                 e.BufferList = null;
             SocketError socketError = e.SocketError;
-            writeArgPool.PutValue(e);
+            if (!writeArgPool.PutValue(e))
+                e.Dispose();
             if (socketError == SocketError.Success) {
                 exception = null;
                 return true;

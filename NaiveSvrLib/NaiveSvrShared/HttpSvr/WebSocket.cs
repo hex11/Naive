@@ -110,8 +110,9 @@ namespace Naive.HttpSvr
         {
             NaiveUtils.RunAsyncTask(async () => {
                 List<WebSocket> tmpList = new List<WebSocket>();
+                var rd = new Random();
                 while (true) {
-                    await Task.Delay(2000).CAF();
+                    await Task.Delay(rd.Next(1000, 3000)).CAF();
                     if (ManagedWebSockets.Count == 0)
                         continue;
                     tmpList.Clear();

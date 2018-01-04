@@ -11,7 +11,7 @@ namespace NaiveSocks
         public class NaiveMServerBase : InAdapter
         {
             internal List<NaiveMSocks> nmsList = new List<NaiveMSocks>();
-            Dictionary<string, ImuxSession> atoDict = new Dictionary<string, ImuxSession>();
+            Dictionary<string, ImuxSession> imuxSessions = new Dictionary<string, ImuxSession>();
 
             protected virtual INetwork GetNetwork(string name)
             {
@@ -31,11 +31,11 @@ namespace NaiveSocks
                         bytes = EncryptOrDecryptBytes(false, realKey, bytes);
                     var req = Request.Parse(bytes);
                     const string XumPrefix = "chs2:";
-                    bool isXum = req.additionalString.StartsWith(XumPrefix);
+                    bool isImux = req.additionalString.StartsWith(XumPrefix);
                     ImuxSession imux = null;
-                    if (isXum || req.additionalString == "channels") {
+                    if (isImux || req.additionalString == "channels") {
                         IMsgStream msgStream;
-                        if (isXum) {
+                        if (isImux) {
                             var arr = NaiveUtils.DeserializeArray(req.additionalString.Substring(XumPrefix.Length));
                             var sessionId = arr[0];
                             int wsCount = Int32.Parse(arr[1]), wssoCount = 0, httpCount = 0;
@@ -51,12 +51,7 @@ namespace NaiveSocks
                             }
                             IMsgStream wsOrHttp;
                             if (connId < connCount - httpCount) {
-                                var ws = new WebSocketServer(p);
-                                if ((await ws.HandleRequestAsync(false)).IsConnected == false)
-                                    return;
-                                ws.AddToManaged();
-                                ws.ApplyAesStreamFilter(realKey);
-                                wsOrHttp = ws;
+                                wsOrHttp = await HandleWebsocket(p, realKey);
                             } else {
                                 p.setStatusCode("200 OK");
                                 p.setHeader(HttpHeaders.KEY_Transfer_Encoding, HttpHeaders.VALUE_Transfer_Encoding_chunked);
@@ -66,37 +61,31 @@ namespace NaiveSocks
                                 msf.AddWriteFilter(Filterable.GetAesStreamFilter(true, realKey));
                                 wsOrHttp = msf;
                             }
-                            lock (atoDict) {
-                                if (atoDict.TryGetValue(sessionId, out imux) == false) {
+                            lock (imuxSessions) {
+                                if (imuxSessions.TryGetValue(sessionId, out imux) == false) {
                                     imux = new ImuxSession(sessionId, connCount) {
                                         WsCount = wsCount,
                                         WssoCount = wssoCount,
                                         HttpCount = httpCount
                                     };
-                                    atoDict.Add(sessionId, imux);
-                                    NaiveUtils.RunAsyncTask(async () => {
-                                        await Task.Delay(10 * 1000);
+                                    imuxSessions.Add(sessionId, imux);
+                                    NaiveUtils.SetTimeout(10 * 1000, () => {
                                         if (imux.ConnectedCount != imux.Count) {
                                             Logging.warning($"IMUX (id={imux.SessionId}, count={imux.ConnectedCount}/{imux.Count}) timed out");
-                                            imux.WhenComplete.SetResult(null);
+                                            imux.WhenEnd.SetResult(null);
                                         }
                                     });
                                 }
                                 if (imux.HandleConnection(wsOrHttp, connId)) {
                                     msgStream = imux.MuxStream;
-                                    goto IMUX_OK;
+                                    goto NO_AWAIT;
                                 }
                             }
-                            await imux.WhenComplete.Task;
+                            await imux.WhenEnd.Task;
                             return;
-                            IMUX_OK:;
+                            NO_AWAIT:;
                         } else {
-                            var ws = new WebSocketServer(p);
-                            if ((await ws.HandleRequestAsync(false)).IsConnected == false)
-                                return;
-                            ws.AddToManaged();
-                            ws.ApplyAesStreamFilter(realKey);
-                            msgStream = ws;
+                            msgStream = await HandleWebsocket(p, realKey);
                         }
                         var nms = new NaiveMSocks(new NaiveMultiplexing(msgStream)) {
                             InAdapter = this
@@ -110,9 +99,9 @@ namespace NaiveSocks
                             lock (nmsList)
                                 nmsList.Remove(nms);
                             if (imux != null) {
-                                lock (atoDict)
-                                    atoDict.Remove(imux.SessionId);
-                                imux.WhenComplete.SetResult(null);
+                                lock (imuxSessions)
+                                    imuxSessions.Remove(imux.SessionId);
+                                imux.WhenEnd.SetResult(null);
                             }
                         }
                     }
@@ -123,6 +112,16 @@ namespace NaiveSocks
                         p.Handled = false;
                     }
                 }
+            }
+
+            private static async Task<WebSocketServer> HandleWebsocket(HttpConnection p, byte[] realKey)
+            {
+                var ws = new WebSocketServer(p);
+                if ((await ws.HandleRequestAsync(false)).IsConnected == false)
+                    throw new Exception("websocket handshake failed.");
+                ws.AddToManaged();
+                ws.ApplyAesStreamFilter(realKey);
+                return ws;
             }
 
             class ImuxSession
@@ -141,7 +140,7 @@ namespace NaiveSocks
 
                 public int WssoCount, WsCount, HttpCount;
 
-                public TaskCompletionSource<object> WhenComplete = new TaskCompletionSource<object>();
+                public TaskCompletionSource<object> WhenEnd = new TaskCompletionSource<object>();
 
                 public bool HandleConnection(IMsgStream msgStream, int id)
                 {
