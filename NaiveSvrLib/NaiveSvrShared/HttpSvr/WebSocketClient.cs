@@ -27,26 +27,6 @@ namespace Naive.HttpSvr
                                             : $"{{WebSocketClient on {epPair}}}";
         }
 
-        public static WebSocketClient ConnectTo(string host, int port, string path)
-        {
-            var tcpClient = new TcpClient();
-            try {
-                Socket socket = tcpClient.Client;
-                NaiveUtils.ConfigureSocket(socket);
-                tcpClient.Connect(host, port);
-                NetworkStream networkStream = tcpClient.GetStream();
-                var ws = new WebSocketClient(networkStream, path);
-                ws.Host = host;
-                ws.TcpClient = tcpClient;
-                ws.epPair = EPPair.FromSocket(socket);
-                return ws;
-            } catch (Exception) {
-                if (tcpClient.Connected)
-                    tcpClient.Close();
-                throw;
-            }
-        }
-
         public static Task<WebSocketClient> ConnectToAsync(AddrPort ap, string path) => ConnectToAsync(ap.Host, ap.Port, path);
 
         public static async Task<WebSocketClient> ConnectToAsync(string host, int port, string path)
@@ -56,8 +36,8 @@ namespace Naive.HttpSvr
                 Socket socket = tcpClient.Client;
                 NaiveUtils.ConfigureSocket(socket);
                 await tcpClient.ConnectAsync(host, port);
-                NetworkStream networkStream = tcpClient.GetStream();
-                var ws = new WebSocketClient(networkStream, path);
+                var socketStream = NaiveSocks.MyStream.FromSocket(socket);
+                var ws = new WebSocketClient(NaiveSocks.MyStream.ToStream(socketStream), path);
                 ws.Host = host;
                 ws.TcpClient = tcpClient;
                 return ws;

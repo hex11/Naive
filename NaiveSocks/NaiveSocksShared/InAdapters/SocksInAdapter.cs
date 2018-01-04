@@ -45,7 +45,7 @@ namespace NaiveSocks
                 socks5svr.RequestingToConnect = async (s) => {
                     this.Dest.Host = s.TargetAddr;
                     this.Dest.Port = s.TargetPort;
-                    this.DataStream = MyStream.FromSocket(tcp.Client);
+                    this.DataStream = s.Stream;
                     if (adapter.fastopen)
                         await OnConnectionResult(new ConnectResult(ConnectResults.Conneceted)).CAF();
                     NaiveUtils.RunAsyncTask(async () => {

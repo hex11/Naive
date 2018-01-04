@@ -113,9 +113,9 @@ namespace Naive.HttpSvr
                 var rd = new Random();
                 while (true) {
                     await Task.Delay(rd.Next(1000, 3000)).CAF();
+                    tmpList.Clear();
                     if (ManagedWebSockets.Count == 0)
                         continue;
-                    tmpList.Clear();
                     lock (ManagedWebSockets) {
                         tmpList.AddRange(ManagedWebSockets);
                     }

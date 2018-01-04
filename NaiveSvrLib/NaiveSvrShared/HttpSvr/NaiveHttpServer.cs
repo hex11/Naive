@@ -249,7 +249,7 @@ namespace Naive.HttpSvr
             HttpConnection connection = null;
             try {
                 epPair = EPPair.FromSocket(tcpClient.Client);
-                var myStream = MyStream.FromSocket(tcpClient.Client); //tcpClient.GetStream();
+                var myStream = MyStream.FromSocket(tcpClient.Client);
                 var stream = myStream.ToStream();
                 connection = this.CreateHttpConnectionObject(tcpClient, stream, epPair);
                 if (connection == null) {

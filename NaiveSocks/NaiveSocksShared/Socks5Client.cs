@@ -21,7 +21,6 @@ namespace NaiveSocks
         private string _password;
         private Socket _socket;
         private TcpClient _tcpClient;
-        private NetworkStream _ns;
         private const int SOCKS_VER = 0x05;
         private const int AUTH_METH_SUPPORT = 0x02;
         private const int USER_PASS_AUTH = 0x02;
@@ -44,13 +43,12 @@ namespace NaiveSocks
             _tcpClient = new TcpClient();
         }
 
-        public async Task<Socket> ConnectAsync()
+        public async Task<SocketStream> ConnectAsync()
         {
             await _tcpClient.ConnectAsync(_socksAddr, _socksPort);
             _socket = _tcpClient.Client;
-            _ns = _tcpClient.GetStream();
+            var _ns = new SocketStream(_socket);
             Task write(byte[] buf) => _ns.WriteAsync(buf, 0, buf.Length);
-            Task write2(byte[] buf, int offset, int len) => _ns.WriteAsync(buf, offset, len);
             //Task read(byte[] buf) => _ns.ReadAsync(buf, 0, buf.Length);
             async Task read2(byte[] buf, int offset, int len)
             {
@@ -120,7 +118,7 @@ namespace NaiveSocks
             default:
                 throw new Exception("Not supported addr type: " + buffer[3]);
             }
-            return _socket;
+            return _ns;
         }
 
 
@@ -167,7 +165,7 @@ namespace NaiveSocks
             return array;
         }
 
-        public static Task<Socket> Connect(string socksAddress, int socksPort, string destAddress, int destPort, string username, string password)
+        public static Task<SocketStream> Connect(string socksAddress, int socksPort, string destAddress, int destPort, string username, string password)
         {
             Socks5Client client = new Socks5Client(socksAddress, socksPort, destAddress, destPort, username, password);
             return client.ConnectAsync();

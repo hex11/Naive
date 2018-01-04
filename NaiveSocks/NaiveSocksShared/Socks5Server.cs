@@ -10,7 +10,7 @@ namespace NaiveSocks
     internal class Socks5Server
     {
         public TcpClient Client { get; }
-        public NetworkStream Stream { get; }
+        public IMyStream Stream { get; }
         public byte[] buf;
 
         public Func<Socks5Server, Task> RequestingToConnect;
@@ -32,7 +32,7 @@ namespace NaiveSocks
         public Socks5Server(TcpClient socket)
         {
             this.Client = socket;
-            Stream = Client.GetStream();
+            Stream = MyStream.FromSocket(socket.Client);
         }
 
         public async Task ProcessAsync()
@@ -105,21 +105,10 @@ namespace NaiveSocks
                 await WriteReply(Rep.Command_not_supported);
             }
         }
-
-
-        public int Read(byte[] bytes, int offset, int size)
-        {
-            return Stream.Read(bytes, offset, size);
-        }
-
+        
         public Task<int> ReadAsync(byte[] bytes, int offset, int size)
         {
             return Stream.ReadAsync(bytes, offset, size);
-        }
-
-        public void Write(byte[] bytes, int offset, int size)
-        {
-            Stream.Write(bytes, offset, size);
         }
 
         public Task WriteAsync(byte[] bytes, int offset, int size)
@@ -207,21 +196,7 @@ namespace NaiveSocks
         private Exception getException() => new Exception();
         private Exception getException(string msg) => new Exception(msg);
         private Exception getEOFException() => getException("unexpected EOF");
-
-        public void TargetDisconnected()
-        {
-            disconnect();
-        }
-
-        private void disconnect()
-        {
-            Status = Socks5Status.Disconnected;
-            if (Client.Client.Connected) {
-                Stream.Flush();
-                Client.Client.Shutdown(SocketShutdown.Both);
-                Client.Client.Close();
-            }
-        }
+        
 
         public void FailedToConnect(SocketException ex)
         {

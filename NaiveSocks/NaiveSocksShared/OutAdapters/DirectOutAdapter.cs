@@ -35,7 +35,7 @@ namespace NaiveSocks
             var addr = addrs[0];
             var destTcp = new TcpClient(addr.AddressFamily);
             try {
-                destTcp.NoDelay = true;
+                NaiveUtils.ConfigureSocket(destTcp.Client);
                 var connectTask = destTcp.ConnectAsync(addr, dest.Port);
                 if (timeoutSeconds > 0) {
                     if (await Task.WhenAny(connectTask, Task.Delay(timeoutSeconds * 1000)) != connectTask) {

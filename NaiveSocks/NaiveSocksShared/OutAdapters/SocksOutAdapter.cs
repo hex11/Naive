@@ -13,11 +13,9 @@ namespace NaiveSocks
         public override async Task<ConnectResult> ProtectedConnect(ConnectArgument arg)
         {
             var dest = arg.Dest;
-            var socket = await Socks5Client.Connect(server.Host, server.Port,
+            var stream = await Socks5Client.Connect(server.Host, server.Port,
                 dest.Host, dest.Port, username, password);
-            //await InConnection.SetConnectResult(ConnectResults.Conneceted, new IPEndPoint(0, 0));
-            //await MyStream.FromSocket(Socket).RelayWith(InConnection.DataStream);
-            return new ConnectResult(ConnectResults.Conneceted, MyStream.FromSocket(socket));
+            return new ConnectResult(ConnectResults.Conneceted, stream);
         }
 
         public override void SetConfig(TomlTable toml)

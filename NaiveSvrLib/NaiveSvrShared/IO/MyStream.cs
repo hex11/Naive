@@ -20,7 +20,7 @@ namespace NaiveSocks
         Task FlushAsync();
     }
 
-    public interface IMyStreamByteViewSupport : IMyStream
+    public interface IMyStreamMultiBuffer : IMyStream
     {
         Task WriteMultipleAsync(BytesView bv);
     }
@@ -350,7 +350,7 @@ namespace NaiveSocks
     {
         public static Task WriteMultipleAsync(this IMyStream myStream, BytesView bv)
         {
-            if (myStream is IMyStreamByteViewSupport bvs) {
+            if (myStream is IMyStreamMultiBuffer bvs) {
                 return bvs.WriteMultipleAsync(bv);
             } else {
                 return NaiveUtils.RunAsyncTask(async () => {
@@ -365,6 +365,11 @@ namespace NaiveSocks
         public static Task WriteAsync(this IMyStream myStream, byte[] buf, int offset, int count)
         {
             return myStream.WriteAsync(new BytesSegment(buf, offset, count));
+        }
+
+        public static Task<int> ReadAsync(this IMyStream myStream, byte[] buf, int offset, int count)
+        {
+            return myStream.ReadAsync(new BytesSegment(buf, offset, count));
         }
 
         public static Task RelayWith(this IMyStream stream1, IMyStream stream2)
@@ -384,7 +389,7 @@ namespace NaiveSocks
     }
 
 
-    public class SocketStream : MyStream, IMyStreamByteViewSupport
+    public class SocketStream : MyStream, IMyStreamMultiBuffer
     {
         public SocketStream(Socket socket)
         {
@@ -632,7 +637,7 @@ namespace NaiveSocks
         }
     }
 
-    public class MsgStreamToMyStream : IMyStream, IMyStreamByteViewSupport
+    public class MsgStreamToMyStream : IMyStream, IMyStreamMultiBuffer
     {
         public MsgStreamToMyStream(IMsgStream msgStream)
         {
