@@ -78,6 +78,22 @@ namespace NaiveSocks
             Load();
         }
 
+        public void LoadConfigFileFromMultiPaths(string[] paths)
+        {
+            FuncGetConfigString = () => {
+                foreach (var item in paths) {
+                    if (File.Exists(item)) {
+                        Logging.info("using configuration file: " + item);
+                        WorkingDirectory = Path.GetDirectoryName(item);
+                        return File.ReadAllText(item, System.Text.Encoding.UTF8);
+                    }
+                }
+                Logging.warning("configuration file not found. searched paths:\n\t" + string.Join("\n\t", paths));
+                return null;
+            };
+            Load();
+        }
+
         List<ICanReloadBetter> reloading_oldAdapters;
 
         public void Reload()

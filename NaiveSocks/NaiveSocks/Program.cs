@@ -104,19 +104,8 @@ Usage: {NAME}.exe [-h|--help] [(-c|--config) FILE] [--no-cli] [--no-log-stdout]
             if (specifiedConfigPath != null) {
                 Commands.loadController(controller, specifiedConfigPath);
             } else {
-                controller.FuncGetConfigString = () => {
-                    var paths = GetConfigFilePaths();
-                    foreach (var item in paths) {
-                        if (File.Exists(item)) {
-                            Logging.info("using configuration file: " + item);
-                            controller.WorkingDirectory = Path.GetDirectoryName(item);
-                            return File.ReadAllText(item, System.Text.Encoding.UTF8);
-                        }
-                    }
-                    Logging.warning("configuration file not found. searched paths:\n\t" + string.Join("\n\t", paths));
-                    return null;
-                };
-                controller.Load();
+                var paths = GetConfigFilePaths();
+                controller.LoadConfigFileFromMultiPaths(paths);
                 controller.Start();
             }
             var cmdHub = new CommandHub();
