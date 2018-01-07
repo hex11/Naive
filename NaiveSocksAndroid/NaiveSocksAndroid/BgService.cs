@@ -24,23 +24,42 @@ namespace NaiveSocksAndroid
     {
         public Controller Controller { get; private set; }
 
+        private PowerManager powerManager;
+        private NotificationManager notificationManager;
+
+        Notification.Builder builder;
+        Notification.BigTextStyle bigText;
+        const int MainNotificationId = 1;
+
+        private Receiver receiver;
+
+        bool isScreenOn;
+
         public override void OnCreate()
         {
             base.OnCreate();
 
-            var b = new Notification.Builder(this)
+            powerManager = (PowerManager)GetSystemService(Context.PowerService);
+            notificationManager = (NotificationManager)GetSystemService(Context.NotificationService);
+
+            bigText = new Notification.BigTextStyle();
+            bigText.BigText("logs will shown here.\n(multiple lines)");
+
+            builder = new Notification.Builder(this)
                         .SetContentIntent(BuildIntentToShowMainActivity())
                         .SetContentTitle("NaiveSocks")
-                        .SetContentText("NaiveSocks is running.")
-                        .AddAction(BuildServiceAction("stop!", "Stop", 0, 1))
-                        .AddAction(BuildServiceAction("reload!", "Reload", 0, 2))
-                        .AddAction(BuildServiceAction("gc!", "GC", 0, 2))
+                        //.SetSubText("running")
+                        .SetStyle(bigText)
+                        .AddAction(BuildServiceAction(Actions.STOP, "Stop", 0, 1))
+                        .AddAction(BuildServiceAction(Actions.RELOAD, "Reload", 0, 2))
+                        .AddAction(BuildServiceAction(Actions.GC, "GC", 0, 3))
                         .SetSmallIcon(Resource.Drawable.N)
                         .SetPriority((int)NotificationPriority.Min)
                         .SetVisibility(NotificationVisibility.Secret)
+                        .SetShowWhen(false)
                         .SetOngoing(true);
 
-            StartForeground(1, b.Build());
+            StartForeground(MainNotificationId, builder.Build());
 
             Task.Run(() => {
                 Logging.Logged += Logging_Logged;
@@ -60,26 +79,42 @@ namespace NaiveSocksAndroid
                 } catch (System.Exception e) {
                     Logging.exception(e, Logging.Level.Error, "loading/starting controller");
                     ShowToast("starting error: " + e.Message);
+                    StopSelf();
                 }
             });
+
+            isScreenOn = powerManager.IsInteractive;
+            var filter = new IntentFilter(Intent.ActionScreenOff);
+            filter.AddAction(Intent.ActionScreenOn);
+            RegisterReceiver(receiver = new Receiver((c, i) => {
+                if (i.Action == Intent.ActionScreenOn) {
+                    isScreenOn = true;
+                    if (_needUpdateNotif)
+                        updateNotif();
+                } else if (i.Action == Intent.ActionScreenOff) {
+                    isScreenOn = false;
+                }
+            }), filter);
         }
 
         [return: GeneratedEnum]
         public override StartCommandResult OnStartCommand(Intent intent, [GeneratedEnum] StartCommandFlags flags, int startId)
         {
-            if (intent.Action == "stop!") {
-                StopForeground(true);
-                this.StopSelf();
-            } else if (intent.Action == "reload!") {
-                try {
-                    Controller.Reload();
-                    ShowToast("controller reloaded");
-                } catch (Exception e) {
-                    ShowToast("reloading error: " + e.Message);
+            if (intent != null) {
+                if (intent.Action == Actions.STOP) {
+                    StopForeground(true);
+                    this.StopSelf();
+                } else if (intent.Action == Actions.RELOAD) {
+                    try {
+                        Controller.Reload();
+                        ShowToast("controller reloaded");
+                    } catch (Exception e) {
+                        ShowToast("reloading error: " + e.Message);
+                    }
+                } else if (intent.Action == Actions.GC) {
+                    ShowToast("performing GC collection...");
+                    GC.Collect();
                 }
-            } else if (intent.Action == "gc!") {
-                ShowToast("performing GC collection...");
-                GC.Collect();
             }
             return StartCommandResult.Sticky;
         }
@@ -91,13 +126,42 @@ namespace NaiveSocksAndroid
 
         public override void OnDestroy()
         {
+            UnregisterReceiver(receiver);
             Controller.Stop();
             base.OnDestroy();
         }
 
+        string textLast;
+        string textSecondLast;
+
         private void Logging_Logged(Logging.Log log)
         {
-            Log.WriteLine(GetPri(log), "Naive.Logging", log.text);
+            Log.WriteLine(GetPri(log), "naivelog", log.text);
+            textSecondLast = textLast;
+            textLast = log.text;
+            needUpdateNotif();
+        }
+
+
+        bool _needUpdateNotif = false;
+
+        void needUpdateNotif()
+        {
+            if (isScreenOn) {
+                updateNotif();
+            } else {
+                _needUpdateNotif = true;
+            }
+        }
+
+        void updateNotif()
+        {
+            _needUpdateNotif = false;
+            builder.SetContentText(textLast);
+            //bigText.SetSummaryText(lastText1);
+            bigText.BigText(textSecondLast + "\n" + textLast);
+            builder.SetStyle(bigText);
+            notificationManager.Notify(MainNotificationId, builder.Build());
         }
 
         private static LogPriority GetPri(Logging.Log log)
@@ -140,6 +204,29 @@ namespace NaiveSocksAndroid
 
             var builder = new Notification.Action.Builder(icon, text, stopServicePendingIntent);
             return builder.Build();
+        }
+
+        public static class Actions
+        {
+            public const string START = "start!";
+            public const string STOP = "stop!";
+            public const string RELOAD = "reload!";
+            public const string GC = "gc!";
+        }
+    }
+
+    public class Receiver : BroadcastReceiver
+    {
+        private readonly Action<Context, Intent> _onReceive;
+
+        public Receiver(Action<Context, Intent> onReceive)
+        {
+            _onReceive = onReceive;
+        }
+
+        public override void OnReceive(Context context, Intent intent)
+        {
+            _onReceive(context, intent);
         }
     }
 

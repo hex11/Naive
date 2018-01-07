@@ -40,6 +40,7 @@ namespace NaiveSocksAndroid
             base.OnCreate(savedInstanceState);
 
             serviceIntent = new Intent(this, typeof(BgService));
+            serviceIntent.SetAction("start!");
 
             // Set our view from the "main" layout resource
             SetContentView(Resource.Layout.Main);
