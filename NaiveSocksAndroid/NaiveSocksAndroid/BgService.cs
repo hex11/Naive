@@ -27,7 +27,7 @@ namespace NaiveSocksAndroid
         private PowerManager powerManager;
         private NotificationManager notificationManager;
 
-        Notification.Builder builder;
+        Notification.Builder builder, restartBuilder;
         Notification.BigTextStyle bigText;
         const int MainNotificationId = 1;
 
@@ -59,10 +59,21 @@ namespace NaiveSocksAndroid
                         .SetShowWhen(false)
                         .SetOngoing(true);
 
+            restartBuilder = new Notification.Builder(ApplicationContext)
+                        .SetContentIntent(BuildServicePendingIntent("start!", 10086))
+                        .SetContentTitle("Touch to restart NaiveSocks service")
+                        .SetContentText("or just delete this notification")
+                        .SetSmallIcon(Resource.Drawable.N)
+                        .SetAutoCancel(true)
+                        .SetPriority((int)NotificationPriority.Min)
+                        .SetVisibility(NotificationVisibility.Secret)
+                        .SetShowWhen(false);
+
             StartForeground(MainNotificationId, builder.Build());
 
+            Logging.Logged += Logging_Logged;
+
             Task.Run(() => {
-                Logging.Logged += Logging_Logged;
                 Logging.info("starting controller...");
                 try {
                     Controller = new Controller();
@@ -104,6 +115,7 @@ namespace NaiveSocksAndroid
                 if (intent.Action == Actions.STOP) {
                     StopForeground(true);
                     this.StopSelf();
+                    notificationManager.Notify(MainNotificationId, restartBuilder.Build());
                 } else if (intent.Action == Actions.RELOAD) {
                     try {
                         Controller.Reload();
@@ -126,16 +138,22 @@ namespace NaiveSocksAndroid
 
         public override void OnDestroy()
         {
+            isDestroyed = true;
+            Logging.Logged -= Logging_Logged;
             UnregisterReceiver(receiver);
             Controller.Stop();
             base.OnDestroy();
         }
+
+        bool isDestroyed = false;
 
         string textLast;
         string textSecondLast;
 
         private void Logging_Logged(Logging.Log log)
         {
+            if (isDestroyed)
+                return;
             Log.WriteLine(GetPri(log), "naivelog", log.text);
             textSecondLast = textLast;
             textLast = log.text;
@@ -192,18 +210,23 @@ namespace NaiveSocksAndroid
             var notificationIntent = new Intent(this, typeof(MainActivity));
             notificationIntent.SetFlags(ActivityFlags.SingleTop | ActivityFlags.ClearTask);
 
-            var pendingIntent = PendingIntent.GetActivity(this, 0, notificationIntent, PendingIntentFlags.UpdateCurrent);
-            return pendingIntent;
+            return PendingIntent.GetActivity(this, 0, notificationIntent, PendingIntentFlags.UpdateCurrent);
         }
 
         Notification.Action BuildServiceAction(string action, string text, int icon, int requestCode)
         {
+            var pendingIntent = BuildServicePendingIntent(action, requestCode);
+
+            var builder = new Notification.Action.Builder(icon, text, pendingIntent);
+            return builder.Build();
+        }
+
+        private PendingIntent BuildServicePendingIntent(string action, int requestCode)
+        {
             var intent = new Intent(this, GetType());
             intent.SetAction(action);
-            var stopServicePendingIntent = PendingIntent.GetService(this, requestCode, intent, 0);
-
-            var builder = new Notification.Action.Builder(icon, text, stopServicePendingIntent);
-            return builder.Build();
+            intent.SetFlags(ActivityFlags.ClearTop);
+            return PendingIntent.GetService(this, requestCode, intent, 0);
         }
 
         public static class Actions
