@@ -5,39 +5,48 @@
     android:layout_height="match_parent"
     android:minWidth="25px"
     android:minHeight="25px">
-  <ScrollView
+  <LinearLayout
+      android:orientation="vertical"
       android:layout_width="match_parent"
       android:layout_height="match_parent">
-    <LinearLayout
-        android:orientation="vertical"
+    <ScrollView
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
-      <TextView
-          android:text="(state)"
-          android:singleLine="true"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:padding="2sp"
+        android:id="@+id/logparentScroll">
+      <LinearLayout
+          android:orientation="vertical"
           android:layout_width="match_parent"
           android:layout_height="wrap_content"
-          android:id="@+id/state"
-          android:textSize="10sp"
-          android:textAlignment="center"
-          android:fontFamily="monospace" />
+          android:id="@+id/logparent" />
+    </ScrollView>
+    <TextView
+        android:text="(state)"
+        android:singleLine="true"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:id="@+id/state"
+        android:textSize="10sp"
+        android:textAlignment="center"
+        android:gravity="center"
+        android:fontFamily="monospace" />
+    <LinearLayout
+        android:orientation="horizontal"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
       <Button
           android:text="Start"
-          android:layout_width="match_parent"
+          android:layout_width="wrap_content"
           android:layout_height="wrap_content"
+          android:layout_weight="1"
           android:id="@+id/start" />
       <Button
           android:text="Stop"
-          android:layout_width="match_parent"
+          android:layout_width="wrap_content"
           android:layout_height="wrap_content"
+          android:layout_weight="1"
           android:id="@+id/stop" />
-      <TextView
-          android:singleLine="false"
-          android:layout_width="match_parent"
-          android:layout_height="wrap_content"
-          android:id="@+id/logoutput"
-          android:textSize="10sp"
-          android:fontFamily="monospace" />
     </LinearLayout>
-  </ScrollView>
+  </LinearLayout>
 </LinearLayout>

@@ -37,6 +37,8 @@ namespace NaiveSocksAndroid
 
         public override void OnCreate()
         {
+            CrashHandler.CheckInit();
+
             base.OnCreate();
 
             powerManager = (PowerManager)GetSystemService(Context.PowerService);
@@ -50,10 +52,10 @@ namespace NaiveSocksAndroid
                         .SetContentTitle("NaiveSocks")
                         //.SetSubText("running")
                         .SetStyle(bigText)
-                        .AddAction(BuildServiceAction(Actions.COL_NOTIF, "Collapse", 0, 4))
-                        .AddAction(BuildServiceAction(Actions.STOP, "Stop", 0, 1))
+                        .AddAction(BuildServiceAction(Actions.COL_NOTIF, "Collapse", Android.Resource.Drawable.StarOff, 4))
+                        .AddAction(BuildServiceAction(Actions.STOP, "Stop", Android.Resource.Drawable.StarOff, 1))
                         //.AddAction(BuildServiceAction(Actions.RELOAD, "Reload", 0, 2))
-                        .AddAction(BuildServiceAction(Actions.GC, "GC", 0, 3))
+                        .AddAction(BuildServiceAction(Actions.GC, "GC", Android.Resource.Drawable.StarOff, 3))
                         .SetSmallIcon(Resource.Drawable.N)
                         .SetPriority((int)NotificationPriority.Min)
                         .SetVisibility(NotificationVisibility.Secret)
@@ -62,8 +64,8 @@ namespace NaiveSocksAndroid
 
             restartBuilder = new Notification.Builder(this)
                         .SetContentIntent(BuildServicePendingIntent("start!", 10086))
-                        .SetContentTitle("Touch to restart NaiveSocks service")
-                        .SetContentText("or just delete this notification")
+                        .SetContentTitle("NaiveSocks service is stopped")
+                        .SetContentText("touch here to restart")
                         .SetSmallIcon(Resource.Drawable.N)
                         .SetAutoCancel(true)
                         .SetPriority((int)NotificationPriority.Min)
@@ -257,8 +259,8 @@ namespace NaiveSocksAndroid
 
         PendingIntent BuildIntentToShowMainActivity()
         {
-            var notificationIntent = new Intent(this, typeof(MainActivity));
-            notificationIntent.SetFlags(ActivityFlags.SingleTop | ActivityFlags.ClearTask);
+            var notificationIntent = new Intent(this, typeof(MainActivity))
+                                     .SetFlags(ActivityFlags.ReorderToFront);
             return PendingIntent.GetActivity(this, 0, notificationIntent, PendingIntentFlags.UpdateCurrent);
         }
 
@@ -310,5 +312,31 @@ namespace NaiveSocksAndroid
         }
 
         public BgService BgService { get; }
+    }
+
+    static class CrashHandler
+    {
+        static CrashHandler()
+        {
+            AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
+            inited = true;
+        }
+
+        private static void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
+        {
+            using (var sw = File.CreateText(CrashLogFile)) {
+                sw.Write(e.ToString());
+            }
+        }
+
+        public static string CrashLogFile = "/sdcard/NaiveUnhandledException.txt";
+
+        static bool inited = false;
+
+        public static void CheckInit()
+        {
+            if (inited == false)
+                throw new Exception("!!! inited == false !!!");
+        }
     }
 }

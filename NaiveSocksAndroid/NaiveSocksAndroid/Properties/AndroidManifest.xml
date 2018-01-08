@@ -5,5 +5,10 @@
 	<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
 	<uses-permission android:name="android.permission.WRITE_USER_DICTIONARY" />
 	<uses-permission android:name="android.permission.INTERNET" />
-	<application android:allowBackup="true" android:label="@string/app_name" android:icon="@drawable/N"></application>
+	<application 
+    android:allowBackup="true" 
+    android:label="@string/app_name" 
+    android:icon="@drawable/N"
+    android:theme="@style/MyLightTheme">
+  </application>
 </manifest>

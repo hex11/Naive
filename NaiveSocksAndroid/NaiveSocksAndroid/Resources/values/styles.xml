@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<resources>
+  <style name="MyLightTheme" parent="android:Theme.Holo.Light">
+    <!-- Your customizations go here -->
+  </style>
+  <style name="LogTextView" parent="android:style/Widget.TextView">
+    <item name="android:fontFamily">monospace</item>
+    <item name="android:textSize">10sp</item>
+  </style>
+</resources>
