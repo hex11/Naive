@@ -187,6 +187,7 @@ namespace NaiveSocksAndroid
         }
 
         bool _needUpdateNotif = false;
+        bool _needRenotify = false;
 
         void needUpdateNotif()
         {
@@ -197,20 +198,31 @@ namespace NaiveSocksAndroid
             }
         }
 
+        string lastTitle;
+
         void updateNotif()
         {
             if (isDestroyed)
                 return;
             lock (builder) {
                 _needUpdateNotif = false;
-                builder.SetContentTitle($"{Controller.RunningConnections}/{Controller.TotalHandledConnections} cxn, {MyStream.TotalCopiedBytes / 1024:N0} KB, {MyStream.TotalCopiedPackets:N0} pkt - NaiveSocks");
+                var title = $"{Controller.RunningConnections}/{Controller.TotalHandledConnections} cxn, {MyStream.TotalCopiedBytes / 1024:N0} KB, {MyStream.TotalCopiedPackets:N0} pkt - NaiveSocks";
+                if (title != lastTitle) {
+                    _needRenotify = true;
+                    lastTitle = title;
+                    builder.SetContentTitle(title);
+                }
                 if (textLinesChanged) {
+                    textLinesChanged = false;
+                    _needRenotify = true;
                     builder.SetContentText(textLines.Get(-1));
                     bigText.BigText(string.Join("\n", textLines.Where(x => !string.IsNullOrEmpty(x))));
                     builder.SetStyle(bigText);
-                    textLinesChanged = false;
                 }
-                notificationManager.Notify(MainNotificationId, builder.Build());
+                if (_needRenotify) {
+                    _needRenotify = false;
+                    notificationManager.Notify(MainNotificationId, builder.Build());
+                }
             }
         }
 
@@ -231,6 +243,11 @@ namespace NaiveSocksAndroid
                 });
                 if (_needUpdateNotif)
                     updateNotif();
+                WebSocket.ManageInterval = 3000;
+                WebSocket.TimeAcc = 2;
+            } else {
+                WebSocket.ManageInterval = 8000;
+                WebSocket.TimeAcc = 4;
             }
         }
 

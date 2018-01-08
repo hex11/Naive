@@ -96,10 +96,32 @@ namespace Naive.HttpSvr
         {
             NaiveUtils.RunAsyncTask(async () => {
                 while (true) {
-                    await Task.Delay(1000).CAF();
+                    await Task.Delay(_timeAcc).CAF();
                     CurrentTime++;
                 }
             });
+        }
+
+        private static int _timeAcc = 1000;
+        public static int TimeAcc
+        {
+            get { return _timeAcc / 1000; }
+            set {
+                if (value <= 0)
+                    throw new ArgumentOutOfRangeException("TimeAcc");
+                _timeAcc = value * 1000;
+            }
+        }
+
+        private static int manageInterval = 3000;
+        public static int ManageInterval
+        {
+            get { return manageInterval; }
+            set {
+                if (value <= 0)
+                    throw new ArgumentOutOfRangeException("ManageInterval");
+                manageInterval = value;
+            }
         }
 
         public static int CurrentTime { get; private set; } = 0;
@@ -110,9 +132,8 @@ namespace Naive.HttpSvr
         {
             NaiveUtils.RunAsyncTask(async () => {
                 //List<WebSocket> tmpList = new List<WebSocket>();
-                var rd = new Random();
                 while (true) {
-                    await Task.Delay(rd.Next(3000, 5000)).CAF();
+                    await Task.Delay(manageInterval).CAF();
                     //tmpList.Clear();
                     if (ManagedWebSockets.Count == 0)
                         continue;
