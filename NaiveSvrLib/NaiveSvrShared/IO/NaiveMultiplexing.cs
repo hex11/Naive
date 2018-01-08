@@ -171,7 +171,7 @@ namespace NaiveSocks
                 BaseStream.Close(new CloseOpt(CloseType.Close));
         }
 
-        private int _latestId = 1;
+        private int _latestId = 0;
         public Task<Channel> CreateChannel()
         {
             lock (_channelsLock) {

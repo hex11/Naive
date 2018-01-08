@@ -50,16 +50,17 @@ namespace NaiveSocksAndroid
                         .SetContentTitle("NaiveSocks")
                         //.SetSubText("running")
                         .SetStyle(bigText)
+                        .AddAction(BuildServiceAction(Actions.COL_NOTIF, "Collapse", 0, 4))
                         .AddAction(BuildServiceAction(Actions.STOP, "Stop", 0, 1))
-                        .AddAction(BuildServiceAction(Actions.RELOAD, "Reload", 0, 2))
+                        //.AddAction(BuildServiceAction(Actions.RELOAD, "Reload", 0, 2))
                         .AddAction(BuildServiceAction(Actions.GC, "GC", 0, 3))
                         .SetSmallIcon(Resource.Drawable.N)
                         .SetPriority((int)NotificationPriority.Min)
                         .SetVisibility(NotificationVisibility.Secret)
-                        .SetShowWhen(false)
+                        //.SetShowWhen(false)
                         .SetOngoing(true);
 
-            restartBuilder = new Notification.Builder(ApplicationContext)
+            restartBuilder = new Notification.Builder(this)
                         .SetContentIntent(BuildServicePendingIntent("start!", 10086))
                         .SetContentTitle("Touch to restart NaiveSocks service")
                         .SetContentText("or just delete this notification")
@@ -94,16 +95,14 @@ namespace NaiveSocksAndroid
                 }
             });
 
-            isScreenOn = powerManager.IsInteractive;
+            onScreen(powerManager.IsInteractive);
             var filter = new IntentFilter(Intent.ActionScreenOff);
             filter.AddAction(Intent.ActionScreenOn);
             RegisterReceiver(receiver = new Receiver((c, i) => {
                 if (i.Action == Intent.ActionScreenOn) {
-                    isScreenOn = true;
-                    if (_needUpdateNotif)
-                        updateNotif();
+                    onScreen(true);
                 } else if (i.Action == Intent.ActionScreenOff) {
-                    isScreenOn = false;
+                    onScreen(false);
                 }
             }), filter);
         }
@@ -119,13 +118,20 @@ namespace NaiveSocksAndroid
                 } else if (intent.Action == Actions.RELOAD) {
                     try {
                         Controller.Reload();
-                        ShowToast("controller reloaded");
+                        putLine("controller reloaded");
                     } catch (Exception e) {
                         ShowToast("reloading error: " + e.Message);
+                        putLine("reloading error: " + e.ToString());
                     }
                 } else if (intent.Action == Actions.GC) {
-                    ShowToast("performing GC collection...");
+                    var before = GC.GetTotalMemory(false);
                     GC.Collect();
+                    putLine($"GC Done. {before:N0} -> {GC.GetTotalMemory(false):N0}");
+                } else if (intent.Action == Actions.COL_NOTIF) {
+                    lock (builder) {
+                        StopForeground(true);
+                        StartForeground(MainNotificationId, builder.Build());
+                    }
                 }
             }
             return StartCommandResult.Sticky;
@@ -147,19 +153,36 @@ namespace NaiveSocksAndroid
 
         bool isDestroyed = false;
 
-        string textLast;
-        string textSecondLast;
+        string[] textLines = new string[3];
+        bool textLinesChanged = false;
 
         private void Logging_Logged(Logging.Log log)
         {
             if (isDestroyed)
                 return;
             Log.WriteLine(GetPri(log), "naivelog", log.text);
-            textSecondLast = textLast;
-            textLast = log.text;
-            needUpdateNotif();
+            putLine(log.text);
         }
 
+        private void clearLines(bool updateNow)
+        {
+            for (int i = 0; i < textLines.Length; i++) {
+                textLines[i] = null;
+            }
+            if (updateNow)
+                needUpdateNotif();
+        }
+
+        private void putLine(string line, bool updateNow = true)
+        {
+            for (int i = 0; i < textLines.Length - 1; i++) {
+                textLines[i] = textLines[i + 1];
+            }
+            textLines.Set(-1, line);
+            textLinesChanged = true;
+            if (updateNow)
+                needUpdateNotif();
+        }
 
         bool _needUpdateNotif = false;
 
@@ -174,12 +197,39 @@ namespace NaiveSocksAndroid
 
         void updateNotif()
         {
-            _needUpdateNotif = false;
-            builder.SetContentText(textLast);
-            //bigText.SetSummaryText(lastText1);
-            bigText.BigText(textSecondLast + "\n" + textLast);
-            builder.SetStyle(bigText);
-            notificationManager.Notify(MainNotificationId, builder.Build());
+            if (isDestroyed)
+                return;
+            lock (builder) {
+                _needUpdateNotif = false;
+                builder.SetContentTitle($"{Controller.RunningConnections}/{Controller.TotalHandledConnections} cxn, {MyStream.TotalCopiedBytes / 1024:N0} KB, {MyStream.TotalCopiedPackets:N0} pkt - NaiveSocks");
+                if (textLinesChanged) {
+                    builder.SetContentText(textLines.Get(-1));
+                    bigText.BigText(string.Join("\n", textLines.Where(x => !string.IsNullOrEmpty(x))));
+                    builder.SetStyle(bigText);
+                    textLinesChanged = false;
+                }
+                notificationManager.Notify(MainNotificationId, builder.Build());
+            }
+        }
+
+        int id = 0;
+
+        void onScreen(bool on)
+        {
+            isScreenOn = on;
+            if (on) {
+                var _id = ++id;
+                NaiveUtils.RunAsyncTask(async () => {
+                    while (true) {
+                        await Task.Delay(2000);
+                        if (_id != id || !isScreenOn || isDestroyed)
+                            return;
+                        updateNotif();
+                    }
+                });
+                if (_needUpdateNotif)
+                    updateNotif();
+            }
         }
 
         private static LogPriority GetPri(Logging.Log log)
@@ -209,14 +259,12 @@ namespace NaiveSocksAndroid
         {
             var notificationIntent = new Intent(this, typeof(MainActivity));
             notificationIntent.SetFlags(ActivityFlags.SingleTop | ActivityFlags.ClearTask);
-
             return PendingIntent.GetActivity(this, 0, notificationIntent, PendingIntentFlags.UpdateCurrent);
         }
 
         Notification.Action BuildServiceAction(string action, string text, int icon, int requestCode)
         {
             var pendingIntent = BuildServicePendingIntent(action, requestCode);
-
             var builder = new Notification.Action.Builder(icon, text, pendingIntent);
             return builder.Build();
         }
@@ -235,6 +283,7 @@ namespace NaiveSocksAndroid
             public const string STOP = "stop!";
             public const string RELOAD = "reload!";
             public const string GC = "gc!";
+            public const string COL_NOTIF = "colnotif!";
         }
     }
 

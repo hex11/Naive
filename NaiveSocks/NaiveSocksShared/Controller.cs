@@ -20,6 +20,7 @@ namespace NaiveSocks
 
         private int _totalHandledConnections;
         public int TotalHandledConnections => _totalHandledConnections;
+        public int RunningConnections => InConnections.Count;
 
         public Dictionary<string, Type> RegisteredInTypes = new Dictionary<string, Type>();
         public Dictionary<string, Type> RegisteredOutTypes = new Dictionary<string, Type>();

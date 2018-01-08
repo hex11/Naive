@@ -48,6 +48,11 @@ namespace Naive.HttpSvr
             }
         }
 
+        public static WebSocketClient ConnectTo(string host, int port, string path)
+        {
+            return ConnectToAsync(host, port, path).RunSync();
+        }
+
         public void Start() => Start(true);
         public void Start(bool enterRecvLoop)
         {

@@ -20,9 +20,20 @@ namespace NaiveSocks
         Task FlushAsync();
     }
 
+    public interface IHaveBaseStream
+    {
+        object BaseStream { get; }
+    }
+
     public interface IMyStreamMultiBuffer : IMyStream
     {
         Task WriteMultipleAsync(BytesView bv);
+    }
+
+    public interface IMyStreamSync
+    {
+        void Write(BytesSegment bs);
+        int Read(BytesSegment bs);
     }
 
     public struct MyStreamState
@@ -389,7 +400,7 @@ namespace NaiveSocks
     }
 
 
-    public class SocketStream : MyStream, IMyStreamMultiBuffer
+    public class SocketStream : MyStream, IMyStreamMultiBuffer, IMyStreamSync
     {
         public SocketStream(Socket socket)
         {
@@ -568,9 +579,19 @@ namespace NaiveSocks
             Socket.Shutdown(direction);
             return NaiveUtils.CompletedTask;
         }
+
+        public void Write(BytesSegment bs)
+        {
+            Socket.Send(bs.Bytes, bs.Offset, bs.Len, SocketFlags.None);
+        }
+
+        public int Read(BytesSegment bs)
+        {
+            return Socket.Receive(bs.Bytes, bs.Offset, bs.Len, SocketFlags.None);
+        }
     }
 
-    public class StreamFromMyStream : Stream
+    public class StreamFromMyStream : Stream, IHaveBaseStream
     {
         public StreamFromMyStream(IMyStream baseStream)
         {
@@ -580,6 +601,8 @@ namespace NaiveSocks
         public override string ToString() => $"{{MyStream2Stream on {BaseStream}}}";
 
         public IMyStream BaseStream { get; }
+
+        object IHaveBaseStream.BaseStream => BaseStream;
 
         public override bool CanRead => true;
 
@@ -603,6 +626,8 @@ namespace NaiveSocks
 
         public override int Read(byte[] buffer, int offset, int count)
         {
+            if (BaseStream is IMyStreamSync sync)
+                return sync.Read(new BytesSegment(buffer, offset, count));
             return BaseStream.ReadAsync(new BytesSegment(buffer, offset, count)).RunSync();
         }
 
@@ -628,7 +653,10 @@ namespace NaiveSocks
 
         public override void Write(byte[] buffer, int offset, int count)
         {
-            BaseStream.WriteAsync(new BytesSegment(buffer, offset, count)).RunSync();
+            if (BaseStream is IMyStreamSync sync)
+                sync.Write(new BytesSegment(buffer, offset, count));
+            else
+                BaseStream.WriteAsync(new BytesSegment(buffer, offset, count)).RunSync();
         }
 
         public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
@@ -637,7 +665,7 @@ namespace NaiveSocks
         }
     }
 
-    public class MsgStreamToMyStream : IMyStream, IMyStreamMultiBuffer
+    public class MsgStreamToMyStream : IMyStream, IMyStreamMultiBuffer, IHaveBaseStream
     {
         public MsgStreamToMyStream(IMsgStream msgStream)
         {
@@ -645,6 +673,8 @@ namespace NaiveSocks
         }
 
         public IMsgStream MsgStream { get; }
+
+        object IHaveBaseStream.BaseStream => MsgStream;
 
         public MyStreamState State
         {

@@ -69,7 +69,8 @@ namespace NaiveSocksAndroid
 
         protected override void OnStop()
         {
-            this.UnbindService(this);
+            if (this.isConnected)
+                this.UnbindService(this);
             base.OnStop();
         }
     }

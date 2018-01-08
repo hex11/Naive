@@ -109,23 +109,34 @@ namespace Naive.HttpSvr
         private static void StartManageTask()
         {
             NaiveUtils.RunAsyncTask(async () => {
-                List<WebSocket> tmpList = new List<WebSocket>();
+                //List<WebSocket> tmpList = new List<WebSocket>();
                 var rd = new Random();
                 while (true) {
-                    await Task.Delay(rd.Next(1000, 3000)).CAF();
-                    tmpList.Clear();
+                    await Task.Delay(rd.Next(3000, 5000)).CAF();
+                    //tmpList.Clear();
                     if (ManagedWebSockets.Count == 0)
                         continue;
-                    lock (ManagedWebSockets) {
-                        tmpList.AddRange(ManagedWebSockets);
-                    }
-                    foreach (var item in tmpList) {
-                        var delta = CurrentTime - item.LatestActiveTime;
-                        if (item.ManagedCloseTimeout > 0 && delta > item.ManagedCloseTimeout) {
-                            item.IsTimeout = true;
-                            item.Close();
-                        } else if (item.ManagedPingTimeout > 0 && delta > item.ManagedPingTimeout && item.ConnectionState == States.Open) {
-                            item.BeginSendPing();
+                    //lock (ManagedWebSockets) {
+                    //    tmpList.AddRange(ManagedWebSockets);
+                    //}
+                    //foreach (var item in tmpList) 
+                    for (int i = ManagedWebSockets.Count - 1; i >= 0; i--) {
+                        WebSocket item;
+                        try {
+                            item = ManagedWebSockets[i];
+                        } catch (Exception) {
+                            continue; // ignore
+                        }
+                        try {
+                            var delta = CurrentTime - item.LatestActiveTime;
+                            if (item.ManagedCloseTimeout > 0 && delta > item.ManagedCloseTimeout) {
+                                item.IsTimeout = true;
+                                item.Close();
+                            } else if (item.ManagedPingTimeout > 0 && delta > item.ManagedPingTimeout && item.ConnectionState == States.Open) {
+                                item.BeginSendPing();
+                            }
+                        } catch (Exception e) {
+                            Logging.exception(e, Logging.Level.Error, "WebSocket manage task exception, ignored.");
                         }
                     }
                 }
@@ -641,7 +652,7 @@ namespace Naive.HttpSvr
 
         public void BeginSendMsg(byte opcode, byte[] buf, int begin, int len) => SendMsgAsync(opcode, buf, begin, len);
 
-        private static readonly WeakObjectPool<byte[]> _sendMsgBuf = new WeakObjectPool<byte[]>(() => new byte[SendBufSizeMax]);
+        private static readonly WeakObjectPool<byte[]> _sendMsgBufferPool = new WeakObjectPool<byte[]>(() => new byte[SendBufSizeMax]);
         private const int SendBufSizeMin = 990;
         private const int SendBufSizeMax = 1440;
 
@@ -660,36 +671,45 @@ namespace Naive.HttpSvr
                     len = bv.tlen;
                 }
                 var curSendBufSize = NaiveUtils.Random.Next(SendBufSizeMin, SendBufSizeMax);
-                using (var obj = _sendMsgBuf.Get()) {
-                    int bufPosition = 0;
-                    var sendMsgBuf = obj.Value;
-                    var ismask = IsClient;
-
-                    buildHeader(opcode, len, fin, sendMsgBuf, ref bufPosition, ismask);
+                using (var handle = _sendMsgBufferPool.Get()) {
+                    int bufcur = 0;
+                    var sendMsgBuf = handle.Value;
+                    var isMasked = IsClient;
+                    buildHeader(opcode, bv.tlen, fin, sendMsgBuf, ref bufcur, isMasked);
                     var stream = BaseStream;
                     if (buf != null) {
-                        if (ismask) {
-                            for (int i = 0; i < len; i++) {
-                                sendMsgBuf[bufPosition++] = (byte)(bv[i] ^ maskbytes[i % 4]);
-                                if (bufPosition >= curSendBufSize) {
-                                    stream.Write(sendMsgBuf, 0, bufPosition);
-                                    bufPosition = 0;
-                                    curSendBufSize = NaiveUtils.Random.Next(SendBufSizeMin, SendBufSizeMax);
+                        var curbv = bv;
+                        int maskIndex = 0;
+                        do {
+                            int cur = curbv.offset;
+                            int end = cur + curbv.len;
+                            var bytes = curbv.bytes;
+                            if (isMasked) {
+                                for (; cur < end; cur++) {
+                                    sendMsgBuf[bufcur++] = (byte)(bytes[cur] ^ maskbytes[maskIndex++ % 4]);
+                                    if (bufcur >= curSendBufSize) {
+                                        stream.Write(sendMsgBuf, 0, bufcur);
+                                        bufcur = 0;
+                                        curSendBufSize = NaiveUtils.Random.Next(SendBufSizeMin, SendBufSizeMax);
+                                    }
+                                }
+                            } else {
+                                while (cur < end) {
+                                    var toCopy = Math.Min(curSendBufSize - bufcur, end - cur);
+                                    Buffer.BlockCopy(bytes, cur, sendMsgBuf, bufcur, toCopy);
+                                    cur += toCopy;
+                                    bufcur += toCopy;
+                                    if (bufcur == curSendBufSize) {
+                                        stream.Write(sendMsgBuf, 0, bufcur);
+                                        bufcur = 0;
+                                        curSendBufSize = NaiveUtils.Random.Next(SendBufSizeMin, SendBufSizeMax);
+                                    }
                                 }
                             }
-                        } else {
-                            for (int i = 0; i < len; i++) {
-                                sendMsgBuf[bufPosition++] = bv[i];
-                                if (bufPosition >= curSendBufSize) {
-                                    stream.Write(sendMsgBuf, 0, bufPosition);
-                                    bufPosition = 0;
-                                    curSendBufSize = NaiveUtils.Random.Next(SendBufSizeMin, SendBufSizeMax);
-                                }
-                            }
-                        }
+                        } while ((curbv = curbv.nextNode) != null);
                     }
-                    if (bufPosition > 0)
-                        stream.Write(sendMsgBuf, 0, bufPosition);
+                    if (bufcur > 0)
+                        stream.Write(sendMsgBuf, 0, bufcur);
                 }
             } finally {
                 _sendLock.Release();
@@ -697,27 +717,27 @@ namespace Naive.HttpSvr
 
         }
 
-        private void buildHeader(byte opcode, int len, bool fin, byte[] sendMsgBuf, ref int bufPosition, bool ismask)
+        private void buildHeader(byte opcode, int len, bool fin, byte[] buf, ref int bufIndex, bool ismask)
         {
-            sendMsgBuf[bufPosition++] = (byte)((fin ? 0x80 : 0x00) ^ (opcode & 0x0f));
+            buf[bufIndex++] = (byte)((fin ? 0x80 : 0x00) ^ (opcode & 0x0f));
             byte mask = (byte)(ismask ? 0x80 : 0x00);
             if (len <= 125) {
-                sendMsgBuf[bufPosition++] = (byte)(mask ^ len);
+                buf[bufIndex++] = (byte)(mask ^ len);
             } else if (len < 65536) {
-                sendMsgBuf[bufPosition++] = (byte)(mask ^ 126);
-                sendMsgBuf[bufPosition++] = (byte)(len >> 8);
-                sendMsgBuf[bufPosition++] = (byte)(len);
+                buf[bufIndex++] = (byte)(mask ^ 126);
+                buf[bufIndex++] = (byte)(len >> 8);
+                buf[bufIndex++] = (byte)(len);
             } else {
-                sendMsgBuf[bufPosition++] = (byte)(mask ^ 127);
+                buf[bufIndex++] = (byte)(mask ^ 127);
                 var llen = (long)len;
                 for (int i = 8 - 1; i >= 0; i--) {
-                    sendMsgBuf[bufPosition++] = (byte)(llen >> (i * 8));
+                    buf[bufIndex++] = (byte)(llen >> (i * 8));
                 }
             }
             if (ismask) {
                 genMaskBytes();
-                for (var i1 = 0; i1 < maskbytes.Length; i1++)
-                    sendMsgBuf[bufPosition++] = maskbytes[i1];
+                for (var i = 0; i < maskbytes.Length; i++)
+                    buf[bufIndex++] = maskbytes[i];
             }
         }
 
@@ -735,22 +755,22 @@ namespace Naive.HttpSvr
                 }
                 var curSendBufSize = NaiveUtils.Random.Next(SendBufSizeMin, SendBufSizeMax);
                 var len = bv.tlen;
-                using (var obj = _sendMsgBuf.Get()) {
+                using (var handle = _sendMsgBufferPool.Get()) {
                     int bufcur = 0;
-                    var sendMsgBuf = obj.Value;
-                    var ismask = IsClient;
-                    buildHeader(opcode, bv.tlen, fin, sendMsgBuf, ref bufcur, ismask);
+                    var sendMsgBuf = handle.Value;
+                    var isMasked = IsClient;
+                    buildHeader(opcode, bv.tlen, fin, sendMsgBuf, ref bufcur, isMasked);
                     var stream = BaseStream;
                     if (buf != null) {
                         var curbv = bv;
                         int maskIndex = 0;
                         do {
-                            int begin = curbv.offset;
-                            int end = begin + curbv.len;
+                            int cur = curbv.offset;
+                            int end = cur + curbv.len;
                             var bytes = curbv.bytes;
-                            if (ismask) {
-                                for (int i = begin; i < end; i++) {
-                                    sendMsgBuf[bufcur++] = (byte)(bytes[i] ^ maskbytes[maskIndex++ % 4]);
+                            if (isMasked) {
+                                for (; cur < end; cur++) {
+                                    sendMsgBuf[bufcur++] = (byte)(bytes[cur] ^ maskbytes[maskIndex++ % 4]);
                                     if (bufcur >= curSendBufSize) {
                                         await stream.WriteAsync(sendMsgBuf, 0, bufcur).CAF();
                                         bufcur = 0;
@@ -758,9 +778,12 @@ namespace Naive.HttpSvr
                                     }
                                 }
                             } else {
-                                for (int i = begin; i < end; i++) {
-                                    sendMsgBuf[bufcur++] = bytes[i];
-                                    if (bufcur >= curSendBufSize) {
+                                while (cur < end) {
+                                    var toCopy = Math.Min(curSendBufSize - bufcur, end - cur);
+                                    Buffer.BlockCopy(bytes, cur, sendMsgBuf, bufcur, toCopy);
+                                    cur += toCopy;
+                                    bufcur += toCopy;
+                                    if (bufcur == curSendBufSize) {
                                         await stream.WriteAsync(sendMsgBuf, 0, bufcur).CAF();
                                         bufcur = 0;
                                         curSendBufSize = NaiveUtils.Random.Next(SendBufSizeMin, SendBufSizeMax);

@@ -606,6 +606,38 @@ namespace Naive.HttpSvr
             return int.Parse(str);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static T Get<T>(this T[] array, int index)
+        {
+            return (index < 0) ? array[array.Length + index] : array[index];
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static T Get<T>(this IList<T> array, int index)
+        {
+            return (index < 0) ? array[array.Count + index] : array[index];
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void Set<T>(this T[] array, int index, T value)
+        {
+            if (index < 0) {
+                array[array.Length + index] = value;
+            } else {
+                array[index] = value;
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void Set<T>(this IList<T> array, int index, T value)
+        {
+            if (index < 0) {
+                array[array.Count + index] = value;
+            } else {
+                array[index] = value;
+            }
+        }
+
         public static string SafeToStr<T>(this T obj)
         {
             try {
