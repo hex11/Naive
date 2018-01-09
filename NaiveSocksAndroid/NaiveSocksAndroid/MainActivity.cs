@@ -13,15 +13,21 @@ using Android.Support.V7.App;
 using Toolbar = Android.Support.V7.Widget.Toolbar;
 using Android.Graphics;
 using System;
+using Android.Support.V4.Widget;
+using Android.Content.PM;
 
 namespace NaiveSocksAndroid
 {
-    [Activity(Label = "NaiveSocks", MainLauncher = true, LaunchMode = Android.Content.PM.LaunchMode.SingleTask)]
+    [Activity(
+        Label = "NaiveSocks",
+        MainLauncher = true,
+        LaunchMode = LaunchMode.SingleTask,
+        ConfigurationChanges = ConfigChanges.Orientation | ConfigChanges.ScreenSize)]
     public class MainActivity : AppCompatActivity, IServiceConnection
     {
         TextView state;
         LinearLayout outputParent;
-        ScrollView outputParentScroll;
+        NestedScrollView outputParentScroll;
 
         ContextThemeWrapper logThemeWrapper;
 
@@ -63,7 +69,7 @@ namespace NaiveSocksAndroid
             toolbar.Title = "NaiveSocks";
 
             outputParent = this.FindViewById<LinearLayout>(Resource.Id.logparent);
-            outputParentScroll = this.FindViewById<ScrollView>(Resource.Id.logparentScroll);
+            outputParentScroll = this.FindViewById<NestedScrollView>(Resource.Id.logparentScroll);
             state = this.FindViewById<TextView>(Resource.Id.state);
 
             var btnStart = this.FindViewById<Button>(Resource.Id.start);
@@ -80,10 +86,9 @@ namespace NaiveSocksAndroid
             };
             var btnStop = this.FindViewById<Button>(Resource.Id.stop);
             btnStop.Click += (s, e) => {
+                Logging.info("requesting to stop service.");
                 if (!StopService(serviceIntent)) {
                     Logging.info("cannot stop service: service is not running.");
-                } else {
-                    Logging.info("requested to stop service.");
                 }
             };
             Logging.Logged += Logging_Logged;
@@ -137,7 +142,7 @@ namespace NaiveSocksAndroid
             //autoScroll = autoScroll && !outputParentScroll.CanScrollVertically(0);
             outputParent.AddView(tv);
             if (autoScroll) {
-                outputParentScroll.Post(() => outputParentScroll.FullScroll(FocusSearchDirection.Down));
+                outputParentScroll.Post(() => outputParentScroll.FullScroll((int)FocusSearchDirection.Down));
             }
         }
 
