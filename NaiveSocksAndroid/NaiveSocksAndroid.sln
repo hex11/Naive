@@ -11,19 +11,19 @@ Project("{D954291E-2A0B-460D-934E-DC6B0785DB48}") = "NaiveSvrShared", "..\NaiveS
 EndProject
 Project("{D954291E-2A0B-460D-934E-DC6B0785DB48}") = "NaiveConsoleShared", "..\NaiveSvrLib\NaiveConsoleShared\NaiveConsoleShared.shproj", "{A92BC4FA-7794-4694-A814-74F3CED1CFAD}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NaiveSocksLib", "NaiveSocksLib\NaiveSocksLib.csproj", "{D4434C4C-84B5-4CB4-A9F4-875B09554EA8}"
-EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Dependencies", "Dependencies", "{F0E6DC3F-2C8F-4D7F-B9C9-EAF98D4C5412}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NaiveSvrLib", "..\NaiveSvrLib\NaiveSvrLib\NaiveSvrLib.csproj", "{B6FDCE48-2582-4CBC-B1ED-4A6952E183D2}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NaiveSocksCoreAndroid", "NaiveSocksCoreAndroid\NaiveSocksCoreAndroid.csproj", "{96A734C4-93A7-4B3C-B1CC-F74EC533906A}"
+EndProject
 Global
 	GlobalSection(SharedMSBuildProjectFiles) = preSolution
 		..\NaiveSvrLib\NaiveSvrShared\NaiveSvrShared.projitems*{0b623dfc-5129-419c-bb03-823809f9178d}*SharedItemsImports = 13
+		..\NaiveSocks\NaiveSocksShared\NaiveSocksShared.projitems*{96a734c4-93a7-4b3c-b1cc-f74ec533906a}*SharedItemsImports = 4
 		..\NaiveSvrLib\NaiveConsoleShared\NaiveConsoleShared.projitems*{a92bc4fa-7794-4694-a814-74f3ced1cfad}*SharedItemsImports = 13
 		..\NaiveSvrLib\NaiveConsoleShared\NaiveConsoleShared.projitems*{b6fdce48-2582-4cbc-b1ed-4a6952e183d2}*SharedItemsImports = 4
 		..\NaiveSvrLib\NaiveSvrShared\NaiveSvrShared.projitems*{b6fdce48-2582-4cbc-b1ed-4a6952e183d2}*SharedItemsImports = 4
-		..\NaiveSocks\NaiveSocksShared\NaiveSocksShared.projitems*{d4434c4c-84b5-4cb4-a9f4-875b09554ea8}*SharedItemsImports = 4
 		..\NaiveSocks\NaiveSocksShared\NaiveSocksShared.projitems*{fffcf1f9-7c24-425b-bf68-a12f26abb42d}*SharedItemsImports = 13
 	EndGlobalSection
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -41,18 +41,18 @@ Global
 		{978957BF-F302-42CD-9730-19F7C8B04271}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{978957BF-F302-42CD-9730-19F7C8B04271}.Release|Any CPU.Build.0 = Release|Any CPU
 		{978957BF-F302-42CD-9730-19F7C8B04271}.Release|Any CPU.Deploy.0 = Release|Any CPU
-		{D4434C4C-84B5-4CB4-A9F4-875B09554EA8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{D4434C4C-84B5-4CB4-A9F4-875B09554EA8}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{D4434C4C-84B5-4CB4-A9F4-875B09554EA8}.Release(Debug)|Any CPU.ActiveCfg = Release|Any CPU
-		{D4434C4C-84B5-4CB4-A9F4-875B09554EA8}.Release(Debug)|Any CPU.Build.0 = Release|Any CPU
-		{D4434C4C-84B5-4CB4-A9F4-875B09554EA8}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{D4434C4C-84B5-4CB4-A9F4-875B09554EA8}.Release|Any CPU.Build.0 = Release|Any CPU
 		{B6FDCE48-2582-4CBC-B1ED-4A6952E183D2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{B6FDCE48-2582-4CBC-B1ED-4A6952E183D2}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B6FDCE48-2582-4CBC-B1ED-4A6952E183D2}.Release(Debug)|Any CPU.ActiveCfg = Release|Any CPU
 		{B6FDCE48-2582-4CBC-B1ED-4A6952E183D2}.Release(Debug)|Any CPU.Build.0 = Release|Any CPU
 		{B6FDCE48-2582-4CBC-B1ED-4A6952E183D2}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B6FDCE48-2582-4CBC-B1ED-4A6952E183D2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{96A734C4-93A7-4B3C-B1CC-F74EC533906A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{96A734C4-93A7-4B3C-B1CC-F74EC533906A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{96A734C4-93A7-4B3C-B1CC-F74EC533906A}.Release(Debug)|Any CPU.ActiveCfg = Release|Any CPU
+		{96A734C4-93A7-4B3C-B1CC-F74EC533906A}.Release(Debug)|Any CPU.Build.0 = Release|Any CPU
+		{96A734C4-93A7-4B3C-B1CC-F74EC533906A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{96A734C4-93A7-4B3C-B1CC-F74EC533906A}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

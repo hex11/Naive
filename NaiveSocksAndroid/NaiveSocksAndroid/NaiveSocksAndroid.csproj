@@ -106,6 +106,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="BgService.cs" />
+    <Compile Include="CrashHandler.cs" />
     <Compile Include="MainActivity.cs" />
     <Compile Include="Resources\Resource.Designer.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
@@ -137,9 +138,9 @@
       <Project>{b6fdce48-2582-4cbc-b1ed-4a6952e183d2}</Project>
       <Name>NaiveSvrLib</Name>
     </ProjectReference>
-    <ProjectReference Include="..\NaiveSocksLib\NaiveSocksLib.csproj">
-      <Project>{d4434c4c-84b5-4cb4-a9f4-875b09554ea8}</Project>
-      <Name>NaiveSocksLib</Name>
+    <ProjectReference Include="..\NaiveSocksCoreAndroid\NaiveSocksCoreAndroid.csproj">
+      <Project>{96a734c4-93a7-4b3c-b1cc-f74ec533906a}</Project>
+      <Name>NaiveSocksCoreAndroid</Name>
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
@@ -147,6 +148,9 @@
   </ItemGroup>
   <ItemGroup>
     <AndroidResource Include="Resources\values\styles.xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <AndroidResource Include="Resources\layout\toolbar.xml" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath)\Xamarin\Android\Xamarin.Android.CSharp.targets" />
   <Import Project="..\packages\Xamarin.Android.Support.Compat.25.4.0.2\build\MonoAndroid70\Xamarin.Android.Support.Compat.targets" Condition="Exists('..\packages\Xamarin.Android.Support.Compat.25.4.0.2\build\MonoAndroid70\Xamarin.Android.Support.Compat.targets')" />

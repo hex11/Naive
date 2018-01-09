@@ -8,6 +8,7 @@ using Android.App;
 using Android.Content;
 using Android.OS;
 using Android.Runtime;
+using Android.Support.V4.App;
 using Android.Util;
 using Android.Views;
 using Android.Widget;
@@ -27,8 +28,8 @@ namespace NaiveSocksAndroid
         private PowerManager powerManager;
         private NotificationManager notificationManager;
 
-        Notification.Builder builder, restartBuilder;
-        Notification.BigTextStyle bigText;
+        NotificationCompat.Builder builder, restartBuilder;
+        NotificationCompat.BigTextStyle bigText;
         const int MainNotificationId = 1;
 
         private Receiver receiver;
@@ -44,10 +45,10 @@ namespace NaiveSocksAndroid
             powerManager = (PowerManager)GetSystemService(Context.PowerService);
             notificationManager = (NotificationManager)GetSystemService(Context.NotificationService);
 
-            bigText = new Notification.BigTextStyle();
+            bigText = new NotificationCompat.BigTextStyle();
             bigText.BigText("logs will shown here.\n(multiple lines)");
 
-            builder = new Notification.Builder(this)
+            builder = new NotificationCompat.Builder(this)
                         .SetContentIntent(BuildIntentToShowMainActivity())
                         .SetContentTitle("NaiveSocks")
                         //.SetSubText("running")
@@ -58,18 +59,18 @@ namespace NaiveSocksAndroid
                         .AddAction(BuildServiceAction(Actions.GC, "GC", Android.Resource.Drawable.StarOff, 3))
                         .SetSmallIcon(Resource.Drawable.N)
                         .SetPriority((int)NotificationPriority.Min)
-                        .SetVisibility(NotificationVisibility.Secret)
+                        .SetVisibility(NotificationCompat.VisibilitySecret)
                         //.SetShowWhen(false)
                         .SetOngoing(true);
 
-            restartBuilder = new Notification.Builder(this)
+            restartBuilder = new NotificationCompat.Builder(this)
                         .SetContentIntent(BuildServicePendingIntent("start!", 10086))
                         .SetContentTitle("NaiveSocks service is stopped")
                         .SetContentText("touch here to restart")
                         .SetSmallIcon(Resource.Drawable.N)
                         .SetAutoCancel(true)
                         .SetPriority((int)NotificationPriority.Min)
-                        .SetVisibility(NotificationVisibility.Secret)
+                        .SetVisibility(NotificationCompat.VisibilitySecret)
                         .SetShowWhen(false);
 
             StartForeground(MainNotificationId, builder.Build());
@@ -150,7 +151,9 @@ namespace NaiveSocksAndroid
             Logging.Logged -= Logging_Logged;
             Logging.warning("service is being destroyed.");
             UnregisterReceiver(receiver);
-            Controller.Stop();
+            var tmp = Controller;
+            Controller = null;
+            Task.Run(() => tmp.Stop());
             base.OnDestroy();
         }
 
@@ -280,10 +283,10 @@ namespace NaiveSocksAndroid
             return PendingIntent.GetActivity(this, 0, notificationIntent, PendingIntentFlags.UpdateCurrent);
         }
 
-        Notification.Action BuildServiceAction(string action, string text, int icon, int requestCode)
+        NotificationCompat.Action BuildServiceAction(string action, string text, int icon, int requestCode)
         {
             var pendingIntent = BuildServicePendingIntent(action, requestCode);
-            var builder = new Notification.Action.Builder(icon, text, pendingIntent);
+            var builder = new NotificationCompat.Action.Builder(icon, text, pendingIntent);
             return builder.Build();
         }
 
@@ -328,31 +331,5 @@ namespace NaiveSocksAndroid
         }
 
         public BgService BgService { get; }
-    }
-
-    static class CrashHandler
-    {
-        static CrashHandler()
-        {
-            AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
-            inited = true;
-        }
-
-        private static void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
-        {
-            using (var sw = File.CreateText(CrashLogFile)) {
-                sw.Write(e.ToString());
-            }
-        }
-
-        public static string CrashLogFile = "/sdcard/NaiveUnhandledException.txt";
-
-        static bool inited = false;
-
-        public static void CheckInit()
-        {
-            if (inited == false)
-                throw new Exception("!!! inited == false !!!");
-        }
     }
 }

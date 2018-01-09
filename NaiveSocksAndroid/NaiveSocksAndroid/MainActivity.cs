@@ -9,11 +9,15 @@ using System.IO;
 using Android.Content;
 using Android.Net;
 using Android.Views;
+using Android.Support.V7.App;
+using Toolbar = Android.Support.V7.Widget.Toolbar;
+using Android.Graphics;
+using System;
 
 namespace NaiveSocksAndroid
 {
     [Activity(Label = "NaiveSocks", MainLauncher = true, LaunchMode = Android.Content.PM.LaunchMode.SingleTask)]
-    public class MainActivity : Activity, IServiceConnection
+    public class MainActivity : AppCompatActivity, IServiceConnection
     {
         TextView state;
         LinearLayout outputParent;
@@ -53,6 +57,10 @@ namespace NaiveSocksAndroid
 
             // Set our view from the "main" layout resource
             SetContentView(Resource.Layout.Main);
+
+            var toolbar = FindViewById<Toolbar>(Resource.Id.toolbar);
+            SetSupportActionBar(toolbar);
+            toolbar.Title = "NaiveSocks";
 
             outputParent = this.FindViewById<LinearLayout>(Resource.Id.logparent);
             outputParentScroll = this.FindViewById<ScrollView>(Resource.Id.logparentScroll);
@@ -101,13 +109,31 @@ namespace NaiveSocksAndroid
 
         private void putLog(Logging.Log log, bool autoScroll)
         {
-            putText($"[{log.time.ToLongTimeString()} {log.levelStr}] {log.text}", autoScroll);
+            putText($"[{log.time.ToLongTimeString()} {log.levelStr}] {log.text}", autoScroll, getColorFromLevel(log.level));
         }
 
-        private void putText(string text, bool autoScroll = true)
+        private Color? getColorFromLevel(Logging.Level level)
+        {
+            switch (level) {
+            case Logging.Level.None:
+            case Logging.Level.Debug:
+                return null;
+            case Logging.Level.Info:
+                return Color.Argb(30, 0, 255, 0);
+            case Logging.Level.Warning:
+                return Color.Argb(30, 255, 255, 0);
+            case Logging.Level.Error:
+            default:
+                return Color.Argb(30, 255, 0, 0);
+            }
+        }
+
+        private void putText(string text, bool autoScroll = true, Android.Graphics.Color? color = null)
         {
             var tv = new TextView(logThemeWrapper);
             tv.Text = text;
+            if (color != null)
+                tv.SetBackgroundColor(color.Value);
             //autoScroll = autoScroll && !outputParentScroll.CanScrollVertically(0);
             outputParent.AddView(tv);
             if (autoScroll) {
