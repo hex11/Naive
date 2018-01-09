@@ -157,7 +157,7 @@ namespace NaiveSocks
             base.Start();
         }
 
-        public override void NewConnection(TcpClient client)
+        public override void OnNewConnection(TcpClient client)
         {
             async Task tmp()
             {

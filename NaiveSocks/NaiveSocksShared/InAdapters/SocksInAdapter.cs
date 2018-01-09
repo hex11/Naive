@@ -6,30 +6,16 @@ using Naive.HttpSvr;
 namespace NaiveSocks
 {
 
-    public class SocksInAdapter : InAdapter
+    public class SocksInAdapter : InAdapterWithListener
     {
-        public IPEndPoint local { get; set; }
         public bool fastopen { get; set; } = false;
-        public Listener Listener { get; private set; }
 
-        private void Listener_Accepted(TcpClient obj)
+        public override void OnNewConnection(TcpClient client)
         {
-            new SocksInConnection(obj, this).Start().Forget();
+            new SocksInConnection(client, this).Start().Forget();
         }
 
-        public override void Start()
-        {
-            Listener = new Listener(local);
-            Listener.Accepted += Listener_Accepted;
-            Listener.Start().Forget();
-        }
-
-        public override void Stop()
-        {
-            Listener.Stop();
-        }
-
-        public override string ToString() => $"{{SocksIn local={local}}}";
+        public override string ToString() => $"{{SocksIn listen={listen}}}";
 
         private class SocksInConnection : InConnection
         {

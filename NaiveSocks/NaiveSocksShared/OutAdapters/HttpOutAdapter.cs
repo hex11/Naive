@@ -25,12 +25,13 @@ namespace NaiveSocks
             try {
                 var dataStream = baseResult.Stream;
                 var asStream = MyStream.ToStream(dataStream);
-                var sw = new StringWriter();
+                var sw = new StreamWriter(asStream, NaiveUtils.UTF8Encoding, 1440, true);
                 var destStr = dest.ToString();
-                HttpClient.WriteHttpRequestHeader(sw, "CONNECT", destStr, new Dictionary<string, string> {
+                await HttpClient.WriteHttpRequestHeaderAsync(sw, "CONNECT", destStr, new Dictionary<string, string> {
                     ["Host"] = destStr
                 });
-                await dataStream.WriteAsync(NaiveUtils.GetUTF8Bytes(sw.ToString()));
+                await sw.FlushAsync();
+                sw.Dispose();
                 var responseStr = await NaiveUtils.ReadStringUntil(asStream, NaiveUtils.DoubleCRLFBytes);
                 var sr = new StringReader(responseStr);
                 var response = HttpClient.ReadHttpResponseHeader(sr);

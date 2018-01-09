@@ -2,6 +2,7 @@
 using System.Net;
 using System.Threading.Tasks;
 using Naive.HttpSvr;
+using Nett;
 
 namespace NaiveSocks
 {
@@ -11,7 +12,7 @@ namespace NaiveSocks
     public class NaiveInAdapter : NaiveProtocol.NaiveMServerBase, IHttpRequestAsyncHandler
     {
         private NaiveWebsiteServer httpServer;
-        public IPEndPoint local { get; set; }
+        public IPEndPoint listen { get; set; }
         public string path { get; set; } = "/";
         private const string DefaultKey = "hello, world";
         public string key { get; set; } = DefaultKey;
@@ -19,6 +20,12 @@ namespace NaiveSocks
 
         public Dictionary<string, AdapterRef> networks { get; set; }
         public AdapterRef network { get; set; }
+
+        public override void SetConfig(TomlTable toml)
+        {
+            base.SetConfig(toml);
+            listen = toml.TryGetValue("local", listen);
+        }
 
         protected override INetwork GetNetwork(string name)
         {
@@ -35,8 +42,8 @@ namespace NaiveSocks
             if (network != null)
                 networks.Add("default", network);
             httpServer = new NaiveWebsiteServer();
-            if (local != null)
-                httpServer.AddListener(local);
+            if (listen != null)
+                httpServer.AddListener(listen);
             if (paths == null) {
                 if (key == DefaultKey) {
                     Logging.warning($"{this} is using default key: '{DefaultKey}'");

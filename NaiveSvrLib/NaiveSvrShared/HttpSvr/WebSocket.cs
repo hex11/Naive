@@ -92,37 +92,59 @@ namespace Naive.HttpSvr
         public event Action<WebSocket> Activated;
         public States ConnectionState = States.Opening;
 
+        static int _timeTask_id = 0;
         private static void StartTimeTask()
         {
+            var id = Interlocked.Increment(ref _timeTask_id);
             NaiveUtils.RunAsyncTask(async () => {
                 while (true) {
-                    await Task.Delay(_timeAcc).CAF();
-                    CurrentTime++;
+                    await Task.Delay(_timeAcc * 1000).CAF();
+                    if (id != _timeTask_id)
+                        return;
+                    CurrentTime += _timeAcc;
                 }
             });
         }
 
-        private static int _timeAcc = 1000;
+        private static int _timeAcc = 1;
         public static int TimeAcc
         {
-            get { return _timeAcc / 1000; }
+            get { return _timeAcc; }
             set {
-                if (value <= 0)
-                    throw new ArgumentOutOfRangeException("TimeAcc");
-                _timeAcc = value * 1000;
+                ConfigManageTask(value, _manageInterval);
             }
         }
 
-        private static int manageInterval = 3000;
+        private static int _manageInterval = 3000;
         public static int ManageInterval
         {
-            get { return manageInterval; }
+            get { return _manageInterval; }
             set {
-                if (value <= 0)
-                    throw new ArgumentOutOfRangeException("ManageInterval");
-                manageInterval = value;
+                ConfigManageTask(_timeAcc, value);
             }
         }
+
+        public static void ConfigManageTask(int timeAcc, int manageInterval)
+        {
+            if (timeAcc <= 0)
+                throw new ArgumentOutOfRangeException("TimeAcc");
+            if (manageInterval <= 0)
+                throw new ArgumentOutOfRangeException("ManageInterval");
+            _timeAcc = timeAcc;
+            _manageInterval = manageInterval;
+
+            if (timeAcc * 1000 == manageInterval) {
+                _timeTask_id++;
+                incrTimeByManageTask = true;
+            } else {
+                if (incrTimeByManageTask) {
+                    incrTimeByManageTask = false;
+                    StartTimeTask();
+                }
+            }
+        }
+
+        static bool incrTimeByManageTask = false;
 
         public static int CurrentTime { get; private set; } = 0;
         public int CreateTime = CurrentTime;
@@ -133,7 +155,9 @@ namespace Naive.HttpSvr
             NaiveUtils.RunAsyncTask(async () => {
                 //List<WebSocket> tmpList = new List<WebSocket>();
                 while (true) {
-                    await Task.Delay(manageInterval).CAF();
+                    await Task.Delay(_manageInterval).CAF();
+                    if (incrTimeByManageTask)
+                        CurrentTime += _timeAcc;
                     //tmpList.Clear();
                     if (ManagedWebSockets.Count == 0)
                         continue;
@@ -206,7 +230,7 @@ namespace Naive.HttpSvr
         public void RecvLoop() => recvLoop();
         public Task RecvLoopAsync() => recvLoopAsync();
 
-        private readonly SemaphoreSlim _sendLock = new SemaphoreSlim(1, 1);
+        //private readonly SemaphoreSlim _sendLock = new SemaphoreSlim(1, 1);
         protected void recvLoop()
         {
             try {
@@ -580,11 +604,14 @@ namespace Naive.HttpSvr
 
         public Task LastPingTask { get; private set; }
 
+        public int LastPingStartWsTime { get; private set; }
+
         public Task SendPingAsync()
         {
             if (LastPingTask?.IsCompleted == false)
                 return LastPingTask;
             _pingstart = DateTime.UtcNow;
+            LastPingStartWsTime = CurrentTime;
             return LastPingTask = SendMsgAsync(0x9, null, 0, 0);
         }
 
@@ -682,58 +709,54 @@ namespace Naive.HttpSvr
         {
             if (buf == null && len > 0)
                 throw new ArgumentNullException(nameof(buf));
-            _sendLock.Wait();
-            try {
-                BytesView bv = new BytesView(buf, begin, len);
-                if (WriteFilter != null && len > 0) {
-                    WriteFilter(bv);
-                    buf = bv.bytes;
-                    begin = bv.offset;
-                    len = bv.tlen;
-                }
-                var curSendBufSize = NaiveUtils.Random.Next(SendBufSizeMin, SendBufSizeMax);
-                using (var handle = _sendMsgBufferPool.Get()) {
-                    int bufcur = 0;
-                    var sendMsgBuf = handle.Value;
-                    var isMasked = IsClient;
-                    buildHeader(opcode, bv.tlen, fin, sendMsgBuf, ref bufcur, isMasked);
-                    var stream = BaseStream;
-                    if (buf != null) {
-                        var curbv = bv;
-                        int maskIndex = 0;
-                        do {
-                            int cur = curbv.offset;
-                            int end = cur + curbv.len;
-                            var bytes = curbv.bytes;
-                            if (isMasked) {
-                                for (; cur < end; cur++) {
-                                    sendMsgBuf[bufcur++] = (byte)(bytes[cur] ^ maskbytes[maskIndex++ % 4]);
-                                    if (bufcur >= curSendBufSize) {
-                                        stream.Write(sendMsgBuf, 0, bufcur);
-                                        bufcur = 0;
-                                        curSendBufSize = NaiveUtils.Random.Next(SendBufSizeMin, SendBufSizeMax);
-                                    }
-                                }
-                            } else {
-                                while (cur < end) {
-                                    var toCopy = Math.Min(curSendBufSize - bufcur, end - cur);
-                                    Buffer.BlockCopy(bytes, cur, sendMsgBuf, bufcur, toCopy);
-                                    cur += toCopy;
-                                    bufcur += toCopy;
-                                    if (bufcur == curSendBufSize) {
-                                        stream.Write(sendMsgBuf, 0, bufcur);
-                                        bufcur = 0;
-                                        curSendBufSize = NaiveUtils.Random.Next(SendBufSizeMin, SendBufSizeMax);
-                                    }
+
+            BytesView bv = new BytesView(buf, begin, len);
+            if (WriteFilter != null && len > 0) {
+                WriteFilter(bv);
+                buf = bv.bytes;
+                begin = bv.offset;
+                len = bv.tlen;
+            }
+            var curSendBufSize = NaiveUtils.Random.Next(SendBufSizeMin, SendBufSizeMax);
+            using (var handle = _sendMsgBufferPool.Get()) {
+                int bufcur = 0;
+                var sendMsgBuf = handle.Value;
+                var isMasked = IsClient;
+                buildHeader(opcode, bv.tlen, fin, sendMsgBuf, ref bufcur, isMasked);
+                var stream = BaseStream;
+                if (buf != null) {
+                    var curbv = bv;
+                    int maskIndex = 0;
+                    do {
+                        int cur = curbv.offset;
+                        int end = cur + curbv.len;
+                        var bytes = curbv.bytes;
+                        if (isMasked) {
+                            for (; cur < end; cur++) {
+                                sendMsgBuf[bufcur++] = (byte)(bytes[cur] ^ maskbytes[maskIndex++ % 4]);
+                                if (bufcur >= curSendBufSize) {
+                                    stream.Write(sendMsgBuf, 0, bufcur);
+                                    bufcur = 0;
+                                    curSendBufSize = NaiveUtils.Random.Next(SendBufSizeMin, SendBufSizeMax);
                                 }
                             }
-                        } while ((curbv = curbv.nextNode) != null);
-                    }
-                    if (bufcur > 0)
-                        stream.Write(sendMsgBuf, 0, bufcur);
+                        } else {
+                            while (cur < end) {
+                                var toCopy = Math.Min(curSendBufSize - bufcur, end - cur);
+                                Buffer.BlockCopy(bytes, cur, sendMsgBuf, bufcur, toCopy);
+                                cur += toCopy;
+                                bufcur += toCopy;
+                                if (bufcur == curSendBufSize) {
+                                    stream.Write(sendMsgBuf, 0, bufcur);
+                                    bufcur = 0;
+                                    curSendBufSize = NaiveUtils.Random.Next(SendBufSizeMin, SendBufSizeMax);
+                                }
+                            }
+                        }
+                    } while ((curbv = curbv.nextNode) != null);
                 }
-            } finally {
-                _sendLock.Release();
+                if (bufcur > 0)
+                    stream.Write(sendMsgBuf, 0, bufcur);
             }
 
         }
@@ -768,56 +791,52 @@ namespace Naive.HttpSvr
                 throw new ArgumentNullException(nameof(buf));
             if (buf.bytes == null && buf.len > 0)
                 throw new ArgumentNullException("buf.bytes");
-            await _sendLock.WaitAsync().CAF();
-            try {
-                BytesView bv = buf;
-                if (WriteFilter != null && bv.len > 0) {
-                    WriteFilter(bv);
-                }
-                var curSendBufSize = NaiveUtils.Random.Next(SendBufSizeMin, SendBufSizeMax);
-                var len = bv.tlen;
-                using (var handle = _sendMsgBufferPool.Get()) {
-                    int bufcur = 0;
-                    var sendMsgBuf = handle.Value;
-                    var isMasked = IsClient;
-                    buildHeader(opcode, bv.tlen, fin, sendMsgBuf, ref bufcur, isMasked);
-                    var stream = BaseStream;
-                    if (buf != null) {
-                        var curbv = bv;
-                        int maskIndex = 0;
-                        do {
-                            int cur = curbv.offset;
-                            int end = cur + curbv.len;
-                            var bytes = curbv.bytes;
-                            if (isMasked) {
-                                for (; cur < end; cur++) {
-                                    sendMsgBuf[bufcur++] = (byte)(bytes[cur] ^ maskbytes[maskIndex++ % 4]);
-                                    if (bufcur >= curSendBufSize) {
-                                        await stream.WriteAsync(sendMsgBuf, 0, bufcur).CAF();
-                                        bufcur = 0;
-                                        curSendBufSize = NaiveUtils.Random.Next(SendBufSizeMin, SendBufSizeMax);
-                                    }
-                                }
-                            } else {
-                                while (cur < end) {
-                                    var toCopy = Math.Min(curSendBufSize - bufcur, end - cur);
-                                    Buffer.BlockCopy(bytes, cur, sendMsgBuf, bufcur, toCopy);
-                                    cur += toCopy;
-                                    bufcur += toCopy;
-                                    if (bufcur == curSendBufSize) {
-                                        await stream.WriteAsync(sendMsgBuf, 0, bufcur).CAF();
-                                        bufcur = 0;
-                                        curSendBufSize = NaiveUtils.Random.Next(SendBufSizeMin, SendBufSizeMax);
-                                    }
+
+            BytesView bv = buf;
+            if (WriteFilter != null && bv.len > 0) {
+                WriteFilter(bv);
+            }
+            var curSendBufSize = NaiveUtils.Random.Next(SendBufSizeMin, SendBufSizeMax);
+            var len = bv.tlen;
+            using (var handle = _sendMsgBufferPool.Get()) {
+                int bufcur = 0;
+                var sendMsgBuf = handle.Value;
+                var isMasked = IsClient;
+                buildHeader(opcode, bv.tlen, fin, sendMsgBuf, ref bufcur, isMasked);
+                var stream = BaseStream;
+                if (buf != null) {
+                    var curbv = bv;
+                    int maskIndex = 0;
+                    do {
+                        int cur = curbv.offset;
+                        int end = cur + curbv.len;
+                        var bytes = curbv.bytes;
+                        if (isMasked) {
+                            for (; cur < end; cur++) {
+                                sendMsgBuf[bufcur++] = (byte)(bytes[cur] ^ maskbytes[maskIndex++ % 4]);
+                                if (bufcur >= curSendBufSize) {
+                                    await stream.WriteAsync(sendMsgBuf, 0, bufcur).CAF();
+                                    bufcur = 0;
+                                    curSendBufSize = NaiveUtils.Random.Next(SendBufSizeMin, SendBufSizeMax);
                                 }
                             }
-                        } while ((curbv = curbv.nextNode) != null);
-                    }
-                    if (bufcur > 0)
-                        await stream.WriteAsync(sendMsgBuf, 0, bufcur).CAF();
+                        } else {
+                            while (cur < end) {
+                                var toCopy = Math.Min(curSendBufSize - bufcur, end - cur);
+                                Buffer.BlockCopy(bytes, cur, sendMsgBuf, bufcur, toCopy);
+                                cur += toCopy;
+                                bufcur += toCopy;
+                                if (bufcur == curSendBufSize) {
+                                    await stream.WriteAsync(sendMsgBuf, 0, bufcur).CAF();
+                                    bufcur = 0;
+                                    curSendBufSize = NaiveUtils.Random.Next(SendBufSizeMin, SendBufSizeMax);
+                                }
+                            }
+                        }
+                    } while ((curbv = curbv.nextNode) != null);
                 }
-            } finally {
-                _sendLock.Release();
+                if (bufcur > 0)
+                    await stream.WriteAsync(sendMsgBuf, 0, bufcur).CAF();
             }
         }
 

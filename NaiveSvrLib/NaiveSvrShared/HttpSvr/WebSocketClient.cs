@@ -89,7 +89,7 @@ namespace Naive.HttpSvr
             => HandshakeAsync(enterRecvLoop, null);
         public async Task HandshakeAsync(bool enterRecvLoop, Dictionary<string, string> addHeaders)
         {
-            var sw = new StreamWriter(BaseStream, NaiveUtils.UTF8Encoding);
+            var sw = new StreamWriter(BaseStream, NaiveUtils.UTF8Encoding, 1440, true);
             var wskey = Guid.NewGuid().ToString("D");
             var headers = new Dictionary<string, string> {
                 ["Upgrade"] = "websocket",
@@ -105,8 +105,7 @@ namespace Naive.HttpSvr
                 }
             }
             await HttpClient.WriteHttpRequestHeaderAsync(sw, "GET", Path, headers);
-            sw.Flush();
-            BaseStream.Flush();
+            await sw.FlushAsync();
             var responseString = await NaiveUtils.ReadStringUntil(BaseStream, NaiveUtils.DoubleCRLFBytes);
             HttpResponse response;
             try {

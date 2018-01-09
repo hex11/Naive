@@ -61,22 +61,31 @@ namespace NaiveSocksAndroid
             var btnStart = this.FindViewById<Button>(Resource.Id.start);
             btnStart.Click += (s, e) => {
                 if (!isConnected) {
-                    StartService(serviceIntent);
-                    this.BindService(serviceIntent, this, Bind.None);
+                    Logging.info("starting/binding service...");
+                    Task.Run(() => {
+                        StartService(serviceIntent);
+                        this.BindService(serviceIntent, this, Bind.None);
+                    });
+                } else {
+                    Logging.info("cannot start service: service is already running.");
                 }
             };
             var btnStop = this.FindViewById<Button>(Resource.Id.stop);
             btnStop.Click += (s, e) => {
-                StopService(serviceIntent);
+                if (!StopService(serviceIntent)) {
+                    Logging.info("cannot stop service: service is not running.");
+                } else {
+                    Logging.info("requested to stop service.");
+                }
             };
             Logging.Logged += Logging_Logged;
             var logs = Logging.getLogsHistoryArray();
-            for (int i = 0; i < logs.Length; i++) {
-                putLog(logs[i], false);
+            if (logs.Length > 0) {
+                for (int i = 0; i < logs.Length; i++) {
+                    putLog(logs[i], false);
+                }
+                putText("========== end of log history ==========", true);
             }
-            outputParentScroll.Post(() => {
-                outputParentScroll.SmoothScrollTo(0, outputParent.Bottom);
-            });
         }
 
         protected override void OnDestroy()
@@ -92,10 +101,10 @@ namespace NaiveSocksAndroid
 
         private void putLog(Logging.Log log, bool autoScroll)
         {
-            putText($"[{System.DateTime.Now.ToLongTimeString()} {log.levelStr}] {log.text}", autoScroll);
+            putText($"[{log.time.ToLongTimeString()} {log.levelStr}] {log.text}", autoScroll);
         }
 
-        private void putText(string text, bool autoScroll)
+        private void putText(string text, bool autoScroll = true)
         {
             var tv = new TextView(logThemeWrapper);
             tv.Text = text;

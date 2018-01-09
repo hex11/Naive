@@ -95,14 +95,14 @@ namespace NaiveSocks
         }
     }
 
-    public abstract class InAdapterWithListener : InAdapter
+    public abstract class InAdapterWithListener : InAdapterWithListenField
     {
-        public IPEndPoint local { get; set; }
         private Listener listener;
+
         public override void Start()
         {
-            listener = new Listener(local);
-            listener.Accepted += NewConnection;
+            listener = new Listener(listen);
+            listener.Accepted += OnNewConnection;
             listener.Start().Forget();
         }
 
@@ -111,6 +111,19 @@ namespace NaiveSocks
             listener.Stop();
         }
 
-        public abstract void NewConnection(TcpClient client);
+        public abstract void OnNewConnection(TcpClient client);
+    }
+
+    public abstract class InAdapterWithListenField : InAdapter
+    {
+        public IPEndPoint listen { get; set; }
+
+        public override string ToString() => $"{{{GetType().Name} listen={listen}}}";
+
+        public override void SetConfig(TomlTable toml)
+        {
+            base.SetConfig(toml);
+            listen = toml.TryGetValue<IPEndPoint>("local", listen);
+        }
     }
 }

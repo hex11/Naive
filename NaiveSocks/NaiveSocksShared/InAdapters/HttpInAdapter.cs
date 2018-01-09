@@ -11,10 +11,8 @@ using System.Linq;
 namespace NaiveSocks
 {
 
-    public class HttpInAdapter : InAdapter, IHttpRequestAsyncHandler
+    public class HttpInAdapter : InAdapterWithListenField, IHttpRequestAsyncHandler
     {
-        public IPEndPoint local { get; set; }
-
         public bool verbose { get; set; }
 #if DEBUG
         = true; 
@@ -22,7 +20,7 @@ namespace NaiveSocks
 
         public override string ToString()
         {
-            return $"{{HttpIn local={local}}}";
+            return $"{{HttpIn listen={listen}}}";
         }
 
         HttpServer httpServer;
@@ -31,7 +29,7 @@ namespace NaiveSocks
         {
             base.Init();
             httpServer = new HttpServer(this);
-            httpServer.AddListener(local);
+            httpServer.AddListener(listen);
         }
 
         public override void Start()

@@ -148,6 +148,7 @@ namespace NaiveSocksAndroid
         {
             isDestroyed = true;
             Logging.Logged -= Logging_Logged;
+            Logging.warning("service is being destroyed.");
             UnregisterReceiver(receiver);
             Controller.Stop();
             base.OnDestroy();
@@ -243,11 +244,9 @@ namespace NaiveSocksAndroid
                 });
                 if (_needUpdateNotif)
                     updateNotif();
-                WebSocket.ManageInterval = 3000;
-                WebSocket.TimeAcc = 2;
+                WebSocket.ConfigManageTask(3, 3000);
             } else {
-                WebSocket.ManageInterval = 8000;
-                WebSocket.TimeAcc = 4;
+                WebSocket.ConfigManageTask(8, 8000);
             }
         }
 
