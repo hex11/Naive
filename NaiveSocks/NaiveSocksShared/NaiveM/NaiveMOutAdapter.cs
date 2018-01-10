@@ -160,8 +160,8 @@ namespace NaiveSocks
                     RemovePoolItem(x);
                     CheckPoolWithDelay();
                 };
-                pi.ConnectIfNot().Forget();
                 AddPoolItem(pi);
+                pi.ConnectIfNot().Forget();
                 return pi;
             }
         }
@@ -279,20 +279,21 @@ namespace NaiveSocks
                             Error?.Invoke(this, e);
                         } finally {
                             Closed?.Invoke(this);
-                            connectTask = null;
+                            //connectTask = null;
                             nms = null;
                         }
                     }).Forget();
                 } catch (Exception e) {
                     Error?.Invoke(this, e);
                     Closed?.Invoke(this);
-                    connectTask = null;
+                    //connectTask = null;
                     nms = null;
                     if (e.IsConnectionException()) {
                         Logging.error($"'{adapter.Name}' connecting failed: {e.Message}");
                     } else {
                         Logging.exception(e, Logging.Level.Error, $"'{adapter.Name}' connecting failed");
                     }
+                    throw;
                 }
             }
 

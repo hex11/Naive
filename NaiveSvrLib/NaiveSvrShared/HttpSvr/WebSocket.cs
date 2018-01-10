@@ -18,7 +18,6 @@ namespace Naive.HttpSvr
         static WebSocket()
         {
             StartTimeTask();
-            StartManageTask();
         }
 
         public WebSocket(Stream BaseStream, bool isClient)
@@ -146,15 +145,20 @@ namespace Naive.HttpSvr
 
         static bool incrTimeByManageTask = false;
 
+        static int _manageTaskRunning = 0;
+
         public static int CurrentTime { get; private set; } = 0;
         public int CreateTime = CurrentTime;
         public int LatestActiveTime = CurrentTime;
 
-        private static void StartManageTask()
+        private static void CheckManageTask()
         {
+            if (Interlocked.CompareExchange(ref _manageTaskRunning, 1, 0) != 0)
+                return;
             NaiveUtils.RunAsyncTask(async () => {
                 //List<WebSocket> tmpList = new List<WebSocket>();
-                while (true) {
+                Logging.debug("websocket management task started.");
+                do {
                     await Task.Delay(_manageInterval).CAF();
                     if (incrTimeByManageTask)
                         CurrentTime += _timeAcc;
@@ -185,6 +189,8 @@ namespace Naive.HttpSvr
                         }
                     }
                 }
+                while (!(ManagedWebSockets.Count == 0 && Interlocked.CompareExchange(ref _manageTaskRunning, 0, 1) == 1));
+                Logging.debug("websocket management task stopped.");
             });
         }
 
@@ -210,6 +216,7 @@ namespace Naive.HttpSvr
             isManaged = true;
             lock (ManagedWebSockets)
                 ManagedWebSockets.Add(this);
+            CheckManageTask();
         }
 
         public enum States

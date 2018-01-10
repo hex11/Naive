@@ -217,8 +217,8 @@ namespace Naive.HttpSvr
             var sb = new StringBuilder(256);
             sb.Append(text);
             var threadName = Thread.CurrentThread.Name;
-            if (string.IsNullOrEmpty(threadName) == false)
-                sb.AppendFormat("\r\n(ThreadName: {0})", threadName);
+            //if (string.IsNullOrEmpty(threadName) == false)
+            //    sb.AppendFormat("\r\n(ThreadName: {0})", threadName);
             sb.Append("\r\n(").Append(ex.GetType().FullName).Append(") ").AppendLine(ex.Message);
             getStackTraceString(ex, sb);
             sb.AppendLine();

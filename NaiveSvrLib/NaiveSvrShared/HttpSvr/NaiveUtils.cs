@@ -432,6 +432,42 @@ namespace Naive.HttpSvr
             }
         }
 
+        public static async Task<Socket> ConnectTCPAsync(AddrPort dest, int timeout)
+        {
+            int state = 0; // 1: dns done; 2: socket created; 3: timed out
+            TcpClient destTcp = null;
+            var connectTask = NaiveUtils.RunAsyncTask(async () => {
+                var addrs = await Dns.GetHostAddressesAsync(dest.Host);
+                if (addrs.Length == 0)
+                    throw new Exception($"no address resolved for '{dest.Host}'");
+                var addr = addrs[0];
+                if (Interlocked.Exchange(ref state, 1) != 0)
+                    return;
+                destTcp = new TcpClient(addr.AddressFamily);
+                if (Interlocked.Exchange(ref state, 2) != 1) {
+                    destTcp.Close();
+                    return;
+                }
+                try {
+                    ConfigureSocket(destTcp.Client);
+                    await destTcp.ConnectAsync(addr, dest.Port);
+                } catch (Exception) {
+                    destTcp.Close();
+                    throw;
+                }
+            });
+            if (timeout > 0) {
+                if (await Task.WhenAny(connectTask, Task.Delay(timeout)) != connectTask) {
+                    if (Interlocked.Exchange(ref state, 3) == 2) {
+                        destTcp.Close();
+                    }
+                    throw new Exception($"connecting timed out ({timeout} ms)");
+                }
+            }
+            await connectTask;
+            return destTcp.Client;
+        }
+
         public static void ConfigureSocket(Socket socket)
         {
             socket.SendBufferSize = 128 * 1024;

@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Naive.HttpSvr
@@ -13,7 +14,6 @@ namespace Naive.HttpSvr
         public string Path { get; }
         public string Host { get; set; }
 
-        public TcpClient TcpClient;
         public EPPair epPair;
 
         public WebSocketClient(Stream baseStream, string path) : base(baseStream, true)
@@ -27,23 +27,18 @@ namespace Naive.HttpSvr
                                             : $"{{WebSocketClient on {epPair}}}";
         }
 
-        public static Task<WebSocketClient> ConnectToAsync(AddrPort ap, string path) => ConnectToAsync(ap.Host, ap.Port, path);
+        public static Task<WebSocketClient> ConnectToAsync(string host, int port, string path) => ConnectToAsync(new AddrPort(host, port), path);
 
-        public static async Task<WebSocketClient> ConnectToAsync(string host, int port, string path)
+        public static async Task<WebSocketClient> ConnectToAsync(AddrPort dest, string path)
         {
-            TcpClient tcpClient = new TcpClient();
+            Socket socket = await NaiveUtils.ConnectTCPAsync(dest, 15 * 1000);
             try {
-                Socket socket = tcpClient.Client;
-                NaiveUtils.ConfigureSocket(socket);
-                await tcpClient.ConnectAsync(host, port);
                 var socketStream = NaiveSocks.MyStream.FromSocket(socket);
                 var ws = new WebSocketClient(NaiveSocks.MyStream.ToStream(socketStream), path);
-                ws.Host = host;
-                ws.TcpClient = tcpClient;
+                ws.Host = dest.Host;
                 return ws;
             } catch (Exception) {
-                if (tcpClient.Connected)
-                    tcpClient.Close();
+                socket.Dispose();
                 throw;
             }
         }

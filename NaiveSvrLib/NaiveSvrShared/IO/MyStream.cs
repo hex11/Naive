@@ -493,14 +493,19 @@ namespace NaiveSocks
 
         private static void ReadCompletedCallback(object sender, SocketAsyncEventArgs e)
         {
-            var userToken = (ReadUserToken)e.UserToken;
-            var sw = userToken.sw;
-            var tcs = userToken.tcs;
-            var r = ReadCompleted(e, userToken, sw, out var ex);
-            if (r < 0)
-                tcs.SetException(ex);
-            else
-                tcs.SetResult(r);
+            try {
+                var userToken = (ReadUserToken)e.UserToken;
+                var sw = userToken.sw;
+                var tcs = userToken.tcs;
+                var r = ReadCompleted(e, userToken, sw, out var ex);
+                if (r < 0)
+                    tcs.SetException(ex);
+                else
+                    tcs.SetResult(r);
+            } catch (Exception ex) {
+                Logging.exception(ex, Logging.Level.Error, "ReadCompletedCallback");
+                throw;
+            }
         }
 
         private static int ReadCompleted(SocketAsyncEventArgs e, ReadUserToken userToken, SocketStream sw, out Exception exception)
@@ -567,11 +572,16 @@ namespace NaiveSocks
 
         private static void WriteCompletedCallback(object sender, SocketAsyncEventArgs e)
         {
-            var tcs = e.UserToken as TaskCompletionSource<int>;
-            if (WriteCompleted(e, out var ex))
-                tcs.SetResult(0);
-            else
-                tcs.SetException(ex);
+            try {
+                var tcs = e.UserToken as TaskCompletionSource<int>;
+                if (WriteCompleted(e, out var ex))
+                    tcs.SetResult(0);
+                else
+                    tcs.SetException(ex);
+            } catch (Exception ex) {
+                Logging.exception(ex, Logging.Level.Error, "WriteCompletedCallback");
+                throw;
+            }
         }
 
         private static bool WriteCompleted(SocketAsyncEventArgs e, out Exception exception)
