@@ -121,10 +121,14 @@ namespace NaiveSocks
             lock (clients)
                 clients.Add(client);
             Logging.info($"{this} added: {client}");
-            Task.WhenAny(client.WhenDisconnected).ContinueWith((x) => {
-                lock (clients)
-                    clients.Remove(client);
-                Logging.info($"{this} removed: {client}");
+            NaiveUtils.RunAsyncTask(async () => {
+                try {
+                    await client.WhenDisconnected;
+                } finally {
+                    lock (clients)
+                        clients.Remove(client);
+                    Logging.info($"{this} removed: {client}");
+                }
             });
         }
 

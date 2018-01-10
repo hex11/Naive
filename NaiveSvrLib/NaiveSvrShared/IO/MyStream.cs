@@ -402,6 +402,17 @@ namespace NaiveSocks
 
     public class SocketStream : MyStream, IMyStreamMultiBuffer, IMyStreamSync
     {
+        static SocketStream()
+        {
+            const int CachedMax = 32;
+            cachedTaskFromIntResult = new Task<int>[CachedMax];
+            for (int i = 0; i < cachedTaskFromIntResult.Length; i++) {
+                cachedTaskFromIntResult[i] = Task.FromResult(i);
+            }
+        }
+
+        private static Task<int>[] cachedTaskFromIntResult;
+
         public SocketStream(Socket socket)
         {
             this.Socket = socket;
@@ -454,14 +465,30 @@ namespace NaiveSocks
             userToken.tcs = tcs;
             var sw = userToken.sw = this;
             e.SetBuffer(bv.Bytes, bv.Offset, bv.Len);
-            if (!Socket.ReceiveAsync(e)) { // if opearation completed synchronously
-                var r = ReadCompleted(e, userToken, sw, out var ex);
-                if (r < 0)
-                    throw ex;
-                _unusedReadTcs = tcs;
-                return Task.FromResult(r);
+            try {
+                if (Socket.ReceiveAsync(e)) { // if opearation not completed synchronously
+                    return tcs.Task;
+                }
+            } catch (Exception) {
+                recycleReadArgs(e, userToken);
+                throw;
             }
-            return tcs.Task;
+            var r = ReadCompleted(e, userToken, sw, out var ex);
+            if (r < 0)
+                throw ex;
+            _unusedReadTcs = tcs;
+            if (r < cachedTaskFromIntResult.Length)
+                return cachedTaskFromIntResult[r];
+            else
+                return Task.FromResult(r);
+        }
+
+        private static void recycleReadArgs(SocketAsyncEventArgs e, ReadUserToken userToken)
+        {
+            userToken.Reset();
+            e.SetBuffer(null, 0, 0);
+            if (!readArgPool.PutValue(e))
+                e.Dispose();
         }
 
         private static void ReadCompletedCallback(object sender, SocketAsyncEventArgs e)
@@ -478,12 +505,9 @@ namespace NaiveSocks
 
         private static int ReadCompleted(SocketAsyncEventArgs e, ReadUserToken userToken, SocketStream sw, out Exception exception)
         {
-            userToken.Reset();
-            e.SetBuffer(null, 0, 0);
-            SocketError socketError = e.SocketError;
             int bytesTransferred = e.BytesTransferred;
-            if (!readArgPool.PutValue(e))
-                e.Dispose();
+            SocketError socketError = e.SocketError;
+            recycleReadArgs(e, userToken);
             if (socketError == SocketError.Success) {
                 if (bytesTransferred == 0) {
                     Logging.debug($"{sw}: remote shutdown");
@@ -527,13 +551,18 @@ namespace NaiveSocks
             var tcs = _unusedWriteTcs ?? new TaskCompletionSource<int>();
             _unusedWriteTcs = null;
             e.UserToken = tcs;
-            if (!Socket.SendAsync(e)) { // if opearation completed synchronously
-                if (!WriteCompleted(e, out var ex))
-                    throw ex;
-                _unusedWriteTcs = tcs;
-                return NaiveUtils.CompletedTask;
+            try {
+                if (Socket.SendAsync(e)) { // if opearation not completed synchronously
+                    return tcs.Task;
+                }
+            } catch (Exception) {
+                recycleWriteArgs(e);
+                throw;
             }
-            return tcs.Task;
+            if (!WriteCompleted(e, out var ex))
+                throw ex;
+            _unusedWriteTcs = tcs;
+            return NaiveUtils.CompletedTask;
         }
 
         private static void WriteCompletedCallback(object sender, SocketAsyncEventArgs e)
@@ -547,14 +576,8 @@ namespace NaiveSocks
 
         private static bool WriteCompleted(SocketAsyncEventArgs e, out Exception exception)
         {
-            e.UserToken = null;
-            if (e.BufferList == null)
-                e.SetBuffer(null, 0, 0);
-            else
-                e.BufferList = null;
             SocketError socketError = e.SocketError;
-            if (!writeArgPool.PutValue(e))
-                e.Dispose();
+            recycleWriteArgs(e);
             if (socketError == SocketError.Success) {
                 exception = null;
                 return true;
@@ -562,6 +585,17 @@ namespace NaiveSocks
                 exception = new SocketException((int)socketError);
                 return false;
             }
+        }
+
+        private static void recycleWriteArgs(SocketAsyncEventArgs e)
+        {
+            e.UserToken = null;
+            if (e.BufferList == null)
+                e.SetBuffer(null, 0, 0);
+            else
+                e.BufferList = null;
+            if (!writeArgPool.PutValue(e))
+                e.Dispose();
         }
 
         public override Task Close()

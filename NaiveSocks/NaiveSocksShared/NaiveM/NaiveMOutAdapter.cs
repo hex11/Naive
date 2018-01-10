@@ -122,13 +122,22 @@ namespace NaiveSocks
         private void CheckPool()
         {
             lock (ncsPool) {
+                List<PoolItem> toBeRemoved = null;
                 if (ncsPool.Count >= pool_max)
                     return;
                 int avaliable = 0;
                 foreach (var item in ncsPool) {
-                    if (item.ConnectionsCount + (item?.nms?.BaseChannels.TotalRemoteChannels ?? 0) < pool_concurrency)
+                    if (item.connectTask?.IsCompleted == true && item.nms == null) {
+                        Logging.warning($"'{Name}' found a strange pool item, removing. (mono bug?)");
+                        (toBeRemoved ?? (toBeRemoved = new List<PoolItem>())).Add(item);
+                    } else if (item.ConnectionsCount + (item?.nms?.BaseChannels.TotalRemoteChannels ?? 0) < pool_concurrency) {
                         avaliable++;
+                    }
                 }
+                if (toBeRemoved != null)
+                    foreach (var item in toBeRemoved) {
+                        ncsPool.Remove(item);
+                    }
                 int countToCreate = pool_min_free - avaliable;
                 for (int i = 0; i < countToCreate; i++) {
                     NewPoolItem();
@@ -202,10 +211,12 @@ namespace NaiveSocks
 
         internal class PoolItem
         {
-            private object _lock => this;
-            public NaiveMSocks nms;
-            private Task connectTask;
             private NaiveMOutAdapter adapter;
+
+            private object _lock => this;
+
+            public NaiveMSocks nms;
+            public Task connectTask;
 
             public int ConnectionsCount => nms?.BaseChannels?.TotalLocalChannels ?? 0;
             public bool IsConnected => nms != null;
@@ -264,7 +275,7 @@ namespace NaiveSocks
                         try {
                             await nms.Start();
                         } catch (Exception e) {
-                            Logging.exception(e, Logging.Level.Error, "multiplexing error");
+                            Logging.exception(e, Logging.Level.Error, $"{nms.BaseChannels} error");
                             Error?.Invoke(this, e);
                         } finally {
                             Closed?.Invoke(this);
@@ -279,9 +290,9 @@ namespace NaiveSocks
                     nms = null;
                     if (e.IsConnectionException()) {
                         Logging.error($"'{adapter.Name}' connecting failed: {e.Message}");
-                        return;
+                    } else {
+                        Logging.exception(e, Logging.Level.Error, $"'{adapter.Name}' connecting failed");
                     }
-                    Logging.exception(e, Logging.Level.Error, $"'{adapter.Name}' connecting failed");
                 }
             }
 
