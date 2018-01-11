@@ -47,7 +47,7 @@ namespace NaiveSocks
         {
             await NaiveUtils.ConnectTCPAsync(new AddrPort(_socksAddr, _socksPort), 0);
             _socket = _tcpClient.Client;
-            var _ns = new SocketStream(_socket);
+            var _ns = MyStream.FromSocket(_socket);
             Task write(byte[] buf) => _ns.WriteAsync(buf, 0, buf.Length);
             //Task read(byte[] buf) => _ns.ReadAsync(buf, 0, buf.Length);
             async Task read2(byte[] buf, int offset, int len)

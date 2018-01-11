@@ -179,6 +179,7 @@ namespace Naive.HttpSvr
                         try {
                             var delta = CurrentTime - item.LatestActiveTime;
                             if (item.ManagedCloseTimeout > 0 && delta > item.ManagedCloseTimeout) {
+                                Logging.warning($"{item} timed out, closing.");
                                 item.IsTimeout = true;
                                 item.Close();
                             } else if (item.ManagedPingTimeout > 0 && delta > item.ManagedPingTimeout && item.ConnectionState == States.Open) {

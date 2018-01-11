@@ -161,7 +161,7 @@ namespace NaiveSocks
                     CheckPoolWithDelay();
                 };
                 AddPoolItem(pi);
-                pi.ConnectIfNot().Forget();
+                Task.Run(pi.ConnectIfNot);
                 return pi;
             }
         }

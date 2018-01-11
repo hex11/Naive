@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
+using Interlocked = System.Threading.Interlocked;
 
 namespace NaiveSocks
 {
@@ -12,8 +13,7 @@ namespace NaiveSocks
     {
         private readonly IMsgStream[] allStreams, recvStreams, sendStreams;
         private Task<Msg>[] recvTasks;
-        int curSend, curRecv;
-        object syncSend = new object();
+        int curSend = -1, curRecv = 0;
 
         public bool PreReadEnabled { get; set; } = true;
 
@@ -69,10 +69,12 @@ namespace NaiveSocks
             var curRecv2 = curRecv++;
             if (PreReadEnabled) {
                 var task = recvTasks[curRecv2];
-                recvTasks[curRecv2] = NaiveUtils.RunAsyncTask(async () => {
-                    await task;
-                    return await recvStreams[curRecv2].RecvMsg(null);
-                });
+                recvTasks[curRecv2] = (!task.IsCompleted)
+                    ? NaiveUtils.RunAsyncTask(async () => {
+                        await task;
+                        return await recvStreams[curRecv2].RecvMsg(null);
+                    })
+                    : recvStreams[curRecv2].RecvMsg(null);
                 return task;
             } else {
                 return recvStreams[curRecv2].RecvMsg(buf);
@@ -81,11 +83,17 @@ namespace NaiveSocks
 
         public Task SendMsg(Msg msg)
         {
-            lock (syncSend) {
-                if (curSend == sendStreams.Length)
-                    curSend = 0;
-                return sendStreams[curSend++].SendMsg(msg);
-            }
+            int curSend, old;
+            do {
+                old = this.curSend;
+                curSend = (old + 1) % sendStreams.Length;
+            } while (Interlocked.CompareExchange(ref this.curSend, curSend, old) != old);
+            return sendStreams[curSend].SendMsg(msg);
+        }
+
+        static int mod(int x, int m)
+        {
+            return (x % m + m) % m;
         }
     }
 }

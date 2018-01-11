@@ -220,7 +220,7 @@ namespace Naive.HttpSvr
                     try {
                         var client = await tcpListener.AcceptTcpClientAsync();
                         NaiveUtils.ConfigureSocket(client.Client);
-                        server.HandleAcceptedTcp(client).Forget();
+                        Task.Run(() => server.HandleAcceptedTcp(client)).Forget();
                     } catch (Exception e) {
                         if (IsRunning) {
                             server.logException(e, Logging.Level.Error, $"{stamp}({localEP}) accepting connection:");

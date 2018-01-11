@@ -8,6 +8,7 @@ using Naive.Console;
 using Naive.HttpSvr;
 using System.Security.Cryptography;
 using System.Threading;
+using System.Net;
 
 //using FSF.HttpSvr;
 
@@ -15,7 +16,7 @@ namespace NaiveSocks
 {
     public class Commands
     {
-        
+
         public static void loadController(Controller c, string configFilePath)
         {
             c.LoadConfigFileOrWarning(configFilePath);
@@ -106,6 +107,7 @@ namespace NaiveSocks
             cmdHub.AddCmdHandler(prefix + "test", cmd => {
                 byte[] samplekey = NaiveProtocol.GetRealKeyFromString("testtttt");
                 var pcount = Environment.ProcessorCount;
+                var sw = new Stopwatch();
                 var tests = new Dictionary<string, Action> {
                     ["alloc 32 KiB bytes 1024 times"] = () => {
                         for (int i = 0; i < 1024; i++) {
@@ -179,8 +181,122 @@ namespace NaiveSocks
                             ch.Update(bv);
                         }
                     },
+                    //["Increment 128m times (single thread)"] = () => {
+                    //    var x = 0;
+                    //    for (int i = 0; i < 128 * 1024 * 1024; i++) {
+                    //        x++;
+                    //    }
+                    //},
+                    //["Interlocked.Increment 128m times (single thread)"] = () => {
+                    //    var x = 0;
+                    //    for (int i = 0; i < 128 * 1024 * 1024; i++) {
+                    //        Interlocked.Increment(ref x);
+                    //    }
+                    //},
+                    //["Interlocked.Increment 128m times (2 threads)"] = () => {
+                    //    var x = 0;
+                    //    Task[] tasks = new Task[2];
+                    //    for (int t = 0; t < tasks.Length; t++) {
+                    //        tasks[t] = Task.Run(() => {
+                    //            for (int i = 0; i < 128 * 1024 * 1024; i++) {
+                    //                Interlocked.Increment(ref x);
+                    //            }
+                    //        });
+                    //    }
+                    //    Task.WaitAll(tasks);
+                    //},
+                    //["lock and incr 128m times (single thread)"] = () => {
+                    //    var x = 0;
+                    //    var l = new object();
+                    //    for (int i = 0; i < 128 * 1024 * 1024; i++) {
+                    //        lock (l)
+                    //            x++;
+                    //    }
+                    //},
+                    //["lock and incr 128m times (2 threads)"] = () => {
+                    //    var x = 0;
+                    //    var l = new object();
+                    //    Task[] tasks = new Task[2];
+                    //    for (int t = 0; t < tasks.Length; t++) {
+                    //        tasks[t] = Task.Run(() => {
+                    //            for (int i = 0; i < 128 * 1024 * 1024; i++) {
+                    //                lock (l)
+                    //                    x++;
+                    //            }
+                    //        });
+                    //    }
+                    //    Task.WaitAll(tasks);
+                    //},
+                    ["localhost socket 1"] = () => {
+                        var ep = new IPEndPoint(IPAddress.Loopback, NaiveUtils.Random.Next(20000, 60000));
+                        var listener = new Listener(ep) { LogInfo = false };
+                        listener.Accepted += (x) => NaiveUtils.RunAsyncTask(async () => {
+                            var stream = new SocketStream1(x.Client);
+                            var buf = new byte[32 * 1024];
+                            while (await stream.ReadAsync(buf) > 0) {
+                            }
+                            x.Close();
+                        });
+                        listener.Start().Forget();
+                        NaiveUtils.RunAsyncTask(async () => {
+                            var socket = await NaiveUtils.ConnectTCPAsync(AddrPort.Parse(ep.ToString()), 5000);
+                            var stream = new SocketStream1(socket);
+                            sw.Restart();
+                            var buf = new byte[32 * 1024];
+                            for (int i = 0; i < 1024; i++) {
+                                await stream.WriteAsync(buf);
+                            }
+                            socket.Close();
+                        }).RunSync();
+                        listener.Stop();
+                    },
+                    ["localhost socket 2"] = () => {
+                        var ep = new IPEndPoint(IPAddress.Loopback, NaiveUtils.Random.Next(20000, 60000));
+                        var listener = new Listener(ep) { LogInfo = false };
+                        listener.Accepted += (x) => NaiveUtils.RunAsyncTask(async () => {
+                            var stream = new SocketStream2(x.Client);
+                            var buf = new byte[32 * 1024];
+                            while (await stream.ReadAsync(buf) > 0) {
+                            }
+                            x.Close();
+                        });
+                        listener.Start().Forget();
+                        NaiveUtils.RunAsyncTask(async () => {
+                            var socket = await NaiveUtils.ConnectTCPAsync(AddrPort.Parse(ep.ToString()), 5000);
+                            var stream = new SocketStream2(socket);
+                            sw.Restart();
+                            var buf = new byte[32 * 1024];
+                            for (int i = 0; i < 1024; i++) {
+                                await stream.WriteAsync(buf);
+                            }
+                            socket.Close();
+                        }).RunSync();
+                        listener.Stop();
+                    },
+                    ["localhost socket sync"] = () => {
+                        var ep = new IPEndPoint(IPAddress.Loopback, NaiveUtils.Random.Next(20000, 60000));
+                        var listener = new Listener(ep) { LogInfo = false };
+                        listener.Accepted += (x) => {
+                            var stream = new SocketStream2(x.Client);
+                            var buf = new byte[32 * 1024];
+                            while (stream.Read(buf) > 0) {
+                            }
+                            x.Close();
+                        };
+                        listener.Start().Forget();
+                        {
+                            var socket = NaiveUtils.ConnectTCPAsync(AddrPort.Parse(ep.ToString()), 5000).RunSync();
+                            var stream = new SocketStream2(socket);
+                            sw.Restart();
+                            var buf = new byte[32 * 1024];
+                            for (int i = 0; i < 1024; i++) {
+                                stream.Write(buf);
+                            }
+                            socket.Close();
+                        }
+                        listener.Stop();
+                    }
                 };
-                var sw = new Stopwatch();
                 void runTest(string name, Action action)
                 {
                     cmd.Write($"{name}...GC...");

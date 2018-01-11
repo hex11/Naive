@@ -432,19 +432,27 @@ namespace Naive.HttpSvr
             }
         }
 
+        enum ConnectingState
+        {
+            Resolving,
+            Connecting,
+            ConnectingError,
+            TimedOut
+        }
+
         public static async Task<Socket> ConnectTCPAsync(AddrPort dest, int timeout)
         {
-            int state = 0; // 1: dns done; 2: socket created; 3: timed out
+            var state = (int)ConnectingState.Resolving;
             TcpClient destTcp = null;
             var connectTask = NaiveUtils.RunAsyncTask(async () => {
                 var addrs = await Dns.GetHostAddressesAsync(dest.Host);
+                if (state != (int)ConnectingState.Resolving)
+                    return;
                 if (addrs.Length == 0)
                     throw new Exception($"no address resolved for '{dest.Host}'");
                 var addr = addrs[0];
-                if (Interlocked.Exchange(ref state, 1) != 0)
-                    return;
                 destTcp = new TcpClient(addr.AddressFamily);
-                if (Interlocked.Exchange(ref state, 2) != 1) {
+                if (Interlocked.Exchange(ref state, (int)ConnectingState.Connecting) != (int)ConnectingState.Resolving) {
                     destTcp.Close();
                     return;
                 }
@@ -452,16 +460,21 @@ namespace Naive.HttpSvr
                     ConfigureSocket(destTcp.Client);
                     await destTcp.ConnectAsync(addr, dest.Port);
                 } catch (Exception) {
-                    destTcp.Close();
-                    throw;
+                    if (Interlocked.Exchange(ref state, (int)ConnectingState.ConnectingError) == (int)ConnectingState.Connecting) {
+                        destTcp.Close();
+                        throw;
+                    }
                 }
             });
             if (timeout > 0) {
-                if (await Task.WhenAny(connectTask, Task.Delay(timeout)) != connectTask) {
-                    if (Interlocked.Exchange(ref state, 3) == 2) {
+                if (await Task.WhenAny(connectTask, Task.Delay(timeout)) != connectTask) { // if timed out
+                    var originalState = Interlocked.Exchange(ref state, (int)ConnectingState.TimedOut);
+                    if (originalState == (int)ConnectingState.Connecting) {
                         destTcp.Close();
+                    } else if (originalState == (int)ConnectingState.ConnectingError) {
+                        await connectTask; // to throw the exception
                     }
-                    throw new Exception($"connecting timed out ({timeout} ms)");
+                    throw new DisconnectedException($"connecting timed out (timeout={timeout}, state={(ConnectingState)originalState})");
                 }
             }
             await connectTask;
