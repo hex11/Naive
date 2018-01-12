@@ -20,21 +20,9 @@ namespace NaiveSocks
             this.NetworkStream = new NetworkStream(socket);
         }
 
-        public override Task WriteAsync(BytesSegment bv)
-        {
-            return FromAsyncTrimHelper<int, SocketStream1, BytesSegment>.FromAsyncTrim(
-                thisRef: this,
-                args: bv,
-                beginMethod: (thisRef, args, callback, state) => thisRef.Socket.BeginSend(args.Bytes, args.Offset, args.Len, SocketFlags.None, callback, state),
-                endMethod: (thisRef, asyncResult) => {
-                    thisRef.Socket.EndSend(asyncResult);
-                    return 0;
-                });
-        }
-
         public override Task<int> ReadAsync(BytesSegment bv)
         {
-            return FromAsyncTrimHelper<int, SocketStream1, BytesSegment>.FromAsyncTrim(
+            return FromAsyncTrimHelper.FromAsyncTrim(
                 thisRef: this,
                 args: bv,
                 beginMethod: (thisRef, args, callback, state) => thisRef.Socket.BeginReceive(args.Bytes, args.Offset, args.Len, SocketFlags.None, callback, state),
@@ -43,6 +31,18 @@ namespace NaiveSocks
                     if (read == 0)
                         thisRef.State |= MyStreamState.RemoteShutdown;
                     return read;
+                });
+        }
+
+        public override Task WriteAsync(BytesSegment bv)
+        {
+            return FromAsyncTrimHelper.FromAsyncTrim(
+                thisRef: this,
+                args: bv,
+                beginMethod: (thisRef, args, callback, state) => thisRef.Socket.BeginSend(args.Bytes, args.Offset, args.Len, SocketFlags.None, callback, state),
+                endMethod: (thisRef, asyncResult) => {
+                    thisRef.Socket.EndSend(asyncResult);
+                    return VoidType.Void;
                 });
         }
 
@@ -59,14 +59,26 @@ namespace NaiveSocks
                 if (cur.len > 0)
                     bufList[index++] = new ArraySegment<byte>(cur.bytes, cur.offset, cur.len);
             }
-            return FromAsyncTrimHelper<object, SocketStream1, ArraySegment<byte>[]>.FromAsyncTrim(
+            return FromAsyncTrimHelper.FromAsyncTrim(
                 thisRef: this,
                 args: bufList,
                 beginMethod: (thisRef, args, callback, state) => thisRef.Socket.BeginSend(args, SocketFlags.None, callback, state),
                 endMethod: (thisRef, asyncResult) => {
                     thisRef.Socket.EndSend(asyncResult);
-                    return null;
+                    return VoidType.Void;
                 });
+        }
+    }
+
+    static class FromAsyncTrimHelper
+    {
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+        public static Task<TResult> FromAsyncTrim<TResult, TInstance, TArgs>(
+            TInstance thisRef, TArgs args,
+            Func<TInstance, TArgs, AsyncCallback, object, IAsyncResult> beginMethod,
+            Func<TInstance, IAsyncResult, TResult> endMethod) where TInstance : class
+        {
+            return FromAsyncTrimHelper<TResult, TInstance, TArgs>.FromAsyncTrim(thisRef, args, beginMethod, endMethod);
         }
     }
 

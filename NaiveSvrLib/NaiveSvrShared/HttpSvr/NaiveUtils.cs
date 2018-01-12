@@ -1253,4 +1253,9 @@ namespace Naive.HttpSvr
             }
         }
     }
+
+    public struct VoidType
+    {
+        public static readonly VoidType Void;
+    }
 }
