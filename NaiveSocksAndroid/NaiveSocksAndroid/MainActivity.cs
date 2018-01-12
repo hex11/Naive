@@ -15,6 +15,8 @@ using Android.Graphics;
 using System;
 using Android.Support.V4.Widget;
 using Android.Content.PM;
+using R = NaiveSocksAndroid.Resource;
+using Android.Support.V7.Widget;
 
 namespace NaiveSocksAndroid
 {
@@ -25,7 +27,6 @@ namespace NaiveSocksAndroid
         ConfigurationChanges = ConfigChanges.Orientation | ConfigChanges.ScreenSize)]
     public class MainActivity : AppCompatActivity, IServiceConnection
     {
-        TextView state;
         LinearLayout outputParent;
         NestedScrollView outputParentScroll;
 
@@ -35,19 +36,23 @@ namespace NaiveSocksAndroid
 
         BgService service;
         bool isConnected;
+        private Toolbar toolbar;
+        const string TOOLBAR_TITLE = "NaiveSocks";
 
         public void OnServiceConnected(ComponentName name, IBinder service)
         {
             var binder = service as BgServiceBinder;
             this.service = binder.BgService;
             isConnected = true;
-            state.Text = "service connected";
+            toolbar.Title = TOOLBAR_TITLE + " - running";
+            InvalidateOptionsMenu();
         }
 
         public void OnServiceDisconnected(ComponentName name)
         {
             isConnected = false;
-            state.Text = "service disconncected";
+            toolbar.Title = TOOLBAR_TITLE;
+            InvalidateOptionsMenu();
         }
 
         protected override void OnCreate(Bundle savedInstanceState)
@@ -64,33 +69,13 @@ namespace NaiveSocksAndroid
             // Set our view from the "main" layout resource
             SetContentView(Resource.Layout.Main);
 
-            var toolbar = FindViewById<Toolbar>(Resource.Id.toolbar);
+            toolbar = FindViewById<Toolbar>(Resource.Id.toolbar);
             SetSupportActionBar(toolbar);
-            toolbar.Title = "NaiveSocks";
+            toolbar.Title = TOOLBAR_TITLE;
 
             outputParent = this.FindViewById<LinearLayout>(Resource.Id.logparent);
             outputParentScroll = this.FindViewById<NestedScrollView>(Resource.Id.logparentScroll);
-            state = this.FindViewById<TextView>(Resource.Id.state);
 
-            var btnStart = this.FindViewById<Button>(Resource.Id.start);
-            btnStart.Click += (s, e) => {
-                if (!isConnected) {
-                    Logging.info("starting/binding service...");
-                    Task.Run(() => {
-                        StartService(serviceIntent);
-                        this.BindService(serviceIntent, this, Bind.None);
-                    });
-                } else {
-                    Logging.info("cannot start service: service is already running.");
-                }
-            };
-            var btnStop = this.FindViewById<Button>(Resource.Id.stop);
-            btnStop.Click += (s, e) => {
-                Logging.info("requesting to stop service.");
-                if (!StopService(serviceIntent)) {
-                    Logging.info("cannot stop service: service is not running.");
-                }
-            };
             Logging.Logged += Logging_Logged;
             var logs = Logging.getLogsHistoryArray();
             if (logs.Length > 0) {
@@ -99,6 +84,69 @@ namespace NaiveSocksAndroid
                 }
                 putText("========== end of log history ==========", true);
             }
+        }
+
+        private void startService()
+        {
+            Task.Run(() => {
+                if (!isConnected) {
+                    Logging.info("starting/binding service...");
+                    StartService(serviceIntent);
+                    this.BindService(serviceIntent, this, Bind.None);
+                } else {
+                    Logging.info("cannot start service: service is already running.");
+                }
+            });
+        }
+
+        private void stopService()
+        {
+            Task.Run(() => {
+                Logging.info("requesting to stop service.");
+                if (!StopService(serviceIntent)) {
+                    Logging.info("cannot stop service: service is not connected.");
+                }
+            });
+        }
+
+        private void reloadService()
+        {
+            Task.Run(() => {
+                if (isConnected) {
+                    try {
+                        service.Controller.Reload();
+                    } catch (Exception e) {
+                        Logging.exception(e, Logging.Level.Error, "reloading controller");
+                    }
+                } else {
+                    Logging.info("connot reload: service is not connected");
+                }
+            });
+        }
+
+        public override bool OnCreateOptionsMenu(IMenu menu)
+        {
+            MenuInflater.Inflate(R.Menu.menu_control, menu);
+            if (isConnected) {
+                menu.FindItem(R.Id.menu_start).SetVisible(false);
+            } else {
+                menu.FindItem(R.Id.menu_stop).SetVisible(false);
+                menu.FindItem(R.Id.menu_reload).SetVisible(false);
+            }
+            return true;
+        }
+
+        public override bool OnOptionsItemSelected(IMenuItem item)
+        {
+            var id = item.ItemId;
+            if (id == Resource.Id.menu_start) {
+                startService();
+            } else if (id == Resource.Id.menu_stop) {
+                stopService();
+            } else if (id == Resource.Id.menu_reload) {
+                reloadService();
+            }
+            return base.OnOptionsItemSelected(item);
         }
 
         protected override void OnDestroy()

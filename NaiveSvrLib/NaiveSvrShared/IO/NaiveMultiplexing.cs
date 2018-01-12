@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Configuration;
 using System.Net.Sockets;
@@ -231,18 +232,13 @@ namespace NaiveSocks
             }
         }
 
-        private async Task<Frame> ReadFrame()
-        {
-            var r = await BaseStream.RecvMsg(null).CAF();
-            if (r.IsEOF)
-                throw new DisconnectedException("EOF Msg.");
-            return Frame.unpack(this, r.Data);
-        }
-
         private async Task MainReadLoop()
         {
             while (true) {
-                var frame = await ReadFrame().CAF();
+                var r = await BaseStream.RecvMsg(null).CAF();
+                if (r.IsEOF)
+                    throw new DisconnectedException("EOF Msg.");
+                var frame = Frame.unpack(this, r.Data);
                 if (!NoNegativeId & frame.Id != ReservedId) {
                     frame.Id = -frame.Id;
                 }
@@ -418,8 +414,7 @@ namespace NaiveSocks
 
             public BytesView pack(NaiveMultiplexing m, BytesView headerBv = null)
             {
-                if (Id > m.currentMaxId)
-                    throw new Exception($"Id > currentMaxId ({m})");
+                Debug.Assert(Id > m.currentMaxId, $"Id > currentMaxId ({m})");
                 if (headerBv == null)
                     headerBv = new BytesView(new byte[getSendChIdLen(m)]);
                 var cur = 0;

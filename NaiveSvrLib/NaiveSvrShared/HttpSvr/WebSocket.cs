@@ -367,9 +367,8 @@ namespace Naive.HttpSvr
             }
             try {
                 return _readAsync().GetAwaiter().GetResult();
-            } catch (IOException) when (IsTimeout) {
-                throw getTimeoutException();
             } catch (Exception) {
+                throwIfTimeout();
                 Close();
                 throw;
             }

@@ -5,8 +5,6 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:fitsSystemWindows="true">
-
-
   <LinearLayout
       android:orientation="vertical"
       android:layout_width="match_parent"
@@ -18,53 +16,22 @@
       <include
           android:id="@+id/toolbar"
           layout="@layout/toolbar" />
-
     </android.support.design.widget.AppBarLayout>
-    <LinearLayout
-        android:orientation="vertical"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent">
-      <android.support.v4.widget.NestedScrollView
-              android:layout_width="match_parent"
-              android:layout_height="match_parent"
-              android:layout_weight="1"
-              app:layout_behavior="@string/appbar_scrolling_view_behavior"
-            android:id="@+id/logparentScroll">
-        <LinearLayout
-            android:orientation="vertical"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:padding="2sp"
-            android:id="@+id/logparent" />
-      </android.support.v4.widget.NestedScrollView>
 
-      <TextView
-          android:text="(state)"
-          android:singleLine="true"
+    <android.support.v4.widget.NestedScrollView
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:scrollbars="vertical"
+            app:layout_behavior="@string/appbar_scrolling_view_behavior"
+            android:id="@+id/logparentScroll">
+      <LinearLayout
+          android:orientation="vertical"
           android:layout_width="match_parent"
           android:layout_height="wrap_content"
-          android:id="@+id/state"
-          android:textSize="10sp"
-          android:textAlignment="center"
-          android:gravity="center"
-          android:fontFamily="monospace" />
-      <LinearLayout
-          android:orientation="horizontal"
-          android:layout_width="match_parent"
-          android:layout_height="wrap_content">
-        <Button
-            android:text="Start"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:id="@+id/start" />
-        <Button
-            android:text="Stop"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:id="@+id/stop" />
-      </LinearLayout>
-    </LinearLayout>
+          android:padding="2sp"
+          android:id="@+id/logparent" />
+    </android.support.v4.widget.NestedScrollView>
+
   </LinearLayout>
 </android.support.design.widget.CoordinatorLayout>
