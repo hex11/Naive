@@ -201,7 +201,7 @@ namespace NaiveSocks
         {
             if (id <= 0)
                 throw new ArgumentOutOfRangeException(nameof(id), "channel id <= 0.");
-            if (id > MaxId) // supposed to never happend since MaxId == Int32.MaxValue
+            if (id > MaxId) // should never happen since MaxId == Int32.MaxValue
                 throw new ArgumentOutOfRangeException(nameof(id), $"channel id > {MaxId}.");
             Channel ch;
             lock (_sendLock)

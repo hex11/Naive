@@ -13,19 +13,6 @@ namespace NaiveSocks
 
     public class SocketStream1 : SocketStream, IMyStreamMultiBuffer
     {
-        static FromAsyncTrimHelper<object, Socket, ArraySegment<byte>[]> helper;
-        static FromAsyncTrimHelper<int, Socket, BytesSegment> helper2;
-
-        static SocketStream1()
-        {
-            try {
-                helper = new FromAsyncTrimHelper<object, Socket, ArraySegment<byte>[]>();
-                helper2 = new FromAsyncTrimHelper<int, Socket, BytesSegment>();
-            } catch (Exception e) {
-                Logging.exception(e);
-            }
-        }
-
         public NetworkStream NetworkStream { get; }
 
         public SocketStream1(Socket socket) : base(socket)
@@ -33,31 +20,30 @@ namespace NaiveSocks
             this.NetworkStream = new NetworkStream(socket);
         }
 
-        struct ReadWriteParameters
-        {
-            public byte[] Buffer;
-            public int Offset, Count;
-        }
-
         public override Task WriteAsync(BytesSegment bv)
         {
-            return helper2.FromAsyncTrim(
-                thisRef: Socket,
+            return FromAsyncTrimHelper<int, SocketStream1, BytesSegment>.FromAsyncTrim(
+                thisRef: this,
                 args: bv,
-                beginMethod: (socket, args, callback, state) => socket.BeginSend(args.Bytes, args.Offset, args.Len, SocketFlags.None, callback, state),
-                endMethod: (socket, asyncResult) => {
-                    socket.EndSend(asyncResult);
+                beginMethod: (thisRef, args, callback, state) => thisRef.Socket.BeginSend(args.Bytes, args.Offset, args.Len, SocketFlags.None, callback, state),
+                endMethod: (thisRef, asyncResult) => {
+                    thisRef.Socket.EndSend(asyncResult);
                     return 0;
                 });
         }
 
         public override Task<int> ReadAsync(BytesSegment bv)
         {
-            return helper2.FromAsyncTrim(
-                thisRef: Socket,
+            return FromAsyncTrimHelper<int, SocketStream1, BytesSegment>.FromAsyncTrim(
+                thisRef: this,
                 args: bv,
-                beginMethod: (socket, args, callback, state) => socket.BeginReceive(args.Bytes, args.Offset, args.Len, SocketFlags.None, callback, state),
-                endMethod: (socket, asyncResult) => socket.EndReceive(asyncResult));
+                beginMethod: (thisRef, args, callback, state) => thisRef.Socket.BeginReceive(args.Bytes, args.Offset, args.Len, SocketFlags.None, callback, state),
+                endMethod: (thisRef, asyncResult) => {
+                    var read = thisRef.Socket.EndReceive(asyncResult);
+                    if (read == 0)
+                        thisRef.State |= MyStreamState.RemoteShutdown;
+                    return read;
+                });
         }
 
         public Task WriteMultipleAsync(BytesView bv)
@@ -73,37 +59,41 @@ namespace NaiveSocks
                 if (cur.len > 0)
                     bufList[index++] = new ArraySegment<byte>(cur.bytes, cur.offset, cur.len);
             }
-            return helper.FromAsyncTrim(
-                Socket,
-                bufList,
-                (socket, args, callback, state) => {
-                    return socket.BeginSend(args, SocketFlags.None, callback, state);
-                },
-                (socket, asyncResult) => {
-                    socket.EndSend(asyncResult);
+            return FromAsyncTrimHelper<object, SocketStream1, ArraySegment<byte>[]>.FromAsyncTrim(
+                thisRef: this,
+                args: bufList,
+                beginMethod: (thisRef, args, callback, state) => thisRef.Socket.BeginSend(args, SocketFlags.None, callback, state),
+                endMethod: (thisRef, asyncResult) => {
+                    thisRef.Socket.EndSend(asyncResult);
                     return null;
                 });
         }
     }
-    class FromAsyncTrimHelper<TResult, TInstance, TArgs> where TInstance : class
-    {
-        public FromAsyncTrimHelper()
-        {
-            var tftype = typeof(TaskFactory<TResult>);
-            var delegateType = typeof(FromAsyncTrimDelegate<TInstance, TArgs>);
-            var method = tftype
-                .GetMethod("FromAsyncTrim", BindingFlags.Static | BindingFlags.NonPublic);
 
-            _fromAsyncTrim = (FromAsyncTrimDelegate<TInstance, TArgs>)(method.MakeGenericMethod(typeof(TInstance), typeof(TArgs))
-                .CreateDelegate(delegateType));
+    static class FromAsyncTrimHelper<TResult, TInstance, TArgs> where TInstance : class
+    {
+        static FromAsyncTrimHelper()
+        {
+            try {
+                _fromAsyncTrim = typeof(TaskFactory<TResult>)
+                        .GetMethod("FromAsyncTrim", BindingFlags.Static | BindingFlags.NonPublic)
+                        .MakeGenericMethod(typeof(TInstance), typeof(TArgs))
+                        .CreateDelegate(typeof(FromAsyncTrimDelegate<TInstance, TArgs>))
+                        as FromAsyncTrimDelegate<TInstance, TArgs>;
+            } catch (Exception e) {
+                Logging.exception(e, Logging.Level.Error, "cannot get FromAsyncTrim, will fallback to FromAsync.");
+                _factory = new TaskFactory<TResult>();
+            }
         }
 
-        delegate Task<TResult> FromAsyncTrimDelegate<T1, T2>(
+        private delegate Task<TResult> FromAsyncTrimDelegate<T1, T2>(
             T1 thisRef, T2 args,
             Func<T1, T2, AsyncCallback, object, IAsyncResult> beginMethod,
             Func<T1, IAsyncResult, TResult> endMethod) where T1 : class;
 
-        FromAsyncTrimDelegate<TInstance, TArgs> _fromAsyncTrim;
+        private static readonly FromAsyncTrimDelegate<TInstance, TArgs> _fromAsyncTrim;
+
+        private static readonly TaskFactory<TResult> _factory;
 
         /// <summary>
         /// Special internal-only FromAsync support used by System.IO to wrap
@@ -117,12 +107,15 @@ namespace NaiveSocks
         /// <param name="endMethod">The end method.</param>
         /// <param name="args">The arguments.</param>
         /// <returns>A task representing the asynchronous operation.</returns>
-        public Task<TResult> FromAsyncTrim(
+        public static Task<TResult> FromAsyncTrim(
             TInstance thisRef, TArgs args,
             Func<TInstance, TArgs, AsyncCallback, object, IAsyncResult> beginMethod,
             Func<TInstance, IAsyncResult, TResult> endMethod)
         {
-            return _fromAsyncTrim(thisRef, args, beginMethod, endMethod);
+            if (_fromAsyncTrim != null)
+                return _fromAsyncTrim(thisRef, args, beginMethod, endMethod);
+
+            return _factory.FromAsync(beginMethod, (x) => endMethod(thisRef, x), thisRef, args, null, TaskCreationOptions.None);
         }
     }
 }
