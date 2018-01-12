@@ -57,7 +57,8 @@ namespace NaiveSocks
             }
         }
 
-        TaskCompletionSource<int> _unusedWriteTcs, _unusedReadTcs;
+        TaskCompletionSource<VoidType> _unusedWriteTcs;
+        TaskCompletionSource<int> _unusedReadTcs;
 
         public override Task<int> ReadAsync(BytesSegment bv)
         {
@@ -157,7 +158,7 @@ namespace NaiveSocks
 
         private Task SendAsync(SocketAsyncEventArgs e)
         {
-            var tcs = _unusedWriteTcs ?? new TaskCompletionSource<int>();
+            var tcs = _unusedWriteTcs ?? new TaskCompletionSource<VoidType>();
             _unusedWriteTcs = null;
             e.UserToken = tcs;
             try {
@@ -177,9 +178,9 @@ namespace NaiveSocks
         private static void WriteCompletedCallback(object sender, SocketAsyncEventArgs e)
         {
             try {
-                var tcs = e.UserToken as TaskCompletionSource<int>;
+                var tcs = e.UserToken as TaskCompletionSource<VoidType>;
                 if (WriteCompleted(e, out var ex))
-                    tcs.SetResult(0);
+                    tcs.SetResult(VoidType.Void);
                 else
                     tcs.SetException(ex);
             } catch (Exception ex) {

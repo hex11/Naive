@@ -121,7 +121,7 @@ namespace NaiveSocks
                 AddrPort dest = parseUrl(p.Url, out var realurl);
                 connnectDest:
                 var tcsGetResult = new TaskCompletionSource<ConnectResult>();
-                var tcsProcessing = new TaskCompletionSource<object>();
+                var tcsProcessing = new TaskCompletionSource<VoidType>();
                 try {
                     var inc = InConnection.Create(adapter, dest, dataStream: null, getInfoStr: "(http) remote=" + p.remoteEP);
                     inc.Url = p.Url;
@@ -240,7 +240,7 @@ namespace NaiveSocks
                         MyStream.CloseWithTimeout(destStream);
                     }
                 } finally {
-                    tcsProcessing.TrySetResult(null);
+                    tcsProcessing.TrySetResult(VoidType.Void);
                 }
             }
         }

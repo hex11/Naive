@@ -869,13 +869,13 @@ namespace Naive.HttpSvr
 
         public static Task AsTask(this WaitHandle handle, TimeSpan timeout)
         {
-            var tcs = new TaskCompletionSource<object>();
+            var tcs = new TaskCompletionSource<VoidType>();
             var registration = ThreadPool.RegisterWaitForSingleObject(handle, (state, timedOut) => {
-                var localTcs = (TaskCompletionSource<object>)state;
+                var localTcs = (TaskCompletionSource<VoidType>)state;
                 if (timedOut)
                     localTcs.TrySetCanceled();
                 else
-                    localTcs.TrySetResult(null);
+                    localTcs.TrySetResult(VoidType.Void);
             }, tcs, timeout, executeOnlyOnce: true);
             tcs.Task.ContinueWith((_, state) => ((RegisteredWaitHandle)state).Unregister(null), registration, TaskScheduler.Default);
             return tcs.Task;

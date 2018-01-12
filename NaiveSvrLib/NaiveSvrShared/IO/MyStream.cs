@@ -618,20 +618,20 @@ namespace NaiveSocks
             Another = another;
         }
 
-        private TaskCompletionSource<object> tcsNewBuffer;
+        private TaskCompletionSource<VoidType> tcsNewBuffer;
         private void notifyNewBuffer()
         {
             var tmp = tcsNewBuffer;
             tcsNewBuffer = null;
-            tmp?.SetResult(null);
+            tmp?.SetResult(VoidType.Void);
         }
 
-        private TaskCompletionSource<object> tcsBufferEmptied;
+        private TaskCompletionSource<VoidType> tcsBufferEmptied;
         private void notifyBufferEmptied()
         {
             var tmp = tcsBufferEmptied;
             tcsBufferEmptied = null;
-            tmp?.SetResult(null);
+            tmp?.SetResult(VoidType.Void);
         }
 
         private BytesSegment buffer;
@@ -667,7 +667,7 @@ namespace NaiveSocks
                     throw new Exception("another recv task is running.");
                 }
                 if (buffer.Len == 0 & !recvEOF) {
-                    tcsNewBuffer = new TaskCompletionSource<object>();
+                    tcsNewBuffer = new TaskCompletionSource<VoidType>();
                     task = tcsNewBuffer.Task;
                 }
             }
@@ -694,7 +694,7 @@ namespace NaiveSocks
                 if (recvEOF)
                     throw new Exception($"{this}: stream closed/shutdown.");
                 buffer = bv;
-                tcsBufferEmptied = new TaskCompletionSource<object>();
+                tcsBufferEmptied = new TaskCompletionSource<VoidType>();
                 notifyNewBuffer();
                 return tcsBufferEmptied?.Task ?? NaiveUtils.CompletedTask;
             }

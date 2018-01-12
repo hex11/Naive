@@ -515,7 +515,7 @@ namespace NaiveSocks
 
         private object _syncroot => recvQueue;
 
-        private TaskCompletionSource<object> blockSendTcs;
+        private TaskCompletionSource<VoidType> blockSendTcs;
         private AsyncQueue<Msg> recvQueue = new AsyncQueue<Msg>();
         private StateEnum _state;
 
@@ -553,9 +553,9 @@ namespace NaiveSocks
         {
             if (blocking) {
                 if (blockSendTcs == null)
-                    blockSendTcs = new TaskCompletionSource<object>();
+                    blockSendTcs = new TaskCompletionSource<VoidType>();
             } else {
-                blockSendTcs?.SetResult(null);
+                blockSendTcs?.SetResult(VoidType.Void);
                 blockSendTcs = null;
             }
         }
