@@ -17,6 +17,7 @@ using NaiveSocks;
 
 namespace NaiveSocksAndroid
 {
+
     [Service(
         //IsolatedProcess = true,
         //Process = ":bg"
@@ -35,6 +36,18 @@ namespace NaiveSocksAndroid
         private Receiver receiver;
 
         bool isScreenOn;
+
+        Config currentConfig = new Config();
+
+        class Config
+        {
+            public int manage_interval_screen_off { get; set; } = 15;
+            public int manage_interval_screen_on { get; set; } = 5;
+        }
+
+        bool notification_show_logs = true;
+
+        //private ServiceConnection<ConfigService> cfgService;
 
         public override void OnCreate()
         {
@@ -75,12 +88,37 @@ namespace NaiveSocksAndroid
 
             StartForeground(MainNotificationId, builder.Build());
 
+            Controller = new Controller();
+
+            onScreen(powerManager.IsInteractive);
+            var filter = new IntentFilter(Intent.ActionScreenOff);
+            filter.AddAction(Intent.ActionScreenOn);
+            RegisterReceiver(receiver = new Receiver((c, i) => {
+                if (i.Action == Intent.ActionScreenOn) {
+                    onScreen(true);
+                } else if (i.Action == Intent.ActionScreenOff) {
+                    onScreen(false);
+                }
+            }), filter);
+
+            //BindService(new Intent(this, typeof(ConfigService)), cfgService = new ServiceConnection<ConfigService>(), Bind.AutoCreate);
+
+            notification_show_logs = ConfigService.GetShowLogs(ApplicationContext);
+
+            notification_show_logs ^= true; // to force update
+            SetShowLogs(!notification_show_logs);
+
             Logging.Logged += Logging_Logged;
 
             Task.Run(() => {
                 Logging.info("starting controller...");
                 try {
-                    Controller = new Controller();
+                    Controller.ConfigTomlLoaded += (t) => {
+                        if (t.TryGetValue<Config>("android", out var config)) {
+                            currentConfig = config;
+                            onScreen(isScreenOn);
+                        }
+                    };
                     string[] paths = {
                         GetExternalFilesDir(null).AbsolutePath,
                         Path.Combine(Android.OS.Environment.ExternalStorageDirectory.AbsolutePath, "nsocks"),
@@ -97,17 +135,6 @@ namespace NaiveSocksAndroid
                     StopSelf();
                 }
             });
-
-            onScreen(powerManager.IsInteractive);
-            var filter = new IntentFilter(Intent.ActionScreenOff);
-            filter.AddAction(Intent.ActionScreenOn);
-            RegisterReceiver(receiver = new Receiver((c, i) => {
-                if (i.Action == Intent.ActionScreenOn) {
-                    onScreen(true);
-                } else if (i.Action == Intent.ActionScreenOff) {
-                    onScreen(false);
-                }
-            }), filter);
         }
 
         [return: GeneratedEnum]
@@ -150,6 +177,7 @@ namespace NaiveSocksAndroid
             isDestroyed = true;
             Logging.Logged -= Logging_Logged;
             Logging.warning("service is being destroyed.");
+            //UnbindService(cfgService);
             UnregisterReceiver(receiver);
             var tmp = Controller;
             Controller = null;
@@ -159,7 +187,7 @@ namespace NaiveSocksAndroid
 
         bool isDestroyed = false;
 
-        string[] textLines = new string[3];
+        string[] textLines;
         bool textLinesChanged = false;
 
         private void Logging_Logged(Logging.Log log)
@@ -167,7 +195,8 @@ namespace NaiveSocksAndroid
             if (isDestroyed)
                 return;
             Log.WriteLine(GetPri(log), "naivelog", log.text);
-            putLine(log.text);
+            if (notification_show_logs)
+                putLine(log.text);
         }
 
         private void clearLines(bool updateNow)
@@ -210,18 +239,26 @@ namespace NaiveSocksAndroid
                 return;
             lock (builder) {
                 _needUpdateNotif = false;
-                var title = $"{Controller.RunningConnections}/{Controller.TotalHandledConnections} cxn, {MyStream.TotalCopiedBytes / 1024:N0} KB, {MyStream.TotalCopiedPackets:N0} pkt - NaiveSocks";
+                var titleFmt = notification_show_logs ?
+                    "{0}/{1} cxn, {2:N0} KB, {3:N0} pkt - NaiveSocks"
+                    : "{0}/{1} cxn, {2:N0} KB, {3:N0} pkt";
+                var title = string.Format(titleFmt, Controller.RunningConnections, Controller.TotalHandledConnections, MyStream.TotalCopiedBytes / 1024, MyStream.TotalCopiedPackets);
                 if (title != lastTitle) {
                     _needRenotify = true;
                     lastTitle = title;
-                    builder.SetContentTitle(title);
+                    if (notification_show_logs)
+                        builder.SetContentTitle(title);
+                    else
+                        builder.SetContentText(title);
                 }
                 if (textLinesChanged) {
                     textLinesChanged = false;
                     _needRenotify = true;
                     builder.SetContentText(textLines.Get(-1));
-                    bigText.BigText(string.Join("\n", textLines.Where(x => !string.IsNullOrEmpty(x))));
-                    builder.SetStyle(bigText);
+                    if (notification_show_logs) {
+                        bigText.BigText(string.Join("\n", textLines.Where(x => !string.IsNullOrEmpty(x))));
+                        builder.SetStyle(bigText);
+                    }
                 }
                 if (_needRenotify) {
                     _needRenotify = false;
@@ -230,27 +267,47 @@ namespace NaiveSocksAndroid
             }
         }
 
-        int id = 0;
+        public void SetShowLogs(bool show)
+        {
+            if (show == notification_show_logs)
+                return;
+            ConfigService.SetShowLogs(ApplicationContext, show);
+            lock (builder) {
+                notification_show_logs = show;
+                if (show) {
+                    textLines = new string[3];
+                } else {
+                    textLines = new string[1];
+                    builder.SetStyle(null);
+                    builder.SetContentTitle("NaiveSocks");
+                }
+                updateNotif();
+            }
+        }
+
+        int notifTaskId = 0;
 
         void onScreen(bool on)
         {
             isScreenOn = on;
+            int manageIntervalSeconds;
             if (on) {
-                var _id = ++id;
+                var _id = ++notifTaskId;
                 NaiveUtils.RunAsyncTask(async () => {
                     while (true) {
                         await Task.Delay(2000);
-                        if (_id != id || !isScreenOn || isDestroyed)
+                        if (_id != notifTaskId || !isScreenOn || isDestroyed)
                             return;
                         updateNotif();
                     }
                 });
                 if (_needUpdateNotif)
                     updateNotif();
-                WebSocket.ConfigManageTask(3, 3000);
+                manageIntervalSeconds = currentConfig.manage_interval_screen_on;
             } else {
-                WebSocket.ConfigManageTask(8, 8000);
+                manageIntervalSeconds = currentConfig.manage_interval_screen_off;
             }
+            WebSocket.ConfigManageTask(manageIntervalSeconds, manageIntervalSeconds * 1000);
         }
 
         private static LogPriority GetPri(Logging.Log log)
@@ -308,6 +365,53 @@ namespace NaiveSocksAndroid
         }
     }
 
+    public class ServiceConnection : Java.Lang.Object, IServiceConnection
+    {
+        public event Action<ComponentName, IBinder> Connected;
+        public event Action<ComponentName> Disconnected;
+
+        public bool IsConnected { get; private set; }
+
+        public ServiceConnection()
+        {
+        }
+
+        public ServiceConnection(Action<ComponentName, IBinder> connected, Action<ComponentName> disconnected)
+        {
+            Connected += connected;
+            Disconnected += disconnected;
+        }
+
+        public virtual void OnServiceConnected(ComponentName name, IBinder service)
+        {
+            IsConnected = true;
+            Connected?.Invoke(name, service);
+        }
+
+        public virtual void OnServiceDisconnected(ComponentName name)
+        {
+            IsConnected = false;
+            Disconnected?.Invoke(name);
+        }
+    }
+
+    public class ServiceConnection<T> : ServiceConnection where T : class
+    {
+        public T Value;
+
+        public override void OnServiceConnected(ComponentName name, IBinder service)
+        {
+            Value = (service as Binder<T>)?.Value;
+            base.OnServiceConnected(name, service);
+        }
+
+        public override void OnServiceDisconnected(ComponentName name)
+        {
+            Value = null;
+            base.OnServiceDisconnected(name);
+        }
+    }
+
     public class Receiver : BroadcastReceiver
     {
         private readonly Action<Context, Intent> _onReceive;
@@ -331,5 +435,15 @@ namespace NaiveSocksAndroid
         }
 
         public BgService BgService { get; }
+    }
+
+    public class Binder<T> : Binder where T : class
+    {
+        public Binder(T value)
+        {
+            Value = value;
+        }
+
+        public T Value { get; }
     }
 }

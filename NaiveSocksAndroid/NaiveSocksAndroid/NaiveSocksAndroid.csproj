@@ -64,6 +64,7 @@
     </AndroidTlsProvider>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="Nett, Version=0.8.0.0, Culture=neutral, PublicKeyToken=null" />
     <Reference Include="System" />
     <Reference Include="System.Xml" />
     <Reference Include="System.Core" />
@@ -107,6 +108,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="BgService.cs" />
+    <Compile Include="ControlService.cs" />
     <Compile Include="CrashHandler.cs" />
     <Compile Include="MainActivity.cs" />
     <Compile Include="Resources\Resource.Designer.cs" />

@@ -623,7 +623,7 @@ namespace NaiveSocks
         {
             var tmp = tcsNewBuffer;
             tcsNewBuffer = null;
-            tmp?.SetResult(VoidType.Void);
+            tmp?.SetResult(0);
         }
 
         private TaskCompletionSource<VoidType> tcsBufferEmptied;
@@ -631,7 +631,7 @@ namespace NaiveSocks
         {
             var tmp = tcsBufferEmptied;
             tcsBufferEmptied = null;
-            tmp?.SetResult(VoidType.Void);
+            tmp?.SetResult(0);
         }
 
         private BytesSegment buffer;

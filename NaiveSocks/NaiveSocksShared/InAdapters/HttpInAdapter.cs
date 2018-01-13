@@ -240,7 +240,7 @@ namespace NaiveSocks
                         MyStream.CloseWithTimeout(destStream);
                     }
                 } finally {
-                    tcsProcessing.TrySetResult(VoidType.Void);
+                    tcsProcessing.TrySetResult(0);
                 }
             }
         }

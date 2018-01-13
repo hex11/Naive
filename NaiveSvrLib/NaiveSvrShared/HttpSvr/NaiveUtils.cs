@@ -875,7 +875,7 @@ namespace Naive.HttpSvr
                 if (timedOut)
                     localTcs.TrySetCanceled();
                 else
-                    localTcs.TrySetResult(VoidType.Void);
+                    localTcs.TrySetResult(0);
             }, tcs, timeout, executeOnlyOnce: true);
             tcs.Task.ContinueWith((_, state) => ((RegisteredWaitHandle)state).Unregister(null), registration, TaskScheduler.Default);
             return tcs.Task;
@@ -1257,5 +1257,10 @@ namespace Naive.HttpSvr
     public struct VoidType
     {
         public static readonly VoidType Void;
+
+        public static implicit operator VoidType(int i)
+        {
+            return new VoidType();
+        }
     }
 }

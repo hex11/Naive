@@ -39,6 +39,8 @@ namespace NaiveSocksAndroid
         private Toolbar toolbar;
         const string TOOLBAR_TITLE = "NaiveSocks";
 
+        //private ServiceConnection<ConfigService> cfgService;
+
         public void OnServiceConnected(ComponentName name, IBinder service)
         {
             var binder = service as BgServiceBinder;
@@ -60,6 +62,8 @@ namespace NaiveSocksAndroid
             CrashHandler.CheckInit();
 
             base.OnCreate(savedInstanceState);
+
+            //BindService(new Intent(this, typeof(ConfigService)), cfgService = new ServiceConnection<ConfigService>(), Bind.AutoCreate);
 
             serviceIntent = new Intent(this, typeof(BgService));
             serviceIntent.SetAction("start!");
@@ -124,6 +128,9 @@ namespace NaiveSocksAndroid
             });
         }
 
+        const string menu_hideLogs = "Hide logs in notification";
+        const string menu_showLogs = "Show logs in notification";
+
         public override bool OnCreateOptionsMenu(IMenu menu)
         {
             MenuInflater.Inflate(R.Menu.menu_control, menu);
@@ -133,6 +140,8 @@ namespace NaiveSocksAndroid
                 menu.FindItem(R.Id.menu_stop).SetVisible(false);
                 menu.FindItem(R.Id.menu_reload).SetVisible(false);
             }
+            menu.Add(ConfigService.GetShowLogs(ApplicationContext) ? menu_hideLogs : menu_showLogs)
+                .SetShowAsActionFlags(ShowAsAction.Never);
             return true;
         }
 
@@ -145,8 +154,24 @@ namespace NaiveSocksAndroid
                 stopService();
             } else if (id == Resource.Id.menu_reload) {
                 reloadService();
+            } else {
+                var title = item.TitleFormatted.ToString();
+                if (title == menu_showLogs) {
+                    setShowLogs(true);
+                } else if (title == menu_hideLogs) {
+                    setShowLogs(false);
+                }
             }
             return base.OnOptionsItemSelected(item);
+        }
+
+        void setShowLogs(bool show)
+        {
+            this.InvalidateOptionsMenu();
+            ConfigService.SetShowLogs(ApplicationContext, show);
+            if (isConnected) {
+                service.SetShowLogs(show);
+            }
         }
 
         protected override void OnDestroy()

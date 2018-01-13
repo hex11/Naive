@@ -180,7 +180,7 @@ namespace NaiveSocks
             try {
                 var tcs = e.UserToken as TaskCompletionSource<VoidType>;
                 if (WriteCompleted(e, out var ex))
-                    tcs.SetResult(VoidType.Void);
+                    tcs.SetResult(0);
                 else
                     tcs.SetException(ex);
             } catch (Exception ex) {

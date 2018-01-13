@@ -32,6 +32,8 @@ namespace NaiveSocks
         public event Action<InConnection> NewConnection;
         public event Action<InConnection> EndConnection;
 
+        public event Action<TomlTable> ConfigTomlLoaded;
+
         public Func<string> FuncGetConfigString;
 
         public string WorkingDirectory = ".";
@@ -129,7 +131,8 @@ namespace NaiveSocks
 
         public void LoadConfigStr(string toml)
         {
-            Config t = null;
+            Config t;
+            TomlTable tomlTable;
             var refs = new List<AdapterRef>();
             try {
                 var tomlSettings = TomlSettings.Create(cfg => cfg
@@ -157,11 +160,13 @@ namespace NaiveSocks
                                 }))
                         )
                     );
-                t = Toml.ReadString<Config>(toml, tomlSettings);
+                tomlTable = Toml.ReadString(toml, tomlSettings);
+                t = tomlTable.Get<Config>();
             } catch (Exception e) {
                 Logging.error($"TOML error: " + e.Message);
                 return;
             }
+            ConfigTomlLoaded?.Invoke(tomlTable);
             LoggingLevel = t.log_level;
             Aliases = t.aliases;
             if (t.@in != null)
@@ -267,7 +272,7 @@ namespace NaiveSocks
                 }
             }
             foreach (var item in InAdapters) {
-                info($"InAdapter '{item.Name}': {item} -> {item.@out?.Adapter?.ToString()}");
+                info($"InAdapter '{item.Name}': {item} -> {item.@out?.Adapter?.Name?.Quoted() ?? "(No OutAdapter)"}");
                 try {
                     item.InternalInit(this);
                     checkIcrb(item);

@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Android.Content;
+using System;
 using System.IO;
 
 namespace NaiveSocksAndroid
@@ -27,6 +28,7 @@ namespace NaiveSocksAndroid
         {
             if (inited == false)
                 throw new Exception("!!! inited == false !!!");
+            CrashLogFile = Path.Combine(Android.OS.Environment.ExternalStorageDirectory.AbsolutePath, "NaiveUnhandledException.txt");
         }
     }
 }

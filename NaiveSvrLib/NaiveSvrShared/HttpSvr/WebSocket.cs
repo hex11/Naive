@@ -178,12 +178,23 @@ namespace Naive.HttpSvr
                         }
                         try {
                             var delta = CurrentTime - item.LatestActiveTime;
-                            if (item.ManagedCloseTimeout > 0 && delta > item.ManagedCloseTimeout) {
+                            var pingTimeout = item.ManagedPingTimeout;
+                            if (pingTimeout <= 0)
+                                pingTimeout = item.ManagedCloseTimeout;
+                            if (item.ManagedCloseTimeout > 0 && delta > item.ManagedCloseTimeout && item._manageState == ManageState.PingSent) {
                                 Logging.warning($"{item} timed out, closing.");
-                                item.IsTimeout = true;
+                                item._manageState = ManageState.TimedoutClosed;
                                 item.Close();
-                            } else if (item.ManagedPingTimeout > 0 && delta > item.ManagedPingTimeout && item.ConnectionState == States.Open) {
-                                item.BeginSendPing();
+                            } else if (pingTimeout > 0 && delta > pingTimeout && item.ConnectionState == States.Open) {
+                                if (item._manageState == ManageState.Normal) {
+                                    Logging.debug($"{item} pinging.");
+                                    item._manageState = ManageState.PingSent;
+                                    item.BeginSendPing();
+                                } else {
+                                    Logging.debug($"{item} still pinging.");
+                                }
+                            } else {
+                                item._manageState = ManageState.Normal;
                             }
                         } catch (Exception e) {
                             Logging.exception(e, Logging.Level.Error, "WebSocket manage task exception, ignored.");
@@ -195,17 +206,27 @@ namespace Naive.HttpSvr
             });
         }
 
+        ManageState _manageState = ManageState.Normal;
+
+        enum ManageState
+        {
+            Normal,
+            PingSent,
+            TimedoutClosed
+        }
+
         public static List<WebSocket> ManagedWebSockets = new List<WebSocket>();
 
         public int ManagedPingTimeout = 15;
         public int ManagedCloseTimeout = 60;
 
-        public bool IsTimeout { get; private set; }
+        public bool IsTimeout => _manageState == ManageState.TimedoutClosed;
         void throwIfTimeout()
         {
             if (IsTimeout)
                 throw getTimeoutException();
         }
+
         private DisconnectedException getTimeoutException()
             => new DisconnectedException($"timeout ({ManagedCloseTimeout} seconds)");
 
@@ -596,6 +617,7 @@ namespace Naive.HttpSvr
         private void WebSocket_PongReceived(WebSocket ws)
         {
             LastPingTime = (int)(DateTime.UtcNow - _pingstart).TotalMilliseconds;
+            _manageState = ManageState.Normal;
         }
 
         public void SendPing()

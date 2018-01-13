@@ -414,7 +414,7 @@ namespace NaiveSocks
 
             public BytesView pack(NaiveMultiplexing m, BytesView headerBv = null)
             {
-                Debug.Assert(Id > m.currentMaxId, $"Id > currentMaxId ({m})");
+                Debug.Assert(Id <= m.currentMaxId, $"Id > currentMaxId ({m})");
                 if (headerBv == null)
                     headerBv = new BytesView(new byte[getSendChIdLen(m)]);
                 var cur = 0;
@@ -550,7 +550,7 @@ namespace NaiveSocks
                 if (blockSendTcs == null)
                     blockSendTcs = new TaskCompletionSource<VoidType>();
             } else {
-                blockSendTcs?.SetResult(VoidType.Void);
+                blockSendTcs?.SetResult(0);
                 blockSendTcs = null;
             }
         }
