@@ -167,7 +167,7 @@ namespace NaiveSocks
                         var remoteEP = socket.RemoteEndPoint as IPEndPoint;
                         var dataStream = getEncryptionStream(MyStream.FromSocket(socket));
                         var buf = new BytesSegment(new byte[3]);
-                        await dataStream.ReadAsync(buf).CAF(); // read ahead
+                        await dataStream.ReadAllAsync(buf, 3).CAF(); // read ahead
                         var addrType = (Socks5Server.AddrType)buf[0];
                         string addrString = null;
                         switch (addrType) {
@@ -206,7 +206,7 @@ namespace NaiveSocks
                     Logging.exception(e, Logging.Level.Error, $"{this} handling connection");
                 }
             }
-            tmp().Forget();
+            Task.Run(tmp);
         }
     }
 
