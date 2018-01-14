@@ -237,7 +237,7 @@ namespace NaiveSocks
                     var beginTime = DateTime.Now;
                     Logging.info($"'{adapter.Name}' connecting...");
                     var settings = new NaiveMSocks.ConnectingSettings {
-                        Headers = adapter.headers,
+                        Headers = new Dictionary<string, string>(adapter.headers),
                         Host = adapter.server,
                         KeyString = adapter.key,
                         Path = adapter.path,

@@ -18,6 +18,22 @@ using NaiveSocks;
 namespace NaiveSocksAndroid
 {
 
+    [BroadcastReceiver(Name = "naive.NaiveSocksAndroid.BootReceiver", Enabled = false)]
+    [IntentFilter(new[] { Intent.ActionBootCompleted })]
+    public class BootReceiver : BroadcastReceiver
+    {
+        public override void OnReceive(Context context, Intent intent)
+        {
+            GlobalConfig.Init(Application.Context);
+            if (GlobalConfig.Current.GetAutostart()) {
+                Intent serviceIntent = new Intent(context, typeof(BgService));
+                serviceIntent.SetAction("start!");
+                serviceIntent.PutExtra("isAutostart", true);
+                Application.Context.StartService(serviceIntent);
+            }
+        }
+    }
+
     [Service(
         //IsolatedProcess = true,
         //Process = ":bg"
@@ -52,6 +68,7 @@ namespace NaiveSocksAndroid
         public override void OnCreate()
         {
             CrashHandler.CheckInit();
+            GlobalConfig.Init(ApplicationContext);
 
             base.OnCreate();
 
@@ -103,7 +120,7 @@ namespace NaiveSocksAndroid
 
             //BindService(new Intent(this, typeof(ConfigService)), cfgService = new ServiceConnection<ConfigService>(), Bind.AutoCreate);
 
-            notification_show_logs = ConfigService.GetShowLogs(ApplicationContext);
+            notification_show_logs = GlobalConfig.Current.GetShowLogs();
 
             notification_show_logs ^= true; // to force update
             SetShowLogs(!notification_show_logs);
@@ -119,13 +136,7 @@ namespace NaiveSocksAndroid
                             onScreen(isScreenOn);
                         }
                     };
-                    string[] paths = {
-                        GetExternalFilesDir(null).AbsolutePath,
-                        Path.Combine(Android.OS.Environment.ExternalStorageDirectory.AbsolutePath, "nsocks"),
-                    };
-                    for (int i = 0; i < paths.Length; i++) {
-                        paths[i] = Path.Combine(paths[i], "naivesocks.tml");
-                    }
+                    var paths = GlobalConfig.GetNaiveSocksConfigPaths(this);
                     Controller.LoadConfigFileFromMultiPaths(paths);
                     Controller.Start();
                     Logging.info("controller started.");
@@ -271,7 +282,7 @@ namespace NaiveSocksAndroid
         {
             if (show == notification_show_logs)
                 return;
-            ConfigService.SetShowLogs(ApplicationContext, show);
+            GlobalConfig.Current.SetShowLogs(show);
             lock (builder) {
                 notification_show_logs = show;
                 if (show) {
@@ -398,6 +409,15 @@ namespace NaiveSocksAndroid
     public class ServiceConnection<T> : ServiceConnection where T : class
     {
         public T Value;
+
+        public ServiceConnection()
+        {
+        }
+
+
+        public ServiceConnection(Action<ComponentName, IBinder> connected, Action<ComponentName> disconnected) : base(connected, disconnected)
+        {
+        }
 
         public override void OnServiceConnected(ComponentName name, IBinder service)
         {

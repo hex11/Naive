@@ -17,6 +17,8 @@ using Android.Support.V4.Widget;
 using Android.Content.PM;
 using R = NaiveSocksAndroid.Resource;
 using Android.Support.V7.Widget;
+using System.Linq;
+using Android.Support.Design.Widget;
 
 namespace NaiveSocksAndroid
 {
@@ -25,41 +27,30 @@ namespace NaiveSocksAndroid
         MainLauncher = true,
         LaunchMode = LaunchMode.SingleTask,
         ConfigurationChanges = ConfigChanges.Orientation | ConfigChanges.ScreenSize)]
-    public class MainActivity : AppCompatActivity, IServiceConnection
+    public class MainActivity : AppCompatActivity
     {
         LinearLayout outputParent;
         NestedScrollView outputParentScroll;
 
         ContextThemeWrapper logThemeWrapper;
 
+        CoordinatorLayout topView;
+
         Intent serviceIntent;
 
-        BgService service;
-        bool isConnected;
+        bool isConnected => bgServiceConn?.IsConnected ?? false;
+        BgService service => bgServiceConn?.Value;
+        ServiceConnection<BgService> bgServiceConn;
+
         private Toolbar toolbar;
         const string TOOLBAR_TITLE = "NaiveSocks";
 
         //private ServiceConnection<ConfigService> cfgService;
 
-        public void OnServiceConnected(ComponentName name, IBinder service)
-        {
-            var binder = service as BgServiceBinder;
-            this.service = binder.BgService;
-            isConnected = true;
-            toolbar.Title = TOOLBAR_TITLE + " - running";
-            InvalidateOptionsMenu();
-        }
-
-        public void OnServiceDisconnected(ComponentName name)
-        {
-            isConnected = false;
-            toolbar.Title = TOOLBAR_TITLE;
-            InvalidateOptionsMenu();
-        }
-
         protected override void OnCreate(Bundle savedInstanceState)
         {
             CrashHandler.CheckInit();
+            GlobalConfig.Init(ApplicationContext);
 
             base.OnCreate(savedInstanceState);
 
@@ -68,10 +59,22 @@ namespace NaiveSocksAndroid
             serviceIntent = new Intent(this, typeof(BgService));
             serviceIntent.SetAction("start!");
 
+            bgServiceConn = new ServiceConnection<BgService>(
+                connected: (ComponentName name, IBinder service) => {
+                    toolbar.Title = TOOLBAR_TITLE + " - running";
+                    InvalidateOptionsMenu();
+                },
+                disconnected: (ComponentName name) => {
+                    toolbar.Title = TOOLBAR_TITLE;
+                    InvalidateOptionsMenu();
+                });
+
             logThemeWrapper = new ContextThemeWrapper(this, Resource.Style.LogTextView);
 
             // Set our view from the "main" layout resource
             SetContentView(Resource.Layout.Main);
+
+            topView = FindViewById<CoordinatorLayout>(R.Id.topview);
 
             toolbar = FindViewById<Toolbar>(Resource.Id.toolbar);
             SetSupportActionBar(toolbar);
@@ -96,7 +99,7 @@ namespace NaiveSocksAndroid
                 if (!isConnected) {
                     Logging.info("starting/binding service...");
                     StartService(serviceIntent);
-                    this.BindService(serviceIntent, this, Bind.None);
+                    this.BindService(serviceIntent, bgServiceConn, Bind.None);
                 } else {
                     Logging.info("cannot start service: service is already running.");
                 }
@@ -128,8 +131,9 @@ namespace NaiveSocksAndroid
             });
         }
 
-        const string menu_hideLogs = "Hide logs in notification";
         const string menu_showLogs = "Show logs in notification";
+        const string menu_autostart = "Autostart";
+        const string menu_openConfig = "Open configuation file...";
 
         public override bool OnCreateOptionsMenu(IMenu menu)
         {
@@ -140,7 +144,15 @@ namespace NaiveSocksAndroid
                 menu.FindItem(R.Id.menu_stop).SetVisible(false);
                 menu.FindItem(R.Id.menu_reload).SetVisible(false);
             }
-            menu.Add(ConfigService.GetShowLogs(ApplicationContext) ? menu_hideLogs : menu_showLogs)
+            menu.Add(menu_showLogs)
+                .SetCheckable(true)
+                .SetChecked(GlobalConfig.Current.GetShowLogs())
+                .SetShowAsActionFlags(ShowAsAction.Never);
+            menu.Add(menu_autostart)
+                .SetCheckable(true)
+                .SetChecked(GlobalConfig.Current.GetAutostart())
+                .SetShowAsActionFlags(ShowAsAction.Never);
+            menu.Add(menu_openConfig)
                 .SetShowAsActionFlags(ShowAsAction.Never);
             return true;
         }
@@ -157,21 +169,44 @@ namespace NaiveSocksAndroid
             } else {
                 var title = item.TitleFormatted.ToString();
                 if (title == menu_showLogs) {
-                    setShowLogs(true);
-                } else if (title == menu_hideLogs) {
-                    setShowLogs(false);
+                    setShowLogs(!item.IsChecked);
+                } else if (title == menu_autostart) {
+                    setAutostart(!item.IsChecked);
+                } else if (title == menu_openConfig) {
+                    var paths = GlobalConfig.GetNaiveSocksConfigPaths(this);
+                    var found = paths.FirstOrDefault(x => File.Exists(x));
+                    if (found == null) {
+                        Snackbar.Make(topView, "No configuation file.", Snackbar.LengthLong).Show();
+                    } else {
+                        var intent = new Intent(Intent.ActionEdit);
+                        intent.SetDataAndType(Android.Net.Uri.FromFile(new Java.IO.File(found)), "text/plain");
+                        intent.SetFlags(ActivityFlags.NewTask);
+                        StartActivity(intent);
+                    }
                 }
             }
             return base.OnOptionsItemSelected(item);
         }
 
+        private void setAutostart(bool enabled)
+        {
+            GlobalConfig.Current.SetAutostart(enabled);
+            var pm = this.PackageManager;
+            var componentName = new ComponentName(this, Java.Lang.Class.FromType(typeof(BootReceiver)));
+            var enabledState = (enabled) ? ComponentEnabledState.Enabled : ComponentEnabledState.Disabled;
+            pm.SetComponentEnabledSetting(componentName, enabledState, ComponentEnableOption.DontKillApp);
+            this.InvalidateOptionsMenu();
+            Snackbar.Make(topView, $"Autostart is {(enabled ? "enabled" : "disabled")}.", Snackbar.LengthLong).Show();
+        }
+
         void setShowLogs(bool show)
         {
+            GlobalConfig.Current.SetShowLogs(show);
             this.InvalidateOptionsMenu();
-            ConfigService.SetShowLogs(ApplicationContext, show);
             if (isConnected) {
                 service.SetShowLogs(show);
             }
+            Snackbar.Make(topView, $"Logger output will{(show ? "" : " not")} be shown in notification.", Snackbar.LengthLong).Show();
         }
 
         protected override void OnDestroy()
@@ -222,13 +257,13 @@ namespace NaiveSocksAndroid
         protected override void OnStart()
         {
             base.OnStart();
-            this.BindService(serviceIntent, this, Bind.None);
+            this.BindService(serviceIntent, bgServiceConn, Bind.None);
         }
 
         protected override void OnStop()
         {
-            if (this.isConnected)
-                this.UnbindService(this);
+            if (bgServiceConn?.IsConnected == true)
+                this.UnbindService(bgServiceConn);
             base.OnStop();
         }
     }
