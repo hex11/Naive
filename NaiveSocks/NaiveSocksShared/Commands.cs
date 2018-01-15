@@ -181,6 +181,15 @@ namespace NaiveSocks
                             ch.Update(bv);
                         }
                     },
+                    ["encrypt 128 KiB 128 times (speck0 (speck-128/128-ctr))"] = () => {
+                        var ch = new SpeckCtr128128(samplekey);
+                        ch.IV = new byte[] { 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80 };
+                        var buf = new byte[128 * 1024];
+                        var bv = new BytesSegment(buf);
+                        for (int i = 0; i < 128; i++) {
+                            ch.Update(bv);
+                        }
+                    },
                     //["Increment 128m times (single thread)"] = () => {
                     //    var x = 0;
                     //    for (int i = 0; i < 128 * 1024 * 1024; i++) {

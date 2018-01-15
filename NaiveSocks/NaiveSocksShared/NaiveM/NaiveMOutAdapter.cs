@@ -34,7 +34,7 @@ namespace NaiveSocks
 
         public int timeout { get; set; } = 30;
 
-        public string encryption = "chacha20-ietf";
+        public string encryption { get; set; } = NaiveProtocol.EncryptionSpeck0;
 
         int _multiplied_delay = 0;
         int _using_delay => Math.Max(Math.Max(_multiplied_delay, connect_delay), 0);

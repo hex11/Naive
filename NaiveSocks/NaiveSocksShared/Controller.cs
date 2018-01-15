@@ -63,6 +63,7 @@ namespace NaiveSocks
             RegisteredOutTypes.Add("naive", typeof(NaiveMOutAdapter));
             RegisteredOutTypes.Add("naivec", typeof(NaiveMOutAdapter));
             RegisteredOutTypes.Add("ss", typeof(SSOutAdapter));
+            RegisteredOutTypes.Add("webcon", typeof(WebconAdapter));
 
             RegisteredOutTypes.Add("router", typeof(RouterAdapter));
             RegisteredOutTypes.Add("fail", typeof(FailAdapter));

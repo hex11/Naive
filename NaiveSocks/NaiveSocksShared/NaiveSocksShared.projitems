@@ -10,6 +10,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)Encryption\Poly1305.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Encryption\Speck.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)InverseMuxStream.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Encryption\Chacha20.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands.cs" />
@@ -31,6 +32,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)OutAdapters\SocksOutAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)OutAdapters\RouterAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)OutAdapters\SSOutAdapter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)OutAdapters\WebconAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)RrChannels.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Socks5Client.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Socks5Server.cs" />
