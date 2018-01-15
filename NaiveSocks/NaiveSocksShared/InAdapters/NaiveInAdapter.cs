@@ -59,7 +59,7 @@ namespace NaiveSocks
 
         private void addPath(string path, string key)
         {
-            var realKey = NaiveProtocol.GetRealKeyFromString(key);
+            var realKey = NaiveProtocol.GetRealKeyFromString(key, 32);
             httpServer.Router.AddAsyncRoute(path, (p) => this.HandleRequestAsync(p, realKey));
         }
 

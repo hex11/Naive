@@ -34,6 +34,8 @@ namespace NaiveSocks
 
         public int timeout { get; set; } = 30;
 
+        public string encryption = "chacha20-ietf";
+
         int _multiplied_delay = 0;
         int _using_delay => Math.Max(Math.Max(_multiplied_delay, connect_delay), 0);
 
@@ -240,6 +242,7 @@ namespace NaiveSocks
                         Headers = new Dictionary<string, string>(adapter.headers),
                         Host = adapter.server,
                         KeyString = adapter.key,
+                        Encryption = adapter.encryption,
                         Path = adapter.path,
                         ImuxConnections = adapter.imux_ws,
                         ImuxHttpConnections = adapter.imux_http,

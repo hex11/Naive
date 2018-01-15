@@ -27,12 +27,17 @@ namespace NaiveSocks
                     if (token == null)
                         return;
                     var bytes = Convert.FromBase64String(token);
-                    if (realKey != null)
+                    if (realKey != null) {
                         bytes = EncryptOrDecryptBytes(false, realKey, bytes);
+                    }
                     var req = Request.Parse(bytes);
                     const string XumPrefix = "chs2:";
                     bool isImux = req.additionalString.StartsWith(XumPrefix);
                     ImuxSession imux = null;
+                    string encryptType = "";
+                    if (req.extraStrings.Length > 0) {
+                        encryptType = req.extraStrings[0];
+                    }
                     if (isImux || req.additionalString == "channels") {
                         IMsgStream msgStream;
                         if (isImux) {
@@ -51,7 +56,7 @@ namespace NaiveSocks
                             }
                             IMsgStream wsOrHttp;
                             if (connId < connCount - httpCount) {
-                                wsOrHttp = await HandleWebsocket(p, realKey);
+                                wsOrHttp = await HandleWebsocket(p, realKey, encryptType);
                             } else {
                                 p.setStatusCode("200 OK");
                                 p.setHeader(HttpHeaders.KEY_Transfer_Encoding, HttpHeaders.VALUE_Transfer_Encoding_chunked);
@@ -85,7 +90,7 @@ namespace NaiveSocks
                             return;
                             NO_AWAIT:;
                         } else {
-                            msgStream = await HandleWebsocket(p, realKey);
+                            msgStream = await HandleWebsocket(p, realKey, encryptType);
                         }
                         var nms = new NaiveMSocks(new NaiveMultiplexing(msgStream)) {
                             InAdapter = this
@@ -114,13 +119,14 @@ namespace NaiveSocks
                 }
             }
 
-            private static async Task<WebSocketServer> HandleWebsocket(HttpConnection p, byte[] realKey)
+            private static async Task<WebSocketServer> HandleWebsocket(HttpConnection p, byte[] realKey, string encType)
             {
                 var ws = new WebSocketServer(p);
                 if ((await ws.HandleRequestAsync(false)).IsConnected == false)
                     throw new Exception("websocket handshake failed.");
                 ws.AddToManaged();
-                ws.ApplyAesStreamFilter(realKey);
+                NaiveProtocol.ApplyEncryption(ws, realKey, encType);
+                //ws.ApplyAesStreamFilter(realKey);
                 return ws;
             }
 

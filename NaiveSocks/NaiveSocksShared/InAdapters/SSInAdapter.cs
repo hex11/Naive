@@ -210,13 +210,6 @@ namespace NaiveSocks
         }
     }
 
-    public interface IIVEncryptor
-    {
-        void Update(BytesSegment bs);
-        byte[] IV { get; set; }
-        int IVLength { get; }
-    }
-
     public interface IMac
     {
         void Update(BytesSegment bs);

@@ -9,9 +9,9 @@
     <Import_RootNamespace>NaiveSocksShared</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="$(MSBuildThisFileDirectory)3rd\Poly1305.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Encryption\Poly1305.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)InverseMuxStream.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)3rd\Chacha20.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Encryption\Chacha20.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Controller.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)GUI\FormConnections.cs" />

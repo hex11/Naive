@@ -18,6 +18,10 @@ namespace NaiveSocks
             public AddrPort dest;
             public string additionalString = CONNECT;
 
+            public static readonly string[] EmptyStringArray = new string[0];
+
+            public string[] extraStrings = EmptyStringArray;
+
             public Request() { }
 
             public Request(AddrPort dest)
@@ -34,6 +38,15 @@ namespace NaiveSocks
             public byte[] ToBytes()
             {
                 var len = 1 + dest.BytesLength + 1 + additionalString.BytesLength(Encoding);
+                if (extraStrings.Length > 0) {
+                    if (extraStrings.Length > 255)
+                        throw new Exception("extraString.Length > 255");
+                    len += 1 // strings count
+                           + 1; // check sum
+                    foreach (var item in extraStrings) {
+                        len += item.BytesLength(Encoding);
+                    }
+                }
                 var buf = new byte[len];
                 var c = 0;
                 buf[c++] = (byte)((rd.Next() % 128) * 2);
@@ -42,7 +55,18 @@ namespace NaiveSocks
                 for (int i = 0; i < c; i++)
                     sum += buf[i];
                 buf[c++] = sum;
+                var sumBegin = c;
+                sum = 66;
                 additionalString.ToBytes(Encoding, buf, ref c);
+                if (extraStrings.Length > 0) {
+                    buf[c++] = (byte)extraStrings.Length;
+                    foreach (var item in extraStrings) {
+                        item.ToBytes(Encoding, buf, ref c);
+                    }
+                    for (int i = sumBegin; i < c; i++)
+                        sum += buf[i];
+                    buf[c++] = sum;
+                }
                 return buf;
             }
 
@@ -54,16 +78,29 @@ namespace NaiveSocks
 
             public static Request Parse(byte[] buf, ref int c)
             {
-                int begin = c;
+                int sumbegin = c;
                 c++;
                 var result = new Request(AddrPort.Parse(buf, ref c));
                 byte sum = buf[c++];
-                for (int i = begin; i < c - 1; i++)
+                for (int i = sumbegin; i < c - 1; i++)
                     sum -= buf[i];
                 if (sum != 233)
                     throw new Exception("checksum failed");
-                if (c < buf.Length)
+                sumbegin = c;
+                if (c < buf.Length) // version 2
                     result.additionalString = Pack.ParseString(Encoding, buf, ref c);
+                if (c < buf.Length) { // version 3
+                    int stringsCount = buf[c++];
+                    var exStrs = result.extraStrings = new string[stringsCount];
+                    for (int i = 0; i < stringsCount; i++) {
+                        exStrs[i] = Pack.ParseString(Encoding, buf, ref c);
+                    }
+                    sum = buf[c++];
+                    for (int i = sumbegin; i < c - 1; i++)
+                        sum -= buf[i];
+                    if (sum != 66)
+                        throw new Exception("checksum failed");
+                }
                 return result;
             }
         }
@@ -73,7 +110,7 @@ namespace NaiveSocks
             public AddrPort remoteEP;
             public byte status;
             public string additionalString = CONNECT;
-            
+
             public Reply()
             {
             }
@@ -130,7 +167,7 @@ namespace NaiveSocks
         {
             return GetRealKeyFromString(str, 16);
         }
-        
+
         public static byte[] GetRealKeyFromString(string str, int length)
         {
             using (var hash = SHA512.Create())
@@ -145,6 +182,24 @@ namespace NaiveSocks
                 key = key.Take(16).ToArray();
             WebSocket.GetAesFilter2(isEncrypting, key)(bv);
             return bv.GetBytes();
+        }
+
+        public const string EncryptionAesOfb128 = "aes-128-ofb";
+        public const string EncryptionChacha20Ietf = "chacha20-ietf";
+
+        public static void ApplyEncryption(Filterable filterable, byte[] key, string type = "")
+        {
+            if (string.IsNullOrEmpty(type) || type == EncryptionAesOfb128) {
+                if (key.Length > 16)
+                    key = key.Take(16).ToArray();
+                filterable.ApplyAesStreamFilter(key);
+            } else if (type == EncryptionChacha20Ietf) {
+                if (key.Length > 32)
+                    key = key.Take(32).ToArray();
+                filterable.ApplyFilterFromEncryptor(new ChaCha20IetfEncryptor(key), new ChaCha20IetfEncryptor(key));
+            } else {
+                throw new Exception($"unknown encryption '{type}'");
+            }
         }
     }
 }

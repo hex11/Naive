@@ -42,7 +42,8 @@ namespace NaiveSocks
             public AddrPort Host { get; set; }
             public string Path { get; set; }
             public byte[] Key { get; set; }
-            public string KeyString { set => Key = NaiveProtocol.GetRealKeyFromString(value); }
+            public string KeyString { set => Key = NaiveProtocol.GetRealKeyFromString(value, 32); }
+            public string Encryption { get; set; }
 
             public Dictionary<string, string> Headers { get; set; }
             public string UrlFormat { get; set; } = "{0}?token={1}";
@@ -58,7 +59,7 @@ namespace NaiveSocks
             => ConnectTo(new ConnectingSettings {
                 Host = host,
                 Path = path,
-                Key = NaiveProtocol.GetRealKeyFromString(key),
+                Key = NaiveProtocol.GetRealKeyFromString(key, 32),
             });
 
         public static Task<NaiveMSocks> ConnectTo(AddrPort host, string path, byte[] key)
@@ -80,13 +81,16 @@ namespace NaiveSocks
                 var req = new NaiveProtocol.Request(new AddrPort("", 0)) {
                     additionalString = addStr
                 };
+                if (settings.Encryption != null) {
+                    req.extraStrings = new[] { settings.Encryption };
+                }
                 var reqbytes = req.ToBytes();
                 reqbytes = NaiveProtocol.EncryptOrDecryptBytes(true, key, reqbytes);
                 var reqPath = string.Format(settings.UrlFormat, settings.Path, HttpUtil.UrlEncode(Convert.ToBase64String(reqbytes)));
                 if (isHttp) {
                     return ConnectHttpChunked(settings, key, reqPath);
                 } else {
-                    return ConnectWebSocket(settings, key, reqPath);
+                    return ConnectWebSocket(settings, key, reqPath, settings.Encryption);
                 }
             }
             IMsgStream msgStream;
@@ -122,14 +126,15 @@ namespace NaiveSocks
             return ncs;
         }
 
-        private static async Task<IMsgStream> ConnectWebSocket(ConnectingSettings settings, byte[] key, string reqPath)
+        private static async Task<IMsgStream> ConnectWebSocket(ConnectingSettings settings, byte[] key, string reqPath, string encType)
         {
             var ws = await WebSocketClient.ConnectToAsync(settings.Host, reqPath);
             await ws.HandshakeAsync(false, settings.Headers);
             ws.ManagedPingTimeout = settings.Timeout / 2;
             ws.ManagedCloseTimeout = settings.Timeout;
             ws.AddToManaged();
-            ws.ApplyAesStreamFilter(key);
+            NaiveProtocol.ApplyEncryption(ws, key, encType);
+            //ws.ApplyAesStreamFilter(key);
             return ws;
         }
 

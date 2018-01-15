@@ -1222,6 +1222,13 @@ namespace Naive.HttpSvr
         }
     }
 
+    public interface IIVEncryptor
+    {
+        void Update(BytesSegment bs);
+        byte[] IV { get; set; }
+        int IVLength { get; }
+    }
+
     public class Filterable
     {
 
@@ -1295,6 +1302,22 @@ namespace Naive.HttpSvr
         {
             AddWriteFilter(GetAesStreamFilter(true, key));
             AddReadFilter(GetAesStreamFilter(false, key));
+        }
+
+        public void ApplyFilterFromEncryptor(byte[] key, Func<bool, byte[], IIVEncryptor> func)
+        {
+            ApplyFilterFromEncryptor(func(true, key), func(false, key));
+        }
+
+        public void ApplyFilterFromEncryptor(byte[] key, Func<byte[], IIVEncryptor> func)
+        {
+            ApplyFilterFromEncryptor(func(key), func(key));
+        }
+
+        public void ApplyFilterFromEncryptor(IIVEncryptor write, IIVEncryptor read)
+        {
+            AddWriteFilter(GetStreamFilterFromIVEncryptor(true, write));
+            AddReadFilter(GetStreamFilterFromIVEncryptor(false, read));
         }
 
         public void ApplyDeflateFilter()
@@ -1531,6 +1554,28 @@ namespace Naive.HttpSvr
                             bv = bv.nextNode;
                         }
                         while (bv != null);
+                }
+            };
+        }
+
+        public static Action<BytesView> GetStreamFilterFromIVEncryptor(bool isEncrypt, IIVEncryptor iVEncryptor)
+        {
+            var ivOK = false;
+            return (bv) => {
+                if (!ivOK) {
+                    ivOK = true;
+                    if (isEncrypt) {
+                        bv.nextNode = bv.Clone();
+                        bv.Set(iVEncryptor.IV);
+                        bv = bv.nextNode;
+                    } else {
+                        int iVLength = iVEncryptor.IVLength;
+                        iVEncryptor.IV = bv.GetBytes(0, iVLength, true);
+                        bv.Sub(iVLength);
+                    }
+                }
+                foreach (var item in bv) {
+                    iVEncryptor.Update(new BytesSegment(item));
                 }
             };
         }
