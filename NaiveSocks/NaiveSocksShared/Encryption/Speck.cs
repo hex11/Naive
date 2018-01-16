@@ -34,10 +34,15 @@ namespace NaiveSocks
         Block128 counter;
 
         const int BlockSize = 16;
-        const int KsBlockCount = 16;
+        const int KsBlockCount = 8;
         const int KeystreamBufferSize = BlockSize * KsBlockCount;
-        byte[] keyStreamBuf = new byte[KeystreamBufferSize];
+        KeyStreamBuf keyStreamBuf;
         int keystreamBufferPos = KeystreamBufferSize;
+
+        struct KeyStreamBuf
+        {
+            public fixed byte bytes[KeystreamBufferSize];
+        }
 
         protected override void IVSetup(byte[] IV)
         {
@@ -51,7 +56,7 @@ namespace NaiveSocks
             bs.CheckAsParameter();
             var pos = bs.Offset;
             var end = pos + bs.Len;
-            fixed (byte* keyStreamBuf = this.keyStreamBuf)
+            fixed (byte* keyStreamBuf = this.keyStreamBuf.bytes)
             fixed (byte* bytes = bs.Bytes) {
                 while (pos < end) {
                     var remainningKeystream = KeystreamBufferSize - keystreamBufferPos;
@@ -60,7 +65,7 @@ namespace NaiveSocks
                         remainningKeystream = KeystreamBufferSize;
                         var ksb = (Block128*)keyStreamBuf;
                         for (int i = 0; i < KsBlockCount; i++) {
-                            *ksb = counter;
+                            ksb[i] = counter;
                             if (++counter.v1 == 0)
                                 ++counter.v0;
                             Cipher.encrypt_128_128(keys, ref ksb[i]);
@@ -117,7 +122,13 @@ namespace NaiveSocks
             public static void encrypt_128_128(uint64_t[] keySchedules, ref Block128 ciphertext)
             {
                 foreach (var item in keySchedules) {
-                    speck_round_64(ref ciphertext.v1, ref ciphertext.v0, item);
+                    // inlined:
+                    //speck_round_64(ref ciphertext.v1, ref ciphertext.v0, item);
+                    ciphertext.v1 = (ciphertext.v1 >> 8) | (ciphertext.v1 << (64 - 8)); // x = ROTR(x, 8)
+                    ciphertext.v1 += ciphertext.v0;
+                    ciphertext.v1 ^= item;
+                    ciphertext.v0 = (ciphertext.v0 << 3) | (ciphertext.v0 >> (64 - 3)); // y = ROTL(y, 3)
+                    ciphertext.v0 ^= ciphertext.v1;
                 }
             }
 

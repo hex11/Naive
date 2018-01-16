@@ -104,7 +104,7 @@ namespace NaiveSocks
             cmdHub.AddCmdHandler(prefix + "reload", command => {
                 c.Reload();
             });
-            cmdHub.AddCmdHandler("stat", command => {
+            cmdHub.AddCmdHandler(prefix + "stat", command => {
                 var proc = Process.GetCurrentProcess();
                 command.WriteLine($"TotalMemory: {GC.GetTotalMemory(command.args.Contains("gc")).ToString("N0")}");
                 command.WriteLine($"WorkingSet: {proc.WorkingSet64.ToString("N0")}");

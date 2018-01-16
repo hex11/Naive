@@ -69,19 +69,19 @@ namespace NaiveSocksAndroid
                     InvalidateOptionsMenu();
                 });
 
-            logThemeWrapper = new ContextThemeWrapper(this, Resource.Style.LogTextView);
+            logThemeWrapper = new ContextThemeWrapper(this, R.Style.LogTextView);
 
             // Set our view from the "main" layout resource
-            SetContentView(Resource.Layout.Main);
+            SetContentView(R.Layout.Main);
 
             topView = FindViewById<CoordinatorLayout>(R.Id.topview);
 
-            toolbar = FindViewById<Toolbar>(Resource.Id.toolbar);
+            toolbar = FindViewById<Toolbar>(R.Id.toolbar);
             SetSupportActionBar(toolbar);
             toolbar.Title = TOOLBAR_TITLE;
 
-            outputParent = this.FindViewById<LinearLayout>(Resource.Id.logparent);
-            outputParentScroll = this.FindViewById<NestedScrollView>(Resource.Id.logparentScroll);
+            outputParent = this.FindViewById<LinearLayout>(R.Id.logparent);
+            outputParentScroll = this.FindViewById<NestedScrollView>(R.Id.logparentScroll);
 
             Logging.Logged += Logging_Logged;
             var logs = Logging.getLogsHistoryArray();
@@ -160,11 +160,11 @@ namespace NaiveSocksAndroid
         public override bool OnOptionsItemSelected(IMenuItem item)
         {
             var id = item.ItemId;
-            if (id == Resource.Id.menu_start) {
+            if (id == R.Id.menu_start) {
                 startService();
-            } else if (id == Resource.Id.menu_stop) {
+            } else if (id == R.Id.menu_stop) {
                 stopService();
-            } else if (id == Resource.Id.menu_reload) {
+            } else if (id == R.Id.menu_reload) {
                 reloadService();
             } else {
                 var title = item.TitleFormatted.ToString();
