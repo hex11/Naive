@@ -116,14 +116,6 @@ Usage: {NAME}.exe [-h|--help] [(-c|--config) FILE] [--no-cli] [--no-log-stdout]
                 GC.Collect();
                 Logging.warning("GC OK.");
             });
-            cmdHub.AddCmdHandler("stat", command => {
-                var proc = Process.GetCurrentProcess();
-                Logging.info($"TotalMemory: {GC.GetTotalMemory(command.args.Contains("gc")).ToString("0,0")}");
-                Logging.info($"WorkingSet: {proc.WorkingSet64.ToString("0,0")}");
-                Logging.info($"PrivateMemory: {proc.PrivateMemorySize64.ToString("0,0")}");
-                Logging.info($"CPUTime: {proc.TotalProcessorTime.TotalMilliseconds.ToString("0,0")} ms");
-                Logging.info($"Threads: {proc.Threads.Count}");
-            });
             cmdHub.AddCmdHandler("newbie", (cmd) => Commands.NewbieWizard(cmd, controller, specifiedConfigPath ?? configFilePath));
             if (Environment.OSVersion.Platform == PlatformID.Win32NT)
                 cmdHub.AddCmdHandler("openfolder", (cmd) => Process.Start("explorer", "."));

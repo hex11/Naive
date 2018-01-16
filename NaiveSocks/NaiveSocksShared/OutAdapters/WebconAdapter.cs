@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 
 namespace NaiveSocks
 {
-    class WebconAdapter : OutAdapter
+    class WebconAdapter : OutAdapter, ICanReloadBetter
     {
         public string passwd { get; set; }
 
@@ -18,12 +18,26 @@ namespace NaiveSocks
 
         HttpSvr httpsvr;
 
-        protected override void Init()
+        public void Reloading(object oldInstance)
         {
-            base.Init();
-            httpsvr = new HttpSvr(this);
-            consoleHub = new ConsoleHub();
-            Commands.AddCommands(consoleHub.CommandHub, Controller, "");
+            if (oldInstance is WebconAdapter old) {
+                httpsvr = old.httpsvr;
+                consoleHub = old.consoleHub;
+            }
+        }
+
+        public override void Start()
+        {
+            base.Start();
+            if (consoleHub == null) {
+                httpsvr = new HttpSvr(this);
+                consoleHub = new ConsoleHub();
+                Commands.AddCommands(consoleHub.CommandHub, Controller, "");
+            }
+        }
+
+        public void StopForReloading()
+        {
         }
 
         public override async Task HandleConnection(InConnection connection)
@@ -104,7 +118,7 @@ namespace NaiveSocks
                     if (passwd == realPasswd) {
                         break;
                     } else {
-                        Logging.warning($"[RemoteConsole] wrong passwd from ({p.remoteEP})");
+                        Logging.warning($"{Adapter}: wrong passwd from {p.myStream}");
                         if (--chances <= 0) {
                             await wss.SendStringAsync("session end.\r\n");
                             return;

@@ -104,6 +104,16 @@ namespace NaiveSocks
             cmdHub.AddCmdHandler(prefix + "reload", command => {
                 c.Reload();
             });
+            cmdHub.AddCmdHandler("stat", command => {
+                var proc = Process.GetCurrentProcess();
+                command.WriteLine($"TotalMemory: {GC.GetTotalMemory(command.args.Contains("gc")).ToString("N0")}");
+                command.WriteLine($"WorkingSet: {proc.WorkingSet64.ToString("N0")}");
+                command.WriteLine($"PrivateMemory: {proc.PrivateMemorySize64.ToString("N0")}");
+                command.WriteLine($"CPUTime: {proc.TotalProcessorTime.TotalMilliseconds.ToString("N0")} ms");
+                command.WriteLine($"Threads: {proc.Threads.Count}");
+                command.WriteLine($"Connections: {c.RunningConnections:N0} running, {c.TotalHandledConnections} handled");
+                command.WriteLine($"MyStream Copied: {MyStream.TotalCopiedPackets:N0} packets, {MyStream.TotalCopiedBytes:N0} bytes");
+            });
             cmdHub.AddCmdHandler(prefix + "test", cmd => {
                 byte[] samplekey = NaiveProtocol.GetRealKeyFromString("testtttt");
                 var pcount = Environment.ProcessorCount;

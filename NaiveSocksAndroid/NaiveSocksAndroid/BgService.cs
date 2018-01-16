@@ -57,7 +57,7 @@ namespace NaiveSocksAndroid
 
         class Config
         {
-            public int manage_interval_screen_off { get; set; } = 15;
+            public int manage_interval_screen_off { get; set; } = 20;
             public int manage_interval_screen_on { get; set; } = 5;
         }
 
@@ -180,7 +180,7 @@ namespace NaiveSocksAndroid
 
         public override IBinder OnBind(Intent intent)
         {
-            return new BgServiceBinder(this);
+            return new Binder<BgService>(this);
         }
 
         public override void OnDestroy()
@@ -445,16 +445,6 @@ namespace NaiveSocksAndroid
         {
             _onReceive(context, intent);
         }
-    }
-
-    public class BgServiceBinder : Binder
-    {
-        public BgServiceBinder(BgService bgService)
-        {
-            BgService = bgService;
-        }
-
-        public BgService BgService { get; }
     }
 
     public class Binder<T> : Binder where T : class

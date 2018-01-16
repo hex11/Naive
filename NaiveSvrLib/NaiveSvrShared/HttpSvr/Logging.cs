@@ -90,7 +90,7 @@ namespace Naive.HttpSvr
                 System.Console.WriteLine(processText(log.text, stamp.Length));
             }
         }
-        
+
         static unsafe string processText(string text, int indent)
         {
             if (WriteLogToConsoleIndentation && text.Length < 16 * 1024 && text.Contains("\n")) {
@@ -290,37 +290,37 @@ namespace Naive.HttpSvr
     // TODO
     public class Logger
     {
-        public static event LogEventHandler Logged;
+        public event LogEventHandler Logged;
 
         public Logger BaseLogger;
 
-        private static void log(Logging.Log log)
+        private void log(Logging.Log log)
         {
             throw new NotImplementedException();
         }
 
-        public static void log(string text, Logging.Level level)
+        public void log(string text, Logging.Level level)
         {
             throw new NotImplementedException();
         }
 
         [Conditional("DEBUG")]
-        public static void debug(string text)
+        public void debug(string text)
         {
             log(text, Logging.Level.Debug);
         }
 
-        public static void info(string text)
+        public void info(string text)
         {
             log(text, Logging.Level.Info);
         }
 
-        public static void warning(string text)
+        public void warning(string text)
         {
             log(text, Logging.Level.Warning);
         }
 
-        public static void error(string text)
+        public void error(string text)
         {
             log(text, Logging.Level.Error);
         }

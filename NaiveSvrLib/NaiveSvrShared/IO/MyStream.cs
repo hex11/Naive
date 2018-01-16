@@ -452,7 +452,7 @@ namespace NaiveSocks
             BaseStream = baseStream;
         }
 
-        public override string ToString() => $"{{MyStream2Stream on {BaseStream}}}";
+        public override string ToString() => $"{{{BaseStream} as Stream}}";
 
         public IMyStream BaseStream { get; }
 

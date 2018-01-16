@@ -13,11 +13,8 @@ namespace NaiveSocks
 
     public class SocketStream1 : SocketStream, IMyStreamMultiBuffer
     {
-        public NetworkStream NetworkStream { get; }
-
         public SocketStream1(Socket socket) : base(socket)
         {
-            this.NetworkStream = new NetworkStream(socket);
         }
 
         public override Task<int> ReadAsync(BytesSegment bv)
