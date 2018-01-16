@@ -306,6 +306,7 @@ namespace NaiveSocks
                 }
         }
 
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private void IncrementCounter()
         {
             for (var i = Counter.Length - 1; i >= 0; i--) {

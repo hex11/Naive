@@ -3,123 +3,255 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Text;
-using uint64_t = System.UInt64;
-using uint32_t = System.UInt32;
+using uint64 = System.UInt64;
+using uint32 = System.UInt32;
 
 namespace NaiveSocks
 {
-    unsafe class SpeckCtr128128 : IVEncryptorBase
+
+    // NOTE:
+    // This is an incorrect implementation. 
+    // It does not use big-endian words, makes incompatible with other implementation.
+    // See: https://www.reddit.com/r/crypto/comments/4cjgat/c_implementation_for_speck128256/d1knkiz/
+
+    public static unsafe class Speck
     {
-        public SpeckCtr128128(byte[] key)
+        public class Ctr128128 : IVEncryptorBase
         {
-            if (key.Length < 16)
-                throw new ArgumentException("key.Length < 16");
-            Block128 kb128;
-            BytesToBlock128(key, out kb128);
-            //this.realkey = kb128;
-            this.keys = Cipher.getKeySchedules_128_128(kb128);
-        }
+            const int BlockSize = 16;
+            const int KeySize = 16;
 
-        private static void BytesToBlock128(byte[] key, out Block128 kb128)
-        {
-            fixed (byte* k = key) {
-                kb128 = *((Block128*)k);
+            public Ctr128128(byte[] key)
+            {
+                if (key.Length < KeySize)
+                    throw new ArgumentException($"key.Length < {KeySize}");
+                QWords128 keywords;
+                BytesToWords128(key, out keywords);
+                this.keys = Cipher.getKeySchedules_128_128(keywords);
             }
-        }
 
-        public override int IVLength => 16;
+            private static void BytesToWords128(byte[] key, out QWords128 words128)
+            {
+                fixed (byte* k = key) {
+                    words128 = *((QWords128*)k);
+                }
+            }
 
-        //Block128 realkey;
-        uint64_t[] keys;
-        Block128 counter;
+            public override int IVLength => BlockSize;
 
-        const int BlockSize = 16;
-        const int KsBlockCount = 8;
-        const int KeystreamBufferSize = BlockSize * KsBlockCount;
-        KeyStreamBuf keyStreamBuf;
-        int keystreamBufferPos = KeystreamBufferSize;
+            //Block128 realkey;
+            uint64[] keys;
+            QWords128 counter;
+            
+            const int KsBlockCount = 8;
+            const int KeystreamBufferSize = BlockSize * KsBlockCount;
+            KeyStreamBuf keyStreamBuf;
+            int keystreamBufferPos = KeystreamBufferSize;
 
-        struct KeyStreamBuf
-        {
-            public fixed byte bytes[KeystreamBufferSize];
-        }
+            struct KeyStreamBuf
+            {
+                public fixed byte bytes[KeystreamBufferSize];
+            }
 
-        protected override void IVSetup(byte[] IV)
-        {
-            if (IV.Length < 16)
-                throw new ArgumentException("IV.Length < 16");
-            BytesToBlock128(IV, out counter);
-        }
+            protected override void IVSetup(byte[] IV)
+            {
+                if (IV.Length < BlockSize)
+                    throw new ArgumentException($"IV.Length < {BlockSize}");
+                BytesToWords128(IV, out counter);
+            }
 
-        public override void Update(BytesSegment bs)
-        {
-            bs.CheckAsParameter();
-            var pos = bs.Offset;
-            var end = pos + bs.Len;
-            fixed (byte* keyStreamBuf = this.keyStreamBuf.bytes)
-            fixed (byte* bytes = bs.Bytes) {
-                while (pos < end) {
-                    var remainningKeystream = KeystreamBufferSize - keystreamBufferPos;
-                    if (remainningKeystream == 0) {
-                        keystreamBufferPos = 0;
-                        remainningKeystream = KeystreamBufferSize;
-                        var ksb = (Block128*)keyStreamBuf;
-                        for (int i = 0; i < KsBlockCount; i++) {
-                            ksb[i] = counter;
-                            if (++counter.v1 == 0)
-                                ++counter.v0;
-                            Cipher.encrypt_128_128(keys, ref ksb[i]);
+            public override void Update(BytesSegment bs)
+            {
+                bs.CheckAsParameter();
+                var pos = bs.Offset;
+                var end = pos + bs.Len;
+                fixed (byte* keyStreamBuf = this.keyStreamBuf.bytes)
+                fixed (byte* bytes = bs.Bytes) {
+                    while (pos < end) {
+                        var remainningKeystream = KeystreamBufferSize - keystreamBufferPos;
+                        if (remainningKeystream == 0) {
+                            keystreamBufferPos = 0;
+                            remainningKeystream = KeystreamBufferSize;
+                            var ksb = (QWords128*)keyStreamBuf;
+                            for (int i = 0; i < KsBlockCount; i++) {
+                                ksb[i] = counter;
+                                if (++counter.v1 == 0)
+                                    ++counter.v0;
+                                Cipher.encrypt_128_128(keys, ref ksb[i]);
+                            }
                         }
+                        var count = end - pos;
+                        count = count < remainningKeystream ? count : remainningKeystream;
+                        NaiveUtils.XorBytesUnsafe(keyStreamBuf + keystreamBufferPos, bytes + pos, count);
+                        pos += count;
+                        keystreamBufferPos += count;
                     }
-                    var count = end - pos;
-                    count = count < remainningKeystream ? count : remainningKeystream;
-                    NaiveUtils.XorBytesUnsafe(keyStreamBuf + keystreamBufferPos, bytes + pos, count);
-                    pos += count;
-                    keystreamBufferPos += count;
                 }
             }
         }
 
-        public struct Block128
+        public class Ctr64128 : IVEncryptorBase
         {
-            public uint64_t v1, v0;
+            const int BlockSize = 8;
+            const int KeySize = 16;
+
+            public Ctr64128(byte[] key)
+            {
+                if (key.Length < KeySize)
+                    throw new ArgumentException($"key.Length < {KeySize}");
+                DWords128 keywords;
+                BytesToBlock128(key, out keywords);
+                this.keys = Cipher.getKeySchedules_64_128(keywords);
+            }
+
+            private static void BytesToBlock128(byte[] key, out DWords128 kb128)
+            {
+                fixed (byte* k = key) {
+                    kb128 = *((DWords128*)k);
+                }
+            }
+
+            private static void BytesToBlock64(byte[] key, out DWords64 kb128)
+            {
+                fixed (byte* k = key) {
+                    kb128 = *((DWords64*)k);
+                }
+            }
+
+            public override int IVLength => BlockSize;
+            
+            uint32[] keys;
+            DWords64 counter;
+
+            const int KsBlockCount = 8;
+            const int KeystreamBufferSize = BlockSize * KsBlockCount;
+            KeyStreamBuf keyStreamBuf;
+            int keystreamBufferPos = KeystreamBufferSize;
+
+            struct KeyStreamBuf
+            {
+                public fixed byte bytes[KeystreamBufferSize];
+            }
+
+            protected override void IVSetup(byte[] IV)
+            {
+                if (IV.Length < BlockSize)
+                    throw new ArgumentException($"IV.Length < {BlockSize}");
+                BytesToBlock64(IV, out counter);
+            }
+
+            public override void Update(BytesSegment bs)
+            {
+                bs.CheckAsParameter();
+                var pos = bs.Offset;
+                var end = pos + bs.Len;
+                fixed (byte* keyStreamBuf = this.keyStreamBuf.bytes)
+                fixed (byte* bytes = bs.Bytes) {
+                    while (pos < end) {
+                        var remainningKeystream = KeystreamBufferSize - keystreamBufferPos;
+                        if (remainningKeystream == 0) {
+                            keystreamBufferPos = 0;
+                            remainningKeystream = KeystreamBufferSize;
+                            var ksb = (DWords64*)keyStreamBuf;
+                            for (int i = 0; i < KsBlockCount; i++) {
+                                ksb[i] = counter;
+                                if (++counter.v1 == 0)
+                                    ++counter.v0;
+                                Cipher.encrypt_64_128(keys, ref ksb[i]);
+                            }
+                        }
+                        var count = end - pos;
+                        count = count < remainningKeystream ? count : remainningKeystream;
+                        NaiveUtils.XorBytesUnsafe(keyStreamBuf + keystreamBufferPos, bytes + pos, count);
+                        pos += count;
+                        keystreamBufferPos += count;
+                    }
+                }
+            }
+        }
+
+        public struct QWords128
+        {
+            public uint64 v1, v0;
+        }
+
+        public struct DWords128
+        {
+            public uint32 v3, v2, v1, v0;
+        }
+
+        public struct DWords64
+        {
+            public uint32 v1, v0;
         }
 
         static unsafe class Cipher
         {
+            // Reference: https://github.com/dimview/speck_cipher/blob/master/speck_128_128.cpp
+
+            const uint64 ROUNDS128128 = 32;
+            const uint32 ROUNDS64128 = 27;
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            static void speck_round_64(ref uint64_t x, ref uint64_t y, uint64_t k)
+            static void speck_round_64(ref uint64 x, ref uint64 y, uint64 k)
             {
-                x = (x >> 8) | (x << (64 - 8)); // x = ROTR(x, 8)
+                const int WORDSIZE = 64;
+                x = (x >> 8) | (x << (WORDSIZE - 8)); // x = ROTR(x, 8)
                 x += y;
                 x ^= k;
-                y = (y << 3) | (y >> (64 - 3)); // y = ROTL(y, 3)
+                y = (y << 3) | (y >> (WORDSIZE - 3)); // y = ROTL(y, 3)
                 y ^= x;
             }
 
-            const uint64_t ROUNDS128128 = 32;
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            static void speck_round_32(ref uint32 x, ref uint32 y, uint32 k)
+            {
+                const int WORDSIZE = 32;
+                x = (x >> 8) | (x << (WORDSIZE - 8)); // x = ROTR(x, 8)
+                x += y;
+                x ^= k;
+                y = (y << 3) | (y >> (WORDSIZE - 3)); // y = ROTL(y, 3)
+                y ^= x;
+            }
+
 
             // Generate key schedule and encrypt at the same time
-            public static void encrypt_128_128(Block128 key, ref Block128 ciphertext)
+            public static void encrypt_128_128(QWords128 key, ref QWords128 ciphertext)
             {
-                for (uint64_t i = 0; i < ROUNDS128128; i++) {
-                    speck_round_64(ref ciphertext.v1, ref ciphertext.v0, key.v0);
+                speck_round_64(ref ciphertext.v1, ref ciphertext.v0, key.v0);
+                for (uint64 i = 0; i < ROUNDS128128 - 1; i++) {
                     speck_round_64(ref key.v1, ref key.v0, i);
+                    speck_round_64(ref ciphertext.v1, ref ciphertext.v0, key.v0);
                 }
             }
 
-            public static uint64_t[] getKeySchedules_128_128(Block128 key)
+            public static uint64[] getKeySchedules_128_128(QWords128 key)
             {
-                var keys = new uint64_t[ROUNDS128128];
-                for (uint64_t i = 0; i < ROUNDS128128; i++) {
-                    keys[i] = key.v0;
+                var keys = new uint64[ROUNDS128128];
+                keys[0] = key.v0;
+                for (uint64 i = 0; i < ROUNDS128128 - 1; i++) {
                     speck_round_64(ref key.v1, ref key.v0, i);
+                    keys[1 + i] = key.v0;
                 }
                 return keys;
             }
 
-            public static void encrypt_128_128(uint64_t[] keySchedules, ref Block128 ciphertext)
+            public static uint32[] getKeySchedules_64_128(DWords128 key)
+            {
+                var keys = new uint32[ROUNDS128128];
+                keys[0] = key.v0;
+                var a = stackalloc uint32[3];
+                a[0] = key.v1;
+                a[1] = key.v2;
+                a[2] = key.v3;
+                for (uint32 i = 0; i < ROUNDS128128 - 1; i++) {
+                    speck_round_32(ref a[i % 3], ref key.v0, i);
+                    keys[1 + i] = key.v0;
+                }
+                return keys;
+            }
+
+            public static void encrypt_128_128(uint64[] keySchedules, ref QWords128 ciphertext)
             {
                 foreach (var item in keySchedules) {
                     // inlined:
@@ -128,6 +260,20 @@ namespace NaiveSocks
                     ciphertext.v1 += ciphertext.v0;
                     ciphertext.v1 ^= item;
                     ciphertext.v0 = (ciphertext.v0 << 3) | (ciphertext.v0 >> (64 - 3)); // y = ROTL(y, 3)
+                    ciphertext.v0 ^= ciphertext.v1;
+                }
+            }
+
+            public static void encrypt_64_128(uint32[] keySchedules, ref DWords64 ciphertext)
+            {
+                foreach (var item in keySchedules) {
+                    // inlined:
+                    // speck_round_32(ref ciphertext.v1, ref ciphertext.v0, item);
+                    const int WORDSIZE = 32;
+                    ciphertext.v1 = (ciphertext.v1 >> 8) | (ciphertext.v1 << (WORDSIZE - 8)); // x = ROTR(x, 8)
+                    ciphertext.v1 += ciphertext.v0;
+                    ciphertext.v1 ^= item;
+                    ciphertext.v0 = (ciphertext.v0 << 3) | (ciphertext.v0 >> (WORDSIZE - 3)); // y = ROTL(y, 3)
                     ciphertext.v0 ^= ciphertext.v1;
                 }
             }

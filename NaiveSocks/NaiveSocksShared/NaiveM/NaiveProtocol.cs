@@ -187,6 +187,7 @@ namespace NaiveSocks
         public const string EncryptionAesOfb128 = "aes-128-ofb";
         public const string EncryptionChacha20Ietf = "chacha20-ietf";
         public const string EncryptionSpeck0 = "speck0";
+        public const string EncryptionSpeck064 = "speck064";
 
         public static void ApplyEncryption(Filterable filterable, byte[] key, string type = "")
         {
@@ -199,9 +200,9 @@ namespace NaiveSocks
                     key = key.Take(32).ToArray();
                 filterable.ApplyFilterFromEncryptor(new ChaCha20IetfEncryptor(key), new ChaCha20IetfEncryptor(key));
             } else if (type == EncryptionSpeck0) {
-                if (key.Length > 32)
-                    key = key.Take(32).ToArray();
-                filterable.ApplyFilterFromEncryptor(new SpeckCtr128128(key), new SpeckCtr128128(key));
+                filterable.ApplyFilterFromEncryptor(new Speck.Ctr128128(key), new Speck.Ctr128128(key));
+            } else if (type == EncryptionSpeck064) {
+                filterable.ApplyFilterFromEncryptor(new Speck.Ctr64128(key), new Speck.Ctr64128(key));
             } else {
                 throw new Exception($"unknown encryption '{type}'");
             }

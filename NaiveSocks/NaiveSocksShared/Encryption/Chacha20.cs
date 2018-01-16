@@ -207,15 +207,46 @@ namespace NaiveSocks
                 x[i] = state[i];
             }
             for (int i = 0; i < 10; i++) {
-                QuarterRound(x, 0, 4, 8, 12);
-                QuarterRound(x, 1, 5, 9, 13);
-                QuarterRound(x, 2, 6, 10, 14);
-                QuarterRound(x, 3, 7, 11, 15);
+                x[0] += x[4]; x[12] = ((x[12] ^ x[0]) << 16) | ((x[12] ^ x[0]) >> (32 - 16));
+                x[8] += x[12]; x[4] = ((x[4] ^ x[8]) << 12) | ((x[4] ^ x[8]) >> (32 - 12));
+                x[0] += x[4]; x[12] = ((x[12] ^ x[0]) << 8) | ((x[12] ^ x[0]) >> (32 - 8));
+                x[8] += x[12]; x[4] = ((x[4] ^ x[8]) << 7) | ((x[4] ^ x[8]) >> (32 - 7));
 
-                QuarterRound(x, 0, 5, 10, 15);
-                QuarterRound(x, 1, 6, 11, 12);
-                QuarterRound(x, 2, 7, 8, 13);
-                QuarterRound(x, 3, 4, 9, 14);
+                x[1] += x[5]; x[13] = ((x[13] ^ x[1]) << 16) | ((x[13] ^ x[1]) >> (32 - 16));
+                x[9] += x[13]; x[5] = ((x[5] ^ x[9]) << 12) | ((x[5] ^ x[9]) >> (32 - 12));
+                x[1] += x[5]; x[13] = ((x[13] ^ x[1]) << 8) | ((x[13] ^ x[1]) >> (32 - 8));
+                x[9] += x[13]; x[5] = ((x[5] ^ x[9]) << 7) | ((x[5] ^ x[9]) >> (32 - 7));
+
+                x[2] += x[6]; x[14] = ((x[14] ^ x[2]) << 16) | ((x[14] ^ x[2]) >> (32 - 16));
+                x[10] += x[14]; x[6] = ((x[6] ^ x[10]) << 12) | ((x[6] ^ x[10]) >> (32 - 12));
+                x[2] += x[6]; x[14] = ((x[14] ^ x[2]) << 8) | ((x[14] ^ x[2]) >> (32 - 8));
+                x[10] += x[14]; x[6] = ((x[6] ^ x[10]) << 7) | ((x[6] ^ x[10]) >> (32 - 7));
+
+                x[3] += x[7]; x[15] = ((x[15] ^ x[3]) << 16) | ((x[15] ^ x[3]) >> (32 - 16));
+                x[11] += x[15]; x[7] = ((x[7] ^ x[11]) << 12) | ((x[7] ^ x[11]) >> (32 - 12));
+                x[3] += x[7]; x[15] = ((x[15] ^ x[3]) << 8) | ((x[15] ^ x[3]) >> (32 - 8));
+                x[11] += x[15]; x[7] = ((x[7] ^ x[11]) << 7) | ((x[7] ^ x[11]) >> (32 - 7));
+
+
+                x[0] += x[5]; x[15] = ((x[15] ^ x[0]) << 16) | ((x[15] ^ x[0]) >> (32 - 16));
+                x[10] += x[15]; x[5] = ((x[5] ^ x[10]) << 12) | ((x[5] ^ x[10]) >> (32 - 12));
+                x[0] += x[5]; x[15] = ((x[15] ^ x[0]) << 8) | ((x[15] ^ x[0]) >> (32 - 8));
+                x[10] += x[15]; x[5] = ((x[5] ^ x[10]) << 7) | ((x[5] ^ x[10]) >> (32 - 7));
+
+                x[1] += x[6]; x[12] = ((x[12] ^ x[1]) << 16) | ((x[12] ^ x[1]) >> (32 - 16));
+                x[11] += x[12]; x[6] = ((x[6] ^ x[11]) << 12) | ((x[6] ^ x[11]) >> (32 - 12));
+                x[1] += x[6]; x[12] = ((x[12] ^ x[1]) << 8) | ((x[12] ^ x[1]) >> (32 - 8));
+                x[11] += x[12]; x[6] = ((x[6] ^ x[11]) << 7) | ((x[6] ^ x[11]) >> (32 - 7));
+
+                x[2] += x[7]; x[13] = ((x[13] ^ x[2]) << 16) | ((x[13] ^ x[2]) >> (32 - 16));
+                x[8] += x[13]; x[7] = ((x[7] ^ x[8]) << 12) | ((x[7] ^ x[8]) >> (32 - 12));
+                x[2] += x[7]; x[13] = ((x[13] ^ x[2]) << 8) | ((x[13] ^ x[2]) >> (32 - 8));
+                x[8] += x[13]; x[7] = ((x[7] ^ x[8]) << 7) | ((x[7] ^ x[8]) >> (32 - 7));
+
+                x[3] += x[4]; x[14] = ((x[14] ^ x[3]) << 16) | ((x[14] ^ x[3]) >> (32 - 16));
+                x[9] += x[14]; x[4] = ((x[4] ^ x[9]) << 12) | ((x[4] ^ x[9]) >> (32 - 12));
+                x[3] += x[4]; x[14] = ((x[14] ^ x[3]) << 8) | ((x[14] ^ x[3]) >> (32 - 8));
+                x[9] += x[14]; x[4] = ((x[4] ^ x[9]) << 7) | ((x[4] ^ x[9]) >> (32 - 7));
             }
             uint* ksAsUint = (uint*)keyStreamBuffer;
             for (int i = 0; i < 16; i++) {
@@ -225,44 +256,6 @@ namespace NaiveSocks
                 /* Stopping at 2^70 bytes per nonce is the user's responsibility */
                 state[13]++;
             }
-        }
-
-        /// <summary>
-        /// n-bit left rotation operation (towards the high bits) for 32-bit 
-        /// integers. 
-        /// </summary>
-        /// <param name="v"></param>
-        /// <param name="c"></param>
-        /// <returns>The result of (v LEFTSHIFT c)</returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static uint Rotate(uint v, int c)
-        {
-            return (v << c) | (v >> (32 - c));
-        }
-
-        /// <summary>
-        /// The ChaCha Quarter Round operation. It operates on four 32-bit unsigned 
-        /// integers within the given buffer at indices a, b, c, and d. 
-        /// </summary>
-        /// <remarks>
-        /// The ChaCha state does not have four integer numbers: it has 16.  So 
-        /// the quarter-round operation works on only four of them -- hence the 
-        /// name.  Each quarter round operates on four predetermined numbers in 
-        /// the ChaCha state. 
-        /// See <a href="https://tools.ietf.org/html/rfc7539#page-4">ChaCha20 Spec Sections 2.1 - 2.2</a>.
-        /// </remarks>
-        /// <param name="x">A ChaCha state (vector). Must contain 16 elements.</param>
-        /// <param name="a">Index of the first number</param>
-        /// <param name="b">Index of the second number</param>
-        /// <param name="c">Index of the third number</param>
-        /// <param name="d">Index of the fourth number</param>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static unsafe void QuarterRound(uint* x, uint a, uint b, uint c, uint d)
-        {
-            x[a] = x[a] + x[b]; x[d] = Rotate(x[d] ^ x[a], 16);
-            x[c] = x[c] + x[d]; x[b] = Rotate(x[b] ^ x[c], 12);
-            x[a] = x[a] + x[b]; x[d] = Rotate(x[d] ^ x[a], 8);
-            x[c] = x[c] + x[d]; x[b] = Rotate(x[b] ^ x[c], 7);
         }
 
         /// <summary>

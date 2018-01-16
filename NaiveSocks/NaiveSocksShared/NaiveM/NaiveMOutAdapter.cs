@@ -34,7 +34,9 @@ namespace NaiveSocks
 
         public int timeout { get; set; } = 30;
 
-        public string encryption { get; set; } = NaiveProtocol.EncryptionSpeck0;
+        public static string DefaultEncryption { get; set; }
+
+        public string encryption { get; set; } = DefaultEncryption;
 
         int _multiplied_delay = 0;
         int _using_delay => Math.Max(Math.Max(_multiplied_delay, connect_delay), 0);
@@ -60,6 +62,16 @@ namespace NaiveSocks
         }
 
         internal List<PoolItem> ncsPool = new List<PoolItem>();
+
+        static NaiveMOutAdapter()
+        {
+            if (Environment.OSVersion.Platform == PlatformID.Win32NT) {
+                DefaultEncryption = NaiveProtocol.EncryptionAesOfb128;
+            } else {
+                DefaultEncryption = NaiveProtocol.EncryptionSpeck0;
+            }
+            Logging.info($"NaiveOutAdapter default encryption chosen: '{DefaultEncryption}'");
+        }
 
         public void Reloading(object oldInstance)
         {
