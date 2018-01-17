@@ -48,12 +48,17 @@ namespace NaiveSocks
 
         public Controller()
         {
+            RegisterBuiltInTypes();
+        }
+
+        private void RegisterBuiltInTypes()
+        {
             RegisteredInTypes.Add("direct", typeof(DirectInAdapter));
             RegisteredInTypes.Add("socks", typeof(SocksInAdapter));
             RegisteredInTypes.Add("socks5", typeof(SocksInAdapter));
             RegisteredInTypes.Add("http", typeof(HttpInAdapter));
-            RegisteredInTypes.Add("naive", typeof(NaiveInAdapter));
-            RegisteredInTypes.Add("naivec", typeof(NaiveInAdapter));
+            RegisteredInTypes.Add("naive", typeof(NaiveMInAdapter));
+            RegisteredInTypes.Add("naivec", typeof(NaiveMInAdapter));
             RegisteredInTypes.Add("ss", typeof(SSInAdapter));
 
             RegisteredOutTypes.Add("direct", typeof(DirectOutAdapter));

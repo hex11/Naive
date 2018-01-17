@@ -229,7 +229,7 @@ namespace NaiveSocks
 
             private object _lock => this;
 
-            public NaiveMSocks nms;
+            public NaiveMChannels nms;
             public Task connectTask;
 
             public int ConnectionsCount => nms?.BaseChannels?.TotalLocalChannels ?? 0;
@@ -250,7 +250,7 @@ namespace NaiveSocks
                 try {
                     var beginTime = DateTime.Now;
                     Logging.info($"'{adapter.Name}' connecting...");
-                    var settings = new NaiveMSocks.ConnectingSettings {
+                    var settings = new NaiveMChannels.ConnectingSettings {
                         Headers = new Dictionary<string, string>(adapter.headers),
                         Host = adapter.server,
                         KeyString = adapter.key,
@@ -262,12 +262,12 @@ namespace NaiveSocks
                         ImuxConnectionsDelay = adapter.imux_delay,
                         Timeout = adapter.timeout
                     };
-                    var nms = await NaiveMSocks.ConnectTo(settings);
+                    var nms = await NaiveMChannels.ConnectTo(settings);
                     nms.OutAdapter = adapter;
                     nms.InAdapter = adapter;
                     nms.Logged += (log) => Logging.info($"'{adapter.Name}': {log}");
                     nms.HandleRemoteInConnection = (inc) => {
-                        Logging.info($"'{adapter.Name}': conn from remote {(inc as NaiveMSocks.InConnection)?.Channel}" +
+                        Logging.info($"'{adapter.Name}': conn from remote {(inc as NaiveMChannels.InConnection)?.Channel}" +
                                         $" (dest={inc.Dest}) redirecting to 127.1");
                         adapter.CheckPool();
                         inc.Dest.Host = "127.0.0.1";

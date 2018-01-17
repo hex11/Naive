@@ -9,7 +9,7 @@ namespace NaiveSocks
 
 
 
-    public class NaiveInAdapter : NaiveProtocol.NaiveMServerBase, IHttpRequestAsyncHandler
+    public class NaiveMInAdapter : NaiveProtocol.NaiveMServerBase, IHttpRequestAsyncHandler
     {
         private NaiveWebsiteServer httpServer;
         public IPEndPoint listen { get; set; }

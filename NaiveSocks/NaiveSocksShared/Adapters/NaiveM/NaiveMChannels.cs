@@ -11,7 +11,7 @@ using System.IO;
 
 namespace NaiveSocks
 {
-    public class NaiveMSocks : RrChannels<NaiveProtocol.Request, NaiveProtocol.Reply>
+    public class NaiveMChannels : RrChannels<NaiveProtocol.Request, NaiveProtocol.Reply>
     {
         public IInAdapter InAdapter;
 
@@ -29,7 +29,7 @@ namespace NaiveSocks
 
         List<WeakReference<INetwork>> joinedNetworks = new List<WeakReference<INetwork>>();
 
-        public NaiveMSocks(NaiveMultiplexing channels) : base(channels)
+        public NaiveMChannels(NaiveMultiplexing channels) : base(channels)
         {
             MsgRequestConverter = x => NaiveProtocol.Request.Parse(x.Data.GetBytes());
             RequestMsgConverter = x => x.ToBytes();
@@ -55,21 +55,21 @@ namespace NaiveSocks
             public int Timeout { get; internal set; }
         }
 
-        public static Task<NaiveMSocks> ConnectTo(AddrPort host, string path, string key)
+        public static Task<NaiveMChannels> ConnectTo(AddrPort host, string path, string key)
             => ConnectTo(new ConnectingSettings {
                 Host = host,
                 Path = path,
                 Key = NaiveProtocol.GetRealKeyFromString(key, 32),
             });
 
-        public static Task<NaiveMSocks> ConnectTo(AddrPort host, string path, byte[] key)
+        public static Task<NaiveMChannels> ConnectTo(AddrPort host, string path, byte[] key)
             => ConnectTo(new ConnectingSettings {
                 Host = host,
                 Path = path,
                 Key = key
             });
 
-        public static async Task<NaiveMSocks> ConnectTo(ConnectingSettings settings)
+        public static async Task<NaiveMChannels> ConnectTo(ConnectingSettings settings)
         {
             const string ImuxPrefix = "chs2:";
             var key = settings.Key;
@@ -122,7 +122,7 @@ namespace NaiveSocks
             } else {
                 msgStream = await connect("channels");
             }
-            var ncs = new NaiveMSocks(new NaiveMultiplexing(msgStream));
+            var ncs = new NaiveMChannels(new NaiveMultiplexing(msgStream));
             return ncs;
         }
 
@@ -438,11 +438,11 @@ namespace NaiveSocks
 
         public class InConnection : NaiveSocks.InConnection
         {
-            public NaiveMSocks Ncs { get; }
+            public NaiveMChannels Ncs { get; }
             public Channel Channel { get; }
             Stopwatch sw;
 
-            public InConnection(NaiveMSocks ncs, NaiveProtocol.Request req, Channel channel) : base(ncs.InAdapter)
+            public InConnection(NaiveMChannels ncs, NaiveProtocol.Request req, Channel channel) : base(ncs.InAdapter)
             {
                 Ncs = ncs;
                 Channel = channel;

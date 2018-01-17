@@ -400,7 +400,7 @@ namespace NaiveSocks
                     return;
                 }
                 var ins = from x in c.InAdapters where x is NaiveProtocol.NaiveMServerBase select (x as NaiveProtocol.NaiveMServerBase).nmsList;
-                foreach (IEnumerable<NaiveMSocks> item in (from x in outs select from y in x.ncsPool select y.nms).Union(ins)) {
+                foreach (IEnumerable<NaiveMChannels> item in (from x in outs select from y in x.ncsPool select y.nms).Union(ins)) {
                     foreach (var poolItem in item) {
                         var task = NaiveUtils.RunAsyncTask(async () => {
                             try {

@@ -10,7 +10,7 @@ namespace NaiveSocks
     {
         public class NaiveMServerBase : InAdapter
         {
-            internal List<NaiveMSocks> nmsList = new List<NaiveMSocks>();
+            internal List<NaiveMChannels> nmsList = new List<NaiveMChannels>();
             Dictionary<string, ImuxSession> imuxSessions = new Dictionary<string, ImuxSession>();
 
             protected virtual INetwork GetNetwork(string name)
@@ -92,7 +92,7 @@ namespace NaiveSocks
                         } else {
                             msgStream = await HandleWebsocket(p, realKey, encryptType);
                         }
-                        var nms = new NaiveMSocks(new NaiveMultiplexing(msgStream)) {
+                        var nms = new NaiveMChannels(new NaiveMultiplexing(msgStream)) {
                             InAdapter = this
                         };
                         nms.GetNetwork = GetNetwork;
