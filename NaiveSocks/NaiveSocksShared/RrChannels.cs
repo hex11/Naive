@@ -117,7 +117,6 @@ namespace NaiveSocks
             public Channel Channel { get; }
             Converter<Msg, TReply> Converter { get; }
 
-            //public Task<TReply> GetReply() => GetReply(false);
             public async Task<TReply> GetReply(bool keepOpen)
             {
                 var msg = await Channel.RecvMsg(null).ThrowIfEOF().CAF();
@@ -132,40 +131,4 @@ namespace NaiveSocks
             }
         }
     }
-
-    //public struct RrMsg<TRecv,TSend> : IDisposable
-    //{
-    //    private bool _firstMsgRead;
-    //    private TRecv _firstMsg;
-    //    public TRecv FirstMsg
-    //    {
-    //        get {
-    //            if (!_firstMsgRead)
-    //                _firstMsg = GetFirstMsg().GetAwaiter().GetResult();
-    //            return _firstMsg;
-    //        }
-    //    }
-
-    //    public Channel Channel { get; }
-
-    //    public RrMsg(TRecv firstMsg, Channel channel, bool responseRead)
-    //    {
-    //        _firstMsg = firstMsg;
-    //        Channel = channel;
-    //        _firstMsgRead = responseRead;
-    //    }
-
-    //    public async Task<TRecv> GetFirstMsg()
-    //    {
-    //        if (_firstMsgRead)
-    //            return _firstMsg;
-    //        _firstMsg = await Channel.RecvMsg(null);
-    //        return _firstMsg;
-    //    }
-
-    //    public void Dispose()
-    //    {
-    //        Channel.Dispose();
-    //    }
-    //}
 }

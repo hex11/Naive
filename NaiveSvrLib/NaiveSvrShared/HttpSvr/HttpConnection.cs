@@ -393,9 +393,10 @@ namespace Naive.HttpSvr
             this.ResponseStatusCode = statusCode;
         }
 
-        public void write(string str)
+        public HttpConnection write(string str)
         {
             outputWriter.Write(str);
+            return this;
         }
 
         public void writeEncoded(string str)
@@ -406,9 +407,10 @@ namespace Naive.HttpSvr
         public Task writeAsync(string str)
             => outputWriter.WriteAsync(str);
 
-        public void writeLine(string str)
+        public HttpConnection writeLine(string str)
         {
             outputWriter.WriteLine(str);
+            return this;
         }
 
         public Task writeLineAsync(string str)

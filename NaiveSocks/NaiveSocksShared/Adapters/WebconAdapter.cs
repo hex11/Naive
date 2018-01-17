@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 
 namespace NaiveSocks
 {
-    class WebconAdapter : OutAdapter, ICanReloadBetter
+    class WebconAdapter : OutAdapter, ICanReloadBetter, IHttpRequestAsyncHandler
     {
         public string passwd { get; set; }
 
@@ -40,14 +40,16 @@ namespace NaiveSocks
         {
         }
 
+        public Task HandleRequestAsync(HttpConnection p)
+        {
+            return httpsvr.HandleRequestAsync(p);
+        }
+
         public override async Task HandleConnection(InConnection connection)
         {
             if (connection.Dest.Port == 80) {
                 await connection.SetConnectResult(ConnectResults.Conneceted);
-                var httpConnection = new HttpConnection(MyStream.ToStream(connection.DataStream),
-                    new EPPair(new IPEndPoint(IPAddress.Loopback, 1),
-                    new IPEndPoint(IPAddress.Loopback, 2)), httpsvr);
-                httpConnection.SetTag("connection", connection);
+                HttpConnection httpConnection = NNetworkAdapter.CreateHttpConnectionFromMyStream(connection.DataStream, httpsvr);
                 await httpConnection.Process();
             }
         }

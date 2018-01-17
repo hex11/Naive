@@ -13,6 +13,8 @@ namespace NaiveSocks
 
     public class HttpInAdapter : InAdapterWithListenField, IHttpRequestAsyncHandler
     {
+        public AdapterRef webout { get; set; }
+
         public bool verbose { get; set; }
 #if DEBUG
         = true; 
@@ -90,7 +92,15 @@ namespace NaiveSocks
                 } else if (p.Url.StartsWith("http://")) {
                     await handleHttp(p);
                 } else {
-                    Logging.info($"{adapter.QuotedName}: unhandled Request: {p.Method} {p.Url}");
+                    if (adapter.webout != null) {
+                        if (!(adapter.webout.Adapter is IHttpRequestAsyncHandler ihrah)) {
+                            Logging.warning($"{adapter.QuotedName}: value of 'webout' ({adapter.webout.Adapter}) is not a http handler.");
+                            return;
+                        }
+                        await ihrah.HandleRequestAsync(p);
+                    } else {
+                        Logging.info($"{adapter.QuotedName}: unhandled web Request: {p.Method} {p.Url}");
+                    }
                 }
             }
 
