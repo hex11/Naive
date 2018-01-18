@@ -32,15 +32,16 @@ namespace Naive.HttpSvr
             this.epPair = epPair;
         }
 
-        //public TcpClient tcpClient;
-        public Stream baseStream;
-        public IMyStream myStream;
-        public NaiveHttpServer server;
-
         public Socket socket;
 
-        internal Stream realInputStream;
-        private Stream realOutputStream;
+        public NaiveHttpServer server;
+
+        public Stream baseStream;
+        public IMyStream myStream;
+
+        private Stream realInputStream => baseStream;
+        private Stream realOutputStream => baseStream;
+
         private TextWriter realOutputWriter;
 
         public CompressedOutputStream outputStream;
@@ -158,7 +159,6 @@ namespace Naive.HttpSvr
 
         public async Task Process()
         {
-            realOutputStream = realInputStream = baseStream;
             realOutputWriter = new StreamWriter(realOutputStream, NaiveUtils.UTF8Encoding);
             realOutputWriter.NewLine = "\r\n";
             ConnectionBegin?.Invoke(this);
@@ -416,7 +416,7 @@ namespace Naive.HttpSvr
         public Task writeLineAsync(string str)
              => outputWriter.WriteLineAsync(str);
 
-        internal async Task writeHeadersToAsync(TextWriter writer)
+        internal async Task writeResponseToAsync(TextWriter writer)
         {
             await writer.WriteAsync("HTTP/1.1 " + ResponseStatusCode + "\r\n");
             foreach (var key in ResponseHeaders.Keys) {
@@ -425,10 +425,20 @@ namespace Naive.HttpSvr
             await writer.WriteAsync("\r\n");
         }
 
-        internal void writeHeadersTo(TextWriter writer)
+        internal void writeResponseTo(TextWriter writer)
         {
-            writeHeadersToAsync(writer).RunSync();
+            writer.Write("HTTP/1.1 ");
+            writer.Write(ResponseStatusCode);
+            writer.Write("\r\n");
+            foreach (var key in ResponseHeaders.Keys) {
+                writer.Write(key);
+                writer.Write(": ");
+                writer.Write(ResponseHeaders[key]);
+                writer.Write("\r\n");
+            }
+            writer.Write("\r\n");
         }
+
         public int Id => id;
         private int id = id_counter++;
         private static int id_counter = 0;

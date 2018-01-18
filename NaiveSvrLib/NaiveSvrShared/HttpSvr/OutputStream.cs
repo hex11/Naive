@@ -299,9 +299,12 @@ namespace Naive.HttpSvr
 #if DEBUG
             p.ResponseHeaders["X-NaiveSvr-Mode"] = CurrentMode.ToString();
 #endif
-            using (var sw = new StreamWriter(baseStream, NaiveUtils.UTF8Encoding, 1440, true)) {
-                await p.writeHeadersToAsync(sw).CAF();
-                await sw.FlushAsync();
+            using (MemoryStream ms = new MemoryStream(512))
+            using (var sw = new StreamWriter(ms, NaiveUtils.UTF8Encoding, 256)) {
+                p.writeResponseTo(sw);
+                sw.Flush();
+                await baseStream.WriteAsync(ms.GetBuffer(), 0, (int)ms.Length);
+                await baseStream.FlushAsync();
             }
             p.ConnectionState = HttpConnection.States.HeadersEnded;
         }
