@@ -752,6 +752,38 @@ namespace Naive.HttpSvr
             }
             return newBytes;
         }
+
+        static Action<int, // generation
+            GCCollectionMode, // mode
+            bool, // blocking
+            bool // compacting
+            > dotNet46_GC_Collect;
+
+        static bool dotNet46_GC_Collect_inited;
+
+        public static void GCCollect(Action<string> onLog)
+        {
+            if (!dotNet46_GC_Collect_inited) {
+                dotNet46_GC_Collect_inited = true;
+                Type delegateType = typeof(Action<int, GCCollectionMode, bool, bool>);
+                dotNet46_GC_Collect = typeof(GC)
+                    .GetMethod("Collect", delegateType.GetGenericArguments())
+                    ?.CreateDelegate(delegateType) as Action<int, GCCollectionMode, bool, bool>;
+                if (dotNet46_GC_Collect == null)
+                    onLog("(cannot get delegate of new GC.Collect in .NET 4.6)");
+            }
+            string getMemStat() => $"Total Memory: {GC.GetTotalMemory(false).ToString("N0")}. ";
+            onLog($"GC...  {getMemStat()}");
+            try {
+                if (dotNet46_GC_Collect != null)
+                    dotNet46_GC_Collect(GC.MaxGeneration, GCCollectionMode.Forced, true, true);
+                else
+                    GC.Collect();
+                GC.WaitForFullGCComplete();
+            } catch (Exception) {
+            }
+            onLog($"GC OK. {getMemStat()}");
+        }
     }
 
     public struct EPPair

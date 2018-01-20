@@ -91,7 +91,18 @@ namespace NaiveSocks
         public override void SetConfig(TomlTable toml)
         {
             base.SetConfig(toml);
-            imux_ws = toml.TryGetValue<int>("imux", imux_ws);
+            if (toml.TryGetValue("imux", out var imux)) {
+                if (imux is TomlArray ta) {
+                    var imuxarr = ta.Get<int[]>();
+                    imux_ws = imuxarr[0];
+                    imux_http = imuxarr[1];
+                    imux_wsso = imuxarr[2];
+                } else if (imux is TomlValue tv) {
+                    imux_ws = toml.Get<int>();
+                } else {
+                    throw new Exception("unexpected 'imux' value type: " + imux.GetType());
+                }
+            }
         }
 
         static readonly string[] UAs = new[] {

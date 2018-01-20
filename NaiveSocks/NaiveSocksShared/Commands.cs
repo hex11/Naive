@@ -114,6 +114,9 @@ namespace NaiveSocks
                 command.WriteLine($"Connections: {c.RunningConnections:N0} running, {c.TotalHandledConnections} handled");
                 command.WriteLine($"MyStream Copied: {MyStream.TotalCopiedPackets:N0} packets, {MyStream.TotalCopiedBytes:N0} bytes");
             });
+            cmdHub.AddCmdHandler(prefix + "gc", command => {
+                NaiveUtils.GCCollect(command.WriteLine);
+            });
             cmdHub.AddCmdHandler(prefix + "test", cmd => {
                 byte[] samplekey = NaiveProtocol.GetRealKeyFromString("testtttt");
                 var pcount = Environment.ProcessorCount;

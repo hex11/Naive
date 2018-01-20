@@ -20,6 +20,8 @@ namespace NaiveSocks
 
             public int imux_max { get; set; } = 16;
 
+            public int timeout { get; set; } = 30;
+
             public async Task HandleRequestAsync(HttpConnection p, byte[] realKey)
             {
                 try {
@@ -119,12 +121,12 @@ namespace NaiveSocks
                 }
             }
 
-            private static async Task<WebSocketServer> HandleWebsocket(HttpConnection p, byte[] realKey, string encType)
+            private async Task<WebSocketServer> HandleWebsocket(HttpConnection p, byte[] realKey, string encType)
             {
                 var ws = new WebSocketServer(p);
                 if ((await ws.HandleRequestAsync(false)).IsConnected == false)
                     throw new Exception("websocket handshake failed.");
-                ws.AddToManaged();
+                ws.AddToManaged(timeout / 2, timeout);
                 NaiveProtocol.ApplyEncryption(ws, realKey, encType);
                 //ws.ApplyAesStreamFilter(realKey);
                 return ws;

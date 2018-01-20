@@ -82,15 +82,6 @@ namespace NaiveSocksAndroid
 
             outputParent = this.FindViewById<LinearLayout>(R.Id.logparent);
             outputParentScroll = this.FindViewById<NestedScrollView>(R.Id.logparentScroll);
-
-            Logging.Logged += Logging_Logged;
-            var logs = Logging.getLogsHistoryArray();
-            if (logs.Length > 0) {
-                for (int i = 0; i < logs.Length; i++) {
-                    putLog(logs[i], false);
-                }
-                putText("========== end of log history ==========", true);
-            }
         }
 
         private void startService()
@@ -176,7 +167,7 @@ namespace NaiveSocksAndroid
                     var paths = GlobalConfig.GetNaiveSocksConfigPaths(this);
                     var found = paths.FirstOrDefault(x => File.Exists(x));
                     if (found == null) {
-                        Snackbar.Make(topView, "No configuation file.", Snackbar.LengthLong).Show();
+                        MakeSnackbar("No configuation file.", Snackbar.LengthLong).Show();
                     } else {
                         var intent = new Intent(Intent.ActionEdit);
                         intent.SetDataAndType(Android.Net.Uri.FromFile(new Java.IO.File(found)), "text/plain");
@@ -196,7 +187,7 @@ namespace NaiveSocksAndroid
             var enabledState = (enabled) ? ComponentEnabledState.Enabled : ComponentEnabledState.Disabled;
             pm.SetComponentEnabledSetting(componentName, enabledState, ComponentEnableOption.DontKillApp);
             this.InvalidateOptionsMenu();
-            Snackbar.Make(topView, $"Autostart is {(enabled ? "enabled" : "disabled")}.", Snackbar.LengthLong).Show();
+            MakeSnackbar($"Autostart is {(enabled ? "enabled" : "disabled")}.", Snackbar.LengthLong).Show();
         }
 
         void setShowLogs(bool show)
@@ -206,13 +197,12 @@ namespace NaiveSocksAndroid
             if (isConnected) {
                 service.SetShowLogs(show);
             }
-            Snackbar.Make(topView, $"Logger output will{(show ? "" : " not")} be shown in notification.", Snackbar.LengthLong).Show();
+            MakeSnackbar($"Logger output will{(show ? "" : " not")} be shown in notification.", Snackbar.LengthLong).Show();
         }
 
-        protected override void OnDestroy()
+        private Snackbar MakeSnackbar(string text, int duration)
         {
-            Logging.Logged -= Logging_Logged;
-            base.OnDestroy();
+            return Snackbar.Make(topView, text, duration);
         }
 
         private void Logging_Logged(Logging.Log log)
@@ -249,6 +239,7 @@ namespace NaiveSocksAndroid
                 tv.SetBackgroundColor(color.Value);
             //autoScroll = autoScroll && !outputParentScroll.CanScrollVertically(0);
             outputParent.AddView(tv);
+            tv.Dispose();
             if (autoScroll) {
                 outputParentScroll.Post(() => outputParentScroll.FullScroll((int)FocusSearchDirection.Down));
             }
@@ -257,15 +248,25 @@ namespace NaiveSocksAndroid
         protected override void OnStart()
         {
             base.OnStart();
+            Logging.Logged += Logging_Logged;
+            var logs = Logging.getLogsHistoryArray();
+            if (logs.Length > 0) {
+                for (int i = 0; i < logs.Length; i++) {
+                    putLog(logs[i], false);
+                }
+                putText("========== end of log history ==========", true);
+            }
             this.BindService(serviceIntent, bgServiceConn, Bind.None);
         }
 
         protected override void OnStop()
         {
+            Logging.Logged -= Logging_Logged;
+            outputParent.RemoveAllViews();
             if (bgServiceConn?.IsConnected == true)
                 this.UnbindService(bgServiceConn);
+            GC.Collect(0);
             base.OnStop();
         }
     }
 }
-

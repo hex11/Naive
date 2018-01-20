@@ -72,6 +72,8 @@ namespace NaiveSocksAndroid
 
             base.OnCreate();
 
+            Logging.info("service is starting...");
+
             powerManager = (PowerManager)GetSystemService(Context.PowerService);
             notificationManager = (NotificationManager)GetSystemService(Context.NotificationService);
 

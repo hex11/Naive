@@ -130,9 +130,7 @@ namespace NaiveSocks
         {
             var ws = await WebSocketClient.ConnectToAsync(settings.Host, reqPath);
             await ws.HandshakeAsync(false, settings.Headers);
-            ws.ManagedPingTimeout = settings.Timeout / 2;
-            ws.ManagedCloseTimeout = settings.Timeout;
-            ws.AddToManaged();
+            ws.AddToManaged(settings.Timeout / 2, settings.Timeout);
             NaiveProtocol.ApplyEncryption(ws, key, encType);
             //ws.ApplyAesStreamFilter(key);
             return ws;

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -33,6 +34,7 @@ namespace NaiveSocksAndroid
         [return: GeneratedEnum]
         public override StartCommandResult OnStartCommand(Intent intent, [GeneratedEnum] StartCommandFlags flags, int startId)
         {
+            Prepare(this);
             // TODO: start vpn
             return StartCommandResult.Sticky;
         }
@@ -72,13 +74,27 @@ namespace NaiveSocksAndroid
 
     static class Native
     {
+        // native binaries from shadowsocks-android release apk:
+
+        // to send TUN file descriptor to tun2socks.
         public const string SsJniHelper = "libjni-helper.so";
-        public const string SsOverture = "liboverture.so";
+
+        // tun -> socks, start as process.
         public const string SsTun2Socks = "libtun2socks.so";
+
+        // a DNS server supporting socks upstream, start as process.
+        public const string SsOverture = "liboverture.so";
 
         public static void Init(Context ctx)
         {
             NativeDir = ctx.ApplicationInfo.NativeLibraryDir;
+        }
+
+        public static string GetLibFullPath(string libName)
+        {
+            if (NativeDir == null)
+                throw new Exception("'Native' class havn't been initialized!");
+            return Path.Combine(NativeDir, libName);
         }
 
         [DllImport(SsJniHelper)]

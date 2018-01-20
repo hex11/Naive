@@ -311,7 +311,7 @@ namespace NaiveSocks
             }
             if (logging) {
                 var ms = sw.ElapsedMilliseconds;
-                Logging.info($"{this}: {connection.Redirected} <- {connection.Dest.Host} ({ms} ms)");
+                Logging.info($"{this}: {connection.Redirected} <- {connection.Url ?? connection.Dest.ToString()} ({ms} ms)");
             }
         }
     }

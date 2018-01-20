@@ -241,6 +241,13 @@ namespace Naive.HttpSvr
             CheckManageTask();
         }
 
+        public void AddToManaged(int pingInterval, int timeoutToClose)
+        {
+            ManagedPingTimeout = pingInterval;
+            ManagedCloseTimeout = timeoutToClose;
+            AddToManaged();
+        }
+
         public enum States
         {
             Opening,

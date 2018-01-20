@@ -111,11 +111,6 @@ Usage: {NAME}.exe [-h|--help] [(-c|--config) FILE] [--no-cli] [--no-log-stdout]
             var cmdHub = new CommandHub();
             cmdHub.Prompt = $"{NAME}>";
             Commands.AddCommands(cmdHub, controller, null);
-            cmdHub.AddCmdHandler("gc", command => {
-                Logging.warning("GC...");
-                GC.Collect();
-                Logging.warning("GC OK.");
-            });
             cmdHub.AddCmdHandler("newbie", (cmd) => Commands.NewbieWizard(cmd, controller, specifiedConfigPath ?? configFilePath));
             if (Environment.OSVersion.Platform == PlatformID.Win32NT)
                 cmdHub.AddCmdHandler("openfolder", (cmd) => Process.Start("explorer", "."));
