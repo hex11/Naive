@@ -1,4 +1,5 @@
-﻿using System;
+﻿using NaiveSocks;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
@@ -786,7 +787,7 @@ namespace Naive.HttpSvr
                 int bufcur = 0;
                 var sendMsgBuf = handle.Value;
                 var isMasked = IsClient;
-                buildHeader(opcode, bv.tlen, fin, sendMsgBuf, ref bufcur, isMasked);
+                buildFrameHeader(opcode, bv.tlen, fin, sendMsgBuf, ref bufcur, isMasked);
                 var stream = BaseStream;
                 if (buf != null) {
                     var curbv = bv;
@@ -825,7 +826,7 @@ namespace Naive.HttpSvr
 
         }
 
-        private void buildHeader(byte opcode, int len, bool fin, byte[] buf, ref int bufIndex, bool ismask)
+        private void buildFrameHeader(byte opcode, int len, bool fin, byte[] buf, ref int bufIndex, bool ismask)
         {
             buf[bufIndex++] = (byte)((fin ? 0x80 : 0x00) ^ (opcode & 0x0f));
             byte mask = (byte)(ismask ? 0x80 : 0x00);
@@ -866,8 +867,14 @@ namespace Naive.HttpSvr
                 int bufcur = 0;
                 var sendMsgBuf = handle.Value;
                 var isMasked = IsClient;
-                buildHeader(opcode, bv.tlen, fin, sendMsgBuf, ref bufcur, isMasked);
+                buildFrameHeader(opcode, bv.tlen, fin, sendMsgBuf, ref bufcur, isMasked);
                 var stream = BaseStream;
+                if (!isMasked && stream is StreamFromMyStream ms && ms.BaseStream is IMyStreamMultiBuffer msmb) {
+                    // if base stream supports writing multiple buffers,
+                    // we can reduce copying overhead.
+                    await msmb.WriteMultipleAsync(new BytesView(sendMsgBuf, 0, bufcur) { nextNode = bv });
+                    return;
+                }
                 if (buf != null) {
                     var curbv = bv;
                     int maskIndex = 0;
