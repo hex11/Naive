@@ -30,14 +30,14 @@ namespace NaiveSocks
 
     public interface ICanReloadBetter : IAdapter
     {
-        // Calling order:
-        // Reloading, Start, StopForReloading, Stop
-
-        void Reloading(object oldInstance);
-        void StopForReloading();
+        /// <summary>
+        /// Called by the controller when it's reloading and an old instance is found.
+        /// Returns false if the adapter wants the Start() method being called later.
+        /// </summary>
+        bool Reloading(object oldInstance);
     }
 
-    public abstract class Adapter
+    public abstract class Adapter : IAdapter
     {
         public string Name { get; set; }
         public Controller Controller { get; private set; }
@@ -53,12 +53,24 @@ namespace NaiveSocks
 
         public virtual void Start()
         {
+        }
+
+        internal void InternalStart(bool callStart)
+        {
             IsRunning = true;
+            if (callStart)
+                Start();
         }
 
         public virtual void Stop()
         {
+        }
+
+        internal void InternalStop(bool callStop)
+        {
             IsRunning = false;
+            if (callStop)
+                Stop();
         }
 
         internal void InternalInit(Controller controller)

@@ -88,7 +88,7 @@ namespace NaiveSocks
                 reqbytes = NaiveProtocol.EncryptOrDecryptBytes(true, key, reqbytes);
                 var reqPath = string.Format(settings.UrlFormat, settings.Path, HttpUtil.UrlEncode(Convert.ToBase64String(reqbytes)));
                 if (isHttp) {
-                    return ConnectHttpChunked(settings, key, reqPath);
+                    return ConnectHttpChunked(settings, key, reqPath, settings.Encryption);
                 } else {
                     return ConnectWebSocket(settings, key, reqPath, settings.Encryption);
                 }
@@ -136,7 +136,7 @@ namespace NaiveSocks
             return ws;
         }
 
-        private static async Task<IMsgStream> ConnectHttpChunked(ConnectingSettings settings, byte[] key, string reqPath)
+        private static async Task<IMsgStream> ConnectHttpChunked(ConnectingSettings settings, byte[] key, string reqPath, string encType)
         {
             var r = await ConnectHelper.Connect(null, settings.Host, 10);
             r.ThrowIfFailed();
@@ -154,7 +154,7 @@ namespace NaiveSocks
                 if (!response.TestHeader(HttpHeaders.KEY_Transfer_Encoding, HttpHeaders.VALUE_Transfer_Encoding_chunked))
                     throw new Exception("test header failed: Transfer-Encoding != chunked");
                 var msf = new MsgStreamFilter(new HttpChunkedEncodingMsgStream(stream));
-                msf.AddReadFilter(Filterable.GetAesStreamFilter(false, key));
+                NaiveProtocol.ApplyEncryption(msf, key, encType);
                 return msf;
             } catch (Exception) {
                 MyStream.CloseWithTimeout(r.Stream);

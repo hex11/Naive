@@ -64,14 +64,11 @@ namespace NaiveSocks
             httpsvr = new HttpSvr(this);
         }
 
-        public void Reloading(object oldInstance)
+        public bool Reloading(object oldInstance)
         {
             clients = (oldInstance as NNetworkAdapter).clients;
             Logging.info($"{this} reload with {clients.Count} client(s).");
-        }
-
-        public void StopForReloading()
-        {
+            return false;
         }
 
         static Random rd = new Random();

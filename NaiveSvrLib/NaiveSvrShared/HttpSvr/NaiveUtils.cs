@@ -1168,7 +1168,7 @@ namespace Naive.HttpSvr
     {
         private readonly Action<T> _resetFunc;
         private readonly Func<T> _createFunc;
-        private ConcurrentBag<T> _bag = new ConcurrentBag<T>();
+        private ConcurrentStack<T> _baseContainer = new ConcurrentStack<T>();
         public int MaxCount { get; set; } = 5;
 
         public ObjectPool(Func<T> createFunc)
@@ -1188,7 +1188,7 @@ namespace Naive.HttpSvr
 
         public T GetValue()
         {
-            if (!_bag.TryTake(out T obj)) {
+            if (!_baseContainer.TryPop(out T obj)) {
                 obj = _createFunc();
             }
             return obj;
@@ -1196,9 +1196,9 @@ namespace Naive.HttpSvr
 
         private bool Put(T value)
         {
-            if (_bag.Count < MaxCount) {
+            if (_baseContainer.Count < MaxCount) {
                 _resetFunc?.Invoke(value);
-                _bag.Add(value);
+                _baseContainer.Push(value);
                 return true;
             }
             return false;

@@ -126,9 +126,9 @@ namespace Naive.HttpSvr
         public static void ConfigManageTask(int timeAcc, int manageInterval)
         {
             if (timeAcc <= 0)
-                throw new ArgumentOutOfRangeException("TimeAcc");
+                throw new ArgumentOutOfRangeException(nameof(timeAcc));
             if (manageInterval <= 0)
-                throw new ArgumentOutOfRangeException("ManageInterval");
+                throw new ArgumentOutOfRangeException(nameof(manageInterval));
             _timeAcc = timeAcc;
             _manageInterval = manageInterval;
 
@@ -178,10 +178,13 @@ namespace Naive.HttpSvr
                         }
                         try {
                             var delta = CurrentTime - item.LatestActiveTime;
+                            var closeTimeout = item.ManagedCloseTimeout;
                             var pingTimeout = item.ManagedPingTimeout;
+                            if (closeTimeout <= 0)
+                                continue;
                             if (pingTimeout <= 0)
-                                pingTimeout = item.ManagedCloseTimeout;
-                            if (item.ManagedCloseTimeout > 0 && delta > item.ManagedCloseTimeout && item._manageState == ManageState.PingSent) {
+                                pingTimeout = closeTimeout;
+                            if (delta > closeTimeout && item._manageState == ManageState.PingSent) {
                                 Logging.warning($"{item} timed out, closing.");
                                 item._manageState = ManageState.TimedoutClosed;
                                 item.Close();

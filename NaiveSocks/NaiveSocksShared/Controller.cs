@@ -13,8 +13,22 @@ namespace NaiveSocks
 
     public class Controller
     {
-        public List<InAdapter> InAdapters = new List<InAdapter>();
-        public List<OutAdapter> OutAdapters = new List<OutAdapter>();
+        public Config CurrentConfig = new Config();
+
+        public List<InAdapter> InAdapters => CurrentConfig.InAdapters;
+        public List<OutAdapter> OutAdapters => CurrentConfig.OutAdapters;
+
+        public class Config
+        {
+            public List<InAdapter> InAdapters = new List<InAdapter>();
+            public List<OutAdapter> OutAdapters = new List<OutAdapter>();
+
+            public Dictionary<string, string> Aliases = new Dictionary<string, string>();
+
+            public Logging.Level LoggingLevel;
+        }
+
+        Logging.Level LoggingLevel => CurrentConfig.LoggingLevel;
 
         public List<InConnection> InConnections = new List<InConnection>();
 
@@ -26,8 +40,6 @@ namespace NaiveSocks
         public Dictionary<string, Type> RegisteredOutTypes = new Dictionary<string, Type>();
         public Dictionary<string, Func<TomlTable, InAdapter>> RegisteredInCreators = new Dictionary<string, Func<TomlTable, InAdapter>>();
         public Dictionary<string, Func<TomlTable, OutAdapter>> RegisteredOutCreators = new Dictionary<string, Func<TomlTable, OutAdapter>>();
-
-        public Dictionary<string, string> Aliases = new Dictionary<string, string>();
 
         public event Action<InConnection> NewConnection;
         public event Action<InConnection> EndConnection;
@@ -43,8 +55,6 @@ namespace NaiveSocks
                 return input;
             return Path.Combine(WorkingDirectory, input);
         }
-
-        public Logging.Level LoggingLevel;
 
         public Controller()
         {
@@ -103,41 +113,33 @@ namespace NaiveSocks
             Load();
         }
 
-        List<ICanReloadBetter> reloading_oldAdapters;
-
-        public void Reload()
-        {
-            Reload(null);
-        }
-
-        public void Reload(string configContent)
-        {
-            Logging.warning("================================");
-            Logging.warning("stopping controller...");
-            reloading_oldAdapters = new List<ICanReloadBetter>();
-            this.Stop();
-            this.Reset();
-            Logging.warning("================================");
-            Logging.warning("restarting controller...");
-            Load(configContent);
-            this.Start();
-            reloading_oldAdapters = null;
-        }
-
         public void Load() => Load(null);
         public void Load(string configContent)
         {
-            var config = configContent ?? FuncGetConfigString?.Invoke();
+            var config = GetConfigStringOrLog(configContent);
             if (config != null) {
                 LoadConfigStr(config);
-            } else {
-                Logging.warning($"no configuration.");
             }
+        }
+
+        string GetConfigStringOrLog(string configContent)
+        {
+            var config = configContent ?? FuncGetConfigString?.Invoke();
+            if (config == null)
+                Logging.warning($"no configuration.");
+            return config;
         }
 
         public void LoadConfigStr(string toml)
         {
-            Config t;
+            CurrentConfig = LoadConfigFromStr(toml, null) ?? CurrentConfig;
+            Logging.info($"configuration loaded. {InAdapters.Count} InAdapters, {OutAdapters.Count} OutAdapters.");
+        }
+
+        private Config LoadConfigFromStr(string toml, Config newcfg)
+        {
+            newcfg = newcfg ?? new Config();
+            NaiveSocks.Config t;
             TomlTable tomlTable;
             var refs = new List<AdapterRef>();
             try {
@@ -167,21 +169,21 @@ namespace NaiveSocks
                         )
                     );
                 tomlTable = Toml.ReadString(toml, tomlSettings);
-                t = tomlTable.Get<Config>();
+                t = tomlTable.Get<NaiveSocks.Config>();
             } catch (Exception e) {
                 Logging.error($"TOML error: " + e.Message);
-                return;
+                return null;
             }
             ConfigTomlLoaded?.Invoke(tomlTable);
-            LoggingLevel = t.log_level;
-            Aliases = t.aliases;
+            newcfg.LoggingLevel = t.log_level;
+            newcfg.Aliases = t.aliases;
             if (t.@in != null)
                 foreach (var item in t.@in) {
                     try {
                         var tt = item.Value;
                         var adapter = NewRegisteredInType(tt);
                         adapter.Name = item.Key;
-                        InAdapters.Add(adapter);
+                        newcfg.InAdapters.Add(adapter);
                     } catch (Exception e) {
                         Logging.exception(e, Logging.Level.Error, $"TOML table 'in.{item.Key}':");
                     }
@@ -192,7 +194,7 @@ namespace NaiveSocks
                         var tt = item.Value;
                         var adapter = NewRegisteredOutType(tt);
                         adapter.Name = item.Key;
-                        OutAdapters.Add(adapter);
+                        newcfg.OutAdapters.Add(adapter);
                     } catch (Exception e) {
                         Logging.exception(e, Logging.Level.Error, $"TOML table 'out.{item.Key}':");
                     }
@@ -201,32 +203,33 @@ namespace NaiveSocks
                 if (r.IsTable) {
                     var tt = r.Ref as TomlTable;
                     var adapter = NewRegisteredOutType(tt);
-                    if (tt.ContainsKey("name")) {
-                        adapter.Name = tt["name"].Get<string>();
+                    if (tt.TryGetValue("name", out string n)) {
+                        adapter.Name = n;
                     }
                     if (adapter.Name == null) {
                         int i = 0;
                         string name;
                         do {
-                            name = $"_{tt["type"].Get<string>()}_" + (i++ == 0 ? "" : i.ToString());
-                        } while (OutAdapters.Any(x => x.Name == name));
+                            name = $"_{tt["type"].Get<string>()}_" + ((i++ == 0) ? "" : i.ToString());
+                        } while (newcfg.OutAdapters.Any(x => x.Name == name));
                         adapter.Name = name;
                     }
                     r.Adapter = adapter;
-                    OutAdapters.Add(adapter);
+                    newcfg.OutAdapters.Add(adapter);
                 }
             }
-            if (OutAdapters.Any(x => x.Name == "direct") == false) {
-                OutAdapters.Add(new DirectOutAdapter() { Name = "direct" });
+            if (newcfg.OutAdapters.Any(x => x.Name == "direct") == false) {
+                newcfg.OutAdapters.Add(new DirectOutAdapter() { Name = "direct" });
             }
-            if (OutAdapters.Any(x => x.Name == "fail") == false) {
-                OutAdapters.Add(new FailAdapter() { Name = "fail" });
+            if (newcfg.OutAdapters.Any(x => x.Name == "fail") == false) {
+                newcfg.OutAdapters.Add(new FailAdapter() { Name = "fail" });
             }
             foreach (var r in refs) {
                 if (r.IsName) {
-                    r.Adapter = FindOutAdapter(r.Ref as string);
+                    r.Adapter = FindAdapter<IAdapter>(newcfg, r.Ref as string, -1);
                 }
             }
+            return newcfg;
         }
 
         private InAdapter NewRegisteredInType(TomlTable tt)
@@ -256,23 +259,52 @@ namespace NaiveSocks
             return table.Get(type) as T;
         }
 
-        public void Start()
+        public void Reload() => Reload(null);
+        public void Reload(string configContent)
         {
-            void checkIcrb(IAdapter item)
+            Logging.warning("================================");
+            Logging.warning("reloading configuation...");
+            var newstr = GetConfigStringOrLog(configContent);
+            if (newstr == null)
+                return;
+            var newCfg = LoadConfigFromStr(newstr, null);
+            if (newCfg == null) {
+                Logging.error("reloading failed.");
+                return;
+            }
+            Logging.info($"new configuration loaded. {newCfg.InAdapters.Count} InAdapters, {newCfg.OutAdapters.Count} OutAdapters.");
+            var oldCfg = CurrentConfig;
+            var oldCanReload = InAdapters.Union<Adapter>(OutAdapters)
+                                        .Select(x => x as ICanReloadBetter)
+                                        .Where(x => x != null).ToList();
+            Logging.warning("stopping old adapters...");
+            this.Stop();
+            Logging.warning("================================");
+            Logging.warning("starting new adapters...");
+            CurrentConfig = newCfg;
+            this.Start(oldCanReload);
+        }
+
+        public void Start() => Start(null);
+        private void Start(List<ICanReloadBetter> oldAdapters)
+        {
+            bool checkIcrb(IAdapter item)
             {
-                if (reloading_oldAdapters != null && item is ICanReloadBetter icrb) {
-                    var old = reloading_oldAdapters.Find(x => x.Name == icrb.Name && x.GetType() == icrb.GetType());
+                if (oldAdapters != null && item is ICanReloadBetter icrb) {
+                    var old = oldAdapters.Find(x => x.Name == icrb.Name && x.GetType() == icrb.GetType());
                     if (old != null) {
-                        icrb.Reloading(old);
+                        oldAdapters.Remove(old);
+                        if (icrb.Reloading(old))
+                            return false;
                     }
                 }
+                return true;
             }
             foreach (var item in OutAdapters) {
                 info($"OutAdapter '{item.Name}': {item}");
                 try {
                     item.InternalInit(this);
-                    checkIcrb(item);
-                    item.Start();
+                    item.InternalStart(checkIcrb(item));
                 } catch (Exception e) {
                     Logging.exception(e, Logging.Level.Error, $"starting OutAdapter '{item.Name}': {item}");
                 }
@@ -281,39 +313,29 @@ namespace NaiveSocks
                 info($"InAdapter '{item.Name}': {item} -> {item.@out?.Adapter?.Name?.Quoted() ?? "(No OutAdapter)"}");
                 try {
                     item.InternalInit(this);
-                    checkIcrb(item);
-                    item.Start();
+                    item.InternalStart(checkIcrb(item));
                 } catch (Exception e) {
                     Logging.exception(e, Logging.Level.Error, $"starting InAdapter '{item.Name}': {item}");
                 }
             }
         }
 
-        public void Stop()
+        public void Stop() => Stop(CurrentConfig);
+        private void Stop(Config config)
         {
-            foreach (var item in InAdapters) {
+            foreach (var item in config.InAdapters) {
                 info($"stopping InAdapter: {item}");
-                if (reloading_oldAdapters != null && item is ICanReloadBetter icrb) {
-                    icrb.StopForReloading();
-                    reloading_oldAdapters.Add(icrb);
-                }
-                item.Stop();
+                item.InternalStop(true);
             }
-            foreach (var item in OutAdapters) {
+            foreach (var item in config.OutAdapters) {
                 info($"stopping OutAdapter: '{item.Name}' {item}");
-                if (reloading_oldAdapters != null && item is ICanReloadBetter icrb) {
-                    icrb.StopForReloading();
-                    reloading_oldAdapters.Add(icrb);
-                }
-                item.Stop();
+                item.InternalStop(true);
             }
         }
 
         public void Reset()
         {
-            InAdapters.Clear();
-            OutAdapters.Clear();
-            Aliases.Clear();
+            CurrentConfig = new Config();
         }
 
         public virtual Task HandleInConnection(InConnection inConnection)
@@ -395,7 +417,7 @@ namespace NaiveSocks
                     } else if (outAdapter is IConnectionHandler ch) {
                         r = await OutAdapter2.Connect(ch.HandleConnection, inc).CAF();
                     } else {
-                        error($"{inc} does implement neither IConnectionProvider nor IConnectionHandler.");
+                        error($"{inc} implement neither IConnectionProvider nor IConnectionHandler.");
                         return;
                     }
                     if (!r.IsRedirected) {
@@ -445,7 +467,7 @@ namespace NaiveSocks
             if (inc.CallbackCalled == false) {
                 await inc.SetConnectResult(ConnectResults.Failed, new IPEndPoint(0, 0));
             }
-            if (inc.DataStream?.State != MyStreamState.Closed)
+            if (inc.DataStream != null && inc.DataStream.State != MyStreamState.Closed)
                 MyStream.CloseWithTimeout(inc.DataStream);
             EndConnection?.Invoke(inc);
         }
@@ -462,24 +484,31 @@ namespace NaiveSocks
 
         public IConnectionHandler FindOutAdapter(string name)
         {
-            return FindAdapter<IConnectionHandler>(name, 16);
+            return FindAdapter<IConnectionHandler>(name, -1);
         }
 
         public T FindAdapter<T>(string name) where T : class
         {
-            return FindAdapter<T>(name, 16);
+            return FindAdapter<T>(name, -1);
         }
 
         T FindAdapter<T>(string name, int ttl) where T : class
         {
+            return FindAdapter<T>(CurrentConfig, name, ttl);
+        }
+
+        static T FindAdapter<T>(Config cfg, string name, int ttl) where T : class
+        {
+            if (ttl == -1)
+                ttl = 16;
             string new_name = null;
-            if (Aliases?.TryGetValue(name, out new_name) == true) {
+            if (cfg.Aliases?.TryGetValue(name, out new_name) == true) {
                 if (ttl == 0)
                     throw new Exception("alias loop?");
-                return FindAdapter<T>(new_name, ttl - 1);
+                return FindAdapter<T>(cfg, new_name, ttl - 1);
             }
-            return OutAdapters.Find(a => a.Name == name) as T
-                ?? InAdapters.Find(a => a.Name == name) as T;
+            return cfg.OutAdapters.Find(a => a.Name == name) as T
+                ?? cfg.InAdapters.Find(a => a.Name == name) as T;
         }
 
         public AdapterRef AdapterRefFromName(string name)

@@ -96,20 +96,20 @@ namespace Naive.HttpSvr
         public string ServerHeader = "NaiveServer";
 
         public event Action<HttpConnection> ConnectionBegin;
-        public event Action<HttpConnection> ConnectionStatusChanged;
+        public event Action<HttpConnection> ConnectionStateChanged;
         public event HttpRequestHandler Requested;
         public event Action<HttpConnection> ConnectionEnd;
 
-        private States _connectionStatus = States.Receiving;
+        private States _connectionState = States.Receiving;
 
         public States ConnectionState
         {
             get {
-                return _connectionStatus;
+                return _connectionState;
             }
             set {
-                _connectionStatus = value;
-                ConnectionStatusChanged?.Invoke(this);
+                _connectionState = value;
+                ConnectionStateChanged?.Invoke(this);
             }
         }
 

@@ -88,7 +88,11 @@ namespace NaiveSocks
                             return null;
                         }
                     }, () => str);
-                    await adapter.HandleIncommingConnection(inc);
+                    try {
+                        await adapter.HandleIncommingConnection(inc);
+                    } finally {
+                        MyStream.CloseWithTimeout(mystream);
+                    }
                 } else if (p.Url.StartsWith("http://")) {
                     await handleHttp(p);
                 } else {

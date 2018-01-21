@@ -18,12 +18,13 @@ namespace NaiveSocks
 
         HttpSvr httpsvr;
 
-        public void Reloading(object oldInstance)
+        public bool Reloading(object oldInstance)
         {
             if (oldInstance is WebconAdapter old) {
                 httpsvr = old.httpsvr;
                 consoleHub = old.consoleHub;
             }
+            return false;
         }
 
         public override void Start()
@@ -34,10 +35,6 @@ namespace NaiveSocks
                 consoleHub = new ConsoleHub();
                 Commands.AddCommands(consoleHub.CommandHub, Controller, "");
             }
-        }
-
-        public void StopForReloading()
-        {
         }
 
         public Task HandleRequestAsync(HttpConnection p)

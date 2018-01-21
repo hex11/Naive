@@ -73,7 +73,7 @@ namespace NaiveSocks
             Logging.info($"NaiveOutAdapter default encryption chosen: '{DefaultEncryption}'");
         }
 
-        public void Reloading(object oldInstance)
+        public bool Reloading(object oldInstance)
         {
             var old = oldInstance as NaiveMOutAdapter;
             if (old.server == this.server
@@ -82,10 +82,7 @@ namespace NaiveSocks
                 ncsPool = old.ncsPool;
                 Logging.info($"{this} reload with {ncsPool.Count} old connections.");
             }
-        }
-
-        public void StopForReloading()
-        {
+            return false;
         }
 
         public override void SetConfig(TomlTable toml)
