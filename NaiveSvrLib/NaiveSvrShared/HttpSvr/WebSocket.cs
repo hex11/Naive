@@ -203,6 +203,23 @@ namespace Naive.HttpSvr
                             Logging.exception(e, Logging.Level.Error, "WebSocket manage task exception, ignored.");
                         }
                     }
+                    for (int i = AdditionalManagementTasks.Count - 1; i >= 0; i--) {
+                        Func<bool> item;
+                        try {
+                            item = AdditionalManagementTasks[i];
+                        } catch (Exception) {
+                            continue; // ignore
+                        }
+                        bool remove = true;
+                        try {
+                            remove = item();
+                        } catch (Exception e) {
+                            Logging.exception(e, Logging.Level.Error, "management additional task " + item);
+                            remove = true;
+                        }
+                        if (remove)
+                            AdditionalManagementTasks.RemoveAt(i);
+                    }
                 }
                 while (!(ManagedWebSockets.Count == 0 && Interlocked.CompareExchange(ref _manageTaskRunning, 0, 1) == 1));
                 Logging.debug("websocket management task stopped.");
@@ -219,6 +236,14 @@ namespace Naive.HttpSvr
         }
 
         public static List<WebSocket> ManagedWebSockets = new List<WebSocket>();
+
+        static List<Func<bool>> AdditionalManagementTasks = new List<Func<bool>>();
+
+        public static void AddAdditionalManagementTask(Func<bool> func)
+        {
+            lock (AdditionalManagementTasks)
+                AdditionalManagementTasks.Add(func);
+        }
 
         public int ManagedPingTimeout = 15;
         public int ManagedCloseTimeout = 60;

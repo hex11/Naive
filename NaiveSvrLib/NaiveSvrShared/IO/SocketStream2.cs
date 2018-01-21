@@ -13,19 +13,8 @@ namespace NaiveSocks
 
     public class SocketStream2 : SocketStream, IMyStreamMultiBuffer
     {
-        static SocketStream2()
-        {
-            const int CachedMax = 32;
-            cachedTaskFromIntResult = new Task<int>[CachedMax];
-            for (int i = 0; i < cachedTaskFromIntResult.Length; i++) {
-                cachedTaskFromIntResult[i] = Task.FromResult(i);
-            }
-        }
-
         public SocketStream2(Socket socket) : base(socket)
         { }
-
-        private static Task<int>[] cachedTaskFromIntResult;
 
         private static readonly ObjectPool<SocketAsyncEventArgs> readArgPool = new ObjectPool<SocketAsyncEventArgs>(
             createFunc: () => {
@@ -81,10 +70,7 @@ namespace NaiveSocks
             if (r < 0)
                 throw ex;
             _unusedReadTcs = tcs;
-            if (r < cachedTaskFromIntResult.Length)
-                return cachedTaskFromIntResult[r];
-            else
-                return Task.FromResult(r);
+            return NaiveUtils.GetCachedTaskInt(r);
         }
 
         private static void recycleReadArgs(SocketAsyncEventArgs e, ReadUserToken userToken)

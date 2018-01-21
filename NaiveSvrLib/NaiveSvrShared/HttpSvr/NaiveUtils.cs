@@ -784,6 +784,29 @@ namespace Naive.HttpSvr
             }
             onLog($"GC OK. {getMemStat()}");
         }
+
+        public static Task<int> GetCachedTaskInt(int value)
+        {
+            if (value >= TaskCache.CachedIntMin && value <= TaskCache.CachedIntMax) {
+                return TaskCache.cachedTaskInt[value - TaskCache.CachedIntMin];
+            }
+            return Task.FromResult(value);
+        }
+
+        static class TaskCache
+        {
+            static TaskCache()
+            {
+                cachedTaskInt = new Task<int>[CachedIntMax + 1 - CachedIntMin];
+                for (int i = 0; i < cachedTaskInt.Length; i++) {
+                    cachedTaskInt[i] = Task.FromResult(CachedIntMin + i);
+                }
+            }
+
+            public const int CachedIntMin = -1;
+            public const int CachedIntMax = 64;
+            public static Task<int>[] cachedTaskInt;
+        }
     }
 
     public struct EPPair

@@ -17,8 +17,29 @@ namespace NaiveSocks
         {
         }
 
+        static int RAsync, RSync, WAsync, WSync;
+
+        public static int CountRAsync => RAsync;
+        public static int CountRSync => RSync;
+
+        public static int CountWAsync => WAsync;
+        public static int CountWSync => WSync;
+
+        public static string GetCountString()
+        {
+            return $"Read {RSync + RAsync} (async {RAsync}), Write {WSync + WAsync} (async {WAsync})";
+        }
+
         public override Task<int> ReadAsync(BytesSegment bv)
         {
+            if (Socket.Available > 0) {
+                Interlocked.Increment(ref RSync);
+                var read = Socket.Receive(bv.Bytes, bv.Offset, bv.Len, SocketFlags.None);
+                if (read == 0)
+                    State |= MyStreamState.RemoteShutdown;
+                return NaiveUtils.GetCachedTaskInt(read);
+            }
+            Interlocked.Increment(ref RAsync);
             return FromAsyncTrimHelper.FromAsyncTrim(
                 thisRef: this,
                 args: bv,
@@ -38,6 +59,10 @@ namespace NaiveSocks
                 args: bv,
                 beginMethod: (thisRef, args, callback, state) => thisRef.Socket.BeginSend(args.Bytes, args.Offset, args.Len, SocketFlags.None, callback, state),
                 endMethod: (thisRef, asyncResult) => {
+                    if (asyncResult.CompletedSynchronously)
+                        Interlocked.Increment(ref WSync);
+                    else
+                        Interlocked.Increment(ref WAsync);
                     thisRef.Socket.EndSend(asyncResult);
                     return VoidType.Void;
                 });
@@ -61,6 +86,10 @@ namespace NaiveSocks
                 args: bufList,
                 beginMethod: (thisRef, args, callback, state) => thisRef.Socket.BeginSend(args, SocketFlags.None, callback, state),
                 endMethod: (thisRef, asyncResult) => {
+                    if (asyncResult.CompletedSynchronously)
+                        Interlocked.Increment(ref WSync);
+                    else
+                        Interlocked.Increment(ref WAsync);
                     thisRef.Socket.EndSend(asyncResult);
                     return VoidType.Void;
                 });

@@ -65,7 +65,7 @@ namespace NaiveSocks
                                 await p.EndResponseAsync();
                                 var baseStream = MyStream.FromStream(p.SwitchProtocol());
                                 var msf = new MsgStreamFilter(new HttpChunkedEncodingMsgStream(baseStream));
-                                msf.AddWriteFilter(Filterable.GetAesStreamFilter(true, realKey));
+                                NaiveProtocol.ApplyEncryption(msf, realKey, encryptType);
                                 wsOrHttp = msf;
                             }
                             lock (imuxSessions) {

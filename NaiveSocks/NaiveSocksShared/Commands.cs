@@ -113,6 +113,7 @@ namespace NaiveSocks
                 command.WriteLine($"Threads: {proc.Threads.Count}");
                 command.WriteLine($"Connections: {c.RunningConnections:N0} running, {c.TotalHandledConnections} handled");
                 command.WriteLine($"MyStream Copied: {MyStream.TotalCopiedPackets:N0} packets, {MyStream.TotalCopiedBytes:N0} bytes");
+                command.WriteLine($"SocketStream1 Counters: {SocketStream1.GetCountString()}");
             });
             cmdHub.AddCmdHandler(prefix + "gc", command => {
                 NaiveUtils.GCCollect(command.WriteLine);
