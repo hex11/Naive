@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using uint64 = System.UInt64;
 using uint32 = System.UInt32;
+using System.Runtime.InteropServices;
 
 namespace NaiveSocks
 {
@@ -25,9 +26,15 @@ namespace NaiveSocks
             {
                 if (key.Length < KeySize)
                     throw new ArgumentException($"key.Length < {KeySize}");
-                QWords128 keywords;
-                BytesToWords128(key, out keywords);
-                this.keys = Cipher.getKeySchedules_128_128(keywords);
+                keyStreamBuf = (byte*)Marshal.AllocHGlobal(KeystreamBufferSize);
+                QWords128 workingKey;
+                BytesToWords128(key, out workingKey);
+                this.keys = Cipher.getKeySchedules_128_128(workingKey);
+            }
+
+            ~Ctr128128()
+            {
+                Marshal.FreeHGlobal((IntPtr)keyStreamBuf);
             }
 
             private static void BytesToWords128(byte[] key, out QWords128 words128)
@@ -39,19 +46,14 @@ namespace NaiveSocks
 
             public override int IVLength => BlockSize;
 
-            //Block128 realkey;
             uint64[] keys;
             QWords128 counter;
-            
+
             const int KsBlockCount = 8;
             const int KeystreamBufferSize = BlockSize * KsBlockCount;
-            KeyStreamBuf keyStreamBuf;
-            int keystreamBufferPos = KeystreamBufferSize;
 
-            struct KeyStreamBuf
-            {
-                public fixed byte bytes[KeystreamBufferSize];
-            }
+            byte* keyStreamBuf;
+            int keystreamBufferPos = KeystreamBufferSize;
 
             protected override void IVSetup(byte[] IV)
             {
@@ -65,7 +67,7 @@ namespace NaiveSocks
                 bs.CheckAsParameter();
                 var pos = bs.Offset;
                 var end = pos + bs.Len;
-                fixed (byte* keyStreamBuf = this.keyStreamBuf.bytes)
+                byte* keyStreamBuf = this.keyStreamBuf;
                 fixed (byte* bytes = bs.Bytes) {
                     while (pos < end) {
                         var remainningKeystream = KeystreamBufferSize - keystreamBufferPos;
@@ -99,9 +101,15 @@ namespace NaiveSocks
             {
                 if (key.Length < KeySize)
                     throw new ArgumentException($"key.Length < {KeySize}");
-                DWords128 keywords;
-                BytesToBlock128(key, out keywords);
-                this.keys = Cipher.getKeySchedules_64_128(keywords);
+                keyStreamBuf = (byte*)Marshal.AllocHGlobal(KeystreamBufferSize);
+                DWords128 workingKey;
+                BytesToBlock128(key, out workingKey);
+                this.keys = Cipher.getKeySchedules_64_128(workingKey);
+            }
+
+            ~Ctr64128()
+            {
+                Marshal.FreeHGlobal((IntPtr)keyStreamBuf);
             }
 
             private static void BytesToBlock128(byte[] key, out DWords128 kb128)
@@ -119,19 +127,15 @@ namespace NaiveSocks
             }
 
             public override int IVLength => BlockSize;
-            
+
             uint32[] keys;
             DWords64 counter;
 
             const int KsBlockCount = 8;
             const int KeystreamBufferSize = BlockSize * KsBlockCount;
-            KeyStreamBuf keyStreamBuf;
-            int keystreamBufferPos = KeystreamBufferSize;
 
-            struct KeyStreamBuf
-            {
-                public fixed byte bytes[KeystreamBufferSize];
-            }
+            byte* keyStreamBuf;
+            int keystreamBufferPos = KeystreamBufferSize;
 
             protected override void IVSetup(byte[] IV)
             {
@@ -145,7 +149,7 @@ namespace NaiveSocks
                 bs.CheckAsParameter();
                 var pos = bs.Offset;
                 var end = pos + bs.Len;
-                fixed (byte* keyStreamBuf = this.keyStreamBuf.bytes)
+                byte* keyStreamBuf = this.keyStreamBuf;
                 fixed (byte* bytes = bs.Bytes) {
                     while (pos < end) {
                         var remainningKeystream = KeystreamBufferSize - keystreamBufferPos;
@@ -238,13 +242,13 @@ namespace NaiveSocks
 
             public static uint32[] getKeySchedules_64_128(DWords128 key)
             {
-                var keys = new uint32[ROUNDS128128];
+                var keys = new uint32[ROUNDS64128];
                 keys[0] = key.v0;
                 var a = stackalloc uint32[3];
                 a[0] = key.v1;
                 a[1] = key.v2;
                 a[2] = key.v3;
-                for (uint32 i = 0; i < ROUNDS128128 - 1; i++) {
+                for (uint32 i = 0; i < ROUNDS64128 - 1; i++) {
                     speck_round_32(ref a[i % 3], ref key.v0, i);
                     keys[1 + i] = key.v0;
                 }
@@ -256,20 +260,7 @@ namespace NaiveSocks
                 foreach (var item in keySchedules) {
                     // inlined:
                     //speck_round_64(ref ciphertext.v1, ref ciphertext.v0, item);
-                    ciphertext.v1 = (ciphertext.v1 >> 8) | (ciphertext.v1 << (64 - 8)); // x = ROTR(x, 8)
-                    ciphertext.v1 += ciphertext.v0;
-                    ciphertext.v1 ^= item;
-                    ciphertext.v0 = (ciphertext.v0 << 3) | (ciphertext.v0 >> (64 - 3)); // y = ROTL(y, 3)
-                    ciphertext.v0 ^= ciphertext.v1;
-                }
-            }
-
-            public static void encrypt_64_128(uint32[] keySchedules, ref DWords64 ciphertext)
-            {
-                foreach (var item in keySchedules) {
-                    // inlined:
-                    // speck_round_32(ref ciphertext.v1, ref ciphertext.v0, item);
-                    const int WORDSIZE = 32;
+                    const int WORDSIZE = 64;
                     ciphertext.v1 = (ciphertext.v1 >> 8) | (ciphertext.v1 << (WORDSIZE - 8)); // x = ROTR(x, 8)
                     ciphertext.v1 += ciphertext.v0;
                     ciphertext.v1 ^= item;
@@ -278,20 +269,19 @@ namespace NaiveSocks
                 }
             }
 
-            //int main(void)
-            //{
-            //    uint64_t plaintext[2] = { 0x7469206564616d20ULL, 0x6c61766975716520ULL };
-            //    uint64_t key[2] = { 0x0706050403020100ULL, 0x0f0e0d0c0b0a0908ULL };
-            //    uint64_t ciphertext[2];
-
-            //    speck_encrypt(plaintext, key, ciphertext);
-
-            //    printf("Plaintext:  0x%016llx 0x%016llx\n", plaintext[0], plaintext[1]);
-            //    printf("Key:        0x%016llx 0x%016llx\n", key[0], key[1]);
-            //    printf("Ciphertext: 0x%016llx 0x%016llx\n", ciphertext[0], ciphertext[1]);
-            //    printf("Expected:   0x7860fedf5c570d18 0xa65d985179783265\n");
-            //    return 0;
-            //}
+            public static void encrypt_64_128(uint32[] keySchedules, ref DWords64 ciphertext)
+            {
+                foreach (var item in keySchedules) {
+                    // inlined:
+                    //speck_round_32(ref ciphertext.v1, ref ciphertext.v0, item);
+                    const int WORDSIZE = 32;
+                    ciphertext.v1 = (ciphertext.v1 >> 8) | (ciphertext.v1 << (WORDSIZE - 8)); // x = ROTR(x, 8)
+                    ciphertext.v1 += ciphertext.v0;
+                    ciphertext.v1 ^= item;
+                    ciphertext.v0 = (ciphertext.v0 << 3) | (ciphertext.v0 >> (WORDSIZE - 3)); // y = ROTL(y, 3)
+                    ciphertext.v0 ^= ciphertext.v1;
+                }
+            }
         }
     }
 }

@@ -30,6 +30,7 @@
 
 using System;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text;
 using Naive.HttpSvr;
 
@@ -59,7 +60,13 @@ namespace NaiveSocks
         /// </param>
         public ChaCha20IetfEncryptor(byte[] key/*, byte[] nonce, uint counter*/)
         {
+            ctx = (Context*)Marshal.AllocHGlobal(sizeof(Context));
             KeySetup(key);
+        }
+
+        ~ChaCha20IetfEncryptor()
+        {
+            Marshal.FreeHGlobal((IntPtr)ctx);
         }
 
         public static ChaCha20IetfEncryptor Create(byte[] key)
@@ -91,9 +98,9 @@ namespace NaiveSocks
             // see http://cr.yp.to/streamciphers/timings/estreambench/submissions/salsa20/chacha8/ref/chacha.c
             byte[] constants = (key.Length == 32) ? sigma : tau;
             int keyIndex = key.Length - 16;
+            uint* state = ctx->state;
             fixed (byte* c = constants)
-            fixed (byte* k = key)
-            fixed (uint* state = ctx.state) {
+            fixed (byte* k = key) {
                 state[4] = U8To32Little(k, 0);
                 state[5] = U8To32Little(k, 4);
                 state[6] = U8To32Little(k, 8);
@@ -134,8 +141,8 @@ namespace NaiveSocks
                 );
             }
             _iv = nonce;
-            fixed (byte* n = nonce)
-            fixed (uint* state = ctx.state) {
+            uint* state = ctx->state;
+            fixed (byte* n = nonce) {
                 state[12] = counter;
                 state[13] = U8To32Little(n, 0);
                 state[14] = U8To32Little(n, 4);
@@ -146,20 +153,16 @@ namespace NaiveSocks
         public uint Counter
         {
             get {
-                fixed (uint* state = ctx.state) {
-                    return state[12];
-                }
+                return ctx->state[12];
             }
             set {
-                fixed (uint* state = ctx.state) {
-                    state[12] = value;
-                }
+                ctx->state[12] = value;
             }
         }
 
         public override int IVLength => 12;
 
-        Context ctx;
+        Context* ctx;
 
         private unsafe struct Context
         {
@@ -180,18 +183,18 @@ namespace NaiveSocks
             bs.CheckAsParameter();
             var pos = bs.Offset;
             var end = pos + bs.Len;
-            fixed (byte* bytes = bs.Bytes)
-            fixed (Context* c = &ctx) {
+            var ksb = ctx->keyStreamBuffer;
+            fixed (byte* bytes = bs.Bytes) {
                 while (pos < end) {
                     var remainningKeystream = KeystreamBufferSize - keystreamBufferPos;
                     if (remainningKeystream == 0) {
                         keystreamBufferPos = 0;
                         remainningKeystream = KeystreamBufferSize;
-                        NextKeystreamBuffer(c);
+                        NextKeystreamBuffer(ctx);
                     }
                     var count = end - pos;
                     count = count < remainningKeystream ? count : remainningKeystream;
-                    NaiveUtils.XorBytesUnsafe(c->keyStreamBuffer + keystreamBufferPos, bytes + pos, count);
+                    NaiveUtils.XorBytesUnsafe(ksb + keystreamBufferPos, bytes + pos, count);
                     pos += count;
                     keystreamBufferPos += count;
                 }
@@ -207,6 +210,17 @@ namespace NaiveSocks
                 x[i] = state[i];
             }
             for (int i = 0; i < 10; i++) {
+                // inlined:
+                //QuarterRound(x, 0, 4, 8, 12);
+                //QuarterRound(x, 1, 5, 9, 13);
+                //QuarterRound(x, 2, 6, 10, 14);
+                //QuarterRound(x, 3, 7, 11, 15);
+
+                //QuarterRound(x, 0, 5, 10, 15);
+                //QuarterRound(x, 1, 6, 11, 12);
+                //QuarterRound(x, 2, 7, 8, 13);
+                //QuarterRound(x, 3, 4, 9, 14);
+
                 x[0] += x[4]; x[12] = ((x[12] ^ x[0]) << 16) | ((x[12] ^ x[0]) >> (32 - 16));
                 x[8] += x[12]; x[4] = ((x[4] ^ x[8]) << 12) | ((x[4] ^ x[8]) >> (32 - 12));
                 x[0] += x[4]; x[12] = ((x[12] ^ x[0]) << 8) | ((x[12] ^ x[0]) >> (32 - 8));
