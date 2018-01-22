@@ -679,7 +679,7 @@ namespace NaiveSocks
                 }
                 int read = Math.Min(bv.Len, buffer.Len);
                 buffer.CopyTo(bv, 0, read);
-                buffer = buffer.Sub(read);
+                buffer.SubSelf(read);
                 if (buffer.Len == 0) {
                     buffer = new BytesSegment();
                     notifyBufferEmptied();

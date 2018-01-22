@@ -1231,10 +1231,23 @@ namespace Naive.HttpSvr
             set => Bytes[Offset + index] = value;
         }
 
+        public void SubSelf(int begin)
+        {
+            this.Offset += begin;
+            this.Len -= begin;
+        }
+
         public BytesSegment Sub(int begin) => Sub(begin, Len - begin);
         public BytesSegment Sub(int begin, int count)
         {
             return new BytesSegment(Bytes, Offset + begin, count);
+        }
+
+        public void CopyTo(BytesSegment dst) => CopyTo(dst, Len);
+
+        public void CopyTo(BytesSegment dst, int count)
+        {
+            Buffer.BlockCopy(Bytes, Offset, dst.Bytes, dst.Offset, count);
         }
 
         public void CopyTo(BytesSegment dst, int srcBegin, int count)

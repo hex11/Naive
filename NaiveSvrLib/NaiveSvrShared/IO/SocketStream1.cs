@@ -17,32 +17,69 @@ namespace NaiveSocks
         {
         }
 
-        static int RAsync, RSync, WAsync, WSync;
+        static Counters ctr;
 
-        public static int CountRAsync => RAsync;
-        public static int CountRSync => RSync;
+        public struct Counters
+        {
+            public int Rasync, Rsync, Rbuffer, Wasync, Wsync;
+        }
 
-        public static int CountWAsync => WAsync;
-        public static int CountWSync => WSync;
+        public static Counters GetCounters() => ctr;
 
         public static string GetCountString()
         {
-            return $"Read {RSync + RAsync} (async {RAsync}), Write {WSync + WAsync} (async {WAsync})";
+            return $"Read {ctr.Rsync + ctr.Rasync + ctr.Rbuffer} (async {ctr.Rasync}, sync {ctr.Rsync}, from buffer {ctr.Rbuffer})," +
+                $" Write {ctr.Wsync + ctr.Wasync} (async {ctr.Wasync}, sync {ctr.Wsync})";
         }
 
-        public override Task<int> ReadAsync(BytesSegment bv)
+        const int readBufferSize = 128;
+        BytesSegment readBuffer;
+
+        public bool EnableSmartReadBuffer { get; set; } = true;
+
+        public override Task<int> ReadAsync(BytesSegment bs)
         {
-            if (Socket.Available > 0) {
-                Interlocked.Increment(ref RSync);
-                var read = Socket.Receive(bv.Bytes, bv.Offset, bv.Len, SocketFlags.None);
-                if (read == 0)
-                    State |= MyStreamState.RemoteShutdown;
+            // We use an internal buffer, whice is larger, to reduce many small read() syscalls.
+            // It's important, since there is a hardware bug named 'Meltdown' in Intel CPUs.
+            // TESTED: This optimization made this method 20x faster when bs.Len == 4, 
+            //         on Windows 10 x64 16299.192 with a laptop Haswell CPU.
+            if (readBuffer.Len > 0) {
+                Interlocked.Increment(ref ctr.Rbuffer);
+                var read = Math.Min(bs.Len, readBuffer.Len);
+                readBuffer.CopyTo(bs, read);
+                readBuffer.SubSelf(read);
+                // Don't release the buffer here even the buffer is empty,
+                // because there may be more small ReadAsync() calls later.
                 return NaiveUtils.GetCachedTaskInt(read);
             }
-            Interlocked.Increment(ref RAsync);
-            return FromAsyncTrimHelper.FromAsyncTrim(
+            int available = Socket.Available;
+            if (EnableSmartReadBuffer && (available > bs.Len & bs.Len < readBufferSize)) {
+                Interlocked.Increment(ref ctr.Rsync);
+                if (readBuffer.Bytes == null)
+                    readBuffer.Bytes = new byte[readBufferSize];
+                readBuffer.Offset = 0;
+                var read = Socket.Receive(readBuffer.Bytes, 0, readBufferSize, SocketFlags.None);
+                readBuffer.Len = read;
+                if (read == 0)
+                    throw new Exception("WTF! It should not happen: Socket.Receive() returns 0 when Socket.Available > 0.");
+                read = Math.Min(read, bs.Len);
+                readBuffer.CopyTo(bs, read);
+                readBuffer.SubSelf(read);
+                return NaiveUtils.GetCachedTaskInt(read);
+            }
+            // There is a large reading opearation, so the internal buffer can be released now.
+            readBuffer.Bytes = null;
+            if (available > 0) {
+                Interlocked.Increment(ref ctr.Rsync);
+                var read = Socket.Receive(bs.Bytes, bs.Offset, bs.Len, SocketFlags.None);
+                if (read == 0)
+                    throw new Exception("WTF! It should not happen: Socket.Receive() returns 0 when Socket.Available > 0.");
+                return NaiveUtils.GetCachedTaskInt(read);
+            }
+            Interlocked.Increment(ref ctr.Rasync);
+            return TaskHelper.FromAsyncTrim(
                 thisRef: this,
-                args: bv,
+                args: bs,
                 beginMethod: (thisRef, args, callback, state) => thisRef.Socket.BeginReceive(args.Bytes, args.Offset, args.Len, SocketFlags.None, callback, state),
                 endMethod: (thisRef, asyncResult) => {
                     var read = thisRef.Socket.EndReceive(asyncResult);
@@ -54,15 +91,15 @@ namespace NaiveSocks
 
         public override Task WriteAsync(BytesSegment bv)
         {
-            return FromAsyncTrimHelper.FromAsyncTrim(
+            return TaskHelper.FromAsyncTrim(
                 thisRef: this,
                 args: bv,
                 beginMethod: (thisRef, args, callback, state) => thisRef.Socket.BeginSend(args.Bytes, args.Offset, args.Len, SocketFlags.None, callback, state),
                 endMethod: (thisRef, asyncResult) => {
                     if (asyncResult.CompletedSynchronously)
-                        Interlocked.Increment(ref WSync);
+                        Interlocked.Increment(ref ctr.Wsync);
                     else
-                        Interlocked.Increment(ref WAsync);
+                        Interlocked.Increment(ref ctr.Wasync);
                     thisRef.Socket.EndSend(asyncResult);
                     return VoidType.Void;
                 });
@@ -81,22 +118,22 @@ namespace NaiveSocks
                 if (cur.len > 0)
                     bufList[index++] = new ArraySegment<byte>(cur.bytes, cur.offset, cur.len);
             }
-            return FromAsyncTrimHelper.FromAsyncTrim(
+            return TaskHelper.FromAsyncTrim(
                 thisRef: this,
                 args: bufList,
                 beginMethod: (thisRef, args, callback, state) => thisRef.Socket.BeginSend(args, SocketFlags.None, callback, state),
                 endMethod: (thisRef, asyncResult) => {
                     if (asyncResult.CompletedSynchronously)
-                        Interlocked.Increment(ref WSync);
+                        Interlocked.Increment(ref ctr.Wsync);
                     else
-                        Interlocked.Increment(ref WAsync);
+                        Interlocked.Increment(ref ctr.Wasync);
                     thisRef.Socket.EndSend(asyncResult);
                     return VoidType.Void;
                 });
         }
     }
 
-    static class FromAsyncTrimHelper
+    static class TaskHelper
     {
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         public static Task<TResult> FromAsyncTrim<TResult, TInstance, TArgs>(
@@ -104,13 +141,15 @@ namespace NaiveSocks
             Func<TInstance, TArgs, AsyncCallback, object, IAsyncResult> beginMethod,
             Func<TInstance, IAsyncResult, TResult> endMethod) where TInstance : class
         {
-            return FromAsyncTrimHelper<TResult, TInstance, TArgs>.FromAsyncTrim(thisRef, args, beginMethod, endMethod);
+            return TaskHelper<TResult, TInstance, TArgs>.FromAsyncTrim(thisRef, args, beginMethod, endMethod);
         }
     }
 
-    static class FromAsyncTrimHelper<TResult, TInstance, TArgs> where TInstance : class
+    static class TaskHelper<TResult, TInstance, TArgs> where TInstance : class
     {
-        static FromAsyncTrimHelper()
+        // See: https://referencesource.microsoft.com/#mscorlib/system/threading/Tasks/FutureFactory.cs,88f023d3850066a9
+
+        static TaskHelper()
         {
             try {
                 _fromAsyncTrim = typeof(TaskFactory<TResult>)

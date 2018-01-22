@@ -282,6 +282,53 @@ namespace NaiveSocks
                         }).RunSync();
                         listener.Stop();
                     },
+                    ["localhost socket 1 (4 bytes read buffer)"] = () => {
+                        var ep = new IPEndPoint(IPAddress.Loopback, NaiveUtils.Random.Next(20000, 60000));
+                        var listener = new Listener(ep) { LogInfo = false };
+                        listener.Accepted += (x) => NaiveUtils.RunAsyncTask(async () => {
+                            var stream = new SocketStream1(x.Client);
+                            var buf = new byte[4];
+                            while (await stream.ReadAsync(buf) > 0) {
+                            }
+                            x.Close();
+                        });
+                        listener.Start().Forget();
+                        NaiveUtils.RunAsyncTask(async () => {
+                            var socket = await NaiveUtils.ConnectTCPAsync(AddrPort.Parse(ep.ToString()), 5000);
+                            var stream = new SocketStream1(socket);
+                            sw.Restart();
+                            var buf = new byte[32 * 1024];
+                            for (int i = 0; i < 1024; i++) {
+                                await stream.WriteAsync(buf);
+                            }
+                            socket.Close();
+                        }).RunSync();
+                        listener.Stop();
+                    },
+                    ["localhost socket 1 (4 bytes read buffer without internal buffer)"] = () => {
+                        var ep = new IPEndPoint(IPAddress.Loopback, NaiveUtils.Random.Next(20000, 60000));
+                        var listener = new Listener(ep) { LogInfo = false };
+                        listener.Accepted += (x) => NaiveUtils.RunAsyncTask(async () => {
+                            var stream = new SocketStream1(x.Client);
+                            stream.EnableSmartReadBuffer = false;
+                            var buf = new byte[4];
+                            while (await stream.ReadAsync(buf) > 0) {
+                            }
+                            x.Close();
+                        });
+                        listener.Start().Forget();
+                        NaiveUtils.RunAsyncTask(async () => {
+                            var socket = await NaiveUtils.ConnectTCPAsync(AddrPort.Parse(ep.ToString()), 5000);
+                            var stream = new SocketStream1(socket);
+                            sw.Restart();
+                            var buf = new byte[32 * 1024];
+                            for (int i = 0; i < 1024; i++) {
+                                await stream.WriteAsync(buf);
+                            }
+                            socket.Close();
+                        }).RunSync();
+                        listener.Stop();
+                    },
                     ["localhost socket 2"] = () => {
                         var ep = new IPEndPoint(IPAddress.Loopback, NaiveUtils.Random.Next(20000, 60000));
                         var listener = new Listener(ep) { LogInfo = false };
