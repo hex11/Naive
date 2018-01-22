@@ -39,36 +39,9 @@ namespace NaiveSocks
 
         public override Task<int> ReadAsync(BytesSegment bs)
         {
-            // We use an internal buffer, whice is larger, to reduce many small read() syscalls.
-            // It's important, since there is a hardware bug named 'Meltdown' in Intel CPUs.
-            // TESTED: This optimization made this method 20x faster when bs.Len == 4, 
-            //         on Windows 10 x64 16299.192 with a laptop Haswell CPU.
-            if (readBuffer.Len > 0) {
-                Interlocked.Increment(ref ctr.Rbuffer);
-                var read = Math.Min(bs.Len, readBuffer.Len);
-                readBuffer.CopyTo(bs, read);
-                readBuffer.SubSelf(read);
-                // Don't release the buffer here even the buffer is empty,
-                // because there may be more small ReadAsync() calls later.
-                return NaiveUtils.GetCachedTaskInt(read);
-            }
-            int available = Socket.Available;
-            if (EnableSmartReadBuffer && (available > bs.Len & bs.Len < readBufferSize)) {
-                Interlocked.Increment(ref ctr.Rsync);
-                if (readBuffer.Bytes == null)
-                    readBuffer.Bytes = new byte[readBufferSize];
-                readBuffer.Offset = 0;
-                var read = Socket.Receive(readBuffer.Bytes, 0, readBufferSize, SocketFlags.None);
-                readBuffer.Len = read;
-                if (read == 0)
-                    throw new Exception("WTF! It should not happen: Socket.Receive() returns 0 when Socket.Available > 0.");
-                read = Math.Min(read, bs.Len);
-                readBuffer.CopyTo(bs, read);
-                readBuffer.SubSelf(read);
-                return NaiveUtils.GetCachedTaskInt(read);
-            }
-            // There is a large reading opearation, so the internal buffer can be released now.
-            readBuffer.Bytes = null;
+            var bufRead = TryReadWithInternalBuffer(ref bs, out var available);
+            if (bufRead > 0)
+                return NaiveUtils.GetCachedTaskInt(bufRead);
             if (available > 0) {
                 Interlocked.Increment(ref ctr.Rsync);
                 var read = Socket.Receive(bs.Bytes, bs.Offset, bs.Len, SocketFlags.None);
@@ -87,6 +60,51 @@ namespace NaiveSocks
                         thisRef.State |= MyStreamState.RemoteShutdown;
                     return read;
                 });
+        }
+
+        private int TryReadWithInternalBuffer(ref BytesSegment bs, out int available)
+        {
+            // We use an internal buffer, whice is larger, to reduce many small read() syscalls.
+            // It's important, since there is a hardware bug named 'Meltdown' in Intel CPUs.
+            // TESTED: This optimization made this method 20x faster when bs.Len == 4, 
+            //         on Windows 10 x64 16299.192 with a laptop Haswell CPU.
+            if (readBuffer.Len > 0) {
+                Interlocked.Increment(ref ctr.Rbuffer);
+                var read = Math.Min(bs.Len, readBuffer.Len);
+                readBuffer.CopyTo(bs, read);
+                readBuffer.SubSelf(read);
+                // Don't release the buffer here even the buffer is empty,
+                // because there may be more small ReadAsync() calls later.
+                available = 0;
+                return read;
+            }
+            available = Socket.Available;
+            if (EnableSmartReadBuffer && (available > bs.Len & bs.Len < readBufferSize)) {
+                Interlocked.Increment(ref ctr.Rsync);
+                if (readBuffer.Bytes == null)
+                    readBuffer.Bytes = new byte[readBufferSize];
+                readBuffer.Offset = 0;
+                var read = Socket.Receive(readBuffer.Bytes, 0, readBufferSize, SocketFlags.None);
+                readBuffer.Len = read;
+                if (read == 0)
+                    throw new Exception("WTF! It should not happen: Socket.Receive() returns 0 when Socket.Available > 0.");
+                read = Math.Min(read, bs.Len);
+                readBuffer.CopyTo(bs, read);
+                readBuffer.SubSelf(read);
+                return read;
+            }
+            // There is a large reading opearation, so the internal buffer can be released now.
+            readBuffer.Bytes = null;
+            available = 0;
+            return 0;
+        }
+
+        public override int Read(BytesSegment bs)
+        {
+            var bufRead = TryReadWithInternalBuffer(ref bs, out var available);
+            if (bufRead > 0)
+                return bufRead;
+            return base.Read(bs);
         }
 
         public override Task WriteAsync(BytesSegment bv)

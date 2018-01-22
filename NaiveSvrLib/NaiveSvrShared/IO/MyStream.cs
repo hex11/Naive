@@ -434,12 +434,12 @@ namespace NaiveSocks
             return NaiveUtils.CompletedTask;
         }
 
-        public void Write(BytesSegment bs)
+        public virtual void Write(BytesSegment bs)
         {
             Socket.Send(bs.Bytes, bs.Offset, bs.Len, SocketFlags.None);
         }
 
-        public int Read(BytesSegment bs)
+        public virtual int Read(BytesSegment bs)
         {
             return Socket.Receive(bs.Bytes, bs.Offset, bs.Len, SocketFlags.None);
         }
