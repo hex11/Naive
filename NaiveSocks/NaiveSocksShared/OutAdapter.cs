@@ -105,6 +105,7 @@ namespace NaiveSocks
                     return null;
                 }
             });
+            newinc.Url = arg.Url;
             NaiveUtils.RunAsyncTask(async () => {
                 try {
                     await handleConnection(newinc).CAF();

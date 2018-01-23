@@ -43,6 +43,8 @@ namespace NaiveSocks
             if (bufRead > 0)
                 return NaiveUtils.GetCachedTaskInt(bufRead);
             if (available > 0) {
+                // if the receive buffer of system is not empty,
+                // use sync operation to reduce async overhead.
                 Interlocked.Increment(ref ctr.Rsync);
                 var read = Socket.Receive(bs.Bytes, bs.Offset, bs.Len, SocketFlags.None);
                 if (read == 0)

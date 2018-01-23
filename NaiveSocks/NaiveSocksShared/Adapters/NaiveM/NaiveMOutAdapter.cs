@@ -183,7 +183,7 @@ namespace NaiveSocks
                     CheckPoolWithDelay();
                 };
                 AddPoolItem(pi);
-                Task.Run(pi.ConnectIfNot);
+                pi.ConnectIfNot().Forget();
                 return pi;
             }
         }
@@ -256,6 +256,7 @@ namespace NaiveSocks
             private async Task Connect()
             {
                 try {
+                    await Task.Yield();
                     var beginTime = DateTime.Now;
                     Logging.info($"'{adapter.Name}' connecting...");
                     var settings = new NaiveMChannels.ConnectingSettings {

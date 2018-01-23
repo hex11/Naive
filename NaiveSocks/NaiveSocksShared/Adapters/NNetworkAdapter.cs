@@ -40,7 +40,7 @@ namespace NaiveSocks
         }
 
         //public abstract Task HandleConnection(InConnection connection)
-        public override string ToString() => $"{{NClient name={string.Join(",", names)} disconnected={WhenDisconnected.IsCompleted}}}";
+        public override string ToString() => $"{{NClient name={string.Join(",", names)}{(WhenDisconnected.IsCompleted ? " disconnected" : "")}}}";
     }
 
     public class NNetworkAdapter : OutAdapter, ICanReloadBetter, INetwork, IHttpRequestAsyncHandler
@@ -173,13 +173,14 @@ namespace NaiveSocks
                 p.setStatusCode("200 OK");
                 var sb = new StringBuilder(512);
                 sb.AppendLine("<html><head><meta name='viewport' content='width=device-width, initial-scale=1'></head>")
-                  .AppendLine($"<body><h1 style='text-align: center'>NNetwork '{Adapter.domain}'</h1><pre style='overflow: auto; margin: 0 auto; max-width: 60em'>");
-                sb.AppendLine("==[Clients]===========");
+                  .AppendLine($"<body style='margin: 0 auto; max-width: 100ch; padding: 8px;'>" +
+                                $"<h1 style='text-align: center'>NNetwork '{Adapter.domain}'</h1>");
+                sb.AppendLine("<h2>Connected Clients</h2><pre style='overflow: auto;'>");
                 foreach (var item in Adapter.clients) {
                     sb.AppendLine($"{string.Join("\t", item.names)}\tCreateTime: {item.CreateTime - WebSocket.CurrentTime}");
                 }
                 sb.AppendLine()
-                  .AppendLine("==[Request Info]======")
+                  .AppendLine("</pre><h2>Request Info</h2><pre style='overflow: auto;'>")
                   .AppendLine($"Url: {p.Url}")
                   .AppendLine($"Host: {p.Host}")
                   .AppendLine($"BaseStream: {p.myStream}")

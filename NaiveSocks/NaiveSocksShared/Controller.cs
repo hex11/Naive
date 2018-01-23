@@ -417,7 +417,7 @@ namespace NaiveSocks
                     } else if (outAdapter is IConnectionHandler ch) {
                         r = await OutAdapter2.Connect(ch.HandleConnection, inc).CAF();
                     } else {
-                        error($"{inc} implement neither IConnectionProvider nor IConnectionHandler.");
+                        error($"{outAdapter} implement neither IConnectionProvider nor IConnectionHandler.");
                         return;
                     }
                     if (!r.IsRedirected) {

@@ -220,7 +220,6 @@ namespace NaiveSocks
             } catch (Exception e) {
                 Logging.exception(e, Logging.Level.Error, $"Relay task ({left.SafeToStr()} <-> {right.SafeToStr()})");
             }
-            close:
             CloseWithTimeout(left, forceCloseTimeout);
             CloseWithTimeout(right, forceCloseTimeout);
         }
@@ -229,12 +228,15 @@ namespace NaiveSocks
         {
             if (stream == null)
                 throw new ArgumentNullException(nameof(stream));
-            if (stream.State.IsClosed)
-                return;
+            if (timeout < -2)
+                throw new ArgumentOutOfRangeException(nameof(timeout), "should be -2 (default), -1 (infinity), or >= 0.");
             if (timeout == -2)
                 timeout = 10 * 1000;
+            if (stream.State.IsClosed)
+                return;
             NaiveUtils.RunAsyncTask(async () => {
                 try {
+                    await Task.Yield();
                     Stopwatch sw = Stopwatch.StartNew();
                     var taskTimeout = Task.Delay(timeout);
                     var closeTask = stream.Close();
