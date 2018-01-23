@@ -195,14 +195,20 @@ namespace NaiveSocks
                             ch.Update(bv);
                         }
                     },
+                    ["encrypt 128 KiB 128 times ('speck0' (speck-128/128-ctr) without multi-threading)"] = () => {
+                        Speck0Test(samplekey, 128 * 1024, 128, false);
+                    },
                     ["encrypt 128 KiB 128 times ('speck0' (speck-128/128-ctr))"] = () => {
-                        var ch = new Speck.Ctr128128(samplekey);
-                        ch.IV = new byte[] { 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80 };
-                        var buf = new byte[128 * 1024];
-                        var bv = new BytesSegment(buf);
-                        for (int i = 0; i < 128; i++) {
-                            ch.Update(bv);
-                        }
+                        Speck0Test(samplekey, 128 * 1024, 128, true);
+                    },
+                    ["encrypt 16 KiB 1024 times ('speck0' (speck-128/128-ctr) without multi-threading)"] = () => {
+                        Speck0Test(samplekey, 16 * 1024, 1024, false);
+                    },
+                    ["encrypt 16 KiB 1024 times ('speck0' (speck-128/128-ctr))"] = () => {
+                        Speck0Test(samplekey, 16 * 1024, 1024, true);
+                    },
+                    ["encrypt 3 B 1024 * 1024 times ('speck0' (speck-128/128-ctr))"] = () => {
+                        Speck0Test(samplekey, 3, 1024 * 1024, true);
                     },
                     ["encrypt 128 KiB 128 times ('speck064' (speck-64/128-ctr))"] = () => {
                         var ch = new Speck.Ctr64128(samplekey);
@@ -468,6 +474,18 @@ namespace NaiveSocks
                     cmd.WriteLine($"waiting timed out.");
                 }
             }, "Usage: mping [start|stop]");
+        }
+
+        private static void Speck0Test(byte[] samplekey, int bufSize, int loops, bool allowMultiThreading)
+        {
+            var ch = new Speck.Ctr128128(samplekey);
+            ch.EnableMultiThreading = allowMultiThreading;
+            ch.IV = new byte[] { 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80 };
+            var buf = new byte[bufSize];
+            var bv = new BytesSegment(buf);
+            for (int i = 0; i < loops; i++) {
+                ch.Update(bv);
+            }
         }
     }
 }

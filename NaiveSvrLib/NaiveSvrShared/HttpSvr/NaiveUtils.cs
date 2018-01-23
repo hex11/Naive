@@ -312,6 +312,7 @@ namespace Naive.HttpSvr
 
         public static async Task<byte[]> ReadBytesUntil(Stream stream, byte[] pattern, byte[] buffer = null, int maxLength = 32 * 1024, bool withPattern = true)
         {
+            // Notice: this implementation may not work properly when the pattern is not "\r\n" or "\r\n\r\n"
             // TODO: use KMP search algorithm
             var ms = new MemoryStream(128);
             int pos = 0;

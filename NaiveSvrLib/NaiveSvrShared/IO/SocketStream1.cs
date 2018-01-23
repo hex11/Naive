@@ -97,7 +97,6 @@ namespace NaiveSocks
             }
             // There is a large reading opearation, so the internal buffer can be released now.
             readBuffer.Bytes = null;
-            available = 0;
             return 0;
         }
 

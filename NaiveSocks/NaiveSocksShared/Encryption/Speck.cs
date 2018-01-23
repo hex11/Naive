@@ -6,6 +6,7 @@ using System.Text;
 using uint64 = System.UInt64;
 using uint32 = System.UInt32;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 
 namespace NaiveSocks
 {
@@ -46,6 +47,10 @@ namespace NaiveSocks
 
             public override int IVLength => BlockSize;
 
+            public static int ThreadCount { get; } = Math.Max(1, Math.Min(4, Environment.ProcessorCount / 2));
+
+            public bool EnableMultiThreading { get; set; } = true;
+
             uint64[] keys;
             QWords128 counter;
 
@@ -67,27 +72,71 @@ namespace NaiveSocks
                 bs.CheckAsParameter();
                 var pos = bs.Offset;
                 var end = pos + bs.Len;
-                byte* keyStreamBuf = this.keyStreamBuf;
-                fixed (byte* bytes = bs.Bytes) {
-                    while (pos < end) {
-                        var remainningKeystream = KeystreamBufferSize - keystreamBufferPos;
-                        if (remainningKeystream == 0) {
-                            keystreamBufferPos = 0;
-                            remainningKeystream = KeystreamBufferSize;
-                            var ksb = (QWords128*)keyStreamBuf;
-                            for (int i = 0; i < KsBlockCount; i++) {
-                                ksb[i] = counter;
-                                if (++counter.v1 == 0)
-                                    ++counter.v0;
-                                Cipher.encrypt_128_128(keys, ref ksb[i]);
-                            }
-                        }
-                        var count = end - pos;
-                        count = count < remainningKeystream ? count : remainningKeystream;
-                        NaiveUtils.XorBytesUnsafe(keyStreamBuf + keystreamBufferPos, bytes + pos, count);
-                        pos += count;
-                        keystreamBufferPos += count;
+                var bytesGCHandle = GCHandle.Alloc(bs.Bytes, GCHandleType.Pinned);
+                try {
+                    var bytes = (byte*)bytesGCHandle.AddrOfPinnedObject();
+                    if (EnableMultiThreading && bs.Len >= 16 * 1024 && ThreadCount > 1) {
+                        UpdateMT(bytes, pos, end);
+                    } else {
+                        Update(bytes, pos, end, keyStreamBuf, ref keystreamBufferPos, ref counter, keys);
                     }
+                } finally {
+                    bytesGCHandle.Free();
+                }
+            }
+
+            private void UpdateMT(byte* bytes, int pos, int end)
+            {
+                // update until end of keystream buffer:
+                if (keystreamBufferPos != KeystreamBufferSize)
+                    Update(bytes, pos, (pos = pos + KeystreamBufferSize - keystreamBufferPos),
+                        keyStreamBuf, ref keystreamBufferPos, ref counter, keys);
+
+                int len = end - pos;
+                int lenPerThread = (len / ThreadCount);
+                lenPerThread -= (lenPerThread % KeystreamBufferSize); // align to keystream buffer size
+                var ctrPerThread = (ulong)lenPerThread / BlockSize;
+                var tasks = new Task[ThreadCount - 1];
+                for (int i = 0; i < tasks.Length; i++) {
+                    var threadPos = pos;
+                    var threadEnd = pos += lenPerThread;
+                    var threadCtr = counter;
+                    var oldV1 = counter.v1;
+                    if ((counter.v1 += ctrPerThread) < oldV1)
+                        counter.v0++;
+                    tasks[i] = Task.Run(() => {
+                        var ksBuffer = stackalloc byte[KeystreamBufferSize];
+                        var ksPos = KeystreamBufferSize;
+                        Update(bytes, threadPos, threadEnd,
+                            ksBuffer, ref ksPos, ref threadCtr, keys);
+                    });
+                }
+                // update the last part by this thread:
+                Update(bytes, pos, end, keyStreamBuf, ref keystreamBufferPos, ref counter, keys);
+                Task.WaitAll(tasks);
+            }
+
+            static void Update(byte* bytes, int pos, int end,
+                byte* keyStreamBuf, ref int keystreamBufferPos, ref QWords128 counter, uint64[] keys)
+            {
+                while (pos < end) {
+                    var remainningKeystream = KeystreamBufferSize - keystreamBufferPos;
+                    if (remainningKeystream == 0) {
+                        keystreamBufferPos = 0;
+                        remainningKeystream = KeystreamBufferSize;
+                        var ksb = (QWords128*)keyStreamBuf;
+                        for (int i = 0; i < KsBlockCount; i++) {
+                            ksb[i] = counter;
+                            if (++counter.v1 == 0)
+                                ++counter.v0;
+                            Cipher.encrypt_128_128(keys, ref ksb[i]);
+                        }
+                    }
+                    var count = end - pos;
+                    count = count < remainningKeystream ? count : remainningKeystream;
+                    NaiveUtils.XorBytesUnsafe(keyStreamBuf + keystreamBufferPos, bytes + pos, count);
+                    pos += count;
+                    keystreamBufferPos += count;
                 }
             }
         }
