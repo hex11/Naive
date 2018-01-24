@@ -48,7 +48,7 @@ namespace NaiveSocks
             public Dictionary<string, string> Headers { get; set; }
             public string UrlFormat { get; set; } = "{0}?token={1}";
 
-            public int ImuxConnections { get; set; } = 1;
+            public int ImuxWsConnections { get; set; } = 1;
             public int ImuxHttpConnections { get; set; } = 0;
             public int ImuxWsSendOnlyConnections { get; set; } = 0;
             public int ImuxConnectionsDelay { get; set; } = 0;
@@ -96,7 +96,7 @@ namespace NaiveSocks
             IMsgStream msgStream;
             // [ wsso | ws | http ]
             int wssoCount = settings.ImuxWsSendOnlyConnections; // sending only (index starting from 0)
-            int wsCount = settings.ImuxConnections; // sending and recving (index following by wssoCount)
+            int wsCount = settings.ImuxWsConnections; // sending and recving (index following by wssoCount)
             int httpCount = settings.ImuxHttpConnections; // recving only
             int count = wssoCount + wsCount + httpCount;
             string sid = Guid.NewGuid().ToString("N").Substring(0, 8);

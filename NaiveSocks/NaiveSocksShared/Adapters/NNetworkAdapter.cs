@@ -43,7 +43,7 @@ namespace NaiveSocks
         public override string ToString() => $"{{NClient name={string.Join(",", names)}{(WhenDisconnected.IsCompleted ? " disconnected" : "")}}}";
     }
 
-    public class NNetworkAdapter : OutAdapter, ICanReloadBetter, INetwork, IHttpRequestAsyncHandler
+    public class NNetworkAdapter : OutAdapter, ICanReload, INetwork, IHttpRequestAsyncHandler
     {
         public override string ToString() => $"{{NNetwork '{domain}'}}";
 

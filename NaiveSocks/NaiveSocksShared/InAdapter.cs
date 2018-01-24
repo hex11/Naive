@@ -28,7 +28,7 @@ namespace NaiveSocks
         }
     }
 
-    public interface ICanReloadBetter : IAdapter
+    public interface ICanReload : IAdapter
     {
         /// <summary>
         /// Called by the controller when it's reloading and an old instance is found.

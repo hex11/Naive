@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 
 namespace NaiveSocks
 {
-    class WebconAdapter : OutAdapter, ICanReloadBetter, IHttpRequestAsyncHandler
+    class WebconAdapter : OutAdapter, ICanReload, IHttpRequestAsyncHandler
     {
         public string passwd { get; set; }
 

@@ -8,7 +8,7 @@ using Nett;
 
 namespace NaiveSocks
 {
-    public class NaiveMOutAdapter : OutAdapter2, IInAdapter, ICanReloadBetter, IDnsProvider
+    public class NaiveMOutAdapter : OutAdapter2, IInAdapter, ICanReload, IDnsProvider
     {
         public override string ToString() => $"{{NaiveMOut server={server}}}";
 
@@ -95,7 +95,7 @@ namespace NaiveSocks
                     imux_http = imuxarr[1];
                     imux_wsso = imuxarr[2];
                 } else if (imux is TomlValue tv) {
-                    imux_ws = toml.Get<int>();
+                    imux_ws = tv.Get<int>();
                 } else {
                     throw new Exception("unexpected 'imux' value type: " + imux.GetType());
                 }
@@ -265,7 +265,7 @@ namespace NaiveSocks
                         KeyString = adapter.key,
                         Encryption = adapter.encryption,
                         Path = adapter.path,
-                        ImuxConnections = adapter.imux_ws,
+                        ImuxWsConnections = adapter.imux_ws,
                         ImuxHttpConnections = adapter.imux_http,
                         ImuxWsSendOnlyConnections = adapter.imux_wsso,
                         ImuxConnectionsDelay = adapter.imux_delay,

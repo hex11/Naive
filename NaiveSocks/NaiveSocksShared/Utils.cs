@@ -260,7 +260,7 @@ namespace NaiveSocks
         public TcpListener BaseListener { get; }
         public Action<TcpClient> Accepted;
 
-        public bool LogInfo { get; set; } = true;
+        public bool LogInfo { get; set; } = false;
 
         public async Task Start()
         {
@@ -271,11 +271,11 @@ namespace NaiveSocks
                 BaseListener.Start(10);
                 ep = BaseListener.LocalEndpoint;
             } catch (Exception e) {
-                Logging.error($"starting listening on {BaseListener.LocalEndpoint}: {e.Message}");
+                Logging.error($"[listener] starting listening on {BaseListener.LocalEndpoint}: {e.Message}");
                 return;
             }
             if (LogInfo)
-                Logging.info($"listening on {ep}");
+                Logging.info($"[listener] listening on {ep}");
             while (true) {
                 TcpClient cli = null;
                 try {
@@ -284,12 +284,12 @@ namespace NaiveSocks
                         NaiveUtils.ConfigureSocket(cli.Client);
                     } catch (Exception) when (stopping) {
                         if (LogInfo)
-                            Logging.info($"stopped listening on {ep}");
+                            Logging.info($"[listener] stopped listening on {ep}");
                         return;
                     }
                     Accepted?.Invoke(cli);
                 } catch (Exception e) {
-                    Logging.exception(e, Logging.Level.Error, $"listener {ep}");
+                    Logging.exception(e, Logging.Level.Error, $"[listener] {ep}");
                 }
             }
         }

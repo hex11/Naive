@@ -275,26 +275,32 @@ namespace NaiveSocks
             Logging.info($"new configuration loaded. {newCfg.InAdapters.Count} InAdapters, {newCfg.OutAdapters.Count} OutAdapters.");
             var oldCfg = CurrentConfig;
             var oldCanReload = InAdapters.Union<Adapter>(OutAdapters)
-                                        .Select(x => x as ICanReloadBetter)
+                                        .Select(x => x as ICanReload)
                                         .Where(x => x != null).ToList();
+            var newCanReload = newCfg.InAdapters.Union<Adapter>(newCfg.OutAdapters)
+                                        .Select(x => x as ICanReload)
+                                        .Where(x => x != null).ToList();
+            var oldNewCanReload = oldCanReload.Where(x => {
+                return newCanReload.Any(y => y.Name == x.Name && y.GetType() == x.GetType());
+            }).ToList();
             Logging.warning("stopping old adapters...");
-            this.Stop();
+            this.Stop(CurrentConfig, oldNewCanReload);
             Logging.warning("================================");
             Logging.warning("starting new adapters...");
             CurrentConfig = newCfg;
-            this.Start(oldCanReload);
+            this.Start(oldNewCanReload);
         }
 
         public void Start() => Start(null);
-        private void Start(List<ICanReloadBetter> oldAdapters)
+        private void Start(List<ICanReload> oldAdapters)
         {
-            bool checkIcrb(IAdapter item)
+            bool checkIcr(IAdapter item)
             {
-                if (oldAdapters != null && item is ICanReloadBetter icrb) {
-                    var old = oldAdapters.Find(x => x.Name == icrb.Name && x.GetType() == icrb.GetType());
+                if (oldAdapters != null && item is ICanReload icr) {
+                    var old = oldAdapters.Find(x => x.Name == icr.Name && x.GetType() == icr.GetType());
                     if (old != null) {
                         oldAdapters.Remove(old);
-                        if (icrb.Reloading(old))
+                        if (icr.Reloading(old))
                             return false;
                     }
                 }
@@ -304,7 +310,7 @@ namespace NaiveSocks
                 info($"OutAdapter '{item.Name}': {item}");
                 try {
                     item.InternalInit(this);
-                    item.InternalStart(checkIcrb(item));
+                    item.InternalStart(checkIcr(item));
                 } catch (Exception e) {
                     Logging.exception(e, Logging.Level.Error, $"starting OutAdapter '{item.Name}': {item}");
                 }
@@ -313,23 +319,25 @@ namespace NaiveSocks
                 info($"InAdapter '{item.Name}': {item} -> {item.@out?.Adapter?.Name?.Quoted() ?? "(No OutAdapter)"}");
                 try {
                     item.InternalInit(this);
-                    item.InternalStart(checkIcrb(item));
+                    item.InternalStart(checkIcr(item));
                 } catch (Exception e) {
                     Logging.exception(e, Logging.Level.Error, $"starting InAdapter '{item.Name}': {item}");
                 }
             }
         }
 
-        public void Stop() => Stop(CurrentConfig);
-        private void Stop(Config config)
+        public void Stop() => Stop(CurrentConfig, null);
+        private void Stop(Config config, List<ICanReload> listNotCallStop)
         {
             foreach (var item in config.InAdapters) {
-                info($"stopping InAdapter: {item}");
-                item.InternalStop(true);
+                var reloading = item is ICanReload icr && listNotCallStop?.Contains(icr) == true;
+                info($"stopping{(reloading ? " (reloading)" : "")} InAdapter: {item}");
+                item.InternalStop(!reloading);
             }
             foreach (var item in config.OutAdapters) {
-                info($"stopping OutAdapter: '{item.Name}' {item}");
-                item.InternalStop(true);
+                var reloading = item is ICanReload icr && listNotCallStop?.Contains(icr) == true;
+                info($"stopping{(reloading ? " (reloading)" : "")} OutAdapter: '{item.Name}' {item}");
+                item.InternalStop(!reloading);
             }
         }
 

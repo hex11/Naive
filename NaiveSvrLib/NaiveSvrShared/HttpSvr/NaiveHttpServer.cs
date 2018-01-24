@@ -183,6 +183,7 @@ namespace Naive.HttpSvr
             public NaiveHttpServer server { get; }
             public IPEndPoint localEP { get; }
             public bool IsRunning { get; private set; } = false;
+            public bool LogInfo { get; set; } = false;
             private string stamp => server.stamp;
             public NaiveHttpListener(NaiveHttpServer server, TcpListener tcpListener)
             {
@@ -202,7 +203,8 @@ namespace Naive.HttpSvr
                     }
                 } finally {
                     IsRunning = false;
-                    server.log($"{stamp}({localEP}) listening thread exiting", Logging.Level.Warning);
+                    if (LogInfo)
+                        server.log($"{stamp}({localEP}) listening thread exiting", Logging.Level.Warning);
                 }
             }
 
@@ -215,7 +217,8 @@ namespace Naive.HttpSvr
                     Logging.error($"{stamp} starting listening on {localEP}: {e.Message}");
                     return;
                 }
-                Logging.info($"{stamp} listening on {localEP}");
+                if (LogInfo)
+                    Logging.info($"{stamp} listening on {localEP}");
                 while (true) {
                     try {
                         var client = await tcpListener.AcceptTcpClientAsync();
