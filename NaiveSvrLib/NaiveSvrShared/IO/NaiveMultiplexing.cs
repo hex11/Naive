@@ -16,7 +16,7 @@ namespace NaiveSocks
     // header byte: sbyte, short (extended), int (extended)
     //   if eq MinValue: reserved channel ([MinValue] [channel id] [opcode])
     //   else if is sending frame: channel id
-    //   else if is recving frame: nagatived channel id
+    //   else if is recving frame: negatived channel id
 
     // Channel ID:
     //             MinValue : reserved channel (used for opcodes)

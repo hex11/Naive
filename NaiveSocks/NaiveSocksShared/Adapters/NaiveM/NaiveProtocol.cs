@@ -189,7 +189,7 @@ namespace NaiveSocks
         public const string EncryptionSpeck0 = "speck0";
         public const string EncryptionSpeck064 = "speck064";
 
-        public static void ApplyEncryption(Filterable filterable, byte[] key, string type = "")
+        public static void ApplyEncryption(FilterBase filterable, byte[] key, string type = "")
         {
             if (string.IsNullOrEmpty(type) || type == EncryptionAesOfb128) {
                 if (key.Length > 16)

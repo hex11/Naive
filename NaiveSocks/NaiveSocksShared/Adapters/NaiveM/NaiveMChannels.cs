@@ -471,7 +471,7 @@ namespace NaiveSocks
         }
     }
 
-    public class MsgStreamFilter : Filterable, IMsgStream
+    public class MsgStreamFilter : FilterBase, IMsgStream
     {
         public MsgStreamFilter(IMsgStream baseStream)
         {
@@ -533,48 +533,48 @@ namespace NaiveSocks
                 asStream = BaseStream.ToStream();
             var lengthStr = await NaiveUtils.ReadStringUntil(asStream, NaiveUtils.CRLFBytes, maxLength: 32, withPattern: false);
             var chunkSize = Convert.ToInt32(lengthStr, 16);
-            //Logging.debug("recv: " + chunkSize);
             if (chunkSize == 0) {
                 return Msg.EOF;
             }
             var buffer = new byte[chunkSize];
             var pos = 0;
-            var read = 0;
             do {
+                int read;
                 pos += read = await BaseStream.ReadAsync(new BytesSegment(buffer, pos, chunkSize - pos)).CAF();
                 if (read == 0)
                     throw new DisconnectedException("unexpected EOF while reading chunked http request content.");
             } while (pos < chunkSize);
-            read = 0;
+            pos = 0;
             do { // read CRLF
-                read += await BaseStream.ReadAsync(new BytesSegment(_crlfBuffer, read, 2 - read));
+                int read;
+                pos += read = await BaseStream.ReadAsync(new BytesSegment(_crlfBuffer, pos, 2 - pos));
                 if (read == 0)
                     throw new DisconnectedException("unexpected EOF while reading chunked http request content.");
-            } while (read < 2);
+            } while (pos < 2);
             if (_crlfBuffer[0] != '\r' && _crlfBuffer[1] != '\n') {
-                throw new Exception($"not a CRLF after chunked payload! {_crlfBuffer[0]} {_crlfBuffer[1]}");
+                throw new Exception($"not a CRLF after chunk! {_crlfBuffer[0]} {_crlfBuffer[1]}");
             }
             return new Msg(buffer);
         }
 
 
 
-        private readonly object _syncRootLastSendTask = new object();
+        private readonly object _lockLatestSendTask = new object();
         private Task _latestSendTask;
 
         public Task SendMsg(Msg msg)
         {
-            lock (_syncRootLastSendTask) {
+            lock (_lockLatestSendTask) {
                 if (_latestSendTask == null || _latestSendTask.IsCompleted) {
                     return _latestSendTask = _SendMsg(msg);
                 } else {
-                    return _latestSendTask = _SendMsg_await(_latestSendTask, msg);
+                    return _latestSendTask = _SendMsgQueued(_latestSendTask, msg);
                 }
             }
         }
 
 
-        private async Task _SendMsg_await(Task taskToWait, Msg msg)
+        private async Task _SendMsgQueued(Task taskToWait, Msg msg)
         {
             try {
                 await taskToWait;

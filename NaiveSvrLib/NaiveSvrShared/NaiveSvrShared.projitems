@@ -25,8 +25,11 @@
     <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\System.Web\Helpers.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\System.Web\HttpEncoder.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\System.Web\HttpUtility.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\WebSocket.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\WebSocketClient.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IO\BytesSegment.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IO\BytesView.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IO\FilterBase.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IO\WebSocket.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IO\WebSocketClient.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\WebSocketServer.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IO\MsgStream.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IO\MyStream.cs" />
