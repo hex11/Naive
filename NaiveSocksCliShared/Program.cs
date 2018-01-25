@@ -6,7 +6,6 @@ using Naive.HttpSvr;
 using Naive;
 using System.IO;
 using System.Threading.Tasks;
-using System.Windows.Forms;
 using System.Linq;
 
 namespace NaiveSocks
@@ -92,14 +91,28 @@ Usage: {NAME}.exe [-h|--help] [(-c|--config) FILE] [--no-cli] [--no-log-stdout]
                     lastBytes = b;
                 }
             }
-            //controller.NewConnection += x => updateTitle();
-            //controller.EndConnection += x => updateTitle();
-            NaiveUtils.RunAsyncTask(async () => {
+            async Task updateTitleLoopTask(CancellationToken ct)
+            {
                 while (true) {
                     await Task.Delay(1000);
+                    if (ct.IsCancellationRequested) {
+                        Console.Title = NAME;
+                        return;
+                    }
                     updateTitle();
                 }
-            });
+            }
+            CancellationTokenSource currentUpdateCTS = null;
+            controller.ConfigTomlLoaded += (x) => {
+                if (currentUpdateCTS != null) {
+                    currentUpdateCTS.Cancel();
+                    currentUpdateCTS = null;
+                }
+                if (x.TryGetValue("update_title", Environment.OSVersion.Platform == PlatformID.Win32NT)) {
+                    currentUpdateCTS = new CancellationTokenSource();
+                    updateTitleLoopTask(currentUpdateCTS.Token).Forget();
+                }
+            };
             Logging.info($"{NAME} {verstionText}");
             if (specifiedConfigPath != null) {
                 Commands.loadController(controller, specifiedConfigPath);

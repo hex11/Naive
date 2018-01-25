@@ -62,7 +62,6 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="NaiveModule.cs" />
-    <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
@@ -78,5 +77,6 @@
     </ProjectReference>
   </ItemGroup>
   <Import Project="..\NaiveSocksShared\NaiveSocksShared.projitems" Label="Shared" />
+  <Import Project="..\..\NaiveSocksCliShared\NaiveSocksCliShared.projitems" Label="Shared" />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

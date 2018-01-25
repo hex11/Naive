@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
-VisualStudioVersion = 15.0.27130.0
+VisualStudioVersion = 15.0.27130.2024
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NaiveSocks", "NaiveSocks\NaiveSocks\NaiveSocks.csproj", "{489D2BC7-5344-4CBA-BBE0-F104F955199C}"
 EndProject
@@ -17,15 +17,23 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NZip", "NaiveZip\NZip\NZip.
 EndProject
 Project("{D954291E-2A0B-460D-934E-DC6B0785DB48}") = "NZipShared", "NaiveZip\NZipShared\NZipShared.shproj", "{A8493EC4-38AC-45BF-9A52-D3822A962BD6}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NaiveSocksDotNetCore", "NaiveSocksDotNetCore\NaiveSocksDotNetCore.csproj", "{F172074F-C119-47FD-BC38-173847ED2083}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NaiveSvrLibStandard", "NaiveSvrLibStandard\NaiveSvrLibStandard.csproj", "{A6D5ADD3-5B85-4CD8-BE28-6AC19B8F6786}"
+EndProject
+Project("{D954291E-2A0B-460D-934E-DC6B0785DB48}") = "NaiveSocksCliShared", "NaiveSocksCliShared\NaiveSocksCliShared.shproj", "{F8975733-0B83-4AF3-BF4E-8BCDAFEE4A70}"
+EndProject
 Global
 	GlobalSection(SharedMSBuildProjectFiles) = preSolution
 		NaiveSvrLib\NaiveSvrShared\NaiveSvrShared.projitems*{0b623dfc-5129-419c-bb03-823809f9178d}*SharedItemsImports = 13
 		NaiveZip\NZipShared\NZipShared.projitems*{104b1bf6-4740-4f18-8adc-7b2f730e6000}*SharedItemsImports = 4
+		NaiveSocksCliShared\NaiveSocksCliShared.projitems*{489d2bc7-5344-4cba-bbe0-f104f955199c}*SharedItemsImports = 4
 		NaiveSocks\NaiveSocksShared\NaiveSocksShared.projitems*{489d2bc7-5344-4cba-bbe0-f104f955199c}*SharedItemsImports = 4
 		NaiveZip\NZipShared\NZipShared.projitems*{a8493ec4-38ac-45bf-9a52-d3822a962bd6}*SharedItemsImports = 13
 		NaiveSvrLib\NaiveConsoleShared\NaiveConsoleShared.projitems*{a92bc4fa-7794-4694-a814-74f3ced1cfad}*SharedItemsImports = 13
 		NaiveSvrLib\NaiveConsoleShared\NaiveConsoleShared.projitems*{b6fdce48-2582-4cbc-b1ed-4a6952e183d2}*SharedItemsImports = 4
 		NaiveSvrLib\NaiveSvrShared\NaiveSvrShared.projitems*{b6fdce48-2582-4cbc-b1ed-4a6952e183d2}*SharedItemsImports = 4
+		NaiveSocksCliShared\NaiveSocksCliShared.projitems*{f8975733-0b83-4af3-bf4e-8bcdafee4a70}*SharedItemsImports = 13
 		NaiveSocks\NaiveSocksShared\NaiveSocksShared.projitems*{fffcf1f9-7c24-425b-bf68-a12f26abb42d}*SharedItemsImports = 13
 	EndGlobalSection
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -52,6 +60,18 @@ Global
 		{104B1BF6-4740-4F18-8ADC-7B2F730E6000}.Release(Debug)|Any CPU.Build.0 = Release|Any CPU
 		{104B1BF6-4740-4F18-8ADC-7B2F730E6000}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{104B1BF6-4740-4F18-8ADC-7B2F730E6000}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F172074F-C119-47FD-BC38-173847ED2083}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F172074F-C119-47FD-BC38-173847ED2083}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F172074F-C119-47FD-BC38-173847ED2083}.Release(Debug)|Any CPU.ActiveCfg = Release|Any CPU
+		{F172074F-C119-47FD-BC38-173847ED2083}.Release(Debug)|Any CPU.Build.0 = Release|Any CPU
+		{F172074F-C119-47FD-BC38-173847ED2083}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F172074F-C119-47FD-BC38-173847ED2083}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A6D5ADD3-5B85-4CD8-BE28-6AC19B8F6786}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A6D5ADD3-5B85-4CD8-BE28-6AC19B8F6786}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A6D5ADD3-5B85-4CD8-BE28-6AC19B8F6786}.Release(Debug)|Any CPU.ActiveCfg = Release|Any CPU
+		{A6D5ADD3-5B85-4CD8-BE28-6AC19B8F6786}.Release(Debug)|Any CPU.Build.0 = Release|Any CPU
+		{A6D5ADD3-5B85-4CD8-BE28-6AC19B8F6786}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A6D5ADD3-5B85-4CD8-BE28-6AC19B8F6786}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
