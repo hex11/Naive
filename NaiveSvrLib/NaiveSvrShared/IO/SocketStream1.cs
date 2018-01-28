@@ -32,24 +32,35 @@ namespace NaiveSocks
                 $" Write {ctr.Wsync + ctr.Wasync} (async {ctr.Wasync}, sync {ctr.Wsync})";
         }
 
-        const int readBufferSize = 128;
+        public int SmartReadBufferSize { get; set; } = 256;
         BytesSegment readBuffer;
 
         public bool EnableSmartReadBuffer { get; set; } = true;
+        public bool EnableSmartSyncRead { get; set; } = true;
 
         public override Task<int> ReadAsync(BytesSegment bs)
         {
-            var bufRead = TryReadWithInternalBuffer(ref bs, out var available);
+            // We use an internal buffer, whice is larger, to reduce many recv() syscalls when `bs` is very small.
+            // It's important, since there is a hardware bug named 'Meltdown' in Intel CPUs.
+            // TESTED: This optimization made ReadAsync 20x faster when bs.Len == 4, 
+            //         on Windows 10 x64 16299.192 with a laptop Haswell CPU.
+            var bufRead = TryReadInternalBuffer(ref bs);
             if (bufRead > 0)
                 return NaiveUtils.GetCachedTaskInt(bufRead);
-            if (available > 0) {
-                // if the receive buffer of system is not empty,
-                // use sync operation to reduce async overhead.
-                Interlocked.Increment(ref ctr.Rsync);
-                var read = Socket.Receive(bs.Bytes, bs.Offset, bs.Len, SocketFlags.None);
-                if (read == 0)
-                    throw new Exception("WTF! It should not happen: Socket.Receive() returns 0 when Socket.Available > 0.");
-                return NaiveUtils.GetCachedTaskInt(read);
+            if (EnableSmartSyncRead | EnableSmartReadBuffer) {
+                var available = Socket.Available;
+                var bufRead2 = TryFillAndReadInternalBuffer(ref bs, available);
+                if (bufRead2 > 0)
+                    return NaiveUtils.GetCachedTaskInt(bufRead2);
+                if (EnableSmartSyncRead && available > 0) {
+                    // if the receive buffer of system is not empty,
+                    // use sync operation to reduce async overhead.
+                    Interlocked.Increment(ref ctr.Rsync);
+                    var read = Socket.Receive(bs.Bytes, bs.Offset, bs.Len, SocketFlags.None);
+                    if (read == 0)
+                        throw new Exception("WTF! It should not happen: Socket.Receive() returns 0 when Socket.Available > 0.");
+                    return NaiveUtils.GetCachedTaskInt(read);
+                }
             }
             Interlocked.Increment(ref ctr.Rasync);
             return TaskHelper.FromAsyncTrim(
@@ -64,12 +75,8 @@ namespace NaiveSocks
                 });
         }
 
-        private int TryReadWithInternalBuffer(ref BytesSegment bs, out int available)
+        private int TryReadInternalBuffer(ref BytesSegment bs)
         {
-            // We use an internal buffer, whice is larger, to reduce many small read() syscalls.
-            // It's important, since there is a hardware bug named 'Meltdown' in Intel CPUs.
-            // TESTED: This optimization made this method 20x faster when bs.Len == 4, 
-            //         on Windows 10 x64 16299.192 with a laptop Haswell CPU.
             if (readBuffer.Len > 0) {
                 Interlocked.Increment(ref ctr.Rbuffer);
                 var read = Math.Min(bs.Len, readBuffer.Len);
@@ -77,16 +84,19 @@ namespace NaiveSocks
                 readBuffer.SubSelf(read);
                 // Don't release the buffer here even the buffer is empty,
                 // because there may be more small ReadAsync() calls later.
-                available = 0;
                 return read;
             }
-            available = Socket.Available;
-            if (EnableSmartReadBuffer && (available > bs.Len & bs.Len < readBufferSize)) {
+            return 0;
+        }
+
+        private int TryFillAndReadInternalBuffer(ref BytesSegment bs, int socketAvailable)
+        {
+            if (EnableSmartReadBuffer && (socketAvailable > bs.Len & bs.Len < SmartReadBufferSize)) {
                 Interlocked.Increment(ref ctr.Rsync);
-                if (readBuffer.Bytes == null)
-                    readBuffer.Bytes = new byte[readBufferSize];
+                if (readBuffer.Bytes == null || readBuffer.Bytes.Length != SmartReadBufferSize)
+                    readBuffer.Bytes = new byte[SmartReadBufferSize];
                 readBuffer.Offset = 0;
-                var read = Socket.Receive(readBuffer.Bytes, 0, readBufferSize, SocketFlags.None);
+                var read = Socket.Receive(readBuffer.Bytes, 0, SmartReadBufferSize, SocketFlags.None);
                 readBuffer.Len = read;
                 if (read == 0)
                     throw new Exception("WTF! It should not happen: Socket.Receive() returns 0 when Socket.Available > 0.");
@@ -102,7 +112,7 @@ namespace NaiveSocks
 
         public override int Read(BytesSegment bs)
         {
-            var bufRead = TryReadWithInternalBuffer(ref bs, out var available);
+            var bufRead = TryReadInternalBuffer(ref bs);
             if (bufRead > 0)
                 return bufRead;
             return base.Read(bs);

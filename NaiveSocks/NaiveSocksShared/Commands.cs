@@ -276,16 +276,7 @@ namespace NaiveSocks
                             x.Close();
                         });
                         listener.Start().Forget();
-                        NaiveUtils.RunAsyncTask(async () => {
-                            var socket = await NaiveUtils.ConnectTCPAsync(AddrPort.Parse(ep.ToString()), 5000);
-                            var stream = new SocketStream1(socket);
-                            sw.Restart();
-                            var buf = new byte[32 * 1024];
-                            for (int i = 0; i < 1024; i++) {
-                                await stream.WriteAsync(buf);
-                            }
-                            socket.Close();
-                        }).RunSync();
+                        TestSocketWrite(sw, ep, 32 * 1024, 1024);
                         listener.Stop();
                     },
                     ["localhost socket 1 (4 bytes read buffer)"] = () => {
@@ -299,19 +290,10 @@ namespace NaiveSocks
                             x.Close();
                         });
                         listener.Start().Forget();
-                        NaiveUtils.RunAsyncTask(async () => {
-                            var socket = await NaiveUtils.ConnectTCPAsync(AddrPort.Parse(ep.ToString()), 5000);
-                            var stream = new SocketStream1(socket);
-                            sw.Restart();
-                            var buf = new byte[32 * 1024];
-                            for (int i = 0; i < 1024; i++) {
-                                await stream.WriteAsync(buf);
-                            }
-                            socket.Close();
-                        }).RunSync();
+                        TestSocketWrite(sw, ep, 32 * 1024, 1024);
                         listener.Stop();
                     },
-                    ["localhost socket 1 (4 bytes read buffer without internal buffer)"] = () => {
+                    ["localhost socket 1 (4 bytes read buffer without smart buffer)"] = () => {
                         var ep = new IPEndPoint(IPAddress.Loopback, NaiveUtils.Random.Next(20000, 60000));
                         var listener = new Listener(ep) { LogInfo = false };
                         listener.Accepted += (x) => NaiveUtils.RunAsyncTask(async () => {
@@ -323,16 +305,23 @@ namespace NaiveSocks
                             x.Close();
                         });
                         listener.Start().Forget();
-                        NaiveUtils.RunAsyncTask(async () => {
-                            var socket = await NaiveUtils.ConnectTCPAsync(AddrPort.Parse(ep.ToString()), 5000);
-                            var stream = new SocketStream1(socket);
-                            sw.Restart();
-                            var buf = new byte[32 * 1024];
-                            for (int i = 0; i < 1024; i++) {
-                                await stream.WriteAsync(buf);
+                        TestSocketWrite(sw, ep, 32 * 1024, 1024);
+                        listener.Stop();
+                    },
+                    ["localhost socket 1 (4 bytes read buffer without smart buffer/sync)"] = () => {
+                        var ep = new IPEndPoint(IPAddress.Loopback, NaiveUtils.Random.Next(20000, 60000));
+                        var listener = new Listener(ep) { LogInfo = false };
+                        listener.Accepted += (x) => NaiveUtils.RunAsyncTask(async () => {
+                            var stream = new SocketStream1(x.Client);
+                            stream.EnableSmartReadBuffer = false;
+                            stream.EnableSmartSyncRead = false;
+                            var buf = new byte[4];
+                            while (await stream.ReadAsync(buf) > 0) {
                             }
-                            socket.Close();
-                        }).RunSync();
+                            x.Close();
+                        });
+                        listener.Start().Forget();
+                        TestSocketWrite(sw, ep, 32 * 1024, 1024);
                         listener.Stop();
                     },
                     ["localhost socket 2"] = () => {
@@ -474,6 +463,20 @@ namespace NaiveSocks
                     cmd.WriteLine($"waiting timed out.");
                 }
             }, "Usage: mping [start|stop]");
+        }
+
+        private static void TestSocketWrite(Stopwatch sw, IPEndPoint ep, int bufSize, int count)
+        {
+            NaiveUtils.RunAsyncTask(async () => {
+                var socket = await NaiveUtils.ConnectTCPAsync(AddrPort.Parse(ep.ToString()), 5000);
+                var stream = new SocketStream1(socket);
+                sw.Restart();
+                var buf = new byte[bufSize];
+                for (int i = 0; i < count; i++) {
+                    await stream.WriteAsync(buf);
+                }
+                socket.Close();
+            }).RunSync();
         }
 
         private static void Speck0Test(byte[] samplekey, int bufSize, int loops, bool allowMultiThreading)
