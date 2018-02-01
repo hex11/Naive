@@ -107,6 +107,10 @@ namespace NaiveSocks
             cmdHub.AddCmdHandler(prefix + "stat", command => {
                 var proc = Process.GetCurrentProcess();
                 command.WriteLine($"TotalMemory: {GC.GetTotalMemory(command.args.Contains("gc")).ToString("N0")}");
+                command.WriteLine("CollectionCount: " + string.Join(
+                    ", ",
+                    Enumerable.Range(0, GC.MaxGeneration + 1)
+                        .Select(x => $"({x}) {GC.CollectionCount(x)}")));
                 command.WriteLine($"WorkingSet: {proc.WorkingSet64.ToString("N0")}");
                 command.WriteLine($"PrivateMemory: {proc.PrivateMemorySize64.ToString("N0")}");
                 command.WriteLine($"CPUTime: {proc.TotalProcessorTime.TotalMilliseconds.ToString("N0")} ms");

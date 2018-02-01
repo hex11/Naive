@@ -105,7 +105,7 @@ namespace NaiveSocks
                 await WriteReply(Rep.Command_not_supported);
             }
         }
-        
+
         public Task<int> ReadAsync(byte[] bytes, int offset, int size)
         {
             return Stream.ReadAsync(bytes, offset, size);
@@ -196,7 +196,7 @@ namespace NaiveSocks
         private Exception getException() => new Exception();
         private Exception getException(string msg) => new Exception(msg);
         private Exception getEOFException() => getException("unexpected EOF");
-        
+
 
         public void FailedToConnect(SocketException ex)
         {

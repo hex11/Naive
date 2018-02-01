@@ -207,7 +207,8 @@ namespace Naive.HttpSvr
                         continue;
                     if (pingTimeout <= 0)
                         pingTimeout = closeTimeout;
-                    if (delta > closeTimeout && item._manageState == ManageState.PingSent) {
+                    if (delta > closeTimeout
+                        && (item._manageState == ManageState.PingSent || item.ConnectionState != States.Open)) {
                         Logging.warning($"{item} timed out, closing.");
                         item._manageState = ManageState.TimedoutClosed;
                         item.Close();
@@ -501,7 +502,7 @@ namespace Naive.HttpSvr
                     }
                     if (ReadFilter != null) {
                         var oldlen = bv.len;
-                        ReadFilter(bv);
+                        OnRead(bv);
                         if (optionalBuffer != null && bv.bytes != optionalBuffer) {
                             bv.bytes.CopyTo(optionalBuffer, offset);
                         }
@@ -780,8 +781,8 @@ namespace Naive.HttpSvr
                 throw new ArgumentNullException("buf.bytes");
 
             BytesView bv = buf;
-            if (WriteFilter != null && bv.len > 0) {
-                WriteFilter(bv);
+            if (bv.tlen > 0) {
+                OnWrite(bv);
             }
             var curSendBufSize = NaiveUtils.Random.Next(SendBufSizeMin, SendBufSizeMax);
             var len = bv.tlen;
@@ -840,7 +841,7 @@ namespace Naive.HttpSvr
 
             BytesView bv = new BytesView(buf, begin, len);
             if (WriteFilter != null && len > 0) {
-                WriteFilter(bv);
+                OnWrite(bv);
                 buf = bv.bytes;
                 begin = bv.offset;
                 len = bv.tlen;

@@ -183,7 +183,7 @@ namespace NaiveSocks
                     CheckPoolWithDelay();
                 };
                 AddPoolItem(pi);
-                pi.ConnectIfNot().Forget();
+                Task.Run(pi.ConnectIfNot);
                 return pi;
             }
         }
@@ -247,6 +247,8 @@ namespace NaiveSocks
             public event Action<PoolItem, Exception> Error;
             public event Action<PoolItem> Closed;
 
+            int state = 0;
+
             public PoolItem(NaiveMOutAdapter adapter)
             {
                 this.adapter = adapter;
@@ -256,7 +258,6 @@ namespace NaiveSocks
             private async Task Connect()
             {
                 try {
-                    await Task.Yield();
                     var beginTime = DateTime.Now;
                     Logging.info($"'{adapter.Name}' connecting...");
                     var settings = new NaiveMChannels.ConnectingSettings {
@@ -271,7 +272,9 @@ namespace NaiveSocks
                         ImuxConnectionsDelay = adapter.imux_delay,
                         Timeout = adapter.timeout
                     };
+                    state = 1;
                     var nms = await NaiveMChannels.ConnectTo(settings);
+                    state = 2;
                     nms.OutAdapter = adapter;
                     nms.InAdapter = adapter;
                     nms.Logged += (log) => Logging.info($"'{adapter.Name}': {log}");
@@ -284,6 +287,7 @@ namespace NaiveSocks
                     };
                     nms.InConnectionFastCallback = adapter.fastopen;
                     Logging.info($"'{adapter.Name}' connected: {nms.BaseChannels} in {(DateTime.Now - beginTime).TotalMilliseconds:0} ms");
+                    state = 3;
                     if (adapter.network != null)
                         NaiveUtils.RunAsyncTask(async () => {
                             try {
@@ -295,19 +299,23 @@ namespace NaiveSocks
                         }).Forget();
                     this.nms = nms;
                     Connected?.Invoke(this);
+                    state = 4;
                     NaiveUtils.RunAsyncTask(async () => {
                         try {
+                            state = 5;
                             await nms.Start();
                         } catch (Exception e) {
                             Logging.exception(e, Logging.Level.Error, $"{nms.BaseChannels} error");
                             Error?.Invoke(this, e);
                         } finally {
+                            state = 6;
                             Closed?.Invoke(this);
                             //connectTask = null;
                             nms = null;
                         }
                     }).Forget();
                 } catch (Exception e) {
+                    state = 7;
                     Error?.Invoke(this, e);
                     Closed?.Invoke(this);
                     //connectTask = null;

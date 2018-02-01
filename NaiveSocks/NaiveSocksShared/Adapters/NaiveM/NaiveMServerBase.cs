@@ -64,7 +64,7 @@ namespace NaiveSocks
                                 p.setHeader(HttpHeaders.KEY_Transfer_Encoding, HttpHeaders.VALUE_Transfer_Encoding_chunked);
                                 await p.EndResponseAsync();
                                 var baseStream = MyStream.FromStream(p.SwitchProtocol());
-                                var msf = new MsgStreamFilter(new HttpChunkedEncodingMsgStream(baseStream));
+                                var msf = new HttpChunkedEncodingMsgStream(baseStream);
                                 NaiveProtocol.ApplyEncryption(msf, realKey, encryptType);
                                 wsOrHttp = msf;
                             }

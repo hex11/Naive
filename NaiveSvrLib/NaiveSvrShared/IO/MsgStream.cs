@@ -57,6 +57,8 @@ namespace Naive.HttpSvr
             CloseType = closeType;
             ShutdownType = shutdownType;
         }
+
+        public static CloseOpt Close => new CloseOpt(CloseType.Close);
     }
 
     public enum CloseType

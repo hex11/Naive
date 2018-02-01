@@ -128,9 +128,9 @@ namespace NaiveSocks
 
         private static async Task<IMsgStream> ConnectWebSocket(ConnectingSettings settings, byte[] key, string reqPath, string encType)
         {
-            var ws = await WebSocketClient.ConnectToAsync(settings.Host, reqPath);
-            await ws.HandshakeAsync(false, settings.Headers);
+            var ws = await WebSocketClient.ConnectToAsync(settings.Host, reqPath, settings.Timeout * 1000);
             ws.AddToManaged(settings.Timeout / 2, settings.Timeout);
+            await ws.HandshakeAsync(false, settings.Headers);
             NaiveProtocol.ApplyEncryption(ws, key, encType);
             //ws.ApplyAesStreamFilter(key);
             return ws;
@@ -153,7 +153,7 @@ namespace NaiveSocks
                     throw new Exception($"remote response: '{response.StatusCode} {response.ReasonPhrase}'");
                 if (!response.TestHeader(HttpHeaders.KEY_Transfer_Encoding, HttpHeaders.VALUE_Transfer_Encoding_chunked))
                     throw new Exception("test header failed: Transfer-Encoding != chunked");
-                var msf = new MsgStreamFilter(new HttpChunkedEncodingMsgStream(stream));
+                var msf = new HttpChunkedEncodingMsgStream(stream);
                 NaiveProtocol.ApplyEncryption(msf, key, encType);
                 return msf;
             } catch (Exception) {
@@ -324,6 +324,8 @@ namespace NaiveSocks
 
         public async Task<IPAddress[]> DnsQuery(string name)
         {
+            if (IPAddress.TryParse(name, out var addr))
+                return new[] { addr };
             var resMsg = await Request(new NaiveProtocol.Request(AddrPort.Empty, "dns:" + name));
             var response = await resMsg.GetReply(keepOpen: false);
             if (response.status == 0 && response.additionalString?.StartsWith("dns_ok:") == true) {
@@ -491,20 +493,20 @@ namespace NaiveSocks
         {
             var msg = await BaseStream.RecvMsg(buf);
             if (!msg.IsEOF && msg.Data.tlen > 0)
-                ReadFilter?.Invoke(msg.Data);
+                OnRead(msg.Data);
             return msg;
         }
 
         public Task SendMsg(Msg msg)
         {
             if (!msg.IsEOF && msg.Data.tlen > 0)
-                WriteFilter?.Invoke(msg.Data);
+                OnWrite(msg.Data);
             return BaseStream.SendMsg(msg);
         }
     }
 
 
-    public class HttpChunkedEncodingMsgStream : IMsgStream
+    public class HttpChunkedEncodingMsgStream : FilterBase, IMsgStream
     {
         public HttpChunkedEncodingMsgStream(IMyStream baseStream)
         {
@@ -516,11 +518,14 @@ namespace NaiveSocks
 
         public MsgStreamStatus State => (MsgStreamStatus)BaseStream.State;
 
+        bool isClosed;
+
         public Task Close(CloseOpt closeOpt)
         {
             if (closeOpt.CloseType == CloseType.Shutdown) {
                 return BaseStream.Shutdown(closeOpt.ShutdownType);
             } else {
+                isClosed = true;
                 return BaseStream.Close();
             }
         }
@@ -531,7 +536,13 @@ namespace NaiveSocks
         {
             if (asStream == null)
                 asStream = BaseStream.ToStream();
+            ReRecv:
             var lengthStr = await NaiveUtils.ReadStringUntil(asStream, NaiveUtils.CRLFBytes, maxLength: 32, withPattern: false);
+            latestRecv = WebSocket.CurrentTime;
+            if (lengthStr == "01") {
+                await NaiveUtils.ReadBytesUntil(asStream, NaiveUtils.CRLFBytes, maxLength: 32, withPattern: false);
+                goto ReRecv;
+            }
             var chunkSize = Convert.ToInt32(lengthStr, 16);
             if (chunkSize == 0) {
                 return Msg.EOF;
@@ -554,7 +565,9 @@ namespace NaiveSocks
             if (_crlfBuffer[0] != '\r' && _crlfBuffer[1] != '\n') {
                 throw new Exception($"not a CRLF after chunk! {_crlfBuffer[0]} {_crlfBuffer[1]}");
             }
-            return new Msg(buffer);
+            var bv = new BytesView(buffer);
+            OnRead(bv);
+            return new Msg(bv);
         }
 
 
@@ -582,9 +595,11 @@ namespace NaiveSocks
             await _SendMsg(msg);
         }
 
-        public Task _SendMsg(Msg msg)
+        private Task _SendMsg(Msg msg)
         {
             //Logging.debug("send: " + msg.Data.tlen);
+            latestSend = WebSocket.CurrentTime;
+            OnWrite(msg.Data);
             var tlen = msg.Data.tlen;
             var chunkHeader = getChunkSizeBytes(tlen);
             if (BaseStream is IMyStreamMultiBuffer bvs && tlen > 128) {
@@ -621,6 +636,47 @@ namespace NaiveSocks
         {
             string chunkSize = Convert.ToString(size, 16) + "\r\n";
             return Encoding.UTF8.GetBytes(chunkSize);
+        }
+
+        int latestSend = WebSocket.CurrentTime;
+        int latestRecv = WebSocket.CurrentTime;
+
+        public void AddManagedTask(bool isSending, int timeout)
+        {
+            WebSocket.AddAdditionalManagementTask(() => {
+                if (isClosed || State == MsgStreamStatus.Close)
+                    return true;
+                if (isSending) {
+                    if (WebSocket.CurrentTime - latestSend > timeout) {
+                        SendKeepaliveMessage();
+                    }
+                } else {
+                    if (WebSocket.CurrentTime - latestRecv > timeout) {
+                        Task.Run(() => {
+                            Close(CloseOpt.Close);
+                        });
+                    }
+                }
+                return false;
+            });
+        }
+
+        private void SendKeepaliveMessage()
+        {
+            lock (_lockLatestSendTask) {
+                var tmp = _latestSendTask;
+                _latestSendTask = NaiveUtils.RunAsyncTask(async () => {
+                    try {
+                        if (tmp != null)
+                            await tmp;
+                        await BaseStream.WriteAsync(NaiveUtils.GetUTF8Bytes("01\r\n" + (char)NaiveUtils.Random.Next('A', 'z') + "\r\n"));
+                        latestSend = WebSocket.CurrentTime;
+                    } catch (Exception) {
+                        if (State != MsgStreamStatus.Close)
+                            await Close(CloseOpt.Close);
+                    }
+                });
+            }
         }
     }
 }

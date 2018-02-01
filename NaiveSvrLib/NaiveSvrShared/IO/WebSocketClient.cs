@@ -29,9 +29,14 @@ namespace Naive.HttpSvr
 
         public static Task<WebSocketClient> ConnectToAsync(string host, int port, string path) => ConnectToAsync(new AddrPort(host, port), path);
 
-        public static async Task<WebSocketClient> ConnectToAsync(AddrPort dest, string path)
+        public static Task<WebSocketClient> ConnectToAsync(AddrPort dest, string path)
         {
-            Socket socket = await NaiveUtils.ConnectTCPAsync(dest, 15 * 1000);
+            return ConnectToAsync(dest, path, 15 * 1000);
+        }
+
+        public static async Task<WebSocketClient> ConnectToAsync(AddrPort dest, string path, int timeout)
+        {
+            Socket socket = await NaiveUtils.ConnectTCPAsync(dest, timeout);
             try {
                 var socketStream = NaiveSocks.MyStream.FromSocket(socket);
                 var ws = new WebSocketClient(NaiveSocks.MyStream.ToStream(socketStream), path);

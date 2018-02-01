@@ -55,6 +55,8 @@ Usage: {NAME}.exe [-h|--help] [(-c|--config) FILE] [--no-cli] [--no-log-stdout]
             Logging.WriteLogToConsole = true;
             CmdConsole.ConsoleOnStdIO.Lock = Logging.ConsoleLock;
 
+            //ThreadPool.SetMaxThreads(Environment.ProcessorCount, Environment.ProcessorCount);
+
             var argumentParser = new ArgumentParser();
             argumentParser.AddArg(ParasPara.OnePara, "-c", "--config");
             argumentParser.AddArg(ParasPara.NoPara, "-h", "--help");

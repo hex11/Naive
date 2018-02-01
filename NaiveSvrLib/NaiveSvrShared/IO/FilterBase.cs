@@ -20,6 +20,18 @@ namespace Naive.HttpSvr
         public Action<BytesView> ReadFilter;
         public Action<BytesView> WriteFilter;
 
+        public void OnRead(BytesView bv)
+        {
+            if (bv.tlen > 0)
+                ReadFilter?.Invoke(bv);
+        }
+
+        public void OnWrite(BytesView bv)
+        {
+            if (bv.tlen > 0)
+                WriteFilter?.Invoke(bv);
+        }
+
         public void ClearFilter()
         {
             WriteFilter = null;
