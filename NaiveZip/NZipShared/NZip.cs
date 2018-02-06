@@ -13,7 +13,6 @@ using System.Linq;
 
 namespace NZip
 {
-
     public class NZ : IDisposable
     {
         public Func<Stream> StreamProvider;
@@ -326,13 +325,6 @@ namespace NZip
             }
         }
 
-        static int toint32(long l)
-        {
-            if (l > int.MaxValue)
-                return int.MaxValue;
-            return (int)l;
-        }
-
         public static string MakeRelativePath(string basePath, string absPath, bool dosSeparator = true)
         {
             if (string.IsNullOrEmpty(basePath)) throw new ArgumentNullException(nameof(basePath));
@@ -361,13 +353,13 @@ namespace NZip
                     throw new EndOfStreamException();
             }
         }
-        
+
         public static DateTime ConvertIntDateTime(double d)
         {
             DateTime startTime = TimeZone.CurrentTimeZone.ToLocalTime(new DateTime(1970, 1, 1));
             return startTime.AddMilliseconds(d);
         }
-        
+
         public static long ConvertDateTimeInt(DateTime time)
         {
             DateTime startTime = TimeZone.CurrentTimeZone.ToLocalTime(new DateTime(1970, 1, 1, 0, 0, 0, 0));

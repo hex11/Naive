@@ -15,7 +15,6 @@ using System.Diagnostics;
 
 namespace Naive.HttpSvr
 {
-
     public class MultipartFormDataReader : ReadOnlyStream
     {
         private long _position;

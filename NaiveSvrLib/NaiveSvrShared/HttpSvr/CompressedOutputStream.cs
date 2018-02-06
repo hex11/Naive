@@ -23,7 +23,6 @@ namespace Naive.HttpSvr
         {
         }
 
-
         public void AutoCompressionType()
         {
             if (p.GetReqHeaderSplits("Accept-Encoding")?.Contains("gzip") == true) {
@@ -53,7 +52,7 @@ namespace Naive.HttpSvr
         {
             if (value == cType)
                 return;
-            if (p.ConnectionState != HttpConnection.States.Processing && setHeader == true)
+            if (p.ConnectionState != HttpConnection.States.Processing && setHeader)
                 throw new InvalidOperationException("cannot change CompressionType: headers have been sent.");
             if (Position != 0)
                 throw new InvalidOperationException("cannot change CompressionType: current position is non-zero.");
@@ -140,7 +139,7 @@ namespace Naive.HttpSvr
                 var flushAsync = compressionStream?.FlushAsync(ct);
                 if (flushAsync != null) await flushAsync;
             }
-            if (ms != null && ms.Length > 0) {
+            if (ms?.Length > 0) {
                 await base.WriteAsync(ms.GetBuffer(), 0, (int)ms.Length, ct);
                 ms.SetLength(0);
             }
@@ -149,7 +148,7 @@ namespace Naive.HttpSvr
 
         void flushCompressedBuffer()
         {
-            if (ms != null && ms.Length > 0) {
+            if (ms?.Length > 0) {
                 ms.WriteTo(proxy);
                 ms.SetLength(0);
             }
@@ -157,7 +156,7 @@ namespace Naive.HttpSvr
 
         async Task flushCompressedBufferAsync(CancellationToken ct)
         {
-            if (ms != null && ms.Length > 0) {
+            if (ms?.Length > 0) {
                 await base.WriteAsync(ms.GetBuffer(), 0, (int)ms.Length, ct);
                 ms.SetLength(0);
             }

@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Naive.HttpSvr;
+using System;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -6,7 +7,6 @@ using System.Threading.Tasks;
 
 namespace NaiveSocks
 {
-
     internal class Socks5Server
     {
         public TcpClient Client { get; }
@@ -69,7 +69,6 @@ namespace NaiveSocks
 
         private async Task processRequests()
         {
-
             var b = new byte[4];
             await readBytesAsync(b, 4);
             checkVersion(b[0]);
@@ -173,14 +172,12 @@ namespace NaiveSocks
             return readBytesAsync(buf, count);
         }
 
-
         private async Task<byte[]> readNewBytesAsync(int length)
         {
             var b = new byte[length];
             await readBytesAsync(b, length);
             return b;
         }
-
 
         private async Task readBytesAsync(byte[] bytes, int count)
         {
@@ -193,10 +190,8 @@ namespace NaiveSocks
             }
         }
 
-        private Exception getException() => new Exception();
         private Exception getException(string msg) => new Exception(msg);
         private Exception getEOFException() => getException("unexpected EOF");
-
 
         public void FailedToConnect(SocketException ex)
         {
@@ -204,7 +199,7 @@ namespace NaiveSocks
             if (ex != null) {
                 rep = GetRepFromSocketErrorCode(ex.SocketErrorCode);
             }
-            WriteReply(rep);
+            WriteReply(rep).Forget();
         }
 
         private static Rep GetRepFromSocketErrorCode(SocketError se)

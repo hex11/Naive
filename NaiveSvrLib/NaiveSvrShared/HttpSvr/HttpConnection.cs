@@ -284,7 +284,7 @@ namespace Naive.HttpSvr
         private static readonly char[] headerSeparator = new[] { ':' };
         private bool parseHeader(string headerLine)
         {
-            if (headerLine == "")
+            if (headerLine?.Length == 0)
                 return false;
             var splits = headerLine.Split(headerSeparator, 2);
             if (splits.Length != 2) {
@@ -298,7 +298,7 @@ namespace Naive.HttpSvr
 
         public static bool ParseHeader(string headerLine, out string key, out string value)
         {
-            if (headerLine == "") {
+            if (headerLine?.Length == 0) {
                 key = null;
                 value = null;
                 return false;
@@ -534,5 +534,4 @@ namespace Naive.HttpSvr
             }
         }
     }
-
 }

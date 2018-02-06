@@ -113,7 +113,6 @@ namespace NZip
             NZ.Create(fs, files.ToArray(), dir, Out);
             fs.Flush();
             fs.Close();
-
         }
 
         static string[] inputstrs;
@@ -144,7 +143,7 @@ namespace NZip
                 var line = input($"{str}[{arr.Count}]: ");
                 if (line == null)
                     throw new Exception("EOF");
-                if (line == "")
+                if (line?.Length == 0)
                     return arr;
                 arr.Add(line);
             }

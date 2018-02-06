@@ -58,7 +58,6 @@ namespace Naive.Console
                     client.Attach(null);
                 }
             }
-
         }
 
         public void RemoveAllClient()
@@ -125,9 +124,7 @@ namespace Naive.Console
 
         public override string ToString()
         {
-            if (Name != null)
-                return Name;
-            return base.ToString();
+            return Name ?? base.ToString();
         }
     }
 }

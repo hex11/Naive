@@ -74,7 +74,6 @@ namespace NaiveSocks
             if (buffer[1] == USER_PASS_AUTH && (_username == null || _password == null))
                 throw new ArgumentException("No username or password provided");
 
-
             if (buffer[1] == USER_PASS_AUTH) {
                 byte[] credentials = new byte[_username.Length + _password.Length + 3];
                 credentials[0] = 1;
@@ -121,7 +120,6 @@ namespace NaiveSocks
             return _ns;
         }
 
-
         private byte GetAddressType()
         {
             IPAddress ipAddr;
@@ -138,7 +136,6 @@ namespace NaiveSocks
             default:
                 throw new BadDistanationAddrException();
             }
-
         }
 
         private byte[] GetDestAddressBytes(byte addressType, string host)
@@ -225,7 +222,6 @@ namespace NaiveSocks
     [Serializable]
     public class SocksRefuseException : Exception
     {
-
         public SocksRefuseException()
         {
         }

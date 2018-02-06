@@ -10,7 +10,7 @@ using System.Linq;
 
 namespace NaiveSocks
 {
-    internal partial class Program
+    internal class Program
     {
         public static string configFileName = "naivesocks.tml";
         public static string configFilePath = configFileName;

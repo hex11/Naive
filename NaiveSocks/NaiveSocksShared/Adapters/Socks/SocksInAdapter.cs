@@ -5,7 +5,6 @@ using Naive.HttpSvr;
 
 namespace NaiveSocks
 {
-
     public class SocksInAdapter : InAdapterWithListener
     {
         public bool fastopen { get; set; } = false;

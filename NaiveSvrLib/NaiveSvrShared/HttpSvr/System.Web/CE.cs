@@ -37,14 +37,13 @@ using System.Collections;
 using System.Xml;
 
 namespace System.Configuration.Internal {
-
     public interface IConfigErrorInfo {
         string Filename   { get; }
         int    LineNumber { get; }
     }
 }
 
-namespace System.Configuration 
+namespace System.Configuration
 {
 /* disable the obsolete warnings about ConfigurationException */
 #pragma warning disable 618
@@ -58,7 +57,7 @@ namespace System.Configuration
 	//	public ConfigurationErrorsException ()
 	//	{
 	//	}
-		
+
 	//	public ConfigurationErrorsException (string message)
 	//		: base (message)
 	//	{
@@ -85,7 +84,7 @@ namespace System.Configuration
 	//		: this (message, inner, GetFilename (node), GetLineNumber (node))
 	//	{
 	//	}
-		
+
 	//	public ConfigurationErrorsException (string message, XmlReader reader)
 	//		: this (message, null, GetFilename (reader), GetLineNumber (reader))
 	//	{
@@ -95,7 +94,7 @@ namespace System.Configuration
 	//		: this (message, inner, GetFilename (reader), GetLineNumber (reader))
 	//	{
 	//	}
-		
+
 	//	public ConfigurationErrorsException (string message, string filename, int line)
 	//		: this (message, null, filename, line)
 	//	{
@@ -107,7 +106,7 @@ namespace System.Configuration
 	//		this.filename = filename;
 	//		this.line = line;
 	//	}
-		
+
 	//	//
 	//	// Properties
 	//	//
@@ -122,7 +121,7 @@ namespace System.Configuration
 	//	public override string Filename {
 	//		get { return filename; }
 	//	}
-		
+
 	//	public override int Line {
 	//		get { return line; }
 	//	}
@@ -181,7 +180,7 @@ namespace System.Configuration
 
 	//		return ((IConfigErrorInfo) node).LineNumber;
 	//	}
-		
+
 	//	public override void GetObjectData (SerializationInfo info, StreamingContext context)
 	//	{
 	//		base.GetObjectData (info, context);

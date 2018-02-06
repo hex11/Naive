@@ -8,7 +8,6 @@ using System.Linq;
 
 namespace NaiveSocks
 {
-
     public interface INetwork
     {
         void AddClient(NClient client);
@@ -112,7 +111,6 @@ namespace NaiveSocks
                 connection.RedirectTo(if_notmatch);
             }
         }
-
 
         public static HttpConnection CreateHttpConnectionFromMyStream(IMyStream myStream, NaiveHttpServer httpSvr)
         {

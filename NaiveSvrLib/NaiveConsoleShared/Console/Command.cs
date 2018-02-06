@@ -29,7 +29,7 @@ namespace Naive.Console
         public string ReadLine(string prompt, string Default)
         {
             var line = ReadLine(prompt + $" [{Default}]:")?.Trim();
-            if (line == "")
+            if (line?.Length == 0)
                 line = Default;
             return line;
         }
@@ -67,7 +67,6 @@ namespace Naive.Console
             return selections[int.Parse(key) - 1];
         }
 
-
         public T Select<T>(string title, IDictionary<string, T> selections, string prompt = defaultPrompt, bool loopUntilSelect = true)
         {
             var dict = new Dictionary<string, string>();
@@ -81,7 +80,7 @@ namespace Naive.Console
         {
             while (true) {
                 var line = ReadLine(prompt + (Default ? " (Y/n): " : " (y/N): "))?.Trim();
-                if (line == null || line == "")
+                if (line == null || line?.Length == 0)
                     return Default;
                 bool? v = "yes".StartsWith(line, StringComparison.OrdinalIgnoreCase) ? true :
                         "no".StartsWith(line, StringComparison.OrdinalIgnoreCase) ? false :
@@ -192,6 +191,7 @@ namespace Naive.Console
             Write(prompt);
             return ReadLine();
         }
+
         public void RunCommand(Command cmd, CommandHandler handler)
         {
             cmd.Console = this;
@@ -254,6 +254,7 @@ namespace Naive.Console
             this.Name = name;
             this.Handler = handler;
         }
+
         public CommandHandler Handler;
         public string Name;
         public string Help;

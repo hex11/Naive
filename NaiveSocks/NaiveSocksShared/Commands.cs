@@ -16,7 +16,6 @@ namespace NaiveSocks
 {
     public class Commands
     {
-
         public static void loadController(Controller c, string configFilePath)
         {
             c.LoadConfigFileOrWarning(configFilePath);
@@ -117,7 +116,8 @@ namespace NaiveSocks
                 command.WriteLine($"Threads: {proc.Threads.Count}");
                 command.WriteLine($"Connections: {c.RunningConnections:N0} running, {c.TotalHandledConnections} handled");
                 command.WriteLine($"MyStream Copied: {MyStream.TotalCopiedPackets:N0} packets, {MyStream.TotalCopiedBytes:N0} bytes");
-                command.WriteLine($"SocketStream1 Counters: {SocketStream1.GetCountString()}");
+                command.WriteLine($"SocketStream1: {SocketStream1.GlobalCounters.StringRead};");
+                command.WriteLine($"               {SocketStream1.GlobalCounters.StringWrite}.");
             });
             cmdHub.AddCmdHandler(prefix + "gc", command => {
                 NaiveUtils.GCCollect(command.WriteLine);

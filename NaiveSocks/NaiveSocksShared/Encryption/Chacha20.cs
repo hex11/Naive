@@ -38,7 +38,6 @@ namespace NaiveSocks
 {
     public sealed unsafe class ChaCha20IetfEncryptor : IVEncryptorBase
     {
-
         /// <summary>
         /// Set up a new ChaCha20 state. The lengths of the given parameters are 
         /// checked before encryption happens. 
@@ -241,6 +240,7 @@ namespace NaiveSocks
                 x[3] += x[7]; x[15] = ((x[15] ^ x[3]) << 8) | ((x[15] ^ x[3]) >> (32 - 8));
                 x[11] += x[15]; x[7] = ((x[7] ^ x[11]) << 7) | ((x[7] ^ x[11]) >> (32 - 7));
 
+                /////////////////
 
                 x[0] += x[5]; x[15] = ((x[15] ^ x[0]) << 16) | ((x[15] ^ x[0]) >> (32 - 16));
                 x[10] += x[15]; x[5] = ((x[5] ^ x[10]) << 12) | ((x[5] ^ x[10]) >> (32 - 12));

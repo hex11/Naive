@@ -1451,7 +1451,6 @@ namespace FSZSimpleJsonNS
 
             public static Attribute GetAttribute(Type objectType, Type attributeType)
             {
-
 #if NETFX_CORE
                 if (objectType == null || attributeType == null || !objectType.GetTypeInfo().IsDefined(attributeType))
                     return null;

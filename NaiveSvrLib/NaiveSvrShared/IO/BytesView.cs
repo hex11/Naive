@@ -66,7 +66,7 @@ namespace Naive.HttpSvr
         public byte[] GetBytes(int offset, int len) => GetBytes(offset, len, false);
         public byte[] GetBytes(int offset, int len, bool forceNew)
         {
-            if (!forceNew && offset == 0 & this.offset == 0 & len == bytes.Length) {
+            if (!forceNew && (offset == 0 & this.offset == 0 & len == bytes.Length)) {
                 return bytes;
             }
             var buf = new Byte[len];
@@ -111,7 +111,7 @@ namespace Naive.HttpSvr
                     }
                     pos += curnode.len;
                 } while ((curnode = curnode.nextNode) != null);
-                throw new IndexOutOfRangeException();
+                throw new ArgumentOutOfRangeException();
             }
             set {
                 if (index < 0) throw new ArgumentOutOfRangeException(nameof(index));

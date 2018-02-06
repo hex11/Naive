@@ -329,7 +329,7 @@ namespace NaiveSocks
             return BaseStream.Shutdown(direction);
         }
 
-        public async Task<int> ReadAsync(BytesSegment bv)
+        public async Task<int> ReadAsync(BytesSegment bs)
         {
             if (!ivReceived) {
                 var buf = new BytesSegment(new byte[recvHelper.IVLength]);
@@ -337,23 +337,23 @@ namespace NaiveSocks
                 recvHelper.IV = buf.Bytes;
                 ivReceived = true;
             }
-            var read = await BaseStream.ReadAsync(bv).CAF();
+            var read = await BaseStream.ReadAsync(bs).CAF();
             if (read > 0) {
-                bv.Len = read;
-                recvHelper.Update(bv);
+                bs.Len = read;
+                recvHelper.Update(bs);
             }
             return read;
         }
 
-        public async Task WriteAsync(BytesSegment bv)
+        public async Task WriteAsync(BytesSegment bs)
         {
             if (!ivSent) {
                 var iv = sendHelper.IV;
                 await BaseStream.WriteAsync(new BytesSegment(iv)).CAF();
                 ivSent = true;
             }
-            sendHelper.Update(bv);
-            await BaseStream.WriteAsync(bv).CAF();
+            sendHelper.Update(bs);
+            await BaseStream.WriteAsync(bs).CAF();
         }
 
         public async Task FlushAsync()
@@ -367,47 +367,47 @@ namespace NaiveSocks
         }
     }
 
-    public class AeadEncryptStream : IMyStream
-    {
-        public IMyStream BaseStream { get; }
-        public IIVEncryptor recvHelper, sendHelper;
-        public IMac recvMac, sendMac;
-        private bool ivSent, ivReceived;
+    //public class AeadEncryptStream : IMyStream
+    //{
+    //    public IMyStream BaseStream { get; }
+    //    public IIVEncryptor recvHelper, sendHelper;
+    //    public IMac recvMac, sendMac;
+    //    private bool ivSent, ivReceived;
 
-        public AeadEncryptStream()
-        {
-        }
+    //    public AeadEncryptStream()
+    //    {
+    //    }
 
-        public MyStreamState State => BaseStream.State;
+    //    public MyStreamState State => BaseStream.State;
 
-        public Task Close()
-        {
-            return BaseStream.Close();
-        }
+    //    public Task Close()
+    //    {
+    //        return BaseStream.Close();
+    //    }
 
-        public Task Shutdown(SocketShutdown direction)
-        {
-            return BaseStream.Shutdown(direction);
-        }
+    //    public Task Shutdown(SocketShutdown direction)
+    //    {
+    //        return BaseStream.Shutdown(direction);
+    //    }
 
-        public async Task<int> ReadAsync(BytesSegment bv)
-        {
-            throw new NotImplementedException();
-        }
+    //    public async Task<int> ReadAsync(BytesSegment bs)
+    //    {
+    //        throw new NotImplementedException();
+    //    }
 
-        public async Task WriteAsync(BytesSegment bv)
-        {
-            throw new NotImplementedException();
-        }
+    //    public async Task WriteAsync(BytesSegment bs)
+    //    {
+    //        throw new NotImplementedException();
+    //    }
 
-        public async Task FlushAsync()
-        {
-            await BaseStream.FlushAsync();
-        }
+    //    public async Task FlushAsync()
+    //    {
+    //        await BaseStream.FlushAsync();
+    //    }
 
-        public override string ToString()
-        {
-            return $"{{AeadEncryptor on {BaseStream}}}";
-        }
-    }
+    //    public override string ToString()
+    //    {
+    //        return $"{{AeadEncryptor on {BaseStream}}}";
+    //    }
+    //}
 }

@@ -86,7 +86,7 @@ namespace Naive.Console
             while (true) {
                 var cmd = con.ReadLine(Prompt);
                 if (cmd != null) {
-                    if (cmd == "")
+                    if (cmd?.Length == 0)
                         continue;
                     if (cmd == "exit") {
                         con.WriteLine("exiting command loop.");

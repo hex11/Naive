@@ -132,5 +132,4 @@ namespace NaiveSocks
             await connection.SetConnectResult(new ConnectResult(ConnectResults.Failed) { FailedReason = reason });
         }
     }
-
 }

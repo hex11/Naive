@@ -5,7 +5,6 @@ using Naive.HttpSvr;
 
 namespace NaiveSocks
 {
-
     public abstract class InConnection : ConnectArgument
     {
         protected InConnection(IAdapter inAdapter) : base(inAdapter)

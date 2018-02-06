@@ -4,7 +4,6 @@ using System.Runtime.CompilerServices;
 
 namespace Org.BouncyCastle.Crypto.Macs
 {
-
     /// <summary>
     /// Poly1305 message authentication code, designed by D. J. Bernstein.
     /// </summary>
@@ -157,7 +156,6 @@ namespace Org.BouncyCastle.Crypto.Macs
                 copied += toCopy;
                 currentBlockOffset += toCopy;
             }
-
         }
 
         private void ProcessBlock()

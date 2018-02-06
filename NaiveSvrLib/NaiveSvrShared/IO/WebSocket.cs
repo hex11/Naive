@@ -76,7 +76,6 @@ namespace Naive.HttpSvr
             return (await RecvMsg(null)).GetString();
         }
 
-
         private static readonly Action<WebSocket> _activated = socket => {
             socket.LatestActiveTime = CurrentTime;
         };
@@ -772,7 +771,6 @@ namespace Naive.HttpSvr
         private const int SendBufSizeMin = 990;
         private const int SendBufSizeMax = 1440;
 
-
         private async Task _sendMsgAsync(byte opcode, BytesView buf, bool fin = true)
         {
             if (buf == null)
@@ -887,7 +885,6 @@ namespace Naive.HttpSvr
                 if (bufcur > 0)
                     stream.Write(sendMsgBuf, 0, bufcur);
             }
-
         }
 
         private void buildFrameHeader(byte opcode, int len, bool fin, byte[] buf, ref int bufIndex, bool ismask)
@@ -945,7 +942,6 @@ namespace Naive.HttpSvr
             BaseStream?.Dispose();
         }
 
-
         public async Task StartVerify(bool recvFirst)
         {
             var rd = RandomNumberGenerator.Create();
@@ -967,7 +963,6 @@ namespace Naive.HttpSvr
                     throw new Exception("handshake failed: wrong packet3 length");
                 if (sha256.ComputeHash(serverrandom).SequenceEqual(rep.payload.Take(32).ToArray()) == false)
                     throw new Exception("handshake failed: wrong packet3");
-
             } else {
                 byte[] clientrandom = new byte[32];
                 rd.GetBytes(clientrandom);
@@ -982,7 +977,5 @@ namespace Naive.HttpSvr
                 await SendBytesAsync(sha256.ComputeHash(buf2)).CAF(); // 3 -> : sha256 of server random bytes (32 bytes)
             }
         }
-
     }
-
 }

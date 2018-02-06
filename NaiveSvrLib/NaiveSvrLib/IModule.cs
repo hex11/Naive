@@ -9,7 +9,6 @@ using System.Threading.Tasks;
 
 namespace NaiveServer
 {
-
     public interface IModule
     {
         void Load(IController controller);

@@ -40,7 +40,6 @@ using System.Text;
 
 namespace System.Web.Util
 {
-
     internal class Lazy<T>
     {
         private bool created = false;
@@ -111,6 +110,7 @@ namespace System.Web.Util
             defaultEncoder = new Lazy<HttpEncoder>(() => new HttpEncoder());
             currentEncoderLazy = defaultEncoder;
         }
+
         protected internal virtual
         void HeaderNameValueEncode(string headerName, string headerValue, out string encodedHeaderName, out string encodedHeaderValue)
         {
@@ -149,9 +149,9 @@ namespace System.Web.Util
 
             return input;
         }
+
         protected internal virtual void HtmlAttributeEncode(string value, TextWriter output)
         {
-
             if (output == null)
                 throw new ArgumentNullException("output");
 

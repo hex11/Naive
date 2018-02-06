@@ -16,8 +16,8 @@ namespace NaiveSocks
 
         Task Close();
         Task Shutdown(SocketShutdown direction);
-        Task<int> ReadAsync(BytesSegment bv);
-        Task WriteAsync(BytesSegment bv);
+        Task<int> ReadAsync(BytesSegment bs);
+        Task WriteAsync(BytesSegment bs);
         Task FlushAsync();
     }
 
@@ -137,9 +137,9 @@ namespace NaiveSocks
             return NaiveUtils.CompletedTask;
         }
 
-        public abstract Task<int> ReadAsync(BytesSegment bv);
+        public abstract Task<int> ReadAsync(BytesSegment bs);
 
-        public abstract Task WriteAsync(BytesSegment bv);
+        public abstract Task WriteAsync(BytesSegment bs);
 
         public virtual Task FlushAsync() => NaiveUtils.CompletedTask;
 
@@ -182,7 +182,7 @@ namespace NaiveSocks
 
         public static async Task Relay(IMyStream left, IMyStream right, Task whenCanReadFromLeft = null)
         {
-            int halfCloseTimeout = 10 * 1000 + rd.Next(-1000, 1000);
+            int halfCloseTimeout = (10 * 1000) + rd.Next(-1000, 1000);
             const int forceCloseTimeout = 10 * 1000;
             try {
                 var readFromRight = StreamCopy(right, left);
@@ -327,7 +327,6 @@ namespace NaiveSocks
             Logging.debug(str);
         }
 
-
         public class StreamWrapper : MyStream
         {
             public StreamWrapper(Stream stream)
@@ -346,14 +345,14 @@ namespace NaiveSocks
                 }
             }
 
-            public override Task<int> ReadAsync(BytesSegment bv)
+            public override Task<int> ReadAsync(BytesSegment bs)
             {
-                return BaseStream.ReadAsync(bv);
+                return BaseStream.ReadAsync(bs);
             }
 
-            public override Task WriteAsync(BytesSegment bv)
+            public override Task WriteAsync(BytesSegment bs)
             {
-                return BaseStream.WriteAsync(bv);
+                return BaseStream.WriteAsync(bs);
             }
 
             public override Task FlushAsync()
@@ -409,7 +408,7 @@ namespace NaiveSocks
 
     public abstract class SocketStream : MyStream, IMyStreamSync
     {
-        public SocketStream(Socket socket)
+        protected SocketStream(Socket socket)
         {
             this.Socket = socket;
             this.EPPair = EPPair.FromSocket(socket);
@@ -551,7 +550,7 @@ namespace NaiveSocks
 
         private BytesView latestMsg = null;
 
-        public async Task<int> ReadAsync(BytesSegment bv)
+        public async Task<int> ReadAsync(BytesSegment bs)
         {
             var pos = 0;
             var curnode = latestMsg;
@@ -562,21 +561,21 @@ namespace NaiveSocks
             }
             do {
                 if (curnode.len > 0) {
-                    var size = Math.Min(bv.Len, curnode.len);
-                    Buffer.BlockCopy(curnode.bytes, curnode.offset, bv.Bytes, bv.Offset + pos, size);
+                    var size = Math.Min(bs.Len, curnode.len);
+                    Buffer.BlockCopy(curnode.bytes, curnode.offset, bs.Bytes, bs.Offset + pos, size);
                     curnode.Sub(size);
                     pos += size;
                 }
-            } while (pos < bv.Len && (curnode = curnode.nextNode) != null);
+            } while (pos < bs.Len && (curnode = curnode.nextNode) != null);
             if (curnode.tlen > 0) {
                 latestMsg = curnode;
             }
             return pos;
         }
 
-        public Task WriteAsync(BytesSegment bv)
+        public Task WriteAsync(BytesSegment bs)
         {
-            return MsgStream.SendMsg(new Msg(new BytesView(bv.Bytes, bv.Offset, bv.Len)));
+            return MsgStream.SendMsg(new Msg(new BytesView(bs.Bytes, bs.Offset, bs.Len)));
         }
 
         public Task WriteMultipleAsync(BytesView bv)
@@ -661,7 +660,7 @@ namespace NaiveSocks
             return NaiveUtils.CompletedTask;
         }
 
-        public async Task<int> ReadAsync(BytesSegment bv)
+        public async Task<int> ReadAsync(BytesSegment bs)
         {
             Task task = null;
             lock (_syncRoot) {
@@ -679,8 +678,8 @@ namespace NaiveSocks
                 if (recvEOF && buffer.Len == 0) {
                     return 0;
                 }
-                int read = Math.Min(bv.Len, buffer.Len);
-                buffer.CopyTo(bv, 0, read);
+                int read = Math.Min(bs.Len, buffer.Len);
+                buffer.CopyTo(bs, 0, read);
                 buffer.SubSelf(read);
                 if (buffer.Len == 0) {
                     buffer = new BytesSegment();
@@ -702,9 +701,9 @@ namespace NaiveSocks
             }
         }
 
-        public Task WriteAsync(BytesSegment bv)
+        public Task WriteAsync(BytesSegment bs)
         {
-            return Another.WriteFromAnother(bv);
+            return Another.WriteFromAnother(bs);
         }
     }
 }

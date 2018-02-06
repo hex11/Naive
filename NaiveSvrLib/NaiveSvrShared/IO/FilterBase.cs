@@ -6,7 +6,6 @@ using System.Security.Cryptography;
 
 namespace Naive.HttpSvr
 {
-
     public interface IIVEncryptor
     {
         void Update(BytesSegment bs);
@@ -16,7 +15,6 @@ namespace Naive.HttpSvr
 
     public class FilterBase
     {
-
         public Action<BytesView> ReadFilter;
         public Action<BytesView> WriteFilter;
 
@@ -188,7 +186,7 @@ namespace Naive.HttpSvr
                     using (var ms = new MemoryStream(bv.bytes, bv.offset, bv.len))
                     using (var cryStream = new CryptoStream(ms, aesalg.CreateEncryptor(), CryptoStreamMode.Read)) {
                         int read;
-                        int oldbytesSize = bv.len - bv.len % blockBytesSize;
+                        int oldbytesSize = bv.len - (bv.len % blockBytesSize);
                         bv.len = oldbytesSize;
                         bv.nextNode = bvBuf;
                         while ((read = cryStream.Read(bv.bytes, bv.offset + pos, oldbytesSize - pos)) > 0) {
@@ -241,7 +239,7 @@ namespace Naive.HttpSvr
                     using (var ms = new MemoryStream(bv.bytes, bv.offset, bv.len))
                     using (var cryStream = new CryptoStream(ms, aesalg.CreateEncryptor(), CryptoStreamMode.Read)) {
                         int read;
-                        int oldbytesSize = bv.len - bv.len % blockBytesSize;
+                        int oldbytesSize = bv.len - (bv.len % blockBytesSize);
                         bv.len = oldbytesSize;
                         bv.nextNode = bvBuf;
                         while ((read = cryStream.Read(bv.bytes, bv.offset + pos, oldbytesSize - pos)) > 0) {

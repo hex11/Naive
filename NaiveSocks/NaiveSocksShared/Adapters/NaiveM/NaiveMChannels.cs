@@ -228,7 +228,7 @@ namespace NaiveSocks
         private async Task _Requested(ReceivedRequest request)
         {
             var req = request.Value;
-            if (req.additionalString == "" || req.additionalString == "connect") {
+            if (req.additionalString?.Length == 0 || req.additionalString == "connect") {
                 if (InAdapter == null & HandleRemoteInConnection == null) {
                     await request.Reply(new NaiveProtocol.Reply(AddrPort.Empty, 255, "noinadapter")).CAF();
                     return;
@@ -367,7 +367,6 @@ namespace NaiveSocks
                 } else {
                     pingTask = null;
                 }
-
             }
         }
 
@@ -505,7 +504,6 @@ namespace NaiveSocks
         }
     }
 
-
     public class HttpChunkedEncodingMsgStream : FilterBase, IMsgStream
     {
         public HttpChunkedEncodingMsgStream(IMyStream baseStream)
@@ -570,8 +568,6 @@ namespace NaiveSocks
             return new Msg(bv);
         }
 
-
-
         private readonly object _lockLatestSendTask = new object();
         private Task _latestSendTask;
 
@@ -585,7 +581,6 @@ namespace NaiveSocks
                 }
             }
         }
-
 
         private async Task _SendMsgQueued(Task taskToWait, Msg msg)
         {

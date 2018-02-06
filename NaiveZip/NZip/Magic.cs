@@ -71,6 +71,7 @@ namespace Naive
             uint indexSubsystem = locateSubsystemIndex(pe);
             pe[indexSubsystem] = subsystem;
         }
+
         public static byte getSubsystem(byte[] pe)
         {
             uint indexSubsystem = locateSubsystemIndex(pe);
@@ -101,7 +102,6 @@ namespace Naive
 
     static class MagicUtil
     {
-
         private static string getTempFilePath(string path)
         {
             return path + ".new";
@@ -134,12 +134,10 @@ namespace Naive
             return Encoding.GetEncoding(code).GetBytes(str);
         }
 
-
         public static byte[] encode(this char[] str, string code)
         {
             return Encoding.GetEncoding(code).GetBytes(str);
         }
-
 
         public static string decode(this byte[] bytes, string code)
         {
@@ -149,7 +147,6 @@ namespace Naive
 
     public static class ByteArrayRocks
     {
-
         static readonly int[] Empty = new int[0];
 
         public static int[] Locate(this byte[] self, byte[] candidate)

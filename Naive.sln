@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
-VisualStudioVersion = 15.0.27130.2024
+VisualStudioVersion = 15.0.27130.2026
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NaiveSocks", "NaiveSocks\NaiveSocks\NaiveSocks.csproj", "{489D2BC7-5344-4CBA-BBE0-F104F955199C}"
 EndProject
@@ -17,11 +17,13 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NZip", "NaiveZip\NZip\NZip.
 EndProject
 Project("{D954291E-2A0B-460D-934E-DC6B0785DB48}") = "NZipShared", "NaiveZip\NZipShared\NZipShared.shproj", "{A8493EC4-38AC-45BF-9A52-D3822A962BD6}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NaiveSocksDotNetCore", "NaiveSocksDotNetCore\NaiveSocksDotNetCore.csproj", "{F172074F-C119-47FD-BC38-173847ED2083}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NaiveSocksDotNetCore", "NaiveSocksDotNetCore\NaiveSocksDotNetCore.csproj", "{F172074F-C119-47FD-BC38-173847ED2083}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NaiveSvrLibStandard", "NaiveSvrLibStandard\NaiveSvrLibStandard.csproj", "{A6D5ADD3-5B85-4CD8-BE28-6AC19B8F6786}"
 EndProject
 Project("{D954291E-2A0B-460D-934E-DC6B0785DB48}") = "NaiveSocksCliShared", "NaiveSocksCliShared\NaiveSocksCliShared.shproj", "{F8975733-0B83-4AF3-BF4E-8BCDAFEE4A70}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "DotNetCore", "DotNetCore", "{C4FDEA2C-B470-4F74-BE1F-3F744B5479A7}"
 EndProject
 Global
 	GlobalSection(SharedMSBuildProjectFiles) = preSolution
@@ -75,6 +77,10 @@ Global
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{F172074F-C119-47FD-BC38-173847ED2083} = {C4FDEA2C-B470-4F74-BE1F-3F744B5479A7}
+		{A6D5ADD3-5B85-4CD8-BE28-6AC19B8F6786} = {C4FDEA2C-B470-4F74-BE1F-3F744B5479A7}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {0BAEFEEE-0666-494C-9B5A-A75BF2B43B94}

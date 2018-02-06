@@ -23,6 +23,7 @@ namespace Naive.HttpSvr
         {
             HandleRequestAsync(p).RunSync();
         }
+
         public abstract Task HandleRequestAsync(HttpConnection p);
     }
 
@@ -43,6 +44,7 @@ namespace Naive.HttpSvr
                 stamp = string.IsNullOrEmpty(value) ? "[HttpSvr]" : $"[HttpSvr:{value}]";
             }
         }
+
         public string stamp { get; private set; } = "[HttpSvr]";
 
         [Obsolete("Use AddListener method")]
@@ -172,7 +174,7 @@ namespace Naive.HttpSvr
 
         public virtual void OnHttpConnectionException(Exception ex, HttpConnection p)
         {
-            if (p.disconnecting == true)
+            if (p.disconnecting)
                 return;
             Logging.exception(ex, Logging.Level.Error, $"{stamp} ({p?.remoteEP}) httpConnection processing");
         }
@@ -275,9 +277,7 @@ namespace Naive.HttpSvr
                 }
             }
         }
-
     }
-
 
     public class DisconnectedException : Exception
     {

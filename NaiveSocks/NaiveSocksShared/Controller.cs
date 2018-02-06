@@ -10,7 +10,6 @@ using Nett;
 
 namespace NaiveSocks
 {
-
     public class Controller
     {
         public Config CurrentConfig = new Config();
@@ -51,7 +50,7 @@ namespace NaiveSocks
         public string WorkingDirectory = ".";
         public string ProcessFilePath(string input)
         {
-            if (WorkingDirectory == "" || WorkingDirectory == "." || Path.IsPathRooted(input))
+            if (WorkingDirectory?.Length == 0 || WorkingDirectory == "." || Path.IsPathRooted(input))
                 return input;
             return Path.Combine(WorkingDirectory, input);
         }
@@ -380,7 +379,7 @@ namespace NaiveSocks
                 int redirectCount = 0;
                 while (true) {
                     await outAdapter.HandleConnection(inc).CAF();
-                    if (inc.CallbackCalled != false || !inc.IsRedirected) {
+                    if (inc.CallbackCalled || !inc.IsRedirected) {
                         break;
                     }
                     if (++redirectCount >= 10) {

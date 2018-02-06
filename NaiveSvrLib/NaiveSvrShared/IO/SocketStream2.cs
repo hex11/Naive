@@ -10,7 +10,6 @@ using System.Reflection;
 
 namespace NaiveSocks
 {
-
     public class SocketStream2 : SocketStream, IMyStreamMultiBuffer
     {
         public SocketStream2(Socket socket) : base(socket)

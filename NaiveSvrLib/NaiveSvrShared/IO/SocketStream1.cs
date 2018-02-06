@@ -10,7 +10,6 @@ using System.Reflection;
 
 namespace NaiveSocks
 {
-
     public class SocketStream1 : SocketStream, IMyStreamMultiBuffer
     {
         public SocketStream1(Socket socket) : base(socket)
@@ -22,14 +21,16 @@ namespace NaiveSocks
         public struct Counters
         {
             public int Rasync, Rsync, Rbuffer, Wasync, Wsync;
+
+            public string StringRead => $"Read {Rsync + Rasync + Rbuffer} (async {Rasync}, sync completed {Rsync}, from buffer {Rbuffer})";
+            public string StringWrite => $"Write {Wsync + Wasync} (async {Wasync}, sync completed {Wsync})";
         }
 
-        public static Counters GetCounters() => ctr;
+        public static Counters GlobalCounters => ctr;
 
         public static string GetCountString()
         {
-            return $"Read {ctr.Rsync + ctr.Rasync + ctr.Rbuffer} (async {ctr.Rasync}, sync {ctr.Rsync}, from buffer {ctr.Rbuffer})," +
-                $" Write {ctr.Wsync + ctr.Wasync} (async {ctr.Wasync}, sync {ctr.Wsync})";
+            return ctr.StringRead + ", " + ctr.StringWrite;
         }
 
         public int SmartReadBufferSize { get; set; } = 256;
@@ -53,7 +54,7 @@ namespace NaiveSocks
                 if (bufRead2 > 0)
                     return NaiveUtils.GetCachedTaskInt(bufRead2);
                 if (EnableSmartSyncRead && available > 0) {
-                    // if the receive buffer of system is not empty,
+                    // if the receive buffer of OS is not empty,
                     // use sync operation to reduce async overhead.
                     Interlocked.Increment(ref ctr.Rsync);
                     var read = Socket.Receive(bs.Bytes, bs.Offset, bs.Len, SocketFlags.None);
@@ -82,8 +83,8 @@ namespace NaiveSocks
                 var read = Math.Min(bs.Len, readBuffer.Len);
                 readBuffer.CopyTo(bs, read);
                 readBuffer.SubSelf(read);
-                // Don't release the buffer here even the buffer is empty,
-                // because there may be more small ReadAsync() calls later.
+                // We can check if readBuffer is emptied, then release readBuffer here,
+                // but we are not doing that, because there may be more small ReadAsync() calls later.
                 return read;
             }
             return 0;
@@ -91,12 +92,13 @@ namespace NaiveSocks
 
         private int TryFillAndReadInternalBuffer(ref BytesSegment bs, int socketAvailable)
         {
-            if (EnableSmartReadBuffer && (socketAvailable > bs.Len & bs.Len < SmartReadBufferSize)) {
+            var readBufferSize = this.SmartReadBufferSize;
+            if (EnableSmartReadBuffer && (socketAvailable > bs.Len & bs.Len < readBufferSize)) {
                 Interlocked.Increment(ref ctr.Rsync);
-                if (readBuffer.Bytes == null || readBuffer.Bytes.Length != SmartReadBufferSize)
-                    readBuffer.Bytes = new byte[SmartReadBufferSize];
+                if (readBuffer.Bytes == null || readBuffer.Bytes.Length < readBufferSize)
+                    readBuffer.Bytes = new byte[readBufferSize];
                 readBuffer.Offset = 0;
-                var read = Socket.Receive(readBuffer.Bytes, 0, SmartReadBufferSize, SocketFlags.None);
+                var read = Socket.Receive(readBuffer.Bytes, 0, readBufferSize, SocketFlags.None);
                 readBuffer.Len = read;
                 if (read == 0)
                     throw new Exception("WTF! It should not happen: Socket.Receive() returns 0 when Socket.Available > 0.");
@@ -118,11 +120,11 @@ namespace NaiveSocks
             return base.Read(bs);
         }
 
-        public override Task WriteAsync(BytesSegment bv)
+        public override Task WriteAsync(BytesSegment bs)
         {
             return TaskHelper.FromAsyncTrim(
                 thisRef: this,
-                args: bv,
+                args: bs,
                 beginMethod: (thisRef, args, callback, state) => thisRef.Socket.BeginSend(args.Bytes, args.Offset, args.Len, SocketFlags.None, callback, state),
                 endMethod: (thisRef, asyncResult) => {
                     if (asyncResult.CompletedSynchronously)

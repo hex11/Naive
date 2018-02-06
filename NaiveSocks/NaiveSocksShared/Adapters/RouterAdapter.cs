@@ -11,7 +11,6 @@ using System.Net;
 
 namespace NaiveSocks
 {
-
     public class RouterAdapter : OutAdapter
     {
         public bool logging { get; set; }

@@ -7,8 +7,6 @@ using Nett;
 namespace NaiveSocks
 {
 
-
-
     public class NaiveMInAdapter : NaiveProtocol.NaiveMServerBase, IHttpRequestAsyncHandler
     {
         private NaiveWebsiteServer httpServer;

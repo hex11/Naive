@@ -9,7 +9,6 @@ using Naive.HttpSvr;
 
 namespace NaiveSocks
 {
-
     // Frame format:
     // [header byte] [payload]
     // header byte: sbyte, short (extended), int (extended)
@@ -34,7 +33,6 @@ namespace NaiveSocks
 
     public class NaiveMultiplexing
     {
-
         public NaiveMultiplexing(IMsgStream baseStream)
         {
             BaseStream = baseStream;
@@ -799,7 +797,6 @@ namespace NaiveSocks
             CloseIfOpen();
         }
     }
-
 
     public class AsyncQueue<T>
     {

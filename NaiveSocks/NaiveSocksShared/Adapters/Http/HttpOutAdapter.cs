@@ -10,7 +10,6 @@ using System.IO;
 
 namespace NaiveSocks
 {
-
     public class HttpOutAdapter : OutAdapter2
     {
         public AddrPort server { get; set; }

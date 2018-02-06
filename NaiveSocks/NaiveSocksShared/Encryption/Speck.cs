@@ -10,7 +10,6 @@ using System.Threading.Tasks;
 
 namespace NaiveSocks
 {
-
     // NOTE:
     // This is an incorrect implementation. 
     // It does not use big-endian words, makes incompatible with other implementation.
@@ -266,7 +265,6 @@ namespace NaiveSocks
                 y = (y << 3) | (y >> (WORDSIZE - 3)); // y = ROTL(y, 3)
                 y ^= x;
             }
-
 
             // Generate key schedule and encrypt at the same time
             public static void encrypt_128_128(QWords128 key, ref QWords128 ciphertext)

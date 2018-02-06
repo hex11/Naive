@@ -67,7 +67,6 @@ namespace System.Web
 
         #region Constructors
 
-        
         #endregion // Constructors
 
         #region Methods
@@ -154,7 +153,6 @@ namespace System.Web
 
             byte[] buf = bytes.ToArray();
             return e.GetString(buf);
-
         }
 
         public static string UrlDecode(byte[] bytes, Encoding e)
@@ -268,7 +266,7 @@ namespace System.Web
             if (acc.Length > 0) {
                 output.Append(GetChars(acc, e));
             }
-            
+
             return output.ToString();
         }
 
@@ -339,7 +337,7 @@ namespace System.Web
             if (s == null)
                 return null;
 
-            if (s == String.Empty)
+            if (s?.Length == 0)
                 return String.Empty;
 
             bool needEncode = false;
@@ -487,6 +485,7 @@ namespace System.Web
                 HttpEncoder.Current.HtmlEncode(s, output);
             }
         }
+
         public static string HtmlEncode(object value)
         {
             if (value == null)
@@ -574,6 +573,7 @@ namespace System.Web
 
             return sb.ToString();
         }
+
         public static string UrlPathEncode(string s)
         {
             return HttpEncoder.Current.UrlPathEncode(s);

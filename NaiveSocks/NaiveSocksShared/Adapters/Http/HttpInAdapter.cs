@@ -10,14 +10,13 @@ using System.Linq;
 
 namespace NaiveSocks
 {
-
     public class HttpInAdapter : InAdapterWithListenField, IHttpRequestAsyncHandler
     {
         public AdapterRef webout { get; set; }
 
         public bool verbose { get; set; }
 #if DEBUG
-        = true; 
+        = true;
 #endif
 
         public override string ToString()
@@ -258,6 +257,5 @@ namespace NaiveSocks
                 }
             }
         }
-
     }
 }

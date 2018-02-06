@@ -141,6 +141,7 @@ namespace Naive.HttpSvr
         {
             throw new NotSupportedException();
         }
+
         public override long Seek(long offset, SeekOrigin origin)
         {
             throw new NotSupportedException();

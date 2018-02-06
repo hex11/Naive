@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 
 namespace Naive.HttpSvr
 {
-
     public class NaiveWebsiteRouter : IHttpRequestHandler, IHttpRequestAsyncHandler
     {
         public event HttpRequestHandler NotFound;
