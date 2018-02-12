@@ -278,7 +278,7 @@ namespace NaiveSocks
                     nms.OutAdapter = adapter;
                     nms.InAdapter = adapter;
                     nms.Logged += (log) => Logging.info($"'{adapter.Name}': {log}");
-                    nms.HandleRemoteInConnection = (inc) => {
+                    nms.GotRemoteInConnection = (inc) => {
                         Logging.info($"'{adapter.Name}': conn from remote {(inc as NaiveMChannels.InConnection)?.Channel}" +
                                         $" (dest={inc.Dest}) redirecting to 127.1");
                         adapter.CheckPool();

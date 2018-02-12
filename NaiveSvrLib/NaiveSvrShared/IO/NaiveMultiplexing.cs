@@ -445,16 +445,22 @@ namespace NaiveSocks
         {
             get { return _state; }
             private set {
-                info("state", value);
-                var old = _state;
-                var oldClosed = IsClosed;
-                var oldRecvEOF = IsRecvEOF(old);
-                _state = value;
-                if (!oldRecvEOF & IsRecvEOF(value))
-                    onRecvEOF();
-                if (!oldClosed & IsClosed)
-                    onClosed();
+                this.setState(value);
             }
+        }
+
+        private void setState(StateEnum value, bool noLog = false)
+        {
+            if (!noLog)
+                info("state", value);
+            var old = _state;
+            var oldClosed = IsClosed;
+            var oldRecvEOF = IsRecvEOF(old);
+            _state = value;
+            if (!oldRecvEOF & IsRecvEOF(value))
+                onRecvEOF();
+            if (!oldClosed & IsClosed)
+                onClosed();
         }
 
         private static bool IsRecvEOF(StateEnum value)
@@ -538,7 +544,7 @@ namespace NaiveSocks
                 return;
             blockingRemote = blocking;
             if (State == StateEnum.EOFSent | State == StateEnum.Open)
-                SendRsvOpcode(blocking ? Opcode.BlockSend : Opcode.ResumeSend).Forget();
+                SendRsvOpcode(blocking ? Opcode.BlockSend : Opcode.ResumeSend);
         }
 
         private void SetBlockingSend(bool blocking)
@@ -597,10 +603,9 @@ namespace NaiveSocks
                         return;
                     }
                     if (IsClosing) {
-                        LastCloseReceived(State == StateEnum.ClosingByRemote);
+                        State = GetLastCloseReceivedState(State == StateEnum.ClosingByRemote);
                     } else {
-                        SendRsvOpcode(Opcode.Close).Forget();
-                        LastCloseReceived(State != StateEnum.EOFSent);
+                        SendRsvOpcodeThenChangeState(Opcode.Close, GetLastCloseReceivedState(State != StateEnum.EOFSent));
                     }
                 } else if (opcode == Opcode.BlockSend) {
                     if (IsClosed) {
@@ -618,7 +623,7 @@ namespace NaiveSocks
                     SetBlockingSend(false);
                 } else {
                     Logging.warning($"{this} BUG?: unknown opcode: {opcode}");
-                    SendRsvOpcode(Opcode.UnknownOpcodeReceived).Forget();
+                    SendRsvOpcode(Opcode.UnknownOpcodeReceived);
                 }
             }
         }
@@ -641,6 +646,13 @@ namespace NaiveSocks
         {
             info("-> opcode", opcode);
             return Parent.SendOpcode(this, opcode);
+        }
+
+        internal void SendRsvOpcodeThenChangeState(Opcode opcode, StateEnum state)
+        {
+            info("-> opstate", opcode, state);
+            Parent.SendOpcode(this, opcode).Forget();
+            setState(state, true);
         }
 
         public async Task<Msg> RecvMsg(BytesView buf)
@@ -690,8 +702,7 @@ namespace NaiveSocks
             lock (_syncroot) {
                 ThrowIfShutdownOrClosed();
                 if (State == StateEnum.Open) {
-                    SendRsvOpcode(Opcode.EOF).Forget();
-                    State = StateEnum.EOFSent;
+                    SendRsvOpcodeThenChangeState(Opcode.EOF, StateEnum.EOFSent);
                 } else { // EOFReceived
                     EnterClosing(true);
                 }
@@ -752,14 +763,13 @@ namespace NaiveSocks
 
         private void EnterClosing(bool byRemote)
         {
-            SendRsvOpcode(Opcode.Close).Forget();
-            State = (byRemote ? StateEnum.ClosingByRemote : StateEnum.ClosingByLocal);
+            SendRsvOpcodeThenChangeState(Opcode.Close, byRemote ? StateEnum.ClosingByRemote : StateEnum.ClosingByLocal);
         }
 
-        private void LastCloseReceived(bool byRemote)
+        private StateEnum GetLastCloseReceivedState(bool byRemote)
         {
-            State = byRemote ? StateEnum.ClosedByRemote : StateEnum.ClosedByLocal;
             Parent.Remove(this);
+            return byRemote ? StateEnum.ClosedByRemote : StateEnum.ClosedByLocal;
         }
 
         internal void ParentChannelsClosed()
@@ -782,14 +792,19 @@ namespace NaiveSocks
                 Logging.info($"{this} {str}: {obj}");
         }
 
+        private void info<T1, T2>(string str, T1 obj1, T2 obj2)
+        {
+            if (Debug)
+                Logging.info($"{this} {str}: {obj1}, {obj2}");
+        }
+
         long write = 0, read = 0;
         int writec = 0, readc = 0;
 
         public override string ToString()
         {
-            var chname = Id == NaiveMultiplexing.ReservedId ? "Rsv" :
-                         Id == NaiveMultiplexing.MainId ? "Main" : Id.ToString();
-            return $"{{#{Parent?.Id}ch{Id} R/W={read:N0}/{write:N0}({readc}/{writec}) {State}}}";
+            var chname = Id == NaiveMultiplexing.ReservedId ? "Rsv" : Id.ToString();
+            return $"{{#{Parent?.Id}ch{chname} R/W={read:N0}/{write:N0}({readc}/{writec}) {State}}}";
         }
 
         public void Dispose()

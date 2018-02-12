@@ -13,5 +13,6 @@ namespace NaiveServer
     {
         void Load(IController controller);
         void Start();
+        void Stop();
     }
 }

@@ -12,22 +12,30 @@ namespace NaiveSocks
         {
             internal List<NaiveMChannels> nmsList = new List<NaiveMChannels>();
             Dictionary<string, ImuxSession> imuxSessions = new Dictionary<string, ImuxSession>();
-
-            protected virtual INetwork GetNetwork(string name)
-            {
-                return null;
-            }
-
-            public int imux_max { get; set; } = 16;
+            
 
             public int timeout { get; set; } = 30;
 
-            public async Task HandleRequestAsync(HttpConnection p, byte[] realKey)
+            public class Settings
             {
+                public byte[] realKey { get; set; }
+                public Func<string, INetwork> networkProvider { get; set; }
+                public int imux_max { get; set; } = -1;
+                public AdapterRef @out { get; set; }
+
+                public virtual INetwork GetNetwork(string str)
+                {
+                    return networkProvider?.Invoke(str);
+                }
+            }
+            
+
+            public async Task HandleRequestAsync(HttpConnection p, Settings settings, string token)
+            {
+                if (token == null)
+                    throw new ArgumentNullException(nameof(token));
+                var realKey = settings.realKey;
                 try {
-                    var token = p.ParseUrlQstr()["token"];
-                    if (token == null)
-                        return;
                     var bytes = Convert.FromBase64String(token);
                     if (realKey != null) {
                         bytes = EncryptOrDecryptBytes(false, realKey, bytes);
@@ -52,8 +60,11 @@ namespace NaiveSocks
                                 httpCount = Int32.Parse(arr[4]);
                             }
                             var connCount = wsCount + wssoCount + httpCount;
-                            if (connCount > imux_max) {
-                                Logging.warning($"{this}: {p.remoteEP}: IMUX count requesting ({connCount}) > imux_max ({imux_max})");
+                            int imuxMax = settings.imux_max;
+                            if (imuxMax < 0)
+                                imuxMax = 16;
+                            if (connCount > imuxMax) {
+                                Logging.warning($"{this}: {p.remoteEP}: IMUX count requesting ({connCount}) > imux_max ({imuxMax})");
                                 return;
                             }
                             IMsgStream wsOrHttp;
@@ -97,7 +108,12 @@ namespace NaiveSocks
                         var nms = new NaiveMChannels(new NaiveMultiplexing(msgStream)) {
                             InAdapter = this
                         };
-                        nms.GetNetwork = GetNetwork;
+                        if (settings.@out != null) {
+                            nms.GotRemoteInConnection = (x) => {
+                                return this.Controller.HandleInConnection(x, settings.@out as IConnectionHandler);
+                            };
+                        }
+                        nms.NetworkProvider = settings.networkProvider;
                         lock (nmsList)
                             nmsList.Add(nms);
                         try {

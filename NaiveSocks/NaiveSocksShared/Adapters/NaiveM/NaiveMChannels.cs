@@ -15,13 +15,13 @@ namespace NaiveSocks
     {
         public IInAdapter InAdapter;
 
+        public Func<NaiveSocks.InConnection, Task> GotRemoteInConnection;
+
         public IConnectionHandler OutAdapter;
 
         public Action<string> Logged;
 
-        public Func<string, INetwork> GetNetwork;
-
-        public Func<NaiveSocks.InConnection, Task> HandleRemoteInConnection;
+        public Func<string, INetwork> NetworkProvider;
 
         public bool InConnectionFastCallback;
 
@@ -229,13 +229,13 @@ namespace NaiveSocks
         {
             var req = request.Value;
             if (req.additionalString?.Length == 0 || req.additionalString == "connect") {
-                if (InAdapter == null & HandleRemoteInConnection == null) {
+                if (InAdapter == null && GotRemoteInConnection == null) {
                     await request.Reply(new NaiveProtocol.Reply(AddrPort.Empty, 255, "noinadapter")).CAF();
                     return;
                 }
                 var inc = new InConnection(this, req, request.Channel);
-                if (HandleRemoteInConnection != null) {
-                    await HandleRemoteInConnection(inc).CAF();
+                if (GotRemoteInConnection != null) {
+                    await GotRemoteInConnection(inc).CAF();
                 } else {
                     await InAdapter.Controller.HandleInConnection(inc).CAF();
                 }
@@ -261,7 +261,7 @@ namespace NaiveSocks
                 if (m == "join") {
                     foreach (var item in from x in a.Skip(1) select x.Split('@')) {
                         var nn = item.Length > 1 ? item[1] : "default";
-                        var n = GetNetwork(nn);
+                        var n = NetworkProvider(nn);
                         if (n == null) {
                             await channel.SendString(NaiveUtils.SerializeArray("error", $"network {nn} not found"));
                             return;
