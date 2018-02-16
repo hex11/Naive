@@ -34,8 +34,12 @@ namespace NaiveSocksAndroid
         [return: GeneratedEnum]
         public override StartCommandResult OnStartCommand(Intent intent, [GeneratedEnum] StartCommandFlags flags, int startId)
         {
-            Prepare(this);
-            // TODO: start vpn
+            // TODO
+            if (VpnService.Prepare(this) != null) {
+                // start vpn activity
+            } else {
+                // continue starting vpn service
+            }
             return StartCommandResult.Sticky;
         }
 
@@ -75,14 +79,16 @@ namespace NaiveSocksAndroid
     static class Native
     {
         // native binaries from shadowsocks-android release apk:
+        // https://github.com/shadowsocks/shadowsocks-android/releases
+        // (v4.4.6)
 
         // to send TUN file descriptor to tun2socks.
         public const string SsJniHelper = "libjni-helper.so";
 
-        // tun -> socks, start as process.
+        // tun -> socks. (executable)
         public const string SsTun2Socks = "libtun2socks.so";
 
-        // a DNS server supporting socks upstream, start as process.
+        // a DNS server supporting socks 5 tcp upstream. (executable)
         public const string SsOverture = "liboverture.so";
 
         public static void Init(Context ctx)
