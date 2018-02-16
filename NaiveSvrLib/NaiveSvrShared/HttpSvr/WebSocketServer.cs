@@ -75,9 +75,10 @@ namespace Naive.HttpSvr
 
         public async Task<WsHandleRequestResult> HandleRequestAsync(bool enterRecvLoop)
         {
+            List<string> connectionSplits = p.GetReqHeaderSplits("Connection");
             if (p.Method == "GET"
                 && p.GetReqHeader("Upgrade") == "websocket"
-                && p.GetReqHeaderSplits("Connection").Contains("Upgrade")) {
+                && (connectionSplits.Contains("Upgrade") || connectionSplits.Contains("upgrade"))) {
                 p.Handled = true;
                 if (p.GetReqHeader("Sec-WebSocket-Version") != "13") {
                     p.ResponseStatusCode = "400 Bad Request";
