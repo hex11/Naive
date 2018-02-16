@@ -179,16 +179,135 @@ namespace Naive.Console
         }
     }
 
+    public struct Color32
+    {
+        public byte A, R, G, B;
+
+        static Color32[] consoleColors = new Color32[] {
+            new Color32{A=0xFF, R=0x00, G=0x00, B=0x00},
+            new Color32{A=0xFF, R=0x00, G=0x00, B=0x8B},
+            new Color32{A=0xFF, R=0x00, G=0x64, B=0x00},
+            new Color32{A=0xFF, R=0x00, G=0x8B, B=0x8B},
+            new Color32{A=0xFF, R=0x8B, G=0x00, B=0x00},
+            new Color32{A=0xFF, R=0x8B, G=0x00, B=0x8B},
+            new Color32{A=0xFF, R=0xD7, G=0xC3, B=0x2A},
+            new Color32{A=0xFF, R=0x80, G=0x80, B=0x80},
+            new Color32{A=0xFF, R=0xA9, G=0xA9, B=0xA9},
+            new Color32{A=0xFF, R=0x00, G=0x00, B=0xFF},
+            new Color32{A=0xFF, R=0x00, G=0x80, B=0x00},
+            new Color32{A=0xFF, R=0x00, G=0xFF, B=0xFF},
+            new Color32{A=0xFF, R=0xFF, G=0x00, B=0x00},
+            new Color32{A=0xFF, R=0xFF, G=0x00, B=0xFF},
+            new Color32{A=0xFF, R=0xFF, G=0xFF, B=0x00},
+            new Color32{A=0xFF, R=0xFF, G=0xFF, B=0xFF}
+        };
+
+        public ConsoleColor ToConsoleColor()
+        {
+            var c = this;
+            for (int i = 0; i < consoleColors.Length; i++) {
+                if (c == consoleColors[i])
+                    return (ConsoleColor)i;
+            }
+            int index = (c.R > 128 | c.G > 128 | c.B > 128) ? 8 : 0; // Bright bit
+            index |= (c.R > 64) ? 4 : 0; // Red bit
+            index |= (c.G > 64) ? 2 : 0; // Green bit
+            index |= (c.B > 64) ? 1 : 0; // Blue bit
+            return (ConsoleColor)index;
+        }
+
+        public static Color32 FromConsoleColor(ConsoleColor c)
+        {
+            if ((int)c > consoleColors.Length || (int)c < 0)
+                return consoleColors[0];
+            return consoleColors[(int)c];
+        }
+
+        public override bool Equals(object obj)
+        {
+            if (!(obj is Color32 other)) {
+                return false;
+            }
+            return this == other;
+        }
+
+        public override int GetHashCode()
+        {
+            return A + (R << 8) + (G << 16) + (B << 24);
+        }
+
+        public static bool operator ==(Color32 a, Color32 b)
+        {
+            return a.A == b.A && a.R == b.R && a.G == b.G && a.B == b.B;
+        }
+
+        public static bool operator !=(Color32 a, Color32 b)
+        {
+            return a.A != b.A || a.R != b.R || a.G != b.G || a.B != b.B;
+        }
+    }
+
     public abstract class CmdConsole
     {
+        public CmdConsole()
+        {
+            ResetColor();
+        }
+
         public static ConsoleOnStdIO StdIO { get; } = new ConsoleOnStdIO();
         public static CmdConsole Null { get; } = new nullConsole();
         public abstract void Write(string text);
         public abstract void WriteLine(string text);
         public abstract string ReadLine();
+
+        public bool PromptColorEnabled { get; set; }
+        public Color32 PromptColor32 { get; set; }
+
+        public bool CustomColorEnabled;
+        private Color32 _foregroundColor32;
+
+        public Color32 ForegroundColor32
+        {
+            get { return _foregroundColor32; }
+            set {
+                _foregroundColor32 = value;
+                CustomColorEnabled = true;
+            }
+        }
+
+        public ConsoleColor ForegroundColor
+        {
+            get { return ForegroundColor32.ToConsoleColor(); }
+            set { ForegroundColor32 = Color32.FromConsoleColor(value); }
+        }
+
+        public void ResetColor()
+        {
+            PromptColorEnabled = true;
+            PromptColor32 = Color32.FromConsoleColor(ConsoleColor.Green);
+            CustomColorEnabled = false;
+            _foregroundColor32 = default(Color32);
+        }
+
+        public void Write(string text, Color32 color)
+        {
+            // save color state:
+            var _custom = CustomColorEnabled;
+            var _color = _foregroundColor32;
+            ForegroundColor32 = color;
+            Write(text);
+            // restore state:
+            CustomColorEnabled = _custom;
+            _foregroundColor32 = _color;
+        }
+
         public virtual string ReadLine(string prompt)
         {
-            Write(prompt);
+            if (PromptColorEnabled) {
+                Write(prompt, PromptColor32);
+            } else {
+                Write(prompt);
+            }
             return ReadLine();
         }
 
@@ -211,23 +330,25 @@ namespace Naive.Console
             public override void Write(string text)
             {
                 lock (Lock)
-                    System.Console.Write(text);
+                    if (!CustomColorEnabled) {
+                        System.Console.Write(text);
+                    } else {
+                        System.Console.ForegroundColor = ForegroundColor;
+                        System.Console.Write(text);
+                        System.Console.ResetColor();
+                    }
             }
 
             public override void WriteLine(string text)
             {
                 lock (Lock)
-                    System.Console.WriteLine(text);
-            }
-
-            public override string ReadLine(string prompt)
-            {
-                lock (Lock) {
-                    System.Console.ForegroundColor = ConsoleColor.Green;
-                    Write(prompt);
-                    System.Console.ResetColor();
-                }
-                return ReadLine();
+                    if (!CustomColorEnabled) {
+                        System.Console.WriteLine(text);
+                    } else {
+                        System.Console.ForegroundColor = ForegroundColor;
+                        System.Console.WriteLine(text);
+                        System.Console.ResetColor();
+                    }
             }
         }
 

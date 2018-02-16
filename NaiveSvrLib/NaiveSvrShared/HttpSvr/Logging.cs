@@ -71,6 +71,7 @@ namespace Naive.HttpSvr
         private static void writeToConsole(Logging.Log log)
         {
             lock (ConsoleLock) {
+                System.Console.BackgroundColor = ConsoleColor.DarkGray;
                 switch (log.level) {
                 case Level.None:
                 case Level.Info:

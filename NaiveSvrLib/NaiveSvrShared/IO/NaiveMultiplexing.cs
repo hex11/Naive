@@ -452,7 +452,7 @@ namespace NaiveSocks
         private void setState(StateEnum value, bool noLog = false)
         {
             if (!noLog)
-                info("state", value);
+                debug("state", value);
             var old = _state;
             var oldClosed = IsClosed;
             var oldRecvEOF = IsRecvEOF(old);
@@ -531,7 +531,7 @@ namespace NaiveSocks
                     if (!msg.IsEOF)
                         queuedSize += msg.Data.tlen;
                     if (queuedSize >= MaxRecvBufferSize) {
-                        info("recv buf", queuedSize);
+                        debug("recv buf", queuedSize);
                         SetBlockingRemote(true);
                     }
                 }
@@ -578,7 +578,7 @@ namespace NaiveSocks
         {
             var bv = msg.Data;
             var opcode = (Opcode)bv[0];
-            info("<- opcode", opcode);
+            debug("<- opcode", opcode);
             lock (_syncroot) {
                 if (opcode == Opcode.Create) {
 
@@ -632,9 +632,9 @@ namespace NaiveSocks
         {
             var tmp = blockSendTcs;
             if (tmp != null) {
-                info("pausing send", msg.Data?.tlen);
+                debug("pausing send", msg.Data?.tlen);
                 await tmp.Task.CAF();
-                info("resumed send", msg.Data?.tlen);
+                debug("resumed send", msg.Data?.tlen);
             }
             ThrowIfShutdownOrClosed();
             write += msg.Data?.tlen ?? 0;
@@ -644,13 +644,13 @@ namespace NaiveSocks
 
         internal Task SendRsvOpcode(Opcode opcode)
         {
-            info("-> opcode", opcode);
+            debug("-> opcode", opcode);
             return Parent.SendOpcode(this, opcode);
         }
 
         internal void SendRsvOpcodeThenChangeState(Opcode opcode, StateEnum state)
         {
-            info("-> opstate", opcode, state);
+            debug("-> opstate", opcode, state);
             Parent.SendOpcode(this, opcode).Forget();
             setState(state, true);
         }
@@ -786,16 +786,16 @@ namespace NaiveSocks
             false;
 #endif
 
-        private void info<T>(string str, T obj)
+        private void debug<T>(string str, T obj)
         {
             if (Debug)
-                Logging.info($"{this} {str}: {obj}");
+                Logging.debug($"{this} {str}: {obj}");
         }
 
-        private void info<T1, T2>(string str, T1 obj1, T2 obj2)
+        private void debug<T1, T2>(string str, T1 obj1, T2 obj2)
         {
             if (Debug)
-                Logging.info($"{this} {str}: {obj1}, {obj2}");
+                Logging.debug($"{this} {str}: {obj1}, {obj2}");
         }
 
         long write = 0, read = 0;
