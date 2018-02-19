@@ -19,6 +19,10 @@ using R = NaiveSocksAndroid.Resource;
 using Android.Support.V7.Widget;
 using System.Linq;
 using Android.Support.Design.Widget;
+using Android.Support.V4.Content;
+using Android;
+using Android.Support.V4.App;
+using Android.Runtime;
 
 namespace NaiveSocksAndroid
 {
@@ -82,6 +86,22 @@ namespace NaiveSocksAndroid
 
             outputParent = this.FindViewById<LinearLayout>(R.Id.logparent);
             outputParentScroll = this.FindViewById<NestedScrollView>(R.Id.logparentScroll);
+
+            if (ContextCompat.CheckSelfPermission(this, Manifest.Permission.ReadExternalStorage)
+                != Permission.Granted) {
+                putText("requesting storage read/write permissions...");
+                ActivityCompat.RequestPermissions(this, new[] {
+                    Manifest.Permission.ReadExternalStorage,
+                    Manifest.Permission.WriteExternalStorage
+                }, 1);
+            }
+        }
+
+        public override void OnRequestPermissionsResult(int requestCode, string[] permissions, [GeneratedEnum] Permission[] grantResults)
+        {
+            for (int i = 0; i < permissions.Length; i++) {
+                putText($"permission {(grantResults[i] == Permission.Granted ? "granted" : "denied")}: {permissions[i]}");
+            }
         }
 
         private void startService()
@@ -170,9 +190,21 @@ namespace NaiveSocksAndroid
                         MakeSnackbar("No configuation file.", Snackbar.LengthLong).Show();
                     } else {
                         var intent = new Intent(Intent.ActionEdit);
-                        intent.SetDataAndType(Android.Net.Uri.FromFile(new Java.IO.File(found)), "text/plain");
-                        intent.SetFlags(ActivityFlags.NewTask);
-                        StartActivity(intent);
+                        Android.Net.Uri fileUri;
+                        if (Build.VERSION.SdkInt >= BuildVersionCodes.N) {
+                            fileUri = FileProvider.GetUriForFile(this, "naive.NaiveSocksAndroid.fp", new Java.IO.File(found));
+                            intent.AddFlags(ActivityFlags.GrantReadUriPermission);
+                            intent.AddFlags(ActivityFlags.GrantWriteUriPermission);
+                        } else {
+                            fileUri = Android.Net.Uri.FromFile(new Java.IO.File(found));
+                        }
+                        intent.SetDataAndType(fileUri, "text/plain");
+                        intent.AddFlags(ActivityFlags.NewTask);
+                        try {
+                            StartActivity(intent);
+                        } catch (ActivityNotFoundException) {
+                            MakeSnackbar("No activity to handle", Snackbar.LengthLong).Show();
+                        }
                     }
                 }
             }

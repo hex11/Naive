@@ -24,6 +24,8 @@ namespace NaiveSocks
 
             public override INetwork GetNetwork(string str)
             {
+                if (networks == null)
+                    return null;
                 networks.TryGetValue(str, out var aref);
                 return aref as INetwork;
             }
@@ -53,18 +55,15 @@ namespace NaiveSocks
         public override void Start()
         {
             base.Start();
-            if (networks == null)
-                networks = new Dictionary<string, AdapterRef>();
+            networks = networks ?? new Dictionary<string, AdapterRef>();
             if (network != null)
                 networks.Add("default", network);
             httpServer = new NaiveWebsiteServer();
-            if (listen != null)
-                httpServer.AddListener(listen);
-            if (path_settings == null)
-                path_settings = new Dictionary<string, PathSettings>();
+            path_settings = path_settings ?? new Dictionary<string, PathSettings>();
             if (paths != null) {
                 foreach (var item in paths) {
                     path_settings.Add(item.Key, new PathSettings {
+                        networks = this.networks,
                         key = item.Value
                     });
                 }
@@ -81,15 +80,22 @@ namespace NaiveSocks
             foreach (var item in path_settings) {
                 addPath(item.Key, item.Value);
             }
-            httpServer.Run();
+            if (listen != null) {
+                httpServer.AddListener(listen);
+                httpServer.Run();
+            } else {
+                Logging.warning($"{this}: no listener!");
+            }
         }
 
         private void addPath(string path, PathSettings settings)
         {
             if (settings.imux_max < 0)
                 settings.imux_max = imux_max;
-            if (settings.network != null)
-                settings.networks.Add("default", network);
+            if (settings.network != null) {
+                settings.networks = settings.networks ?? new Dictionary<string, AdapterRef>();
+                settings.networks.Add("default", settings.network);
+            }
             settings.realKey = NaiveProtocol.GetRealKeyFromString(settings.key ?? this.key, 32);
             httpServer.Router.AddAsyncRoute(path, (p) => {
                 var token = Regex.Match(p.Url_qstr, settings.format).Groups["token"].Value;

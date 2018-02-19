@@ -263,7 +263,7 @@ namespace NaiveSocks
                         var nn = item.Length > 1 ? item[1] : "default";
                         var n = NetworkProvider(nn);
                         if (n == null) {
-                            await channel.SendString(NaiveUtils.SerializeArray("error", $"network {nn} not found"));
+                            await channel.SendString(NaiveUtils.SerializeArray("error", $"network '{nn}' not found"));
                             return;
                         }
                         if (joinedNetworks.Any(x => {

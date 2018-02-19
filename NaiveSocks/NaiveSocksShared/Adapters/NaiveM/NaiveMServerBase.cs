@@ -113,7 +113,7 @@ namespace NaiveSocks
                                 return this.Controller.HandleInConnection(x, settings.@out as IConnectionHandler);
                             };
                         }
-                        nms.NetworkProvider = settings.networkProvider;
+                        nms.NetworkProvider = settings.GetNetwork;
                         lock (nmsList)
                             nmsList.Add(nms);
                         try {

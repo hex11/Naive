@@ -23,7 +23,7 @@ namespace Naive.HttpSvr
 
         public static bool WriteLogToConsole = false;
         public static bool WriteLogToConsoleWithTime = true;
-        public static bool WriteLogToConsoleIndentation = true;
+        public static bool WriteLogToConsoleIndentation = false;
 
         public struct Log
         {
@@ -71,17 +71,17 @@ namespace Naive.HttpSvr
         private static void writeToConsole(Logging.Log log)
         {
             lock (ConsoleLock) {
-                System.Console.BackgroundColor = ConsoleColor.DarkGray;
+                System.Console.ForegroundColor = ConsoleColor.Black;
                 switch (log.level) {
                 case Level.None:
                 case Level.Info:
-                    System.Console.ForegroundColor = ConsoleColor.White;
+                    System.Console.BackgroundColor = ConsoleColor.Gray;
                     break;
                 case Level.Warning:
-                    System.Console.ForegroundColor = ConsoleColor.Yellow;
+                    System.Console.BackgroundColor = ConsoleColor.Yellow;
                     break;
                 case Level.Error:
-                    System.Console.ForegroundColor = ConsoleColor.Red;
+                    System.Console.BackgroundColor = ConsoleColor.Red;
                     break;
                 }
                 string stamp;
