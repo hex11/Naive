@@ -101,8 +101,15 @@ namespace NaiveSocks
                 command.WriteLine($"# {arr.Length} connections");
             });
             cmdHub.AddCmdHandler(prefix + "reload", command => {
-                c.Reload();
-            });
+                if (command.args.Length == 0) {
+                    c.Reload();
+                } else if (command.args.Length == 1) {
+                    c.LoadConfigFileOrWarning(command.args[0], false);
+                    c.Reload();
+                } else {
+                    command.WriteLine("wrong arguments");
+                }
+            }, "Usage: reload [NEW_FILE]");
             cmdHub.AddCmdHandler(prefix + "stat", command => {
                 var proc = Process.GetCurrentProcess();
                 command.WriteLine($"TotalMemory: {GC.GetTotalMemory(command.args.Contains("gc")).ToString("N0")}");

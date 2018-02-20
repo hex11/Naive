@@ -84,19 +84,21 @@ namespace NaiveSocks
             RegisteredOutTypes.Add("nnetwork", typeof(NNetworkAdapter));
         }
 
-        public void LoadConfigFileOrWarning(string path)
+        public void LoadConfigFileOrWarning(string path, bool now = true)
         {
             FuncGetConfigString = () => {
-                if (File.Exists(path))
+                if (File.Exists(path)) {
+                    WorkingDirectory = Path.GetDirectoryName(path);
                     return File.ReadAllText(path, Encoding.UTF8);
+                }
                 Logging.warning($"configuation file '{path}' does not exist.");
                 return null;
             };
-            WorkingDirectory = Path.GetDirectoryName(path);
-            Load();
+            if (now)
+                Load();
         }
 
-        public void LoadConfigFileFromMultiPaths(string[] paths)
+        public void LoadConfigFileFromMultiPaths(string[] paths, bool now = true)
         {
             FuncGetConfigString = () => {
                 foreach (var item in paths) {
@@ -109,7 +111,8 @@ namespace NaiveSocks
                 Logging.warning("configuration file not found. searched paths:\n\t" + string.Join("\n\t", paths));
                 return null;
             };
-            Load();
+            if (now)
+                Load();
         }
 
         public void Load() => Load(null);

@@ -27,7 +27,7 @@ namespace NaiveSocks
                 if (networks == null)
                     return null;
                 networks.TryGetValue(str, out var aref);
-                return aref as INetwork;
+                return aref.Adapter as INetwork;
             }
         }
 
