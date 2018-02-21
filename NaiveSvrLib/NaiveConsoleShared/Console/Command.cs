@@ -15,6 +15,7 @@ namespace Naive.Console
         public int statusCode = 0;
         public CmdConsole Console { get; set; }
         public void Write(string text) => Console.Write(text);
+        public void WriteLine() => Console.WriteLine("");
         public void WriteLine(string text) => Console.WriteLine(text);
         public string ReadLine() => Console.ReadLine();
         public string ReadLine(string prompt) => Console.ReadLine(prompt);

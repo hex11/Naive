@@ -25,6 +25,30 @@ namespace NaiveSocks
             public Dictionary<string, string> Aliases = new Dictionary<string, string>();
 
             public Logging.Level LoggingLevel;
+
+            public string FilePath;
+            public string WorkingDirectory = ".";
+        }
+
+        public class ConfigFile
+        {
+            public string Context;
+            public string Path;
+
+            public static ConfigFile FromPath(string path)
+            {
+                return new ConfigFile {
+                    Context = File.ReadAllText(path, Encoding.UTF8),
+                    Path = path
+                };
+            }
+
+            public static ConfigFile FromContent(string content)
+            {
+                return new ConfigFile {
+                    Context = content
+                };
+            }
         }
 
         Logging.Level LoggingLevel => CurrentConfig.LoggingLevel;
@@ -45,9 +69,9 @@ namespace NaiveSocks
 
         public event Action<TomlTable> ConfigTomlLoaded;
 
-        public Func<string> FuncGetConfigString;
+        public Func<ConfigFile> FuncGetConfigFile;
 
-        public string WorkingDirectory = ".";
+        public string WorkingDirectory => CurrentConfig?.WorkingDirectory ?? ".";
         public string ProcessFilePath(string input)
         {
             if (WorkingDirectory?.Length == 0 || WorkingDirectory == "." || Path.IsPathRooted(input))
@@ -86,10 +110,9 @@ namespace NaiveSocks
 
         public void LoadConfigFileOrWarning(string path, bool now = true)
         {
-            FuncGetConfigString = () => {
+            FuncGetConfigFile = () => {
                 if (File.Exists(path)) {
-                    WorkingDirectory = Path.GetDirectoryName(path);
-                    return File.ReadAllText(path, Encoding.UTF8);
+                    return ConfigFile.FromPath(path);
                 }
                 Logging.warning($"configuation file '{path}' does not exist.");
                 return null;
@@ -100,12 +123,11 @@ namespace NaiveSocks
 
         public void LoadConfigFileFromMultiPaths(string[] paths, bool now = true)
         {
-            FuncGetConfigString = () => {
+            FuncGetConfigFile = () => {
                 foreach (var item in paths) {
                     if (File.Exists(item)) {
                         Logging.info("using configuration file: " + item);
-                        WorkingDirectory = Path.GetDirectoryName(item);
-                        return File.ReadAllText(item, System.Text.Encoding.UTF8);
+                        return ConfigFile.FromPath(item);
                     }
                 }
                 Logging.warning("configuration file not found. searched paths:\n\t" + string.Join("\n\t", paths));
@@ -116,17 +138,17 @@ namespace NaiveSocks
         }
 
         public void Load() => Load(null);
-        public void Load(string configContent)
+        public void Load(ConfigFile configFile)
         {
-            var config = GetConfigStringOrLog(configContent);
+            var config = GetConfigFileOrLog(configFile);
             if (config != null) {
-                LoadConfigStr(config);
+                LoadConfig(config);
             }
         }
 
-        string GetConfigStringOrLog(string configContent)
+        ConfigFile GetConfigFileOrLog(ConfigFile configFile)
         {
-            var config = configContent ?? FuncGetConfigString?.Invoke();
+            var config = configFile ?? FuncGetConfigFile?.Invoke();
             if (config == null)
                 Logging.warning($"no configuration.");
             return config;
@@ -134,13 +156,23 @@ namespace NaiveSocks
 
         public void LoadConfigStr(string toml)
         {
-            CurrentConfig = LoadConfigFromStr(toml, null) ?? CurrentConfig;
+            LoadConfig(ConfigFile.FromContent(toml));
+        }
+
+        public void LoadConfig(ConfigFile configFile)
+        {
+            CurrentConfig = LoadConfig(configFile, null) ?? CurrentConfig;
             Logging.info($"configuration loaded. {InAdapters.Count} InAdapters, {OutAdapters.Count} OutAdapters.");
         }
 
-        private Config LoadConfigFromStr(string toml, Config newcfg)
+        private Config LoadConfig(ConfigFile cf, Config newcfg)
         {
+            var toml = cf.Context;
             newcfg = newcfg ?? new Config();
+            if (cf.Path != null) {
+                newcfg.FilePath = cf.Path;
+                newcfg.WorkingDirectory = Path.GetDirectoryName(cf.Path);
+            }
             NaiveSocks.Config t;
             TomlTable tomlTable;
             var refs = new List<AdapterRef>();
@@ -262,14 +294,14 @@ namespace NaiveSocks
         }
 
         public void Reload() => Reload(null);
-        public void Reload(string configContent)
+        public void Reload(ConfigFile configFile)
         {
             Logging.warning("================================");
             Logging.warning("reloading configuation...");
-            var newstr = GetConfigStringOrLog(configContent);
-            if (newstr == null)
+            var newCfgFile = GetConfigFileOrLog(configFile);
+            if (newCfgFile == null)
                 return;
-            var newCfg = LoadConfigFromStr(newstr, null);
+            var newCfg = LoadConfig(newCfgFile, null);
             if (newCfg == null) {
                 Logging.error("reloading failed.");
                 return;
@@ -547,6 +579,8 @@ namespace NaiveSocks
 #else
             Logging.Level.Info;
 #endif
+
+        public string dir { get; set; }
 
         public Dictionary<string, string> aliases { get; set; }
 

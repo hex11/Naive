@@ -73,7 +73,10 @@ namespace Naive.HttpSvr
             lock (ConsoleLock) {
                 System.Console.ForegroundColor = ConsoleColor.Black;
                 switch (log.level) {
+                default:
                 case Level.None:
+                    System.Console.BackgroundColor = ConsoleColor.DarkGray;
+                    break;
                 case Level.Info:
                     System.Console.BackgroundColor = ConsoleColor.Gray;
                     break;

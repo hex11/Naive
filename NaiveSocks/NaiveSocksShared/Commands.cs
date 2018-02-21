@@ -91,10 +91,10 @@ namespace NaiveSocks
             }
         }
 
-        public static void AddCommands(CommandHub cmdHub, Controller c, string prefix)
+        public static void AddCommands(CommandHub cmdHub, Controller controller, string prefix)
         {
             cmdHub.AddCmdHandler(prefix + "c", command => {
-                var arr = c.InConnections.ToArray();
+                var arr = controller.InConnections.ToArray();
                 foreach (var item in arr) {
                     command.WriteLine(item.ToString());
                 }
@@ -102,10 +102,10 @@ namespace NaiveSocks
             });
             cmdHub.AddCmdHandler(prefix + "reload", command => {
                 if (command.args.Length == 0) {
-                    c.Reload();
+                    controller.Reload();
                 } else if (command.args.Length == 1) {
-                    c.LoadConfigFileOrWarning(command.args[0], false);
-                    c.Reload();
+                    controller.LoadConfigFileOrWarning(command.args[0], false);
+                    controller.Reload();
                 } else {
                     command.WriteLine("wrong arguments");
                 }
@@ -121,10 +121,30 @@ namespace NaiveSocks
                 command.WriteLine($"PrivateMemory: {proc.PrivateMemorySize64.ToString("N0")}");
                 command.WriteLine($"CPUTime: {proc.TotalProcessorTime.TotalMilliseconds.ToString("N0")} ms");
                 command.WriteLine($"Threads: {proc.Threads.Count}");
-                command.WriteLine($"Connections: {c.RunningConnections:N0} running, {c.TotalHandledConnections} handled");
+                command.WriteLine($"Connections: {controller.RunningConnections:N0} running, {controller.TotalHandledConnections} handled");
                 command.WriteLine($"MyStream Copied: {MyStream.TotalCopiedPackets:N0} packets, {MyStream.TotalCopiedBytes:N0} bytes");
                 command.WriteLine($"SocketStream1: {SocketStream1.GlobalCounters.StringRead};");
                 command.WriteLine($"               {SocketStream1.GlobalCounters.StringWrite}.");
+            });
+            cmdHub.AddCmdHandler(prefix + "config", c => {
+                var cfg = controller.CurrentConfig;
+                c.WriteLine("# Current configuration:");
+                c.WriteLine();
+                c.WriteLine("File Path: " + cfg.FilePath);
+                if (cfg.FilePath == null || Path.GetDirectoryName(cfg.FilePath) != cfg.WorkingDirectory) {
+                    c.WriteLine("Working Directory: " + cfg.WorkingDirectory);
+                }
+                c.WriteLine("Logging Level: " + cfg.LoggingLevel);
+                c.WriteLine();
+                c.WriteLine($"## InAdapters ({controller.InAdapters.Count}):");
+                foreach (var item in controller.InAdapters) {
+                    c.WriteLine($"   - '{item.Name}': {item} -> {item.@out.ToString() ?? "(no out)"}");
+                }
+                c.WriteLine();
+                c.WriteLine($"## OutAdapters ({controller.OutAdapters.Count}):");
+                foreach (var item in controller.OutAdapters) {
+                    c.WriteLine($"   - '{item.Name}': {item}");
+                }
             });
             cmdHub.AddCmdHandler(prefix + "gc", command => {
                 NaiveUtils.GCCollect(command.WriteLine);
@@ -449,14 +469,14 @@ namespace NaiveSocks
                     cmd.WriteLine(pingEnabled ? "start ping" : "stop ping");
                 }
                 List<Task> tasks = new List<Task>();
-                var outs = from x in c.OutAdapters where x is NaiveMOutAdapter select (x as NaiveMOutAdapter);
+                var outs = from x in controller.OutAdapters where x is NaiveMOutAdapter select (x as NaiveMOutAdapter);
                 if (keep) {
                     foreach (var item in outs) {
                         item.ping_enabled = pingEnabled;
                     }
                     return;
                 }
-                var ins = from x in c.InAdapters where x is NaiveProtocol.NaiveMServerBase select (x as NaiveProtocol.NaiveMServerBase).nmsList;
+                var ins = from x in controller.InAdapters where x is NaiveProtocol.NaiveMServerBase select (x as NaiveProtocol.NaiveMServerBase).nmsList;
                 foreach (IEnumerable<NaiveMChannels> item in (from x in outs select from y in x.ncsPool select y.nms).Union(ins)) {
                     foreach (var poolItem in item) {
                         var task = NaiveUtils.RunAsyncTask(async () => {
