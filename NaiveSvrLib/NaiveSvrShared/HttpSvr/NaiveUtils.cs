@@ -641,6 +641,11 @@ namespace Naive.HttpSvr
                 || e is SocketException;
         }
 
+        public static bool IsNullOrEmpty(this string str)
+        {
+            return string.IsNullOrEmpty(str);
+        }
+
         public static string JoinWithoutEmptyValue(string separator, params string[] strs)
         {
             return string.Join(separator, strs.Where(x => !string.IsNullOrEmpty(x)));

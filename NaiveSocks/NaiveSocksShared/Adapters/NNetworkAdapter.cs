@@ -66,7 +66,7 @@ namespace NaiveSocks
         public bool Reloading(object oldInstance)
         {
             clients = (oldInstance as NNetworkAdapter).clients;
-            Logging.info($"{this} reload with {clients.Count} client(s).");
+            Logger.info($"reloading with {clients.Count} client(s).");
             return false;
         }
 
@@ -128,14 +128,14 @@ namespace NaiveSocks
         {
             lock (clients)
                 clients.Add(client);
-            Logging.info($"{this} added: {client}");
+            Logger.info($"added: {client}");
             NaiveUtils.RunAsyncTask(async () => {
                 try {
                     await client.WhenDisconnected;
                 } finally {
                     lock (clients)
                         clients.Remove(client);
-                    Logging.info($"{this} removed: {client}");
+                    Logger.info($"removed: {client}");
                 }
             });
         }

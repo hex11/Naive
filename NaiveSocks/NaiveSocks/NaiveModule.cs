@@ -16,6 +16,7 @@ namespace NaiveSocks
         {
             controller.AddHandlerProvider(this, this);
             nsController = new NaiveSocks.Controller();
+            nsController.Logger.ParentLogger = Logging.RootLogger;
             Commands.AddCommands(controller.CommandHub, nsController, "ns");
         }
 

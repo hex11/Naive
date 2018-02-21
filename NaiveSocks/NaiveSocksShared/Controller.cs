@@ -17,6 +17,8 @@ namespace NaiveSocks
         public List<InAdapter> InAdapters => CurrentConfig.InAdapters;
         public List<OutAdapter> OutAdapters => CurrentConfig.OutAdapters;
 
+        public Logger Logger { get; } = new Logger();
+
         public class Config
         {
             public List<InAdapter> InAdapters = new List<InAdapter>();
@@ -114,7 +116,7 @@ namespace NaiveSocks
                 if (File.Exists(path)) {
                     return ConfigFile.FromPath(path);
                 }
-                Logging.warning($"configuation file '{path}' does not exist.");
+                warning($"configuation file '{path}' does not exist.");
                 return null;
             };
             if (now)
@@ -126,11 +128,11 @@ namespace NaiveSocks
             FuncGetConfigFile = () => {
                 foreach (var item in paths) {
                     if (File.Exists(item)) {
-                        Logging.info("using configuration file: " + item);
+                        info("using configuration file: " + item);
                         return ConfigFile.FromPath(item);
                     }
                 }
-                Logging.warning("configuration file not found. searched paths:\n\t" + string.Join("\n\t", paths));
+                warning("configuration file not found. searched paths:\n\t" + string.Join("\n\t", paths));
                 return null;
             };
             if (now)
@@ -150,7 +152,7 @@ namespace NaiveSocks
         {
             var config = configFile ?? FuncGetConfigFile?.Invoke();
             if (config == null)
-                Logging.warning($"no configuration.");
+                warning($"no configuration.");
             return config;
         }
 
@@ -162,7 +164,7 @@ namespace NaiveSocks
         public void LoadConfig(ConfigFile configFile)
         {
             CurrentConfig = LoadConfig(configFile, null) ?? CurrentConfig;
-            Logging.info($"configuration loaded. {InAdapters.Count} InAdapters, {OutAdapters.Count} OutAdapters.");
+            Logger.info($"configuration loaded. {InAdapters.Count} InAdapters, {OutAdapters.Count} OutAdapters.");
         }
 
         private Config LoadConfig(ConfigFile cf, Config newcfg)
@@ -205,7 +207,7 @@ namespace NaiveSocks
                 tomlTable = Toml.ReadString(toml, tomlSettings);
                 t = tomlTable.Get<NaiveSocks.Config>();
             } catch (Exception e) {
-                Logging.error($"TOML error: " + e.Message);
+                error($"TOML error: " + e.Message);
                 return null;
             }
             ConfigTomlLoaded?.Invoke(tomlTable);
@@ -219,7 +221,7 @@ namespace NaiveSocks
                         adapter.Name = item.Key;
                         newcfg.InAdapters.Add(adapter);
                     } catch (Exception e) {
-                        Logging.exception(e, Logging.Level.Error, $"TOML table 'in.{item.Key}':");
+                        Logger.exception(e, Logging.Level.Error, $"TOML table 'in.{item.Key}':");
                     }
                 }
             if (t.@out != null)
@@ -230,33 +232,35 @@ namespace NaiveSocks
                         adapter.Name = item.Key;
                         newcfg.OutAdapters.Add(adapter);
                     } catch (Exception e) {
-                        Logging.exception(e, Logging.Level.Error, $"TOML table 'out.{item.Key}':");
+                        Logger.exception(e, Logging.Level.Error, $"TOML table 'out.{item.Key}':");
                     }
                 }
-            foreach (var r in refs) {
-                if (r.IsTable) {
-                    var tt = r.Ref as TomlTable;
-                    var adapter = NewRegisteredOutType(tt);
-                    if (tt.TryGetValue("name", out string n)) {
-                        adapter.Name = n;
-                    }
-                    if (adapter.Name == null) {
-                        int i = 0;
-                        string name;
-                        do {
-                            name = $"_{tt["type"].Get<string>()}_" + ((i++ == 0) ? "" : i.ToString());
-                        } while (newcfg.OutAdapters.Any(x => x.Name == name));
-                        adapter.Name = name;
-                    }
-                    r.Adapter = adapter;
-                    newcfg.OutAdapters.Add(adapter);
+            foreach (var r in refs.Where(x => x.IsTable)) {
+                var tt = r.Ref as TomlTable;
+                var adapter = NewRegisteredOutType(tt);
+                if (tt.TryGetValue("name", out string n)) {
+                    adapter.Name = n;
                 }
+                if (adapter.Name == null) {
+                    int i = 0;
+                    string name;
+                    do {
+                        name = $"_{tt["type"].Get<string>()}_" + ((i++ == 0) ? "" : i.ToString());
+                    } while (newcfg.OutAdapters.Any(x => x.Name == name));
+                    adapter.Name = name;
+                }
+                r.Adapter = adapter;
+                newcfg.OutAdapters.Add(adapter);
             }
             if (newcfg.OutAdapters.Any(x => x.Name == "direct") == false) {
                 newcfg.OutAdapters.Add(new DirectOutAdapter() { Name = "direct" });
             }
             if (newcfg.OutAdapters.Any(x => x.Name == "fail") == false) {
                 newcfg.OutAdapters.Add(new FailAdapter() { Name = "fail" });
+            }
+            foreach (var item in newcfg.InAdapters.Union<Adapter>(newcfg.OutAdapters)) {
+                item.Logger.ParentLogger = this.Logger;
+                item.Logger.Stamp = item.Name;
             }
             foreach (var r in refs) {
                 if (r.IsName) {
@@ -296,17 +300,17 @@ namespace NaiveSocks
         public void Reload() => Reload(null);
         public void Reload(ConfigFile configFile)
         {
-            Logging.warning("================================");
-            Logging.warning("reloading configuation...");
+            warning("================================");
+            warning("reloading configuation...");
             var newCfgFile = GetConfigFileOrLog(configFile);
             if (newCfgFile == null)
                 return;
             var newCfg = LoadConfig(newCfgFile, null);
             if (newCfg == null) {
-                Logging.error("reloading failed.");
+                error("reloading failed.");
                 return;
             }
-            Logging.info($"new configuration loaded. {newCfg.InAdapters.Count} InAdapters, {newCfg.OutAdapters.Count} OutAdapters.");
+            info($"new configuration loaded. {newCfg.InAdapters.Count} InAdapters, {newCfg.OutAdapters.Count} OutAdapters.");
             var oldCfg = CurrentConfig;
             var oldCanReload = InAdapters.Union<Adapter>(OutAdapters)
                                         .Select(x => x as ICanReload)
@@ -317,10 +321,10 @@ namespace NaiveSocks
             var oldNewCanReload = oldCanReload.Where(x => {
                 return newCanReload.Any(y => y.Name == x.Name && y.GetType() == x.GetType());
             }).ToList();
-            Logging.warning("stopping old adapters...");
+            warning("stopping old adapters...");
             this.Stop(CurrentConfig, oldNewCanReload);
-            Logging.warning("================================");
-            Logging.warning("starting new adapters...");
+            warning("================================");
+            warning("starting new adapters...");
             CurrentConfig = newCfg;
             this.Start(oldNewCanReload);
         }
@@ -346,7 +350,7 @@ namespace NaiveSocks
                     item.InternalInit(this);
                     item.InternalStart(checkIcr(item));
                 } catch (Exception e) {
-                    Logging.exception(e, Logging.Level.Error, $"starting OutAdapter '{item.Name}': {item}");
+                    Logger.exception(e, Logging.Level.Error, $"starting OutAdapter '{item.Name}': {item}");
                 }
             }
             foreach (var item in InAdapters) {
@@ -355,9 +359,10 @@ namespace NaiveSocks
                     item.InternalInit(this);
                     item.InternalStart(checkIcr(item));
                 } catch (Exception e) {
-                    Logging.exception(e, Logging.Level.Error, $"starting InAdapter '{item.Name}': {item}");
+                    Logger.exception(e, Logging.Level.Error, $"starting InAdapter '{item.Name}': {item}");
                 }
             }
+            Logger.info($"=====Adapters Started=====");
         }
 
         public void Stop() => Stop(CurrentConfig, null);
@@ -373,6 +378,7 @@ namespace NaiveSocks
                 info($"stopping{(reloading ? " (reloading)" : "")} OutAdapter: '{item.Name}' {item}");
                 item.InternalStop(!reloading);
             }
+            Logger.info($"=====Adapters Stopped=====");
         }
 
         public void Reset()
@@ -566,7 +572,7 @@ namespace NaiveSocks
         private void log(string str, Logging.Level level)
         {
             if (LoggingLevel <= level)
-                Logging.log(str, level);
+                Logger.log(str, level);
         }
     }
 

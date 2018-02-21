@@ -130,20 +130,20 @@ namespace NaiveSocks
                 var cfg = controller.CurrentConfig;
                 c.WriteLine("# Current configuration:");
                 c.WriteLine();
-                c.WriteLine("File Path: " + cfg.FilePath);
+                c.WriteLine("  File Path: " + cfg.FilePath);
                 if (cfg.FilePath == null || Path.GetDirectoryName(cfg.FilePath) != cfg.WorkingDirectory) {
-                    c.WriteLine("Working Directory: " + cfg.WorkingDirectory);
+                    c.WriteLine("  Working Directory: " + cfg.WorkingDirectory);
                 }
-                c.WriteLine("Logging Level: " + cfg.LoggingLevel);
+                c.WriteLine("  Logging Level: " + cfg.LoggingLevel);
                 c.WriteLine();
-                c.WriteLine($"## InAdapters ({controller.InAdapters.Count}):");
-                foreach (var item in controller.InAdapters) {
-                    c.WriteLine($"   - '{item.Name}': {item} -> {item.@out.ToString() ?? "(no out)"}");
+                c.WriteLine($"  ## InAdapters ({cfg.InAdapters.Count}):");
+                foreach (var item in cfg.InAdapters) {
+                    c.WriteLine($"    - '{item.Name}': {item} -> {item.@out?.ToString() ?? "(No OutAdapter)"}");
                 }
                 c.WriteLine();
-                c.WriteLine($"## OutAdapters ({controller.OutAdapters.Count}):");
-                foreach (var item in controller.OutAdapters) {
-                    c.WriteLine($"   - '{item.Name}': {item}");
+                c.WriteLine($"  ## OutAdapters ({cfg.OutAdapters.Count}):");
+                foreach (var item in cfg.OutAdapters) {
+                    c.WriteLine($"    - '{item.Name}': {item}");
                 }
             });
             cmdHub.AddCmdHandler(prefix + "gc", command => {

@@ -46,7 +46,7 @@ namespace NaiveSocks
                         case Socks5Server.AddrType.DomainName:
                             var length = buf[1];
                             if (length == 0) {
-                                Logging.warning($"{this}: zero addr length ({remoteEP})");
+                                Logger.warning($"zero addr length ({remoteEP})");
                                 await Task.Delay(10 * 1000).CAF();
                                 return;
                             }
@@ -56,7 +56,7 @@ namespace NaiveSocks
                             addrString = Encoding.ASCII.GetString(dnBuf, 0, length);
                             break;
                         default:
-                            Logging.warning($"{this}: unknown addr type {addrType} ({remoteEP})");
+                            Logger.warning("unknown addr type {addrType} ({remoteEP})");
                             await Task.Delay(10 * 1000 + NaiveUtils.Random.Next(20 * 1000)).CAF();
                             return;
                         }
@@ -66,7 +66,7 @@ namespace NaiveSocks
                         await Controller.HandleInConnection(InConnection.Create(this, dest, dataStream, $"remote={remoteEP}")).CAF();
                     }
                 } catch (Exception e) {
-                    Logging.exception(e, Logging.Level.Error, $"{this} handling connection");
+                    Logger.exception(e, Logging.Level.Error, "handling connection");
                 }
             }
             Task.Run(tmp);

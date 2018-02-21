@@ -80,7 +80,7 @@ namespace NaiveSocks
                 && old.path == this.path
                 && old.key == this.key) {
                 ncsPool = old.ncsPool;
-                Logging.info($"{this} reload with {ncsPool.Count} old connections.");
+                Logger.info($"{this} reload with {ncsPool.Count} old connections.");
             }
             return false;
         }
@@ -150,7 +150,7 @@ namespace NaiveSocks
                 int avaliable = 0;
                 foreach (var item in ncsPool) {
                     if (item.connectTask?.IsCompleted == true && item.nms == null) {
-                        Logging.warning($"'{Name}' found a strange pool item, removing. (mono bug?)");
+                        Logger.warning("found a strange pool item, removing. (mono bug?)");
                         (toBeRemoved ?? (toBeRemoved = new List<PoolItem>())).Add(item);
                     } else if (item.ConnectionsCount + (item?.nms?.BaseChannels.TotalRemoteChannels ?? 0) < pool_concurrency) {
                         avaliable++;
@@ -235,6 +235,8 @@ namespace NaiveSocks
         {
             private NaiveMOutAdapter adapter;
 
+            Logger Logger => adapter.Logger;
+
             private object _lock => this;
 
             public NaiveMChannels nms;
@@ -259,7 +261,7 @@ namespace NaiveSocks
             {
                 try {
                     var beginTime = DateTime.Now;
-                    Logging.info($"'{adapter.Name}' connecting...");
+                    Logger.info("connecting...");
                     var settings = new NaiveMChannels.ConnectingSettings {
                         Headers = new Dictionary<string, string>(adapter.headers),
                         Host = adapter.server,
@@ -277,24 +279,24 @@ namespace NaiveSocks
                     state = 2;
                     nms.OutAdapter = adapter;
                     nms.InAdapter = adapter;
-                    nms.Logged += (log) => Logging.info($"'{adapter.Name}': {log}");
+                    nms.Logged += (log) => Logger.info(log);
                     nms.GotRemoteInConnection = (inc) => {
-                        Logging.info($"'{adapter.Name}': conn from remote {(inc as NaiveMChannels.InConnection)?.Channel}" +
+                        Logger.info($"conn from remote {(inc as NaiveMChannels.InConnection)?.Channel}" +
                                         $" (dest={inc.Dest}) redirecting to 127.1");
                         adapter.CheckPool();
                         inc.Dest.Host = "127.0.0.1";
                         return adapter.Controller.HandleInConnection(inc);
                     };
                     nms.InConnectionFastCallback = adapter.fastopen;
-                    Logging.info($"'{adapter.Name}' connected: {nms.BaseChannels} in {(DateTime.Now - beginTime).TotalMilliseconds:0} ms");
+                    Logger.info($"connected: {nms.BaseChannels} in {(DateTime.Now - beginTime).TotalMilliseconds:0} ms");
                     state = 3;
                     if (adapter.network != null)
                         NaiveUtils.RunAsyncTask(async () => {
                             try {
                                 await nms.JoinNetworks(adapter.network.Split(' '));
-                                Logging.info($"{nms.BaseChannels} joined network(s).");
+                                Logger.info($"{nms.BaseChannels} joined network(s).");
                             } catch (Exception e) {
-                                Logging.error($"{nms.BaseChannels}: joining network(s) error: {e.Message}");
+                                Logger.error($"{nms.BaseChannels}: joining network(s) error: {e.Message}");
                             }
                         }).Forget();
                     this.nms = nms;
@@ -305,7 +307,7 @@ namespace NaiveSocks
                             state = 5;
                             await nms.Start();
                         } catch (Exception e) {
-                            Logging.exception(e, Logging.Level.Error, $"{nms.BaseChannels} error");
+                            Logger.exception(e, Logging.Level.Error, $"{nms.BaseChannels} error");
                             Error?.Invoke(this, e);
                         } finally {
                             state = 6;
@@ -321,9 +323,9 @@ namespace NaiveSocks
                     //connectTask = null;
                     nms = null;
                     if (e.IsConnectionException()) {
-                        Logging.error($"'{adapter.Name}' connecting failed: {e.Message}");
+                        Logger.error($"connecting failed: {e.Message}");
                     } else {
-                        Logging.exception(e, Logging.Level.Error, $"'{adapter.Name}' connecting failed");
+                        Logger.exception(e, Logging.Level.Error, $"connecting failed");
                     }
                     throw;
                 }

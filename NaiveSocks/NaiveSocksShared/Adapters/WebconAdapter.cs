@@ -117,7 +117,7 @@ namespace NaiveSocks
                     if (passwd == realPasswd) {
                         break;
                     } else {
-                        Logging.warning($"{Adapter}: wrong passwd from {p.myStream}");
+                        Adapter.Logger.warning($"wrong passwd from {p.myStream}");
                         if (--chances <= 0) {
                             await wss.SendStringAsync("session end.\r\n");
                             return;

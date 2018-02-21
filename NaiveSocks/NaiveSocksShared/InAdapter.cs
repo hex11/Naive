@@ -3,6 +3,7 @@ using System.Net.Sockets;
 using System.Threading.Tasks;
 using Nett;
 using Naive.HttpSvr;
+using System.Text;
 
 namespace NaiveSocks
 {
@@ -22,9 +23,9 @@ namespace NaiveSocks
         public override string ToString()
         {
             if (Adapter != null)
-                return $"ref'{Adapter.Name}'";
+                return IsName ? $"ref'{Adapter.Name}'" : $"new'{Adapter.Name}'";
             else
-                return $"ref'{Ref}'(NoAdapter)";
+                return $"ref'{Ref}'(Not Found)";
         }
     }
 
@@ -41,6 +42,8 @@ namespace NaiveSocks
     {
         public string Name { get; set; }
         public Controller Controller { get; private set; }
+
+        public Logger Logger { get; } = new Logger();
 
         public string QuotedName
         {
@@ -90,6 +93,11 @@ namespace NaiveSocks
             if (Name != null)
                 return Name.Quoted();
             return base.ToString();
+        }
+
+        public virtual void GetDetailString(StringBuilder sb)
+        {
+
         }
     }
 

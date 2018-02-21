@@ -25,6 +25,8 @@ namespace Naive.HttpSvr
         public static bool WriteLogToConsoleWithTime = true;
         public static bool WriteLogToConsoleIndentation = false;
 
+        public static Logger RootLogger { get; } = new Logger(null, (c) => log(c));
+
         public struct Log
         {
             public Level level;
@@ -289,23 +291,110 @@ namespace Naive.HttpSvr
         {
             return (long)(DateTime.Now - Process.GetCurrentProcess().StartTime).TotalMilliseconds;
         }
+
+        public static long Runtime => getRuntime();
     }
 
-    // TODO
+    // TODO: update ResultingStamp when the stamp of parent changed.
     public class Logger
     {
-        public event LogEventHandler Logged;
 
-        public Logger BaseLogger;
+        private bool isNullLogger;
+
+        public static Logger Null { get; } = new Logger { isNullLogger = true };
+
+        public Logger()
+        {
+        }
+
+        public Logger(string stamp)
+        {
+            _stamp = stamp;
+        }
+
+        public Logger(string stamp, LogEventHandler logged)
+        {
+            _stamp = stamp;
+            Logged += logged;
+        }
+
+        public Logger(string stamp, Logger parentLogger)
+        {
+            _stamp = stamp;
+            _parentLogger = parentLogger;
+            UpdateResultingStamp();
+        }
+
+        public Logger CreateChild(string stamp)
+        {
+            return new Logger(stamp, this);
+        }
+
+        public string ResultingStamp { get; private set; }
+
+        void UpdateResultingStamp()
+        {
+            if (_parentLogger?.ResultingStamp.IsNullOrEmpty() != false || _stamp.IsNullOrEmpty())
+                ResultingStamp = _parentLogger?.ResultingStamp ?? _stamp;
+            else
+                ResultingStamp = _parentLogger?.ResultingStamp + "." + _stamp;
+        }
+
+        event LogEventHandler _logged;
+        public event LogEventHandler Logged
+        {
+            add {
+                if (!isNullLogger)
+                    _logged += value;
+            }
+            remove {
+                if (!isNullLogger)
+                    _logged -= value;
+            }
+        }
+
+        private Logger _parentLogger;
+        public Logger ParentLogger
+        {
+            get { return _parentLogger; }
+            set {
+                if (isNullLogger)
+                    return;
+                _parentLogger = value;
+                UpdateResultingStamp();
+            }
+        }
+
+        private string _stamp;
+        public string Stamp
+        {
+            get { return _stamp; }
+            set {
+                if (isNullLogger)
+                    return;
+                _stamp = value;
+                UpdateResultingStamp();
+            }
+        }
 
         private void log(Logging.Log log)
         {
-            throw new NotImplementedException();
+            if (isNullLogger)
+                return;
+            _parentLogger?.log(log);
+            _logged?.Invoke(log);
         }
 
         public void log(string text, Logging.Level level)
         {
-            throw new NotImplementedException();
+            if (isNullLogger)
+                return;
+            log(new Logging.Log {
+                text = ResultingStamp.IsNullOrEmpty() ? text : "<" + ResultingStamp + ">: " + text,
+                level = level,
+                runningTime = Logging.Runtime,
+                time = DateTime.Now
+            });
         }
 
         [Conditional("DEBUG")]
@@ -327,6 +416,16 @@ namespace Naive.HttpSvr
         public void error(string text)
         {
             log(text, Logging.Level.Error);
+        }
+
+        public void exception(Exception ex, Logging.Level level = Logging.Level.None, string text = null)
+        {
+            try {
+                if (ex == null)
+                    log(text + " (Exception object is null!!!)\r\nStackTrace:\r\n" + new StackTrace(true).ToString(), level);
+                else
+                    log(Logging.getExceptionText(ex, text), level);
+            } catch (Exception) { }
         }
     }
 }

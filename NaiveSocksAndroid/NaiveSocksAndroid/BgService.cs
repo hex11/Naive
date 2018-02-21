@@ -108,6 +108,7 @@ namespace NaiveSocksAndroid
             StartForeground(MainNotificationId, builder.Build());
 
             Controller = new Controller();
+            Controller.Logger.ParentLogger = Logging.RootLogger;
 
             onScreen(powerManager.IsInteractive);
             var filter = new IntentFilter(Intent.ActionScreenOff);

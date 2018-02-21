@@ -81,6 +81,7 @@ Usage: {NAME}.exe [-h|--help] [(-c|--config) FILE] [--no-cli] [--no-log-stdout]
             }
 
             var controller = new Controller();
+            controller.Logger.ParentLogger = Logging.RootLogger;
             long lastPackets = 0, lastBytes = 0;
             void updateTitle()
             {

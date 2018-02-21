@@ -54,7 +54,7 @@ namespace NaiveSocks
             if (rules == null || rules.Count == 0)
                 return (x) => { };
             var parsedRules = rules.Select((rule) => {
-                // return Rule or Func<InConnection, bool>
+                // returns Rule or Func<InConnection, bool>
                 if (rule.abpfile == null && rule.abp == null) {
                     return (object)rule;
                 } else {
@@ -64,7 +64,7 @@ namespace NaiveSocks
                         if (abpString == null) {
                             var realPath = Controller.ProcessFilePath(rule.abpfile);
                             if (!File.Exists(realPath)) {
-                                Logging.warning($"{this}: abp file {realPath.Quoted()} does not exist.");
+                                Logger.warning($"abp file {realPath.Quoted()} does not exist.");
                                 return new Func<InConnection, bool>((x) => false);
                             }
                             abpString = File.ReadAllText(realPath, Encoding.UTF8);
@@ -74,10 +74,10 @@ namespace NaiveSocks
                         }
                         var parsedAbpFilter = ParseABPFilter(abpString);
                         if (logging)
-                            Logging.info($"{this}: loaded abp filter {(rule.abpfile == null ? "(inline)" : rule.abpfile.Quoted())} in {sw.ElapsedMilliseconds} ms");
+                            Logger.info($"loaded abp filter {(rule.abpfile == null ? "(inline)" : rule.abpfile.Quoted())} in {sw.ElapsedMilliseconds} ms");
                         return new Func<InConnection, bool>((x) => parsedAbpFilter(x) && onConnectionHit(rule, x));
                     } catch (Exception e) {
-                        Logging.exception(e);
+                        Logger.exception(e);
                         return new Func<InConnection, bool>((x) => false);
                     }
                 }
@@ -224,7 +224,7 @@ namespace NaiveSocks
                     }
                 } else {
                     if (logging)
-                        Logging.warning($"{this}: unsupported/wrong ABP filter at line {i + 1}: {line.Quoted()}");
+                        Logger.warning($"unsupported/wrong ABP filter at line {i + 1}: {line.Quoted()}");
                 }
             }
             return (x) => {
@@ -310,7 +310,7 @@ namespace NaiveSocks
             }
             if (logging) {
                 var ms = sw.ElapsedMilliseconds;
-                Logging.info($"{this}: {connection.Redirected} <- {connection.Url ?? connection.Dest.ToString()} ({ms} ms)");
+                Logger.info($"{connection.Redirected} <- {connection.Url ?? connection.Dest.ToString()} ({ms} ms)");
             }
         }
     }
