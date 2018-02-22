@@ -17,15 +17,15 @@ using NaiveSocks;
 
 namespace NaiveSocksAndroid
 {
-    public class GlobalConfig
+    public class AppConfig
     {
-        public static GlobalConfig Current;
+        public static AppConfig Current;
 
         public static void Init(Context ctx)
         {
             if (Current != null)
                 return;
-            Current = new GlobalConfig() {
+            Current = new AppConfig() {
                 MainPreference = GetPreference(ctx)
             };
         }
@@ -54,11 +54,8 @@ namespace NaiveSocksAndroid
         public const string notification_show_logs = "notification_show_logs";
         public const string start_on_boot = "start_on_boot";
 
-        public void SetShowLogs(bool value) => Set(notification_show_logs, value);
-        public bool GetShowLogs() => GetBool(notification_show_logs, true);
-
-        public void SetAutostart(bool value) => Set(start_on_boot, value);
-        public bool GetAutostart() => GetBool(start_on_boot, false);
+        public bool ShowLogs { get => GetBool(notification_show_logs, false); set => Set(notification_show_logs, value); }
+        public bool Autostart { get => GetBool(start_on_boot, false); set => Set(start_on_boot, value); }
 
         public static string[] GetNaiveSocksConfigPaths(Context ctx)
         {

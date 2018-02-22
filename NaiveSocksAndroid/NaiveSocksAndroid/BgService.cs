@@ -24,8 +24,8 @@ namespace NaiveSocksAndroid
     {
         public override void OnReceive(Context context, Intent intent)
         {
-            GlobalConfig.Init(Application.Context);
-            if (GlobalConfig.Current.GetAutostart()) {
+            AppConfig.Init(Application.Context);
+            if (AppConfig.Current.Autostart) {
                 Intent serviceIntent = new Intent(context, typeof(BgService));
                 serviceIntent.SetAction("start!");
                 serviceIntent.PutExtra("isAutostart", true);
@@ -68,7 +68,7 @@ namespace NaiveSocksAndroid
         public override void OnCreate()
         {
             CrashHandler.CheckInit();
-            GlobalConfig.Init(ApplicationContext);
+            AppConfig.Init(ApplicationContext);
 
             base.OnCreate();
 
@@ -78,16 +78,16 @@ namespace NaiveSocksAndroid
             notificationManager = (NotificationManager)GetSystemService(Context.NotificationService);
 
             bigText = new NotificationCompat.BigTextStyle();
-            bigText.BigText("logs will shown here.\n(multiple lines)");
+            bigText.BigText("NaiveSocks service is starting...");
 
             builder = new NotificationCompat.Builder(this)
                         .SetContentIntent(BuildIntentToShowMainActivity())
                         .SetContentTitle("NaiveSocks")
                         //.SetSubText("running")
                         .SetStyle(bigText)
-                        .AddAction(BuildServiceAction(Actions.COL_NOTIF, "Collapse", Android.Resource.Drawable.StarOff, 4))
+                        //.AddAction(BuildServiceAction(Actions.COL_NOTIF, "Collapse", Android.Resource.Drawable.StarOff, 4))
                         .AddAction(BuildServiceAction(Actions.STOP, "Stop", Android.Resource.Drawable.StarOff, 1))
-                        //.AddAction(BuildServiceAction(Actions.RELOAD, "Reload", 0, 2))
+                        .AddAction(BuildServiceAction(Actions.RELOAD, "Reload", 0, 2))
                         .AddAction(BuildServiceAction(Actions.GC, "GC", Android.Resource.Drawable.StarOff, 3))
                         .SetSmallIcon(Resource.Drawable.N)
                         .SetPriority((int)NotificationPriority.Min)
@@ -123,7 +123,7 @@ namespace NaiveSocksAndroid
 
             //BindService(new Intent(this, typeof(ConfigService)), cfgService = new ServiceConnection<ConfigService>(), Bind.AutoCreate);
 
-            notification_show_logs = GlobalConfig.Current.GetShowLogs();
+            notification_show_logs = AppConfig.Current.ShowLogs;
 
             notification_show_logs ^= true; // to force update
             SetShowLogs(!notification_show_logs);
@@ -139,7 +139,7 @@ namespace NaiveSocksAndroid
                             onScreen(isScreenOn);
                         }
                     };
-                    var paths = GlobalConfig.GetNaiveSocksConfigPaths(this);
+                    var paths = AppConfig.GetNaiveSocksConfigPaths(this);
                     Controller.LoadConfigFileFromMultiPaths(paths);
                     Controller.Start();
                     Logging.info("controller started.");
@@ -285,7 +285,7 @@ namespace NaiveSocksAndroid
         {
             if (show == notification_show_logs)
                 return;
-            GlobalConfig.Current.SetShowLogs(show);
+            AppConfig.Current.ShowLogs = show;
             lock (builder) {
                 notification_show_logs = show;
                 if (show) {

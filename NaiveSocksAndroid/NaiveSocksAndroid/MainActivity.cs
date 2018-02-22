@@ -54,7 +54,7 @@ namespace NaiveSocksAndroid
         protected override void OnCreate(Bundle savedInstanceState)
         {
             CrashHandler.CheckInit();
-            GlobalConfig.Init(ApplicationContext);
+            AppConfig.Init(ApplicationContext);
 
             base.OnCreate(savedInstanceState);
 
@@ -157,11 +157,11 @@ namespace NaiveSocksAndroid
             }
             menu.Add(menu_showLogs)
                 .SetCheckable(true)
-                .SetChecked(GlobalConfig.Current.GetShowLogs())
+                .SetChecked(AppConfig.Current.ShowLogs)
                 .SetShowAsActionFlags(ShowAsAction.Never);
             menu.Add(menu_autostart)
                 .SetCheckable(true)
-                .SetChecked(GlobalConfig.Current.GetAutostart())
+                .SetChecked(AppConfig.Current.Autostart)
                 .SetShowAsActionFlags(ShowAsAction.Never);
             menu.Add(menu_openConfig)
                 .SetShowAsActionFlags(ShowAsAction.Never);
@@ -184,7 +184,7 @@ namespace NaiveSocksAndroid
                 } else if (title == menu_autostart) {
                     setAutostart(!item.IsChecked);
                 } else if (title == menu_openConfig) {
-                    var paths = GlobalConfig.GetNaiveSocksConfigPaths(this);
+                    var paths = AppConfig.GetNaiveSocksConfigPaths(this);
                     var found = paths.FirstOrDefault(x => File.Exists(x));
                     if (found == null) {
                         MakeSnackbar("No configuation file.", Snackbar.LengthLong).Show();
@@ -213,7 +213,7 @@ namespace NaiveSocksAndroid
 
         private void setAutostart(bool enabled)
         {
-            GlobalConfig.Current.SetAutostart(enabled);
+            AppConfig.Current.Autostart = enabled;
             var pm = this.PackageManager;
             var componentName = new ComponentName(this, Java.Lang.Class.FromType(typeof(BootReceiver)));
             var enabledState = (enabled) ? ComponentEnabledState.Enabled : ComponentEnabledState.Disabled;
@@ -224,7 +224,7 @@ namespace NaiveSocksAndroid
 
         void setShowLogs(bool show)
         {
-            GlobalConfig.Current.SetShowLogs(show);
+            AppConfig.Current.ShowLogs = show;
             this.InvalidateOptionsMenu();
             if (isConnected) {
                 service.SetShowLogs(show);

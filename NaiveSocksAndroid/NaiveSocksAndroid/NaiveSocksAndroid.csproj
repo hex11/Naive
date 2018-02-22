@@ -120,7 +120,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="BgService.cs" />
-    <Compile Include="Config.cs" />
+    <Compile Include="AppConfig.cs" />
     <Compile Include="CrashHandler.cs" />
     <Compile Include="MainActivity.cs" />
     <Compile Include="Resources\Resource.Designer.cs" />
