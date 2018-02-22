@@ -61,7 +61,7 @@ namespace Naive.HttpSvr
             len -= startIndex;
         }
 
-        public byte[] GetBytes() => GetBytes(0, tlen);
+        public byte[] GetBytes() => GetBytes(0, tlen, false);
         public byte[] GetBytes(bool forceNew) => GetBytes(0, tlen, forceNew);
         public byte[] GetBytes(int offset, int len) => GetBytes(offset, len, false);
         public byte[] GetBytes(int offset, int len, bool forceNew)
@@ -70,9 +70,27 @@ namespace Naive.HttpSvr
                 return bytes;
             }
             var buf = new Byte[len];
-            for (int i = 0; i < len; i++) {
-                buf[i] = this[offset + i];
+            var bufCur = 0;
+            var curbv = this;
+            var cur = 0;
+            // skip to offset
+            while (cur + curbv.len <= offset) {
+                cur += curbv.len;
+                curbv = curbv.nextNode;
             }
+            int skip = offset - cur, count = Math.Min(len, curbv.len - skip);
+            Buffer.BlockCopy(curbv.bytes, curbv.offset + skip, buf, bufCur, count);
+            bufCur += count;
+            if (bufCur < len)
+                while (true) {
+                    curbv = curbv.nextNode;
+                    if (len - bufCur <= curbv.len) {
+                        Buffer.BlockCopy(curbv.bytes, curbv.offset, buf, bufCur, len - bufCur);
+                        break;
+                    }
+                    Buffer.BlockCopy(curbv.bytes, curbv.offset, buf, bufCur, curbv.len);
+                    bufCur += curbv.len;
+                }
             return buf;
         }
 

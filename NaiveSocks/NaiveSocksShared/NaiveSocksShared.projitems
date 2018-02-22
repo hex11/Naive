@@ -10,6 +10,13 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\SS\SSInAdapter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Compression\LZ4\LZ4Codec.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Compression\LZ4\LZ4Codec.Unsafe.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Compression\LZ4\LZ4Codec.Unsafe32.Dirty.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Compression\LZ4\LZ4Codec.Unsafe32HC.Dirty.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Compression\LZ4\LZ4Codec.Unsafe64.Dirty.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Compression\LZ4\LZ4Codec.Unsafe64HC.Dirty.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Compression\LZ4\LZ4Filter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Encryption\Poly1305.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Encryption\Speck.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)InverseMuxStream.cs" />

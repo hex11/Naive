@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
@@ -188,23 +189,33 @@ namespace NaiveSocks
         public const string EncryptionChacha20Ietf = "chacha20-ietf";
         public const string EncryptionSpeck0 = "speck0";
         public const string EncryptionSpeck064 = "speck064";
+        public const string CompressionLz4_0 = "lz4-0";
 
-        public static void ApplyEncryption(FilterBase filterable, byte[] key, string type = "")
+        public static void ApplyEncryption(FilterBase filterable, byte[] key, string parameter = "")
         {
-            if (string.IsNullOrEmpty(type) || type == EncryptionAesOfb128) {
-                if (key.Length > 16)
-                    key = key.Take(16).ToArray();
-                filterable.ApplyAesStreamFilter(key);
-            } else if (type == EncryptionChacha20Ietf) {
-                if (key.Length > 32)
-                    key = key.Take(32).ToArray();
-                filterable.ApplyFilterFromEncryptor(new ChaCha20IetfEncryptor(key), new ChaCha20IetfEncryptor(key));
-            } else if (type == EncryptionSpeck0) {
-                filterable.ApplyFilterFromEncryptor(new Speck.Ctr128128(key), new Speck.Ctr128128(key));
-            } else if (type == EncryptionSpeck064) {
-                filterable.ApplyFilterFromEncryptor(new Speck.Ctr64128(key), new Speck.Ctr64128(key));
-            } else {
-                throw new Exception($"unknown encryption '{type}'");
+            IEnumerable<string> types;
+            if (parameter.IsNullOrEmpty())
+                types = new[] { EncryptionAesOfb128 };
+            else
+                types = parameter.Split(',').Select(x => x.Trim());
+            foreach (var type in types) {
+                if (string.IsNullOrEmpty(type) || type == EncryptionAesOfb128) {
+                    if (key.Length > 16)
+                        key = key.Take(16).ToArray();
+                    filterable.ApplyAesStreamFilter(key);
+                } else if (type == EncryptionChacha20Ietf) {
+                    if (key.Length > 32)
+                        key = key.Take(32).ToArray();
+                    filterable.ApplyFilterFromEncryptor(new ChaCha20IetfEncryptor(key), new ChaCha20IetfEncryptor(key));
+                } else if (type == EncryptionSpeck0) {
+                    filterable.ApplyFilterFromEncryptor(new Speck.Ctr128128(key), new Speck.Ctr128128(key));
+                } else if (type == EncryptionSpeck064) {
+                    filterable.ApplyFilterFromEncryptor(new Speck.Ctr64128(key), new Speck.Ctr64128(key));
+                } else if (type == CompressionLz4_0) {
+                    filterable.ApplyFilterFromFilterCreator(LZ4pn.LZ4Filter.GetFilter);
+                } else {
+                    throw new Exception($"unknown encryption '{type}'");
+                }
             }
         }
     }

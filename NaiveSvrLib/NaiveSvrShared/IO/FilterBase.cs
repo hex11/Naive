@@ -115,6 +115,12 @@ namespace Naive.HttpSvr
             AddReadFilter(GetStreamFilterFromIVEncryptor(false, read));
         }
 
+        public void ApplyFilterFromFilterCreator(Func<bool, Action<BytesView>> creator)
+        {
+            AddWriteFilter(creator(true));
+            AddReadFilter(creator(false));
+        }
+
         public void ApplyDeflateFilter()
         {
             AddWriteFilter(GetDeflateFilter(true));
