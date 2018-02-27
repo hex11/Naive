@@ -32,6 +32,8 @@ namespace NaiveSocks
                 this.keys = Cipher.getKeySchedules_128_128(workingKey);
             }
 
+            public static Ctr128128 Create(byte[] key) => new Ctr128128(key);
+
             ~Ctr128128()
             {
                 Marshal.FreeHGlobal((IntPtr)keyStreamBuf);
@@ -154,6 +156,8 @@ namespace NaiveSocks
                 BytesToBlock128(key, out workingKey);
                 this.keys = Cipher.getKeySchedules_64_128(workingKey);
             }
+
+            public static Ctr64128 Create(byte[] key) => new Ctr64128(key);
 
             ~Ctr64128()
             {

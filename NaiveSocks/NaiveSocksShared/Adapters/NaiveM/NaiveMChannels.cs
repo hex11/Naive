@@ -218,7 +218,7 @@ namespace NaiveSocks
         private async Task _Requested(ReceivedRequest request)
         {
             var req = request.Value;
-            if (req.additionalString?.Length == 0 || req.additionalString == "connect") {
+            if (req.additionalString.IsNullOrEmpty() || req.additionalString == "connect") {
                 if (InAdapter == null && GotRemoteInConnection == null) {
                     await request.Reply(new NaiveProtocol.Reply(AddrPort.Empty, 255, "noinadapter")).CAF();
                     return;
@@ -231,12 +231,12 @@ namespace NaiveSocks
                 }
             } else if (req.additionalString == "speedtest") {
                 await HandleSpeedTest(request.Channel);
-            } else if (req.additionalString?.StartsWith("dns:") == true) {
+            } else if (req.additionalString.StartsWith("dns:") == true) {
                 await HandleDns(request.Channel, req);
-            } else if (req.additionalString?.StartsWith("network") == true) {
+            } else if (req.additionalString.StartsWith("network") == true) {
                 await HandleNetwork(request);
             } else {
-                Logging.warning($"{request.Channel} unknown cmd: {req.additionalString}");
+                Logging.warning($"unknown cmd: '{req.additionalString}' from {request.Channel}.");
                 await request.Reply(new NaiveProtocol.Reply(AddrPort.Empty, 255, "notsupport"));
             }
         }
@@ -299,6 +299,7 @@ namespace NaiveSocks
                     return;
                 if (cmd == "download") {
                     var buf = new byte[32 * 1024];
+                    new Random().NextBytes(buf);
                     while (true) {
                         await ch.SendMsg(buf).CAF();
                     }

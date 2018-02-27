@@ -68,10 +68,7 @@ namespace NaiveSocks
             Marshal.FreeHGlobal((IntPtr)ctx);
         }
 
-        public static ChaCha20IetfEncryptor Create(byte[] key)
-        {
-            return new ChaCha20IetfEncryptor(key);
-        }
+        public static ChaCha20IetfEncryptor Create(byte[] key) => new ChaCha20IetfEncryptor(key);
 
         static readonly byte[] sigma = Encoding.ASCII.GetBytes("expand 32-byte k");
         static readonly byte[] tau = Encoding.ASCII.GetBytes("expand 16-byte k");

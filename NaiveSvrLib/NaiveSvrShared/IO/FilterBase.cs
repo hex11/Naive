@@ -115,6 +115,18 @@ namespace Naive.HttpSvr
             AddReadFilter(GetStreamFilterFromIVEncryptor(false, read));
         }
 
+        public void ApplyFilterFromEncryptor<TArg>(Func<IIVEncryptor> creator)
+        {
+            AddWriteFilter(GetStreamFilterFromIVEncryptor(true, creator()));
+            AddReadFilter(GetStreamFilterFromIVEncryptor(false, creator()));
+        }
+
+        public void ApplyFilterFromEncryptor<TArg>(Func<TArg, IIVEncryptor> creator, TArg arg)
+        {
+            AddWriteFilter(GetStreamFilterFromIVEncryptor(true, creator(arg)));
+            AddReadFilter(GetStreamFilterFromIVEncryptor(false, creator(arg)));
+        }
+
         public void ApplyFilterFromFilterCreator(Func<bool, Action<BytesView>> creator)
         {
             AddWriteFilter(creator(true));
