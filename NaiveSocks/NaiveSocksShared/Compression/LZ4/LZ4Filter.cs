@@ -15,7 +15,8 @@ namespace LZ4pn
         // OR
         // [0xff] [(4 bytes) uncompressed data size] [compressed data]
 
-        public static Action<BytesView> GetFilter(bool isWriting)
+        public static Action<BytesView> GetFilter(bool isWriting) => GetFilter(isWriting, false);
+        public static Action<BytesView> GetFilter(bool isWriting, bool alwaysCompress)
         {
             const int InitCompressingChances = 4;
             if (isWriting) {
@@ -47,7 +48,10 @@ namespace LZ4pn
                     }
                     if (compress) {
                         var input = x.GetBytes(0, tlen);
-                        var compressedData = LZ4Codec.Encode64(input, 0, tlen, out var outputLength);
+                        int outputLength;
+                        var compressedData = IntPtr.Size < 8
+                            ? LZ4Codec.Encode32(input, 0, tlen, out outputLength)
+                            : LZ4Codec.Encode64(input, 0, tlen, out outputLength);
                         if (outputLength + (headerCur - 1) < tlen) {
                             x.nextNode = new BytesView(compressedData, 0, outputLength);
                             compressingChances = InitCompressingChances;
@@ -56,7 +60,8 @@ namespace LZ4pn
                             x.nextNode = input;
                             header[0] = 0;
                             headerCur = 1;
-                            compressingChances--;
+                            if (!alwaysCompress)
+                                compressingChances--;
                         }
                     } else {
                         x.nextNode = x.Clone();
@@ -90,7 +95,9 @@ namespace LZ4pn
                         input = x.bytes;
                         inputOffset = x.offset + cur;
                     }
-                    x.Set(LZ4Codec.Decode64(input, inputOffset, inputLength, outputLength));
+                    x.Set(IntPtr.Size < 8
+                        ? LZ4Codec.Decode32(input, inputOffset, inputLength, outputLength)
+                        : LZ4Codec.Decode64(input, inputOffset, inputLength, outputLength));
                     x.nextNode = null;
                 };
             }

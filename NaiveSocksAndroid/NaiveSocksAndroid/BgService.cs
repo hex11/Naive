@@ -87,7 +87,7 @@ namespace NaiveSocksAndroid
                         .SetStyle(bigText)
                         //.AddAction(BuildServiceAction(Actions.COL_NOTIF, "Collapse", Android.Resource.Drawable.StarOff, 4))
                         .AddAction(BuildServiceAction(Actions.STOP, "Stop", Android.Resource.Drawable.StarOff, 1))
-                        .AddAction(BuildServiceAction(Actions.RELOAD, "Reload", 0, 2))
+                        .AddAction(BuildServiceAction(Actions.RELOAD, "Reload", Android.Resource.Drawable.StarOff, 2))
                         .AddAction(BuildServiceAction(Actions.GC, "GC", Android.Resource.Drawable.StarOff, 3))
                         .SetSmallIcon(Resource.Drawable.N)
                         .SetPriority((int)NotificationPriority.Min)

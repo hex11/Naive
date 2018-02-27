@@ -428,6 +428,9 @@ namespace NaiveSocks
         public NaiveMultiplexing Parent { get; }
         public int Id { get; }
 
+        FilterBase _dataFilter;
+        public FilterBase DataFilter => _dataFilter ?? (_dataFilter = new FilterBase());
+
         public static int DefaultMaxRecvBufferSize = 128 * 1024; // 128 KiB
         public int MaxRecvBufferSize = DefaultMaxRecvBufferSize;
 
@@ -639,6 +642,7 @@ namespace NaiveSocks
             ThrowIfShutdownOrClosed();
             write += msg.Data?.tlen ?? 0;
             writec++;
+            _dataFilter?.OnWrite(msg.Data);
             await Parent.SendMsg(this, msg).CAF();
         }
 
@@ -674,9 +678,11 @@ namespace NaiveSocks
                 if (recvQueue.Count > 0) {
                     Logging.warning($"{this} BUG: unexpected item(s) (count={recvQueue.Count}) in recv queue after EOF");
                 }
+            } else {
+                _dataFilter?.OnRead(m.Data);
+                read += m.Data.tlen;
+                readc++;
             }
-            read += m.Data?.tlen ?? 0;
-            readc++;
             return m;
         }
 

@@ -25,6 +25,8 @@ namespace NaiveSocks
 
         public bool InConnectionFastCallback;
 
+        public bool Lz4Compression = false;
+
         Task mainTask;
 
         List<WeakReference<INetwork>> joinedNetworks = new List<WeakReference<INetwork>>();
@@ -164,42 +166,30 @@ namespace NaiveSocks
 
         public async Task HandleInConnection(NaiveSocks.InConnection inConnection)
         {
-            var beginTime = DateTime.Now;
-
-            using (var req = await Request(new NaiveProtocol.Request(inConnection.Dest)).CAF()) {
-                async Task<NaiveProtocol.Reply> readReply()
-                {
-                    var response = await req.GetReply(keepOpen: true).CAF();
-                    Logged?.Invoke($"#{req.Channel.Parent.Id}ch{req.Channel.Id} req={inConnection.Dest} " +
-                        $"reply={response.status}{(string.IsNullOrEmpty(response.additionalString) ? "" : $" ({response.additionalString})")} " +
-                        $"in {(DateTime.Now - beginTime).TotalMilliseconds:0} ms");
-                    return response;
-                }
-                var readReplyTask = readReply();
-                if (!InConnectionFastCallback) {
-                    var reply = await readReplyTask.CAF();
-                    if (reply.status != 0) {
-                        req.Channel.Dispose();
-                        await inConnection.SetConnectResult(ConnectResults.Failed, null).CAF();
-                        return;
-                    }
-                }
-                //await inConnection.SetConnectResult(ConnectResults.Conneceted, null).CAF();
-                //await MyStream.Relay(new MsgStreamToMyStream(req.Channel), inConnection.DataStream, readReplyTask).CAF();
-                await inConnection.RelayWith(new MsgStreamToMyStream(req.Channel), readReplyTask);
+            var r = await Connect(inConnection);
+            if (r.Ok) {
+                await inConnection.RelayWith(r.Stream, r.WhenCanRead);
+            } else {
+                await inConnection.SetConnectResult(r);
             }
         }
 
         public async Task<ConnectResult> Connect(ConnectArgument arg)
         {
+            var lz4 = Lz4Compression;
             var beginTime = DateTime.Now;
-
-            var req = await Request(new NaiveProtocol.Request(arg.Dest)).CAF();
+            var req = new NaiveProtocol.Request(arg.Dest);
+            if (lz4) {
+                req.extraStrings = new[] { "lz4" };
+            }
+            var result = await Request(req).CAF();
+            if (lz4)
+                result.Channel.DataFilter.ApplyFilterFromFilterCreator(LZ4pn.LZ4Filter.GetFilter);
             try {
                 async Task<NaiveProtocol.Reply> readReply()
                 {
-                    var response = await req.GetReply(keepOpen: true).CAF();
-                    Logged?.Invoke($"#{req.Channel.Parent.Id}ch{req.Channel.Id} req={arg.Dest} " +
+                    var response = await result.GetReply(keepOpen: true).CAF();
+                    Logged?.Invoke($"#{result.Channel.Parent.Id}ch{result.Channel.Id} req={arg.Dest} " +
                         $"reply={response.status}{(string.IsNullOrEmpty(response.additionalString) ? "" : $" ({response.additionalString})")} " +
                         $"in {(DateTime.Now - beginTime).TotalMilliseconds:0} ms");
                     return response;
@@ -208,13 +198,13 @@ namespace NaiveSocks
                 if (!InConnectionFastCallback) {
                     var reply = await readReplyTask.CAF();
                     if (reply.status != 0) {
-                        req.Channel.Dispose();
+                        result.Channel.Dispose();
                         return new ConnectResult(ConnectResults.Failed);
                     }
                 }
-                return new ConnectResult(ConnectResults.Conneceted, new MsgStreamToMyStream(req.Channel)) { WhenCanRead = readReplyTask };
+                return new ConnectResult(ConnectResults.Conneceted, new MsgStreamToMyStream(result.Channel)) { WhenCanRead = readReplyTask };
             } catch (Exception) {
-                req.Dispose();
+                result.Dispose();
                 throw;
             }
         }
@@ -440,12 +430,14 @@ namespace NaiveSocks
             public NaiveMChannels Ncs { get; }
             public Channel Channel { get; }
             Stopwatch sw;
+            bool lz4;
 
             public InConnection(NaiveMChannels ncs, NaiveProtocol.Request req, Channel channel) : base(ncs.InAdapter)
             {
                 Ncs = ncs;
                 Channel = channel;
                 this.Dest = req.dest;
+                this.lz4 = req.extraStrings.Contains("lz4");
                 sw = Stopwatch.StartNew();
             }
 
@@ -462,6 +454,8 @@ namespace NaiveSocks
                     status = (byte)(result.Ok ? 0 : 1),
                     additionalString = addstr
                 };
+                if (lz4)
+                    Channel.DataFilter.ApplyFilterFromFilterCreator(LZ4pn.LZ4Filter.GetFilter);
                 await Channel.SendMsg(new Msg(new BytesView(response.ToBytes()))).CAF();
                 if (result.Ok) {
                     this.DataStream = new MsgStreamToMyStream(Channel);
