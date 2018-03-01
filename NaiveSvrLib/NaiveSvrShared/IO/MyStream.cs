@@ -327,7 +327,7 @@ namespace NaiveSocks
             Logging.debug(str);
         }
 
-        public class StreamWrapper : MyStream
+        public class StreamWrapper : MyStream, IMyStreamSync
         {
             public StreamWrapper(Stream stream)
             {
@@ -361,6 +361,10 @@ namespace NaiveSocks
             }
 
             public override string ToString() => $"{{Stream {BaseStream}}}";
+
+            public void Write(BytesSegment bs) => BaseStream.Write(bs);
+
+            public int Read(BytesSegment bs) => BaseStream.Read(bs);
         }
     }
 
@@ -406,7 +410,7 @@ namespace NaiveSocks
         }
     }
 
-    public abstract class SocketStream : MyStream, IMyStreamSync
+    public abstract class SocketStream : MyStream, IMyStreamSync, IMyStreamBeginEnd
     {
         protected SocketStream(Socket socket)
         {
@@ -443,6 +447,26 @@ namespace NaiveSocks
         public virtual int Read(BytesSegment bs)
         {
             return Socket.Receive(bs.Bytes, bs.Offset, bs.Len, SocketFlags.None);
+        }
+
+        public IAsyncResult BeginWrite(byte[] buffer, int offset, int count, AsyncCallback callback, object state)
+        {
+            return Socket.BeginSend(buffer, offset, count, SocketFlags.None, callback, state);
+        }
+
+        public void EndWrite(IAsyncResult asyncResult)
+        {
+            Socket.EndSend(asyncResult);
+        }
+
+        public IAsyncResult BeginRead(byte[] buffer, int offset, int count, AsyncCallback callback, object state)
+        {
+            return Socket.BeginReceive(buffer, offset, count, SocketFlags.None, callback, state);
+        }
+
+        public int EndRead(IAsyncResult asyncResult)
+        {
+            return Socket.EndReceive(asyncResult);
         }
     }
 
@@ -518,6 +542,46 @@ namespace NaiveSocks
         {
             return BaseStream.WriteAsync(new BytesSegment(buffer, offset, count));
         }
+
+        public override IAsyncResult BeginWrite(byte[] buffer, int offset, int count, AsyncCallback callback, object state)
+        {
+            if (BaseStream is IMyStreamBeginEnd be) {
+                return be.BeginWrite(buffer, offset, count, callback, state);
+            }
+            return base.BeginWrite(buffer, offset, count, callback, state);
+        }
+
+        public override void EndWrite(IAsyncResult asyncResult)
+        {
+            if (BaseStream is IMyStreamBeginEnd be) {
+                be.EndWrite(asyncResult);
+            }
+            base.EndWrite(asyncResult);
+        }
+
+        public override IAsyncResult BeginRead(byte[] buffer, int offset, int count, AsyncCallback callback, object state)
+        {
+            if (BaseStream is IMyStreamBeginEnd be) {
+                return be.BeginRead(buffer, offset, count, callback, state);
+            }
+            return base.BeginRead(buffer, offset, count, callback, state);
+        }
+
+        public override int EndRead(IAsyncResult asyncResult)
+        {
+            if (BaseStream is IMyStreamBeginEnd be) {
+                return be.EndRead(asyncResult);
+            }
+            return base.EndRead(asyncResult);
+        }
+    }
+
+    public interface IMyStreamBeginEnd
+    {
+        IAsyncResult BeginWrite(byte[] buffer, int offset, int count, AsyncCallback callback, object state);
+        void EndWrite(IAsyncResult asyncResult);
+        IAsyncResult BeginRead(byte[] buffer, int offset, int count, AsyncCallback callback, object state);
+        int EndRead(IAsyncResult asyncResult);
     }
 
     public class MsgStreamToMyStream : IMyStream, IMyStreamMultiBuffer, IHaveBaseStream

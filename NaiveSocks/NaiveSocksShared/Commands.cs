@@ -367,7 +367,7 @@ namespace NaiveSocks
                         });
                         listener.Start().Forget();
                         NaiveUtils.RunAsyncTask(async () => {
-                            var socket = await NaiveUtils.ConnectTCPAsync(AddrPort.Parse(ep.ToString()), 5000);
+                            var socket = await NaiveUtils.ConnectTcpAsync(AddrPort.Parse(ep.ToString()), 5000);
                             var stream = new SocketStream2(socket);
                             sw.Restart();
                             var buf = new byte[32 * 1024];
@@ -390,7 +390,7 @@ namespace NaiveSocks
                         };
                         listener.Start().Forget();
                         {
-                            var socket = NaiveUtils.ConnectTCPAsync(AddrPort.Parse(ep.ToString()), 5000).RunSync();
+                            var socket = NaiveUtils.ConnectTcpAsync(AddrPort.Parse(ep.ToString()), 5000).RunSync();
                             var stream = new SocketStream2(socket);
                             sw.Restart();
                             var buf = new byte[32 * 1024];
@@ -499,7 +499,7 @@ namespace NaiveSocks
         private static void TestSocketWrite(Stopwatch sw, IPEndPoint ep, int bufSize, int count)
         {
             NaiveUtils.RunAsyncTask(async () => {
-                var socket = await NaiveUtils.ConnectTCPAsync(AddrPort.Parse(ep.ToString()), 5000);
+                var socket = await NaiveUtils.ConnectTcpAsync(AddrPort.Parse(ep.ToString()), 5000);
                 var stream = new SocketStream1(socket);
                 sw.Restart();
                 var buf = new byte[bufSize];

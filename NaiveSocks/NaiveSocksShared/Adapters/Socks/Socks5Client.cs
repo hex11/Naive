@@ -45,7 +45,7 @@ namespace NaiveSocks
 
         public async Task<SocketStream> ConnectAsync()
         {
-            await NaiveUtils.ConnectTCPAsync(new AddrPort(_socksAddr, _socksPort), 0);
+            await NaiveUtils.ConnectTcpAsync(new AddrPort(_socksAddr, _socksPort), 0);
             _socket = _tcpClient.Client;
             var _ns = MyStream.FromSocket(_socket);
             Task write(byte[] buf) => _ns.WriteAsync(buf, 0, buf.Length);

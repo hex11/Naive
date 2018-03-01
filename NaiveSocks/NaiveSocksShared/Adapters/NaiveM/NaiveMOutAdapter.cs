@@ -10,9 +10,14 @@ namespace NaiveSocks
 {
     public class NaiveMOutAdapter : OutAdapter2, IInAdapter, ICanReload, IDnsProvider
     {
-        public override string ToString() => $"{{NaiveMOut server={server}}}";
+        public override string ToString()
+        {
+            string i(bool b, string str) => b ? str : "";
+            return $"{{NaiveMOut server={server}{i(tls, "(TLS)")} enc='{encryption}'}}";
+        }
 
-        public AddrPort server { get; set; }
+        public string uri { get; set; }
+        public AddrPort server { get; set; } // default port is 80 or 443 (with tls)
         public string path { get; set; } = "/";
         public string key { get; set; } = "hello, world";
 
@@ -37,6 +42,9 @@ namespace NaiveSocks
         public static string DefaultEncryption { get; set; }
 
         public string encryption { get; set; } = DefaultEncryption;
+
+        public bool tls { get; set; }
+        public bool tls_only { get; set; }
 
         int _multiplied_delay = 0;
         int _using_delay => Math.Max(Math.Max(_multiplied_delay, connect_delay), 0);
@@ -80,7 +88,7 @@ namespace NaiveSocks
                 && old.path == this.path
                 && old.key == this.key) {
                 ncsPool = old.ncsPool;
-                Logger.info($"{this} reload with {ncsPool.Count} old connections.");
+                Logger.info($"reload with {ncsPool.Count} old connections.");
             }
             return false;
         }
@@ -100,6 +108,31 @@ namespace NaiveSocks
                     throw new Exception("unexpected 'imux' value type: " + imux.GetType());
                 }
             }
+            uri = uri ?? toml.TryGetValue<string>("url", null);
+            if (!uri.IsNullOrEmpty()) {
+                var u = new Uri(uri);
+                switch (u.Scheme) {
+                case "http":
+                case "ws":
+                case "naivem":
+                    break;
+                case "https":
+                case "wss":
+                    tls_only = true;
+                    break;
+                default:
+                    throw new Exception($"Unknown URI scheme '{u.Scheme}', expected: http, ws, wss, naivem");
+                }
+                server = new AddrPort {
+                    Host = u.Host,
+                    Port = u.IsDefaultPort ? 0 : u.Port
+                };
+            }
+            if (tls_only) {
+                tls = true;
+                encryption = NaiveProtocol.EncryptionNone;
+            }
+            server = server.WithDefaultPort(tls ? 443 : 80);
         }
 
         static readonly string[] UAs = new[] {
@@ -267,6 +300,7 @@ namespace NaiveSocks
                         Host = adapter.server,
                         KeyString = adapter.key,
                         Encryption = adapter.encryption,
+                        TlsEnabled = adapter.tls,
                         Path = adapter.path,
                         ImuxWsConnections = adapter.imux_ws,
                         ImuxHttpConnections = adapter.imux_http,
@@ -325,7 +359,7 @@ namespace NaiveSocks
                     if (e.IsConnectionException()) {
                         Logger.error($"connecting failed: {e.Message}");
                     } else {
-                        Logger.exception(e, Logging.Level.Error, $"connecting failed");
+                        Logger.exception(e, Logging.Level.Error, "connecting failed");
                     }
                     throw;
                 }

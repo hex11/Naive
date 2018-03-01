@@ -12,13 +12,14 @@ namespace NaiveSocks
 {
     public class HttpOutAdapter : OutAdapter2
     {
-        public AddrPort server { get; set; }
+        public AddrPort server { get; set; } // default port is 80
+
         public int connect_timeout { get; set; } = 10;
 
         public override async Task<ConnectResult> ProtectedConnect(ConnectArgument arg)
         {
             var dest = arg.Dest;
-            var baseResult = await ConnectHelper.Connect(this, server, connect_timeout);
+            var baseResult = await ConnectHelper.Connect(this, server.WithDefaultPort(80), connect_timeout);
             if (!baseResult.Ok)
                 return baseResult;
             try {

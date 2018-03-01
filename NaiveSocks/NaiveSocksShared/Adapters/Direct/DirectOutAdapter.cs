@@ -30,7 +30,7 @@ namespace NaiveSocks
         public static async Task<ConnectResult> Connect(IAdapter adapter, AddrPort dest, int timeoutSeconds)
         {
             try {
-                var socket = await NaiveUtils.ConnectTCPAsync(dest, timeoutSeconds * 1000);
+                var socket = await NaiveUtils.ConnectTcpAsync(dest, timeoutSeconds * 1000);
                 return new ConnectResult(MyStream.FromSocket(socket));
             } catch (Exception e) {
                 return new ConnectResult(ConnectResults.Failed) {

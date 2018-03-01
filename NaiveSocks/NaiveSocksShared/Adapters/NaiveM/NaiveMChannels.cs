@@ -46,6 +46,7 @@ namespace NaiveSocks
             public byte[] Key { get; set; }
             public string KeyString { set => Key = NaiveProtocol.GetRealKeyFromString(value, 32); }
             public string Encryption { get; set; }
+            public bool TlsEnabled { get; set; }
 
             public Dictionary<string, string> Headers { get; set; }
             public string UrlFormat { get; set; } = "{0}?token={1}";
@@ -80,7 +81,7 @@ namespace NaiveSocks
             }
             Task<IMsgStream> connect(string addStr, bool isHttp = false)
             {
-                var req = new NaiveProtocol.Request(new AddrPort("", 0)) {
+                var req = new NaiveProtocol.Request(AddrPort.Empty) {
                     additionalString = addStr
                 };
                 if (settings.Encryption != null) {
@@ -130,7 +131,9 @@ namespace NaiveSocks
 
         private static async Task<IMsgStream> ConnectWebSocket(ConnectingSettings settings, byte[] key, string reqPath, string encType)
         {
-            var ws = await WebSocketClient.ConnectToAsync(settings.Host, reqPath, settings.Timeout * 1000);
+            var ws = settings.TlsEnabled
+                ? await WebSocketClient.ConnectToTlsAsync(settings.Host, reqPath, settings.Timeout * 1000)
+                : await WebSocketClient.ConnectToAsync(settings.Host, reqPath, settings.Timeout * 1000);
             ws.AddToManaged(settings.Timeout / 2, settings.Timeout);
             await ws.HandshakeAsync(false, settings.Headers);
             NaiveProtocol.ApplyEncryption(ws, key, encType);
@@ -140,10 +143,10 @@ namespace NaiveSocks
 
         private static async Task<IMsgStream> ConnectHttpChunked(ConnectingSettings settings, byte[] key, string reqPath, string encType)
         {
-            var r = await ConnectHelper.Connect(null, settings.Host, 10);
-            r.ThrowIfFailed();
+            var stream = settings.TlsEnabled
+                ? MyStream.FromStream(await NaiveUtils.ConnectTlsAsync(settings.Host, 10 * 1000))
+                : MyStream.FromSocket(await NaiveUtils.ConnectTcpAsync(settings.Host, 10 * 1000));
             try {
-                var stream = r.Stream;
                 var stream2 = MyStream.ToStream(stream);
                 var httpClient = new HttpClient(stream2);
                 var response = await httpClient.Request(new HttpRequest() {
@@ -159,7 +162,7 @@ namespace NaiveSocks
                 NaiveProtocol.ApplyEncryption(msf, key, encType);
                 return msf;
             } catch (Exception) {
-                MyStream.CloseWithTimeout(r.Stream);
+                MyStream.CloseWithTimeout(stream);
                 throw;
             }
         }

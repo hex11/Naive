@@ -1,7 +1,9 @@
-﻿using System;
+﻿using NaiveSocks;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Net.Security;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
@@ -36,10 +38,25 @@ namespace Naive.HttpSvr
 
         public static async Task<WebSocketClient> ConnectToAsync(AddrPort dest, string path, int timeout)
         {
-            Socket socket = await NaiveUtils.ConnectTCPAsync(dest, timeout);
+            Socket socket = await NaiveUtils.ConnectTcpAsync(dest, timeout);
             try {
                 var socketStream = NaiveSocks.MyStream.FromSocket(socket);
                 var ws = new WebSocketClient(NaiveSocks.MyStream.ToStream(socketStream), path);
+                ws.Host = dest.Host;
+                return ws;
+            } catch (Exception) {
+                socket.Dispose();
+                throw;
+            }
+        }
+
+        public static async Task<WebSocketClient> ConnectToTlsAsync(AddrPort dest, string path, int timeout)
+        {
+            Socket socket = await NaiveUtils.ConnectTcpAsync(dest, timeout);
+            try {
+                var tls = new SslStream(new NetworkStream(socket));
+                await tls.AuthenticateAsClientAsync(dest.Host, null, System.Security.Authentication.SslProtocols.Tls12, false);
+                var ws = new WebSocketClient(tls, path);
                 ws.Host = dest.Host;
                 return ws;
             } catch (Exception) {

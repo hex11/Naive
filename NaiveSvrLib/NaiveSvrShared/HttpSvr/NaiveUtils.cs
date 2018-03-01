@@ -13,6 +13,7 @@ using System.Net.Sockets;
 using System.Net;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Net.Security;
 
 namespace Naive.HttpSvr
 {
@@ -441,7 +442,7 @@ namespace Naive.HttpSvr
             TimedOut
         }
 
-        public static async Task<Socket> ConnectTCPAsync(AddrPort dest, int timeout)
+        public static async Task<Socket> ConnectTcpAsync(AddrPort dest, int timeout)
         {
             var state = (int)ConnectingState.Resolving;
             TcpClient destTcp = null;
@@ -480,6 +481,19 @@ namespace Naive.HttpSvr
             }
             await connectTask;
             return destTcp.Client;
+        }
+
+        public static async Task<SslStream> ConnectTlsAsync(AddrPort dest, int timeout)
+        {
+            var socket = await ConnectTcpAsync(dest, timeout);
+            try {
+                var tls = new SslStream(new NetworkStream(socket));
+                await tls.AuthenticateAsClientAsync(dest.Host, null, System.Security.Authentication.SslProtocols.Tls12, false);
+                return tls;
+            } catch (Exception) {
+                socket.Dispose();
+                throw;
+            }
         }
 
         public static void ConfigureSocket(Socket socket)
@@ -1102,6 +1116,14 @@ namespace Naive.HttpSvr
             return $"{Host}:{Port}";
         }
 
+        public AddrPort WithDefaultPort(int defaultPort)
+        {
+            return new AddrPort {
+                Host = Host,
+                Port = (Port > 0) ? Port : defaultPort
+            };
+        }
+
         // +---------+-------------------+-------------------+
         // | a byte  |  addrlen byte(s)  |      2 bytes      |
         // +---------+-------------------+-------------------+
@@ -1111,8 +1133,10 @@ namespace Naive.HttpSvr
         public static AddrPort Parse(string str)
         {
             var s = str.LastIndexOf(':');
-            if (s == -1)
-                throw new FormatException("Invalid format (':' not found)");
+            if (s == -1) {
+                //throw new FormatException("Invalid format (':' not found)");
+                return new AddrPort(str, -1);
+            }
             if (!int.TryParse(str.Substring(s + 1), out var port)) {
                 throw new FormatException("Invalid number after ':'");
             }
