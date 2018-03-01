@@ -55,10 +55,14 @@ namespace NaiveSocks
         public override void Start()
         {
             base.Start();
+
+            httpServer = new NaiveWebsiteServer();
+            httpServer.Router.AutoSetHandled = false;
+            httpServer.Router.AutoSetResponseCode = false;
+
             networks = networks ?? new Dictionary<string, AdapterRef>();
             if (network != null)
                 networks.Add("default", network);
-            httpServer = new NaiveWebsiteServer();
             path_settings = path_settings ?? new Dictionary<string, PathSettings>();
             if (paths != null) {
                 foreach (var item in paths) {
@@ -98,7 +102,10 @@ namespace NaiveSocks
             }
             settings.realKey = NaiveProtocol.GetRealKeyFromString(settings.key ?? this.key, 32);
             httpServer.Router.AddAsyncRoute(path, (p) => {
-                var token = Regex.Match(p.Url_qstr, settings.format).Groups["token"].Value;
+                var m = Regex.Match(p.Url_qstr, settings.format);
+                if (m.Success == false)
+                    return NaiveUtils.CompletedTask;
+                var token = m.Groups["token"].Value;
                 token = HttpUtil.UrlDecode(token);
                 return this.HandleRequestAsync(p, settings, token);
             });

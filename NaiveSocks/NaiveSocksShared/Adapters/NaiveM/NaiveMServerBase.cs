@@ -12,7 +12,7 @@ namespace NaiveSocks
         {
             internal List<NaiveMChannels> nmsList = new List<NaiveMChannels>();
             Dictionary<string, ImuxSession> imuxSessions = new Dictionary<string, ImuxSession>();
-            
+
 
             public int timeout { get; set; } = 30;
 
@@ -28,108 +28,117 @@ namespace NaiveSocks
                     return networkProvider?.Invoke(str);
                 }
             }
-            
+
 
             public async Task HandleRequestAsync(HttpConnection p, Settings settings, string token)
             {
-                if (token == null)
-                    throw new ArgumentNullException(nameof(token));
-                var realKey = settings.realKey;
                 try {
-                    var bytes = Convert.FromBase64String(token);
-                    if (realKey != null) {
-                        bytes = EncryptOrDecryptBytes(false, realKey, bytes);
+                    if (token == null)
+                        throw new ArgumentNullException(nameof(token));
+                    var realKey = settings.realKey;
+                    Request req;
+                    try {
+                        var bytes = Convert.FromBase64String(token);
+                        if (realKey != null) {
+                            bytes = EncryptOrDecryptBytes(false, realKey, bytes);
+                        }
+                        req = Request.Parse(bytes);
+                    } catch (Exception e) {
+                        Logger.exception(e, Logging.Level.Warning, "parsing token");
+                        return;
                     }
-                    var req = Request.Parse(bytes);
-                    const string XumPrefix = "chs2:";
-                    bool isImux = req.additionalString.StartsWith(XumPrefix);
-                    ImuxSession imux = null;
-                    string encryptType = "";
-                    if (req.extraStrings.Length > 0) {
-                        encryptType = req.extraStrings[0];
-                    }
-                    if (isImux || req.additionalString == "channels") {
-                        IMsgStream msgStream;
-                        if (isImux) {
-                            var arr = NaiveUtils.DeserializeArray(req.additionalString.Substring(XumPrefix.Length));
-                            var sessionId = arr[0];
-                            int wsCount = Int32.Parse(arr[1]), wssoCount = 0, httpCount = 0;
-                            var connId = Int32.Parse(arr[2]);
-                            if (arr.Count > 3) {
-                                wssoCount = Int32.Parse(arr[3]);
-                                httpCount = Int32.Parse(arr[4]);
-                            }
-                            var connCount = wsCount + wssoCount + httpCount;
-                            int imuxMax = settings.imux_max;
-                            if (imuxMax < 0)
-                                imuxMax = 16;
-                            if (connCount > imuxMax) {
-                                Logging.warning($"{this}: {p.remoteEP}: IMUX count requesting ({connCount}) > imux_max ({imuxMax})");
+                    try {
+                        p.Handled = true;
+                        const string XumPrefix = "chs2:";
+                        bool isImux = req.additionalString.StartsWith(XumPrefix);
+                        ImuxSession imux = null;
+                        string encryptType = "";
+                        if (req.extraStrings.Length > 0) {
+                            encryptType = req.extraStrings[0];
+                        }
+                        if (isImux || req.additionalString == "channels") {
+                            IMsgStream msgStream;
+                            if (isImux) {
+                                var arr = NaiveUtils.DeserializeArray(req.additionalString.Substring(XumPrefix.Length));
+                                var sessionId = arr[0];
+                                int wsCount = Int32.Parse(arr[1]), wssoCount = 0, httpCount = 0;
+                                var connId = Int32.Parse(arr[2]);
+                                if (arr.Count > 3) {
+                                    wssoCount = Int32.Parse(arr[3]);
+                                    httpCount = Int32.Parse(arr[4]);
+                                }
+                                var connCount = wsCount + wssoCount + httpCount;
+                                int imuxMax = settings.imux_max;
+                                if (imuxMax < 0)
+                                    imuxMax = 16;
+                                if (connCount > imuxMax) {
+                                    Logger.warning($"{p.remoteEP}: IMUX count requesting ({connCount}) > imux_max ({imuxMax})");
+                                    return;
+                                }
+                                IMsgStream wsOrHttp;
+                                if (connId < connCount - httpCount) {
+                                    wsOrHttp = await HandleWebsocket(p, realKey, encryptType);
+                                } else {
+                                    p.setStatusCode("200 OK");
+                                    p.setHeader(HttpHeaders.KEY_Transfer_Encoding, HttpHeaders.VALUE_Transfer_Encoding_chunked);
+                                    await p.EndResponseAsync();
+                                    var baseStream = MyStream.FromStream(p.SwitchProtocol());
+                                    var msf = new HttpChunkedEncodingMsgStream(baseStream);
+                                    NaiveProtocol.ApplyEncryption(msf, realKey, encryptType);
+                                    wsOrHttp = msf;
+                                }
+                                lock (imuxSessions) {
+                                    if (imuxSessions.TryGetValue(sessionId, out imux) == false) {
+                                        imux = new ImuxSession(sessionId, connCount) {
+                                            WsCount = wsCount,
+                                            WssoCount = wssoCount,
+                                            HttpCount = httpCount
+                                        };
+                                        imuxSessions.Add(sessionId, imux);
+                                        NaiveUtils.SetTimeout(10 * 1000, () => {
+                                            if (imux.ConnectedCount != imux.Count) {
+                                                Logger.warning($"IMUX (id={imux.SessionId}, count={imux.ConnectedCount}/{imux.Count}) timed out");
+                                                imux.WhenEnd.SetResult(null);
+                                            }
+                                        });
+                                    }
+                                    if (imux.HandleConnection(wsOrHttp, connId)) {
+                                        msgStream = imux.MuxStream;
+                                        goto NO_AWAIT;
+                                    }
+                                }
+                                await imux.WhenEnd.Task;
                                 return;
-                            }
-                            IMsgStream wsOrHttp;
-                            if (connId < connCount - httpCount) {
-                                wsOrHttp = await HandleWebsocket(p, realKey, encryptType);
+                                NO_AWAIT:;
                             } else {
-                                p.setStatusCode("200 OK");
-                                p.setHeader(HttpHeaders.KEY_Transfer_Encoding, HttpHeaders.VALUE_Transfer_Encoding_chunked);
-                                await p.EndResponseAsync();
-                                var baseStream = MyStream.FromStream(p.SwitchProtocol());
-                                var msf = new HttpChunkedEncodingMsgStream(baseStream);
-                                NaiveProtocol.ApplyEncryption(msf, realKey, encryptType);
-                                wsOrHttp = msf;
+                                msgStream = await HandleWebsocket(p, realKey, encryptType);
                             }
-                            lock (imuxSessions) {
-                                if (imuxSessions.TryGetValue(sessionId, out imux) == false) {
-                                    imux = new ImuxSession(sessionId, connCount) {
-                                        WsCount = wsCount,
-                                        WssoCount = wssoCount,
-                                        HttpCount = httpCount
-                                    };
-                                    imuxSessions.Add(sessionId, imux);
-                                    NaiveUtils.SetTimeout(10 * 1000, () => {
-                                        if (imux.ConnectedCount != imux.Count) {
-                                            Logging.warning($"IMUX (id={imux.SessionId}, count={imux.ConnectedCount}/{imux.Count}) timed out");
-                                            imux.WhenEnd.SetResult(null);
-                                        }
-                                    });
-                                }
-                                if (imux.HandleConnection(wsOrHttp, connId)) {
-                                    msgStream = imux.MuxStream;
-                                    goto NO_AWAIT;
-                                }
-                            }
-                            await imux.WhenEnd.Task;
-                            return;
-                            NO_AWAIT:;
-                        } else {
-                            msgStream = await HandleWebsocket(p, realKey, encryptType);
-                        }
-                        var nms = new NaiveMChannels(new NaiveMultiplexing(msgStream)) {
-                            InAdapter = this
-                        };
-                        if (settings.@out != null) {
-                            nms.GotRemoteInConnection = (x) => {
-                                return this.Controller.HandleInConnection(x, settings.@out as IConnectionHandler);
+                            var nms = new NaiveMChannels(new NaiveMultiplexing(msgStream)) {
+                                InAdapter = this
                             };
-                        }
-                        nms.NetworkProvider = settings.GetNetwork;
-                        lock (nmsList)
-                            nmsList.Add(nms);
-                        try {
-                            await nms.Start();
-                        } finally {
+                            if (settings.@out != null) {
+                                nms.GotRemoteInConnection = (x) => {
+                                    return this.Controller.HandleInConnection(x, settings.@out as IConnectionHandler);
+                                };
+                            }
+                            nms.NetworkProvider = settings.GetNetwork;
                             lock (nmsList)
-                                nmsList.Remove(nms);
-                            if (imux != null) {
-                                lock (imuxSessions)
-                                    imuxSessions.Remove(imux.SessionId);
-                                imux.WhenEnd.SetResult(null);
+                                nmsList.Add(nms);
+                            try {
+                                await nms.Start();
+                            } finally {
+                                lock (nmsList)
+                                    nmsList.Remove(nms);
+                                if (imux != null) {
+                                    lock (imuxSessions)
+                                        imuxSessions.Remove(imux.SessionId);
+                                    imux.WhenEnd.SetResult(null);
+                                }
                             }
                         }
+                    } catch (Exception e) {
+                        Logger.exception(e, Logging.Level.Error, "NaiveMHandler Url: " + p.Url);
                     }
-                } catch (Exception e) {
-                    Logging.exception(e, Logging.Level.Error, "NaiveMHandler Url: " + p.Url);
                 } finally {
                     if (p.ConnectionState == HttpConnection.States.Processing) {
                         p.Handled = false;
