@@ -25,8 +25,8 @@ namespace Naive.HttpSvr
 
         public override string ToString()
         {
-            return (epPair.LocalEP == null) ? $"{{WebSocketClient on {BaseStream}}}"
-                                            : $"{{WebSocketClient on {epPair}}}";
+            return (epPair.LocalEP == null) ? $"{{WsCli on {BaseStream}}}"
+                                            : $"{{WsCli on {epPair}}}";
         }
 
         public static Task<WebSocketClient> ConnectToAsync(string host, int port, string path) => ConnectToAsync(new AddrPort(host, port), path);
@@ -52,15 +52,13 @@ namespace Naive.HttpSvr
 
         public static async Task<WebSocketClient> ConnectToTlsAsync(AddrPort dest, string path, int timeout)
         {
-            Socket socket = await NaiveUtils.ConnectTcpAsync(dest, timeout);
+            var stream = await NaiveUtils.ConnectTlsAsync(dest, timeout);
             try {
-                var tls = new SslStream(new NetworkStream(socket));
-                await tls.AuthenticateAsClientAsync(dest.Host, null, System.Security.Authentication.SslProtocols.Tls12, false);
-                var ws = new WebSocketClient(tls, path);
+                var ws = new WebSocketClient(stream, path);
                 ws.Host = dest.Host;
                 return ws;
             } catch (Exception) {
-                socket.Dispose();
+                stream.Dispose();
                 throw;
             }
         }

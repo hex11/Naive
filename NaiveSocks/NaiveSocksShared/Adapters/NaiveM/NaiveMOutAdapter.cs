@@ -110,8 +110,10 @@ namespace NaiveSocks
             }
             uri = uri ?? toml.TryGetValue<string>("url", null);
             if (!uri.IsNullOrEmpty()) {
-                var u = new Uri(uri);
-                switch (u.Scheme) {
+                var parsedUri = new Uri(uri);
+                if (!parsedUri.IsAbsoluteUri)
+                    throw new Exception("not an absolute URI!");
+                switch (parsedUri.Scheme) {
                 case "http":
                 case "ws":
                 case "naivem":
@@ -121,12 +123,13 @@ namespace NaiveSocks
                     tls_only = true;
                     break;
                 default:
-                    throw new Exception($"Unknown URI scheme '{u.Scheme}', expected: http, ws, wss, naivem");
+                    throw new Exception($"Unknown URI scheme '{parsedUri.Scheme}'");
                 }
                 server = new AddrPort {
-                    Host = u.Host,
-                    Port = u.IsDefaultPort ? 0 : u.Port
+                    Host = parsedUri.Host,
+                    Port = parsedUri.IsDefaultPort ? 0 : parsedUri.Port
                 };
+                path = parsedUri.AbsolutePath;
             }
             if (tls_only) {
                 tls = true;

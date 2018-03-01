@@ -31,8 +31,8 @@ namespace Naive.HttpSvr
 
         public override string ToString()
         {
-            return (epPair.LocalEP == null) ? $"{{WebSocketServer on {BaseStream}}}"
-                                            : $"{{WebSocketServer on {epPair}}}";
+            return (epPair.LocalEP == null) ? $"{{WsSvr on {BaseStream}}}"
+                                            : $"{{WsSvr on {epPair}}}";
         }
 
         public void HandleRequest() => HandleRequest(true);

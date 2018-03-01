@@ -28,6 +28,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)IO\BytesSegment.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IO\BytesView.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IO\FilterBase.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IO\TlsStream.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IO\WebSocket.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IO\WebSocketClient.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\WebSocketServer.cs" />

@@ -31,10 +31,23 @@ namespace NaiveSocks
         Task WriteMultipleAsync(BytesView bv);
     }
 
-    public interface IMyStreamSync
+    public interface IMyStreamSync : IMyStream
     {
         void Write(BytesSegment bs);
         int Read(BytesSegment bs);
+    }
+
+    public interface IMyStreamBeginEnd : IMyStream
+    {
+        IAsyncResult BeginWrite(byte[] buffer, int offset, int count, AsyncCallback callback, object state);
+        void EndWrite(IAsyncResult asyncResult);
+        IAsyncResult BeginRead(byte[] buffer, int offset, int count, AsyncCallback callback, object state);
+        int EndRead(IAsyncResult asyncResult);
+    }
+
+    public interface IMyStreamGetStream : IMyStream
+    {
+        Stream GetStream();
     }
 
     public struct MyStreamState
@@ -164,10 +177,12 @@ namespace NaiveSocks
         {
             if (myStream is Stream stream)
                 return stream;
-            if (myStream is StreamWrapper sw)
-                return sw.BaseStream;
+            if (myStream is IMyStreamGetStream gs)
+                return gs.GetStream();
             return new StreamFromMyStream(myStream);
         }
+
+        public Stream ToStream() => ToStream(this);
 
         private static long totalCopiedPackets, totalCopiedBytes;
 
@@ -327,15 +342,24 @@ namespace NaiveSocks
             Logging.debug(str);
         }
 
-        public class StreamWrapper : MyStream, IMyStreamSync
+        public class StreamWrapper : StreamWrapperBase, IMyStreamGetStream
         {
-            public StreamWrapper(Stream stream)
+            public StreamWrapper(Stream stream) : base(stream)
+            {
+            }
+
+            public Stream GetStream() => BaseStream;
+        }
+
+        public class StreamWrapperBase : MyStream, IMyStreamSync
+        {
+            public StreamWrapperBase(Stream stream)
             {
                 BaseStream = stream;
                 Connected = true;
             }
 
-            public Stream BaseStream { get; }
+            public Stream BaseStream { get; protected set; }
 
             public override async Task Close()
             {
@@ -360,11 +384,11 @@ namespace NaiveSocks
                 return BaseStream.FlushAsync();
             }
 
-            public override string ToString() => $"{{Stream {BaseStream}}}";
+            public override string ToString() => $"{{{BaseStream}}}";
 
-            public void Write(BytesSegment bs) => BaseStream.Write(bs);
+            public virtual void Write(BytesSegment bs) => BaseStream.Write(bs);
 
-            public int Read(BytesSegment bs) => BaseStream.Read(bs);
+            public virtual int Read(BytesSegment bs) => BaseStream.Read(bs);
         }
     }
 
@@ -477,7 +501,7 @@ namespace NaiveSocks
             BaseStream = baseStream;
         }
 
-        public override string ToString() => $"{{{BaseStream} as Stream}}";
+        public override string ToString() => $"{{Stream {BaseStream}}}";
 
         public IMyStream BaseStream { get; }
 
@@ -545,18 +569,18 @@ namespace NaiveSocks
 
         public override IAsyncResult BeginWrite(byte[] buffer, int offset, int count, AsyncCallback callback, object state)
         {
-            if (BaseStream is IMyStreamBeginEnd be) {
-                return be.BeginWrite(buffer, offset, count, callback, state);
-            }
-            return base.BeginWrite(buffer, offset, count, callback, state);
+            return (BaseStream is IMyStreamBeginEnd be)
+                ? be.BeginWrite(buffer, offset, count, callback, state)
+                : base.BeginWrite(buffer, offset, count, callback, state);
         }
 
         public override void EndWrite(IAsyncResult asyncResult)
         {
             if (BaseStream is IMyStreamBeginEnd be) {
                 be.EndWrite(asyncResult);
+            } else {
+                base.EndWrite(asyncResult);
             }
-            base.EndWrite(asyncResult);
         }
 
         public override IAsyncResult BeginRead(byte[] buffer, int offset, int count, AsyncCallback callback, object state)
@@ -574,14 +598,6 @@ namespace NaiveSocks
             }
             return base.EndRead(asyncResult);
         }
-    }
-
-    public interface IMyStreamBeginEnd
-    {
-        IAsyncResult BeginWrite(byte[] buffer, int offset, int count, AsyncCallback callback, object state);
-        void EndWrite(IAsyncResult asyncResult);
-        IAsyncResult BeginRead(byte[] buffer, int offset, int count, AsyncCallback callback, object state);
-        int EndRead(IAsyncResult asyncResult);
     }
 
     public class MsgStreamToMyStream : IMyStream, IMyStreamMultiBuffer, IHaveBaseStream

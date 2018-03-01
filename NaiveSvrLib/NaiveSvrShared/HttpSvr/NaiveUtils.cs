@@ -483,13 +483,25 @@ namespace Naive.HttpSvr
             return destTcp.Client;
         }
 
-        public static async Task<SslStream> ConnectTlsAsync(AddrPort dest, int timeout)
+        public static readonly System.Security.Authentication.SslProtocols TlsProtocols
+            = System.Security.Authentication.SslProtocols.Tls12
+                | System.Security.Authentication.SslProtocols.Tls11
+                | System.Security.Authentication.SslProtocols.Tls;
+
+        public static Task<Stream> ConnectTlsAsync(AddrPort dest, int timeout)
+        {
+            return ConnectTlsAsync(dest, timeout, TlsProtocols);
+        }
+
+        public static async Task<Stream> ConnectTlsAsync(AddrPort dest, int timeout,
+            System.Security.Authentication.SslProtocols protocols)
         {
             var socket = await ConnectTcpAsync(dest, timeout);
             try {
-                var tls = new SslStream(new NetworkStream(socket));
-                await tls.AuthenticateAsClientAsync(dest.Host, null, System.Security.Authentication.SslProtocols.Tls12, false);
-                return tls;
+                var tls = new NaiveSocks.TlsStream(NaiveSocks.MyStream.FromSocket(socket));
+                // TODO: TLS handshake timeout
+                await tls.AuthAsClient(dest.Host, protocols);
+                return tls.ToStream();
             } catch (Exception) {
                 socket.Dispose();
                 throw;

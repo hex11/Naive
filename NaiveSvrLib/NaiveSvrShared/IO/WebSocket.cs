@@ -521,11 +521,13 @@ namespace Naive.HttpSvr
                     } catch (Exception) { }
                     break;
                 case 0x9: // ping
+                    Logging.debug($"ping received on {this}");
                     PingReceived?.Invoke(this);
                     var b = bv.GetBytes();
                     await SendMsgAsync(0xA, b, 0, b.Length).CAF();
                     break;
                 case 0xA: // pong
+                    Logging.debug($"pong received on {this}");
                     PongReceived?.Invoke(this);
                     break;
                 default:
