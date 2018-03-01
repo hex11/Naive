@@ -10,6 +10,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\CompressedOutputStream.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\HttpHeaderCollection.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\MultipartFormDataReader.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\NaiveHttpServer.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\NaiveUtils.cs" />

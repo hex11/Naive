@@ -92,7 +92,7 @@ namespace NaiveSocks
                     } finally {
                         MyStream.CloseWithTimeout(mystream);
                     }
-                } else if (p.Url.StartsWith("http://")) {
+                } else if (p.Url.StartsWith("http://") || p.Url.StartsWith("https://")) {
                     await handleHttp(p);
                 } else {
                     if (adapter.webout != null) {
@@ -112,26 +112,38 @@ namespace NaiveSocks
             private async Task handleHttp(HttpConnection p)
             {
                 p.EnableKeepAlive = false;
-                AddrPort parseUrl(string url, out string path)
+                AddrPort parseUrl(string url, out string path, out bool ishttps)
                 {
-                    int realUrlStart = url.IndexOf('/', 7);
+                    int hostStart = url.IndexOf("://") + 3;
+                    var scheme = url.Substring(0, hostStart - 3);
+                    switch (scheme.ToLower()) {
+                    case "http":
+                        ishttps = false;
+                        break;
+                    case "https":
+                        ishttps = true;
+                        break;
+                    default:
+                        throw new Exception($"unknown scheme '{scheme}'");
+                    }
+                    int realUrlStart = url.IndexOf('/', hostStart);
                     if (realUrlStart == -1) {
                         // such url: http://example.com
                         realUrlStart = 7;
                         url += "/";
                     }
-                    var host = url.Substring(7, realUrlStart - 7);
+                    var host = url.Substring(hostStart, realUrlStart - hostStart);
                     path = url.Substring(realUrlStart);
                     if (host.Contains(":") && !host.Contains("[")) {
                         return AddrPort.Parse(host);
                     } else {
-                        return new AddrPort(host, 80);
+                        return new AddrPort(host, ishttps ? 443 : 80);
                     }
                 }
                 bool isUpgrade(Dictionary<string, string> headers) => headers.ContainsKey("Upgrade")
                             || (headers.ContainsKey("Connection")
                                 && headers["Connection"]?.Split(',').Select(x => x.Trim()).Contains("Upgrade") == true);
-                AddrPort dest = parseUrl(p.Url, out var realurl);
+                AddrPort dest = parseUrl(p.Url, out var realurl, out var isHttps);
                 connnectDest:
                 var tcsGetResult = new TaskCompletionSource<ConnectResult>();
                 var tcsProcessing = new TaskCompletionSource<VoidType>();
@@ -148,6 +160,11 @@ namespace NaiveSocks
                         throw new Exception($"ConnectResult: {r.Result} ({r.FailedReason})");
                     }
                     var destStream = r.Stream;
+                    TlsStream tlsStream = null;
+                    if (isHttps) {
+                        destStream = tlsStream = new TlsStream(destStream);
+                        await tlsStream.AuthAsClient(dest.Host);
+                    }
                     var whenCanReadResponse = r.WhenCanRead;
                     var destCommonStream = MyStream.ToStream(destStream);
                     try {
@@ -168,16 +185,16 @@ namespace NaiveSocks
                         bool keepAlive = true;
                         void ProcessHeaders()
                         {
-                            foreach (string key in p.RequestHeaders.Keys) {
-                                var value = p.RequestHeaders[key] as string;
-                                if (key == "Proxy-Connection") {
+                            foreach (var kv in p.RequestHeaders) {
+                                var value = kv.Value;
+                                if (string.Equals(kv.Key, "Proxy-Connection", StringComparison.OrdinalIgnoreCase)) {
                                     newHeaders["Connection"] = value;
                                     if (value == "close" || value == "Close" /* <- IE */ )
                                         //       ^ Browsers excpet IE
                                         keepAlive = false;
                                     continue;
                                 }
-                                newHeaders[key] = value;
+                                newHeaders[kv.Key] = value;
                             }
                             if (isUpgrade(newHeaders)) {
                                 keepAlive = false;
@@ -218,7 +235,8 @@ namespace NaiveSocks
                                         Logging.info($"{adapter.QuotedName} {p} completed: no keep-alive.");
                                     break;
                                 }
-                                Task completed = await Task.WhenAny(p._ReceiveNextRequest(), copyingResponse);
+                                var recvNext = p._ReceiveNextRequest();
+                                Task completed = await Task.WhenAny(recvNext, copyingResponse);
                                 if (completed == copyingResponse) {
                                     if (verbose)
                                         Logging.info($"{adapter.QuotedName} {p} completed: copyingResponse.");
@@ -227,7 +245,9 @@ namespace NaiveSocks
                                     return;
                                 } else {
                                     try {
-                                        await completed;
+                                        if (recvNext.Result == false) {
+                                            return;
+                                        }
                                     } catch (IOException e) when (e.InnerException is SocketException se) {
                                         if (verbose)
                                             Logging.warning($"{adapter.QuotedName} {p}: receiving request error {se.SocketErrorCode}");
@@ -236,13 +256,16 @@ namespace NaiveSocks
                                 }
                                 if (verbose)
                                     Logging.info($"{adapter.QuotedName} {p}: {p.Method} {p.Url}");
-                                var newDest = parseUrl(p.Url, out realurl);
-                                if (newDest != dest) {
+                                var newDest = parseUrl(p.Url, out realurl, out var newIsHttps);
+                                if (newDest != dest || newIsHttps != isHttps) {
+                                    string proto(bool x) => x ? "https" : "http";
                                     if (verbose)
-                                        Logging.warning($"{adapter.QuotedName} {p}: dest changed. {dest} -> {newDest}");
+                                        Logging.warning($"{adapter.QuotedName} {p}: dest changed." +
+                                            $" ({proto(isHttps)}){dest} -> ({proto(newIsHttps)}){newDest}");
                                     await destStream.Shutdown(SocketShutdown.Send);
                                     await copyingResponse;
                                     dest = newDest;
+                                    isHttps = newIsHttps;
                                     goto connnectDest; // It works!
                                 }
                                 ProcessHeaders();

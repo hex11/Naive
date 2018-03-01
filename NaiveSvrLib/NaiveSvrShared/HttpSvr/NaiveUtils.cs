@@ -58,12 +58,13 @@ namespace Naive.HttpSvr
 
         public static string GetHttpHeader(this HttpConnection p)
         {
-            StringBuilder sb = new StringBuilder(128);
-            sb.AppendLine($"{p.Method} {p.Url} {p.HttpVersion}");
-            foreach (string item in p.RequestHeaders.Keys) {
-                sb.AppendLine($"{item}: {p.RequestHeaders[item]}");
-            }
-            return sb.ToString();
+            //StringBuilder sb = new StringBuilder(128);
+            //sb.AppendLine($"{p.Method} {p.Url} {p.HttpVersion}");
+            //foreach (var item in p.RequestHeaders) {
+            //    sb.AppendLine($"{item.Key}: {item.Value}");
+            //}
+            //return sb.ToString();
+            return p.RawRequest;
         }
 
         public static bool HandleIfNotModified(this HttpConnection p, string lastModified = null, string etag = null)

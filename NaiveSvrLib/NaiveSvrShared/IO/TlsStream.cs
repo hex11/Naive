@@ -8,7 +8,7 @@ using Naive.HttpSvr;
 
 namespace NaiveSocks
 {
-    class TlsStream : MyStream.StreamWrapperBase
+    public class TlsStream : MyStream.StreamWrapperBase
     {
         public IMyStream RealBaseStream { get; }
         public SslStream SslStream { get; }

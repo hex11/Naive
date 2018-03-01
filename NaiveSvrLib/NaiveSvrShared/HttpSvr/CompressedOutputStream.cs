@@ -88,7 +88,7 @@ namespace Naive.HttpSvr
         {
             switch (value) {
             case CompressionType.None:
-                p.ResponseHeaders.Remove(HttpHeaders.KEY_Content_Encoding);
+                p.ResponseHeaders[HttpHeaders.KEY_Content_Encoding] = null;
                 break;
             case CompressionType.GZip:
                 p.ResponseHeaders[HttpHeaders.KEY_Content_Encoding] = HttpHeaders.VALUE_Content_Encoding_gzip;

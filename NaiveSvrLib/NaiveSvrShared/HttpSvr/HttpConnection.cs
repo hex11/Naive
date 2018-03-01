@@ -53,7 +53,7 @@ namespace Naive.HttpSvr
         public IPEndPoint remoteEP => epPair.RemoteEP;
         public IPEndPoint localEP => epPair.LocalEP;
 
-        public Hashtable RequestHeaders;
+        public HttpHeaderCollection RequestHeaders;
 
         public string GetReqHeader(string key) => RequestHeaders[key] as string;
 
@@ -78,7 +78,7 @@ namespace Naive.HttpSvr
 
         public bool Handled = false;
 
-        public Hashtable ResponseHeaders;
+        public HttpHeaderCollection ResponseHeaders;
 
         public const string defaultResponseCode = "404 Not Found";
 
@@ -165,7 +165,7 @@ namespace Naive.HttpSvr
             try {
                 await _requestingLoop().CAF();
             } catch (DisconnectedException) {
-                return;
+
             } finally {
                 try {
                     baseStream.Close();
@@ -179,7 +179,8 @@ namespace Naive.HttpSvr
             do {
                 resetResponseStatus();
                 ConnectionState = States.Receiving;
-                await _ReceiveNextRequest().CAF();
+                if (!await _ReceiveNextRequest().CAF())
+                    break;
                 ConnectionState = States.Processing;
                 try {
                     await processRequest().CAF();
@@ -246,19 +247,25 @@ namespace Naive.HttpSvr
             outputWriter.NewLine = "\r\n";
         }
 
-        public async Task _ReceiveNextRequest()
+        public async Task<bool> _ReceiveNextRequest()
         {
             checkInputData();
+            rawRequestPos = 0;
+            try {
+                RawRequest = await readRequest().CAF();
+            } catch (Exception) {
+                return false;
+            }
             await parseRequestAndHeaders();
             initOutputStream();
             initInputDataStream();
+            return true;
         }
 
         private async Task parseRequestAndHeaders()
         {
-            rawRequestPos = 0;
-            RawRequest = await readRequest().CAF();
-            RequestHeaders = new Hashtable(16);
+            RequestHeaders = RequestHeaders ?? new HttpHeaderCollection(16);
+            RequestHeaders.Clear();
             parseRequest(readLineFromRawRequest());
             keepAlive = EnableKeepAlive && IsClientSupportKeepAlive;
             ResponseHeaders[KEY_Connection] = keepAlive ? VALUE_Connection_Keepalive : VALUE_Connection_close;
@@ -315,7 +322,8 @@ namespace Naive.HttpSvr
         private void resetResponseStatus()
         {
             ResponseStatusCode = defaultResponseCode;
-            ResponseHeaders = new Hashtable(16);
+            ResponseHeaders = ResponseHeaders ?? new HttpHeaderCollection(16);
+            ResponseHeaders.Clear();
             ResponseHeaders[KEY_Content_Type] = defaultContentType;
             if (ServerHeader != null) {
                 ResponseHeaders[KEY_Server] = ServerHeader;
@@ -419,8 +427,8 @@ namespace Naive.HttpSvr
         internal async Task writeResponseToAsync(TextWriter writer)
         {
             await writer.WriteAsync("HTTP/1.1 " + ResponseStatusCode + "\r\n");
-            foreach (var key in ResponseHeaders.Keys) {
-                await writer.WriteAsync(key + ": " + ResponseHeaders[key] + "\r\n");
+            foreach (var kv in ResponseHeaders) {
+                await writer.WriteAsync(kv.Key + ": " + ResponseHeaders[kv.Value] + "\r\n");
             }
             await writer.WriteAsync("\r\n");
         }
@@ -430,10 +438,10 @@ namespace Naive.HttpSvr
             writer.Write("HTTP/1.1 ");
             writer.Write(ResponseStatusCode);
             writer.Write("\r\n");
-            foreach (var key in ResponseHeaders.Keys) {
-                writer.Write(key);
+            foreach (var kv in ResponseHeaders) {
+                writer.Write(kv.Key);
                 writer.Write(": ");
-                writer.Write(ResponseHeaders[key]);
+                writer.Write(kv.Value);
                 writer.Write("\r\n");
             }
             writer.Write("\r\n");
