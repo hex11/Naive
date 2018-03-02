@@ -164,6 +164,7 @@ namespace NaiveSocks
                 foreach (var item in Channels) {
                     item.Value.ParentChannelsClosed();
                 }
+                Channels.Clear();
             }
             if (closeBaseStream)
                 BaseStream.Close(new CloseOpt(CloseType.Close));
@@ -468,7 +469,7 @@ namespace NaiveSocks
 
         private static bool IsRecvEOF(StateEnum value)
         {
-            return value >= StateEnum.ClosedByLocal
+            return value >= StateEnum.Closed
                 | value == StateEnum.EOFReceived
                 | value == StateEnum.ClosingByRemote;
         }

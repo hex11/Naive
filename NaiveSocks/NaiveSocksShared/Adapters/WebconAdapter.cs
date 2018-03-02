@@ -14,6 +14,8 @@ namespace NaiveSocks
     {
         public string passwd { get; set; }
 
+        public override string ToString() => $"{{Webcon}}";
+
         ConsoleHub consoleHub;
 
         HttpSvr httpsvr;
@@ -30,6 +32,9 @@ namespace NaiveSocks
         public override void Start()
         {
             base.Start();
+            if (passwd.IsNullOrEmpty()) {
+                Logger.warning("passwd is null or empty!");
+            }
             if (consoleHub == null) {
                 httpsvr = new HttpSvr(this);
                 consoleHub = new ConsoleHub();

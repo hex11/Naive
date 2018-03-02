@@ -19,6 +19,8 @@ namespace NaiveSocks
 
         public AdapterRef @default { get; set; }
 
+        public override string ToString() => $"{{Router rules={rules?.Count ?? 0} default={@default}}}";
+
         public class Rule
         {
             public string abp { get; set; }

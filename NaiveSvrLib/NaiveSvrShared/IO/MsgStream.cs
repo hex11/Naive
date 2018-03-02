@@ -123,6 +123,7 @@ namespace Naive.HttpSvr
         }
     }
 
+    [Flags]
     public enum MsgStreamStatus
     {
         Open = 0,

@@ -20,7 +20,6 @@ namespace NaiveSocks
         private string _username;
         private string _password;
         private Socket _socket;
-        private TcpClient _tcpClient;
         private const int SOCKS_VER = 0x05;
         private const int AUTH_METH_SUPPORT = 0x02;
         private const int USER_PASS_AUTH = 0x02;
@@ -40,13 +39,11 @@ namespace NaiveSocks
             _destPort = destPort;
             _username = username;
             _password = password;
-            _tcpClient = new TcpClient();
         }
 
         public async Task<SocketStream> ConnectAsync()
         {
-            await NaiveUtils.ConnectTcpAsync(new AddrPort(_socksAddr, _socksPort), 0);
-            _socket = _tcpClient.Client;
+            _socket = await NaiveUtils.ConnectTcpAsync(new AddrPort(_socksAddr, _socksPort), 0);
             var _ns = MyStream.FromSocket(_socket);
             Task write(byte[] buf) => _ns.WriteAsync(buf, 0, buf.Length);
             //Task read(byte[] buf) => _ns.ReadAsync(buf, 0, buf.Length);

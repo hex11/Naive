@@ -14,6 +14,8 @@ namespace NaiveSocks
         private Func<IMyStream, IMyStream> getEncryptionStream;
         public string encryption { get; set; } = "aes-128-ctr";
 
+        public override string AdapterType => "SsIn";
+
         public override void Start()
         {
             getEncryptionStream = SS.GetCipherByName(encryption).GetEncryptionStreamFunc(key);

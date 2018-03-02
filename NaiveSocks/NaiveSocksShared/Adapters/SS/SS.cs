@@ -89,24 +89,24 @@ namespace NaiveSocks
 
             public Func<IMyStream, IMyStream> GetEncryptionStreamFunc(byte[] key)
             {
-                return baseStream => {
+                var encFunc = GetEncryptorFunc(key);
+                return baseStream => new IvEncryptStream(baseStream, encFunc(false), encFunc(true));
+            }
+
+            public Func<bool, IIVEncryptor> GetEncryptorFunc(string key)
+                => GetEncryptorFunc(StringToKey(key, KeySize));
+
+            public Func<bool, IIVEncryptor> GetEncryptorFunc(byte[] key)
+            {
+                return isEncrypt => {
                     if (Mode == Modes.AesCtr) {
                         var alg = GetEcbAlg(key);
-                        return new IvEncryptStream(
-                            baseStream,
-                            new CtrEncryptor(alg.CreateEncryptor()),
-                            new CtrEncryptor(alg.CreateEncryptor()));
+                        return new CtrEncryptor(alg.CreateEncryptor());
                     } else if (Mode == Modes.AesCfb) {
                         var alg = GetEcbAlg(key);
-                        return new IvEncryptStream(
-                            baseStream,
-                            new CfbEncryptor(alg.CreateEncryptor(), false),
-                            new CfbEncryptor(alg.CreateEncryptor(), true));
+                        return new CfbEncryptor(alg.CreateEncryptor(), isEncrypt);
                     } else if (Mode == Modes.Chacha20Ietf) {
-                        return new IvEncryptStream(
-                            baseStream,
-                            new ChaCha20IetfEncryptor(key),
-                            new ChaCha20IetfEncryptor(key));
+                        return new ChaCha20IetfEncryptor(key);
                     } else {
                         throw new Exception("No such cipher.");
                     }

@@ -1113,6 +1113,15 @@ namespace Naive.HttpSvr
             }
         }
 
+        public bool IsIP
+        {
+            get {
+                if (Host == null)
+                    return false;
+                return IPAddress.TryParse(Host, out _);
+            }
+        }
+
         public static AddrPort Empty => new AddrPort();
 
         public AddrPort(string host, int port)
@@ -1135,6 +1144,63 @@ namespace Naive.HttpSvr
                 Host = Host,
                 Port = (Port > 0) ? Port : defaultPort
             };
+        }
+
+        public byte[] ToSocks5Bytes()
+        {
+            if (IPAddress.TryParse(Host, out var ip)) {
+                var ipBytes = ip.GetAddressBytes();
+                var buf = new byte[1 + ipBytes.Length + 2];
+                var cur = 0;
+                buf[cur++] = (byte)((ipBytes.Length == 4) ? 0x01 : 0x04);
+                for (int i = 0; i < ipBytes.Length; i++) {
+                    buf[cur++] = ipBytes[i];
+                }
+                buf[cur++] = (byte)(Port >> 8);
+                buf[cur++] = (byte)Port;
+                return buf;
+            } else {
+                var buf = new byte[1 + BytesLength];
+                var cur = 0;
+                buf[cur++] = 0x03; // domain name
+                ToBytes(buf, ref cur);
+                return buf;
+            }
+        }
+
+        public static unsafe AddrPort FromSocks5Bytes(BytesView bytes)
+        {
+            AddrPort dest = new AddrPort();
+            var cur = 0;
+            var addrType = bytes[cur++];
+            switch (addrType) {
+            case 0x01:
+            case 0x04:
+                var addrLen = (addrType == 0x01) ? 4 : 16;
+                var ip = new IPAddress(bytes.GetBytes(cur, addrLen));
+                cur += addrLen;
+                dest.Host = ip.ToString();
+                break;
+            case 0x03:
+                var nameLen = bytes[cur++];
+                if (nameLen == 0)
+                    throw new Exception("length of domain name cannot be zero");
+                var p = stackalloc sbyte[nameLen];
+                for (int i = 0; i < nameLen; i++) {
+                    var b = bytes[cur++];
+                    if (b > 0x7f) {
+                        throw new Exception("domain name is not an ASCII string");
+                    }
+                    p[i] = (sbyte)b;
+                }
+                dest.Host = new String(p, 0, nameLen);
+                break;
+            default:
+                throw new Exception($"unknown addr type ({addrType})");
+            }
+            dest.Port = bytes[cur++] << 8;
+            dest.Port |= bytes[cur++];
+            return dest;
         }
 
         // +---------+-------------------+-------------------+

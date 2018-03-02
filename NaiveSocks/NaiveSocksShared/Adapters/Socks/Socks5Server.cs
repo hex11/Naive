@@ -92,13 +92,13 @@ namespace NaiveSocks
             }
             //Console.WriteLine($"(socks5) request Cmd={cmd} AddrType={addrType} Addr={addrString}");
             TargetAddr = addrString;
-            await readBytesAsync(b, 2);
-            TargetPort = b[0] << 8;
-            TargetPort |= b[1];
-            Status = Socks5Status.ProcessingRequest;
             if (addrString == null) {
                 await WriteReply(Rep.Address_type_not_supported);
             } else if (cmd == ReqCmd.Connect) {
+                await readBytesAsync(b, 2);
+                TargetPort = b[0] << 8;
+                TargetPort |= b[1];
+                Status = Socks5Status.ProcessingRequest;
                 await Naive.HttpSvr.NaiveUtils.RunAsyncTask(() => RequestingToConnect?.Invoke(this));
             } else {
                 await WriteReply(Rep.Command_not_supported);
@@ -157,14 +157,13 @@ namespace NaiveSocks
             await Stream.WriteAsync(buf, 0, 10);
         }
 
-        private byte[] onebuf = new byte[1];
-
         private async Task<byte> readByteAsync()
         {
-            var b = await Stream.ReadAsync(onebuf, 0, 1);
+            var oneByteBuf = new byte[1];
+            var b = await Stream.ReadAsync(oneByteBuf, 0, 1);
             if (b == 0)
                 throw getEOFException();
-            return onebuf[0];
+            return oneByteBuf[0];
         }
 
         private Task readBytesAsync(int count)

@@ -94,6 +94,7 @@ namespace NaiveSocks
             RegisteredInTypes.Add("http", typeof(HttpInAdapter));
             RegisteredInTypes.Add("naive", typeof(NaiveMInAdapter));
             RegisteredInTypes.Add("naivec", typeof(NaiveMInAdapter));
+            RegisteredInTypes.Add("naive0", typeof(Naive0InAdapter));
             RegisteredInTypes.Add("ss", typeof(SSInAdapter));
 
             RegisteredOutTypes.Add("direct", typeof(DirectOutAdapter));
@@ -102,6 +103,7 @@ namespace NaiveSocks
             RegisteredOutTypes.Add("http", typeof(HttpOutAdapter));
             RegisteredOutTypes.Add("naive", typeof(NaiveMOutAdapter));
             RegisteredOutTypes.Add("naivec", typeof(NaiveMOutAdapter));
+            RegisteredOutTypes.Add("naive0", typeof(Naive0OutAdapter));
             RegisteredOutTypes.Add("ss", typeof(SSOutAdapter));
             RegisteredOutTypes.Add("webcon", typeof(WebconAdapter));
 
@@ -252,10 +254,13 @@ namespace NaiveSocks
                 r.Adapter = adapter;
                 newcfg.OutAdapters.Add(adapter);
             }
-            if (newcfg.OutAdapters.Any(x => x.Name == "direct") == false) {
+            bool notExistAndNeed(string name) =>
+                    newcfg.OutAdapters.Any(x => x.Name == name) == false
+                        && refs.Any(x => x.IsName && x.Ref as string == name);
+            if (notExistAndNeed("direct")) {
                 newcfg.OutAdapters.Add(new DirectOutAdapter() { Name = "direct" });
             }
-            if (newcfg.OutAdapters.Any(x => x.Name == "fail") == false) {
+            if (notExistAndNeed("fail")) {
                 newcfg.OutAdapters.Add(new FailAdapter() { Name = "fail" });
             }
             foreach (var item in newcfg.InAdapters.Union<Adapter>(newcfg.OutAdapters)) {
@@ -503,7 +508,11 @@ namespace NaiveSocks
                 debug($"'{inc.InAdapter.Name}' {inc} -> '{outAdapter.Name}'");
             lock (InConnections)
                 InConnections.Add(inc);
-            NewConnection?.Invoke(inc);
+            try {
+                NewConnection?.Invoke(inc);
+            } catch (Exception e) {
+                Logger.exception(e, Logging.Level.Error, "event NewConnection");
+            }
         }
 
         private async Task onConnectionEnd(InConnection inc)
@@ -516,8 +525,12 @@ namespace NaiveSocks
                 await inc.SetConnectResult(ConnectResults.Failed, new IPEndPoint(0, 0));
             }
             if (inc.DataStream != null && inc.DataStream.State != MyStreamState.Closed)
-                MyStream.CloseWithTimeout(inc.DataStream);
-            EndConnection?.Invoke(inc);
+                await MyStream.CloseWithTimeout(inc.DataStream);
+            try {
+                EndConnection?.Invoke(inc);
+            } catch (Exception e) {
+                Logger.exception(e, Logging.Level.Error, "event EndConnection");
+            }
         }
 
         private async Task onConnectionException(InConnection inc, Exception e)

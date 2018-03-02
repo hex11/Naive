@@ -9,6 +9,9 @@
     <Import_RootNamespace>NaiveSocksShared</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Adapters\Naive0\Naive0.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Adapters\Naive0\Naive0InAdapter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Adapters\Naive0\Naive0OutAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\SS\SSInAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Compression\LZ4\LZ4Codec.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Compression\LZ4\LZ4Codec.Unsafe.cs" />

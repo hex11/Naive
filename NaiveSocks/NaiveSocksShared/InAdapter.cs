@@ -138,7 +138,9 @@ namespace NaiveSocks
     {
         public IPEndPoint listen { get; set; }
 
-        public override string ToString() => $"{{{GetType().Name} listen={listen}}}";
+        public override string ToString() => $"{{{AdapterType} listen={listen}}}";
+
+        public virtual string AdapterType => GetType().Name;
 
         public override void SetConfig(TomlTable toml)
         {

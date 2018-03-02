@@ -17,6 +17,8 @@ namespace NaiveSocks
         public string encryption { get; set; } = "aes-128-ctr";
         public int connect_timeout { get; set; } = 10;
 
+        public override string ToString() => $"{{SsOut server={server}}}";
+
         private Func<IMyStream, IMyStream> getEncryptionStream;
 
         public override void Start()
@@ -33,10 +35,7 @@ namespace NaiveSocks
                 return baseResult;
             try {
                 var dataStream = getEncryptionStream(baseResult.Stream);
-                var bytes = new byte[1 + dest.BytesLength];
-                var cur = 0;
-                bytes[cur++] = (byte)Socks5Server.AddrType.DomainName;
-                dest.ToBytes(bytes, ref cur);
+                var bytes = dest.ToSocks5Bytes();
                 await dataStream.WriteAsync(bytes);
                 return new ConnectResult(ConnectResults.Conneceted, dataStream);
             } catch (Exception) {

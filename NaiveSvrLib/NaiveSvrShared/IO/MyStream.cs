@@ -235,11 +235,12 @@ namespace NaiveSocks
             } catch (Exception e) {
                 Logging.exception(e, Logging.Level.Error, $"Relay task ({left.SafeToStr()} <-> {right.SafeToStr()})");
             }
-            CloseWithTimeout(left, forceCloseTimeout);
-            CloseWithTimeout(right, forceCloseTimeout);
+            var t1 = CloseWithTimeout(left, forceCloseTimeout);
+            var t2 = CloseWithTimeout(right, forceCloseTimeout);
+            await Task.WhenAll(t1, t2);
         }
 
-        public static void CloseWithTimeout(IMyStream stream, int timeout = -2)
+        public static Task CloseWithTimeout(IMyStream stream, int timeout = -2)
         {
             if (stream == null)
                 throw new ArgumentNullException(nameof(stream));
@@ -248,8 +249,8 @@ namespace NaiveSocks
             if (timeout == -2)
                 timeout = 10 * 1000;
             if (stream.State.IsClosed)
-                return;
-            NaiveUtils.RunAsyncTask(async () => {
+                return NaiveUtils.CompletedTask;
+            return NaiveUtils.RunAsyncTask(async () => {
                 try {
                     await Task.Yield();
                     Stopwatch sw = Stopwatch.StartNew();
@@ -264,7 +265,7 @@ namespace NaiveSocks
                 } catch (Exception e) {
                     Logging.exception(e, Logging.Level.Warning, $"stream closing ({stream.SafeToStr()})");
                 }
-            }).Forget();
+            });
         }
 
         public Task WriteTo(IMyStream stream) => StreamCopy(this, stream);
@@ -611,7 +612,7 @@ namespace NaiveSocks
 
         object IHaveBaseStream.BaseStream => MsgStream;
 
-        public MyStreamState State
+        public virtual MyStreamState State
         {
             get {
                 return (MyStreamState)MsgStream.State;

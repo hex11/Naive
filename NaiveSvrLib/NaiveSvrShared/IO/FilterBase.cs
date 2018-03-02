@@ -46,6 +46,12 @@ namespace Naive.HttpSvr
             ReadFilter = CombineFilter(f, ReadFilter);
         }
 
+        public void AddFilters(Action<BytesView> fRead, Action<BytesView> fWrite)
+        {
+            AddReadFilter(fRead);
+            AddWriteFilter(fWrite);
+        }
+
         public static Action<BytesView> CombineFilter(Action<BytesView> f1, Action<BytesView> f2)
         {
             if (f1 == null)
@@ -373,7 +379,11 @@ namespace Naive.HttpSvr
 
         public static Action<BytesView> GetStreamFilterFromIVEncryptor(bool isEncrypt, IIVEncryptor iVEncryptor)
         {
-            var ivOK = false;
+            return GetStreamFilterFromIVEncryptor(isEncrypt, iVEncryptor, false);
+        }
+
+        public static Action<BytesView> GetStreamFilterFromIVEncryptor(bool isEncrypt, IIVEncryptor iVEncryptor, bool ivOK)
+        {
             return (bv) => {
                 if (!ivOK) {
                     ivOK = true;

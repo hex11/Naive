@@ -22,7 +22,7 @@ namespace NaiveSocks
             return await Dns.GetHostAddressesAsync(name);
         }
 
-        public override string ToString() => "{DirectOut}";
+        public override string ToString() => $"{{DirectOut{(force_dest.IsDefault ? "" : " force_dest=" + force_dest)}}}";
     }
 
     public class ConnectHelper

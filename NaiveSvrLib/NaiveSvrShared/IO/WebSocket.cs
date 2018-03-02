@@ -27,9 +27,16 @@ namespace Naive.HttpSvr
             Activated += _activated;
         }
 
+        public WebSocket(Stream BaseStream, bool isClient, bool isOpen) : this(BaseStream, isClient)
+        {
+            if (isOpen) {
+                ConnectionState = States.Open;
+            }
+        }
+
         public override string ToString()
         {
-            return $"{{WebSocket({(IsClient ? "client" : "server")}) on {BaseStream}}}";
+            return $"{{Ws({(IsClient ? "client" : "server")}) on {BaseStream}}}";
         }
 
         public MsgStreamStatus State { get; private set; }
