@@ -572,10 +572,10 @@ namespace NaiveSocks
         public Task SendMsg(Msg msg)
         {
             lock (_lockLatestSendTask) {
-                if (_latestSendTask == null || _latestSendTask.IsCompleted) {
-                    return _latestSendTask = _SendMsg(msg);
-                } else {
+                if (_latestSendTask?.IsCompleted == false) {
                     return _latestSendTask = _SendMsgQueued(_latestSendTask, msg);
+                } else {
+                    return _latestSendTask = _SendMsg(msg);
                 }
             }
         }

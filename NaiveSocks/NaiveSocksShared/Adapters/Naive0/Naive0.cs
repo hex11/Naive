@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 using static NaiveSocks.Socks5Server;
@@ -23,7 +24,7 @@ namespace NaiveSocks
 
             public SessionStream CurrentSession { get; private set; }
 
-            public override string ToString() => $"{{Naive0Stream on {ws.BaseStream}}}";
+            public bool PerSessionIV { get; set; }
 
             public Connection(WebSocket ws, Func<bool, IIVEncryptor> enc)
             {
@@ -56,16 +57,26 @@ namespace NaiveSocks
                 });
             }
 
+            public void Close()
+            {
+                ws.Close();
+            }
+
             public class SessionStream : IMsgStream
             {
                 public MsgStreamStatus State => (MsgStreamStatus)MState;
                 public MyStreamState MState { get; private set; }
+
+                public int Generation { get; }
+
+                public override string ToString() => $"{{Naive0 gen{Generation} on {_conn.ws.BaseStream}}}";
 
                 object _syncRoot;
 
                 Task lastRecv, lastSend;
                 public bool FinReceived { get; private set; }
                 private readonly Connection _conn;
+                WebSocket ws => _conn.ws;
 
                 public MsgStreamToMyStream AsMyStream { get; }
 
@@ -75,7 +86,7 @@ namespace NaiveSocks
                         if (!conn.CanOpen)
                             throw new InvalidOperationException("!CanOpen");
                         _syncRoot = conn._syncRoot;
-                        conn.UsedCount++;
+                        Generation = conn.UsedCount++;
                         conn.CurrentSession = this;
                     }
                     _conn = conn;
@@ -123,13 +134,12 @@ namespace NaiveSocks
                     if (!_conn.ivReceived) {
                         _conn.ivReceived = true;
                         var recvEnc = _conn.enc(false);
-                        recvEnc.IV = (await _conn.ws.ReadAsync()).payload;
-                        _conn.ws.AddReadFilter(FilterBase.GetStreamFilterFromIVEncryptor(false, recvEnc, true));
+                        recvEnc.IV = (await ws.ReadAsync()).payload;
+                        ws.AddReadFilter(FilterBase.GetStreamFilterFromIVEncryptor(false, recvEnc, true));
                     }
-                    var frame = await _conn.ws.ReadAsync();
+                    var frame = await ws.ReadAsync();
                     if (frame.opcode == 0x01) {
-                        MState |= MyStreamState.RemoteShutdown;
-                        FinReceived = true;
+                        OnFinReceived();
                         return Msg.EOF;
                     }
                     return frame.payload;
@@ -153,16 +163,16 @@ namespace NaiveSocks
                                 MState |= MyStreamState.LocalShutdown;
                                 var ls = lastSend;
                                 if (ls?.IsCompleted == false) {
-                                    NaiveUtils.RunAsyncTask(async () => {
+                                    lastSend = NaiveUtils.RunAsyncTask(async () => {
                                         try {
                                             await ls;
                                         } catch (Exception) {
                                             ;
                                         }
-                                        _conn.ws.SendStringAsync("fin").Forget();
+                                        SendFin().Forget();
                                     });
                                 } else {
-                                    _conn.ws.SendStringAsync("fin").Forget();
+                                    SendFin().Forget();
                                 }
                             }
                         }
@@ -172,34 +182,57 @@ namespace NaiveSocks
                     }
                 }
 
+                private void OnFinReceived()
+                {
+                    MState |= MyStreamState.RemoteShutdown;
+                    FinReceived = true;
+                    if (_conn.PerSessionIV) {
+                        ws.ReadFilter = null;
+                        _conn.ivReceived = false;
+                    }
+                }
+
+                private async Task SendFin()
+                {
+                    await ws.SendStringAsync("fin");
+                    if (_conn.PerSessionIV) {
+                        ws.WriteFilter = null;
+                        _conn.ivSent = false;
+                    }
+                }
+
                 public async Task<bool> TryShutdownForReuse()
                 {
                     if (MState.IsClosed == false) {
                         Shutdown(SocketShutdown.Both);
                     }
                     if (!FinReceived) {
-                        var triedLength = 0;
-                        while (true) {
-                            if (lastRecv?.IsCompleted == false) {
-                                var timeout = Task.Delay(10_000);
-                                if (await Task.WhenAny(timeout, lastRecv) == timeout)
-                                    return false;
-                                if (FinReceived)
-                                    return true;
-                            }
-                            try {
-                                var frame = await _RecvMsg(null);
-                                if (frame.IsEOF) {
-                                    break;
-                                } else if ((triedLength += frame.Data.len) >= 512 * 1024) {
-                                    return false;
-                                }
-                            } catch (Exception) {
+                        if (await TryReadUntilFin().WithTimeout(10 * 1000))
+                            return false;
+                    }
+                    return FinReceived;
+                }
+
+                async Task TryReadUntilFin()
+                {
+                    // assume that this stream is closed,
+                    // so read/write tasks of this stream are no longer working.
+
+                    // wait for possible running tasks, which had run before stream closing.
+                    await lastRecv.CompletedOnNull();
+                    await lastSend.CompletedOnNull();
+
+                    var triedLength = 0;
+                    while (!FinReceived) {
+                        try {
+                            var frame = await _RecvMsg(null);
+                            if ((triedLength += frame.Data.len) >= 512 * 1024) {
                                 break;
                             }
+                        } catch (Exception) {
+                            break;
                         }
                     }
-                    return true;
                 }
             }
         }

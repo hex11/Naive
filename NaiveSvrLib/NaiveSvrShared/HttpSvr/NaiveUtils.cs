@@ -21,7 +21,7 @@ namespace Naive.HttpSvr
     {
         public static readonly byte[] ZeroBytes = new byte[0];
         public static readonly UTF8Encoding UTF8Encoding = new UTF8Encoding(false);
-        public static readonly Task CompletedTask = Task.FromResult<object>(null);
+        public static readonly Task CompletedTask = AsyncHelper.CompletedTask;
 
         public static readonly Random Random = new Random();
 
@@ -470,7 +470,7 @@ namespace Naive.HttpSvr
                 }
             });
             if (timeout > 0) {
-                if (await Task.WhenAny(connectTask, Task.Delay(timeout)) != connectTask) { // if timed out
+                if (await connectTask.WithTimeout(timeout)) { // if timed out
                     var originalState = Interlocked.Exchange(ref state, (int)ConnectingState.TimedOut);
                     if (originalState == (int)ConnectingState.Connecting) {
                         destTcp.Close();
@@ -598,53 +598,32 @@ namespace Naive.HttpSvr
             return asyncTask();
         }
 
-        public static async Task SetTimeout(int timeout, Func<Task> asyncTask)
-        {
-            await Task.Delay(timeout);
-            await asyncTask();
-        }
+        public static Task SetTimeout(int timeout, Func<Task> asyncTask) => AsyncHelper.SetTimeout(timeout, asyncTask);
+        public static void SetTimeout(int timeout, Action action) => AsyncHelper.SetTimeout(timeout, action);
 
-        public static async void SetTimeout(int timeout, Action action)
-        {
-            await Task.Delay(timeout);
-            action();
-        }
+        #region AsyncHelper
 
-        public static void Forget(this Task task)
+        public static void Forget(Task task)
         {
             // nothing to do
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static ConfiguredTaskAwaitable CAF(this Task task)
+        public static ConfiguredTaskAwaitable CAF(Task task)
         {
             return task.ConfigureAwait(false);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static ConfiguredTaskAwaitable<T> CAF<T>(this Task<T> task)
+        public static ConfiguredTaskAwaitable<T> CAF<T>(Task<T> task)
         {
             return task.ConfigureAwait(false);
         }
 
-        public static void RunSync(this Task task)
-        {
-            var t = Task.Run(async () => await task);
-            t.Wait();
-            if (t.IsFaulted) {
-                throw t.Exception;
-            }
-        }
+        public static void RunSync(Task task) => AsyncHelper.RunSync(task);
+        public static T RunSync<T>(Task<T> task) => AsyncHelper.RunSync<T>(task);
 
-        public static T RunSync<T>(this Task<T> task)
-        {
-            var t = Task.Run(async () => await task);
-            t.Wait();
-            if (t.IsFaulted) {
-                throw t.Exception;
-            }
-            return t.Result;
-        }
+        #endregion
 
         public static void Write(this Stream stream, byte[] bytes)
         {

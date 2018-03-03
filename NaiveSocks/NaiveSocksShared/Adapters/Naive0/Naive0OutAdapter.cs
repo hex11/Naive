@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Naive.HttpSvr;
 using Nett;
@@ -15,9 +16,22 @@ namespace NaiveSocks
         public int timeout { get; set; } = 10;
         public string key { get; set; }
 
+        public int min_free { get; set; } = 3;
+        public int max_free { get; set; } = 10;
+
+        public bool connect_on_start { get; set; } = false;
+
+        public bool per_session_iv { get; set; } = true;
+
         private Func<bool, IIVEncryptor> enc;
 
-        Queue<Connection> pool = new Queue<Naive0.Connection>();
+        List<Connection> pool = new List<Connection>();
+
+        int poolConnecting = 0;
+        void EnterPutting() => Interlocked.Increment(ref poolConnecting);
+        void ExitPutting() => Interlocked.Decrement(ref poolConnecting);
+
+        int free => poolConnecting + pool.Count;
 
         public override string ToString() => $"{{Naive0Out server={server}}}";
 
@@ -27,61 +41,135 @@ namespace NaiveSocks
             this.enc = SS.GetCipherByName("aes-256-ctr").GetEncryptorFunc(key);
         }
 
-        Connection GetStream()
+        public override void Start()
+        {
+            base.Start();
+            if (connect_on_start) {
+                CheckPool();
+            }
+        }
+
+        void CheckPool()
+        {
+            lock (pool) {
+                var free = this.free;
+                if (free < min_free) {
+                    for (int i = 0; i < min_free - free; i++) {
+                        NewConnectionIntoPool().Forget();
+                    }
+                }
+            }
+        }
+
+        Connection TryGetConnection()
         {
             lock (pool) {
                 if (pool.Count > 0) {
-                    return pool.Dequeue();
+                    var x = pool[0];
+                    pool.RemoveAt(0);
+                    return x;
                 } else {
                     return null;
                 }
             }
         }
 
-        async Task<Connection> NewStream()
+        async Task NewConnectionIntoPool()
         {
-            var r = await ConnectHelper.Connect(this, server, timeout);
-            r.ThrowIfFailed();
-            var ws = new WebSocket(r.Stream.ToStream(), true);
-            var stream = new Connection(ws, enc);
-            return stream;
+            Connection conn = null;
+            try {
+                EnterPutting();
+                conn = await NewConnection();
+            } finally {
+                lock (pool) {
+                    ExitPutting();
+                    if (conn != null)
+                        Put(conn);
+                }
+            }
+        }
+
+        async Task<Connection> NewConnection()
+        {
+            try {
+                var r = await ConnectHelper.Connect(this, server, timeout);
+                r.ThrowIfFailed();
+                var ws = new WebSocket(r.Stream.ToStream(), true);
+                if (timeout > 0)
+                    ws.AddToManaged(timeout / 2, timeout);
+                var conn = new Connection(ws, enc) { PerSessionIV = per_session_iv };
+                ws.Closed += (_) => {
+                    // when websocket is closed
+                    lock (pool)
+                        pool.Remove(conn); // remove from pool if it's in
+                };
+                return conn;
+            } catch (Exception e) {
+                Logger.error("connecting to server: " + e.Message);
+                throw;
+            }
+        }
+
+        void Put(Connection x)
+        {
+            if (IsRunning && free < max_free) {
+                x.ws.StartPrereadForControlFrame();
+                pool.Add(x);
+            } else {
+                x.Close();
+            }
         }
 
         private async Task TryPut(Connection x)
         {
             try {
+                EnterPutting();
                 if (!x.CanOpen) {
                     if (!await x.CurrentSession.TryShutdownForReuse())
                         return;
                 }
             } catch (Exception) {
-                x.ws.Close();
+                ExitPutting();
+                x.Close();
                 return;
             }
-            if (x.CanOpen) {
-                lock (pool) {
-                    pool.Enqueue(x);
+            lock (pool) {
+                ExitPutting();
+                if (x.CanOpen) {
+                    Put(x);
+                } else {
+                    x.Close();
                 }
-            } else {
-                x.ws.Close();
             }
         }
 
-        //public override async Task<ConnectResult> ProtectedConnect(ConnectArgument arg)
-        //{
-        //    var stream = GetStream() ?? await NewStream();
-        //    await stream.OpenAndWriteHeader(arg.Dest);
-        //    return new ConnectResult(stream.AsMyStream);
-        //}
-
         public override async Task HandleConnection(InConnection connection)
         {
-            var stream = GetStream() ?? await NewStream();
-            stream.Open();
-            var s = stream.CurrentSession;
-            await s.WriteHeader(connection.Dest);
+            RETRY:
+            CheckPool();
+            bool isConnFromPool = true;
+            var conn = TryGetConnection();
+            if (conn == null) {
+                isConnFromPool = false;
+                conn = await NewConnection();
+            }
+            var usedCount = conn.UsedCount;
+            Connection.SessionStream s;
+            try {
+                conn.Open();
+                s = conn.CurrentSession;
+                await s.WriteHeader(connection.Dest);
+            } catch (Exception e) {
+                Logger.error($"{(usedCount > 0 ? $"reusing({usedCount}) " : "")}" +
+                    $"connection error{(isConnFromPool ? " (will retry)" : "")}:" +
+                    $" {e.Message} on {conn.ws.BaseStream}");
+                conn.Close();
+                if (isConnFromPool)
+                    goto RETRY;
+                throw;
+            }
             await connection.RelayWith(s.AsMyStream);
-            TryPut(stream).Forget();
+            TryPut(conn).Forget();
         }
     }
 }

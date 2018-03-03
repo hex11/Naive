@@ -13,6 +13,9 @@ namespace NaiveSocks
     class Naive0InAdapter : InAdapterWithListener
     {
         public string key { get; set; }
+        public int timeout { get; set; } = 10;
+
+        public bool per_session_iv { get; set; } = true;
 
         public bool logging { get; set; }
 
@@ -36,13 +39,20 @@ namespace NaiveSocks
             try {
                 SocketStream socketStream = MyStream.FromSocket(client.Client);
                 var ws = new WebSocket(socketStream.ToStream(), false, true);
+                if (timeout > 0)
+                    ws.AddToManaged(timeout / 2, timeout);
                 using (ws) {
-                    var stream = new Naive0.Connection(ws, enc);
+                    var stream = new Naive0.Connection(ws, enc) { PerSessionIV = per_session_iv };
                     while (true) {
                         var s = stream.Open();
-                        var dest = await s.ReadHeader();
+                        AddrPort dest;
+                        try {
+                            dest = await s.ReadHeader();
+                        } catch (Exception) {
+                            return;
+                        }
                         if (logging) {
-                            Logger.info($"{socketStream} dest={dest} reused={stream.UsedCount}");
+                            Logger.info($"{socketStream} dest={dest} used={stream.UsedCount}");
                         }
                         var conn = InConnection.Create(this, dest, s.AsMyStream);
                         await this.HandleIncommingConnection(conn);

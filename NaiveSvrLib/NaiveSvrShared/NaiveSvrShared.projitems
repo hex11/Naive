@@ -9,6 +9,7 @@
     <Import_RootNamespace>NaiveSvr</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)AsyncHelper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\CompressedOutputStream.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\HttpHeaderCollection.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\MultipartFormDataReader.cs" />

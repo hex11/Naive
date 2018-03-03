@@ -217,27 +217,26 @@ namespace NaiveSocks
                 if (compeletedTask.IsFaulted) {
                     var exception = compeletedTask.Exception.InnerException;
                     Logging.exception(exception, Logging.Level.Warning, $"stream copying exception, force closing. ({stringFromTask(compeletedTask)})");
-                } else {
-                    var anotherTask = compeletedTask == readFromRight ? readFromLeft : readFromRight;
+                    return;
+                }
 
-                    // waiting for full closing with timeout.
-                    var timedout = await Task.WhenAny(anotherTask, Task.Delay(halfCloseTimeout)).CAF() != anotherTask;
-                    if (timedout) {
-                        Logging.warning($"keeping half closed for {halfCloseTimeout} ms, force closing. ({stringFromTask(anotherTask)})");
-                    } else {
-                        // re-await for possible exception
-                        if (anotherTask.IsFaulted) {
-                            Logging.exception(anotherTask.Exception.InnerException, Logging.Level.Warning, $"half closed waiting exception. {stringFromTask(anotherTask)}");
-                        }
-                        //Logging.info($"half closing time: {sw.ElapsedMilliseconds} ms. ({stringFromTask(anotherTask)})");
+                var anotherTask = compeletedTask == readFromRight ? readFromLeft : readFromRight;
+                // waiting for full closing with timeout.
+                if (await anotherTask.WithTimeout(halfCloseTimeout)) {
+                    Logging.warning($"keeping half closed for {halfCloseTimeout} ms, force closing. ({stringFromTask(anotherTask)})");
+                } else {
+                    if (anotherTask.IsFaulted) {
+                        Logging.exception(anotherTask.Exception.InnerException, Logging.Level.Warning, $"half closed waiting exception. {stringFromTask(anotherTask)}");
                     }
+                    //Logging.info($"half closing time: {sw.ElapsedMilliseconds} ms. ({stringFromTask(anotherTask)})");
                 }
             } catch (Exception e) {
                 Logging.exception(e, Logging.Level.Error, $"Relay task ({left.SafeToStr()} <-> {right.SafeToStr()})");
+            } finally {
+                var t1 = CloseWithTimeout(left, forceCloseTimeout);
+                var t2 = CloseWithTimeout(right, forceCloseTimeout);
+                await t1; await t2;
             }
-            var t1 = CloseWithTimeout(left, forceCloseTimeout);
-            var t2 = CloseWithTimeout(right, forceCloseTimeout);
-            await Task.WhenAll(t1, t2);
         }
 
         public static Task CloseWithTimeout(IMyStream stream, int timeout = -2)
@@ -254,9 +253,8 @@ namespace NaiveSocks
                 try {
                     await Task.Yield();
                     Stopwatch sw = Stopwatch.StartNew();
-                    var taskTimeout = Task.Delay(timeout);
                     var closeTask = stream.Close();
-                    if (await Task.WhenAny(taskTimeout, closeTask).CAF() == taskTimeout) {
+                    if (await closeTask.WithTimeout(timeout)) {
                         Logging.warning($"stream closing timed out ({timeout} ms). ({stream})");
                     } else {
                         //Logging.info($"stream closing took {sw.ElapsedMilliseconds} ms. ({stream})");

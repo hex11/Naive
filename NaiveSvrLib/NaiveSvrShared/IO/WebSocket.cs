@@ -463,7 +463,26 @@ namespace Naive.HttpSvr
             return _readAsync(null, 0);
         }
 
-        private async Task<Frame> _readAsync(byte[] optionalBuffer, int offset)
+        Task<Frame> _prereadTask;
+
+        public void StartPrereadForControlFrame()
+        {
+            if (_prereadTask != null)
+                throw new InvalidOperationException("_prereadTask != null");
+            _prereadTask = __readAsync(null, 0);
+        }
+
+        private Task<Frame> _readAsync(byte[] optionalBuffer, int offset)
+        {
+            var tmp = _prereadTask;
+            if (tmp != null) {
+                _prereadTask = null;
+                return tmp;
+            }
+            return __readAsync(optionalBuffer, offset);
+        }
+
+        private async Task<Frame> __readAsync(byte[] optionalBuffer, int offset)
         {
             Frame wf = new Frame();
             BytesView bv = new BytesView();
