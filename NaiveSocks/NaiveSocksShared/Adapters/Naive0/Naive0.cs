@@ -219,8 +219,8 @@ namespace NaiveSocks
                     // so read/write tasks of this stream are no longer working.
 
                     // wait for possible running tasks, which had run before stream closing.
-                    await lastRecv.CompletedOnNull();
-                    await lastSend.CompletedOnNull();
+                    await lastRecv.NoNRE();
+                    await lastSend.NoNRE();
 
                     var triedLength = 0;
                     while (!FinReceived) {

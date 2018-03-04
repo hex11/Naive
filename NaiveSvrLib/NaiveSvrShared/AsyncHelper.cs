@@ -10,42 +10,54 @@ namespace Naive.HttpSvr
     {
         public static readonly Task CompletedTask = Task.FromResult<object>(null);
 
+        public static Task AsDelay(this int timeout)
+        {
+            return Task.Delay(timeout);
+        }
+
         public static void Forget(this Task task)
         {
             // nothing to do
         }
 
-        public static Task CompletedOnNull(this Task task)
+        public static Task NoNRE(this Task task)
         {
             return task ?? CompletedTask;
         }
 
-        public static TimeoutAwaiter.Awaitable WithTimeout(this Task task, int timeout)
+        public static WrappedAwaiter<Task, Task, bool>.Awaitable WithTimeout(this Task task, int timeout)
         {
             var timeoutTask = Task.Delay(timeout);
-            return new TimeoutAwaiter.Awaitable(task, timeoutTask);
+            return Task.WhenAny(task, timeoutTask)
+                .Wrap(timeoutTask, (completedTask, timedoutTask) => completedTask == timedoutTask);
         }
 
-        public struct TimeoutAwaiter : ICriticalNotifyCompletion
+        public static WrappedAwaiter<TR, TState, TNR>.Awaitable Wrap<TR, TState, TNR>(this Task<TR> task, TState state, Func<TR, TState, TNR> func)
         {
-            public bool IsCompleted => whenAnyTaskAwaiter.IsCompleted;
+            return new WrappedAwaiter<TR, TState, TNR>.Awaitable(task.GetAwaiter(), state, func);
+        }
 
-            private Task timeoutTask;
-            private TaskAwaiter<Task> whenAnyTaskAwaiter;
+        public struct WrappedAwaiter<TR, TState, TNR> : ICriticalNotifyCompletion
+        {
+            public bool IsCompleted => awaiter.IsCompleted;
+
+            private TaskAwaiter<TR> awaiter;
+            private Func<TR, TState, TNR> func;
+            private TState state;
 
             public void OnCompleted(Action continuation)
             {
-                whenAnyTaskAwaiter.OnCompleted(continuation);
+                awaiter.OnCompleted(continuation);
             }
 
             public void UnsafeOnCompleted(Action continuation)
             {
-                whenAnyTaskAwaiter.UnsafeOnCompleted(continuation);
+                awaiter.UnsafeOnCompleted(continuation);
             }
 
-            public bool GetResult()
+            public TNR GetResult()
             {
-                return whenAnyTaskAwaiter.GetResult() == timeoutTask;
+                return func(awaiter.GetResult(), state);
             }
 
             public struct Awaitable
@@ -55,17 +67,19 @@ namespace Naive.HttpSvr
                     await new Awaitable();
                 }
 
-                TimeoutAwaiter awaiter;
+                WrappedAwaiter<TR, TState, TNR> awaiter;
 
-                public TimeoutAwaiter GetAwaiter() => awaiter;
+                public WrappedAwaiter<TR, TState, TNR> GetAwaiter() => awaiter;
 
-                public Awaitable(Task task, Task timeoutTask)
+                public Awaitable(TaskAwaiter<TR> awaiter, TState state, Func<TR, TState, TNR> wrapper)
                 {
-                    awaiter = new TimeoutAwaiter {
-                        timeoutTask = timeoutTask,
-                        whenAnyTaskAwaiter = Task.WhenAny(task, timeoutTask).GetAwaiter()
+                    this.awaiter = new WrappedAwaiter<TR, TState, TNR> {
+                        awaiter = awaiter,
+                        func = wrapper
                     };
                 }
+
+                public TNR Wait() => awaiter.GetResult();
             }
         }
 
@@ -93,21 +107,23 @@ namespace Naive.HttpSvr
 
         public static void RunSync(this Task task)
         {
-            var t = Task.Run(async () => await task);
-            t.Wait();
-            if (t.IsFaulted) {
-                throw t.Exception;
-            }
+            task.GetAwaiter().GetResult();
+            //var t = Task.Run(async () => await task);
+            //t.Wait();
+            //if (t.IsFaulted) {
+            //    throw t.Exception;
+            //}
         }
 
         public static T RunSync<T>(this Task<T> task)
         {
-            var t = Task.Run(async () => await task);
-            t.Wait();
-            if (t.IsFaulted) {
-                throw t.Exception;
-            }
-            return t.Result;
+            return task.GetAwaiter().GetResult();
+            //var t = Task.Run(async () => await task);
+            //t.Wait();
+            //if (t.IsFaulted) {
+            //    throw t.Exception;
+            //}
+            //return t.Result;
         }
 
         public static async Task SetTimeout(int timeout, Func<Task> asyncTask)

@@ -305,8 +305,7 @@ namespace NaiveSocks
         public void Reload() => Reload(null);
         public void Reload(ConfigFile configFile)
         {
-            warning("================================");
-            warning("reloading configuation...");
+            warning("==========Reload==========");
             var newCfgFile = GetConfigFileOrLog(configFile);
             if (newCfgFile == null)
                 return;
@@ -328,7 +327,6 @@ namespace NaiveSocks
             }).ToList();
             warning("stopping old adapters...");
             this.Stop(CurrentConfig, oldNewCanReload);
-            warning("================================");
             warning("starting new adapters...");
             CurrentConfig = newCfg;
             this.Start(oldNewCanReload);

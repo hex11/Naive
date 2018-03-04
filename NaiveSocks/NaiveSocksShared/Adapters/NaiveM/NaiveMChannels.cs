@@ -636,7 +636,7 @@ namespace NaiveSocks
 
         public void AddManagedTask(bool isSending, int timeout)
         {
-            WebSocket.AddAdditionalManagementTask(() => {
+            WebSocket.AddManagementTask(() => {
                 if (isClosed || State == MsgStreamStatus.Close)
                     return true;
                 if (isSending) {

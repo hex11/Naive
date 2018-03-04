@@ -481,7 +481,7 @@ namespace NaiveSocks
                     foreach (var poolItem in item) {
                         var task = NaiveUtils.RunAsyncTask(async () => {
                             try {
-                                await poolItem?.Ping((t) => cmd.WriteLine($"{poolItem.BaseChannels}: {t}"), true);
+                                await (poolItem?.Ping((t) => cmd.WriteLine($"{poolItem.BaseChannels}: {t}"), true)).NoNRE();
                             } catch (Exception e) {
                                 cmd.WriteLine(Logging.getExceptionText(e, $"{poolItem?.BaseChannels} pinging"));
                             }
@@ -489,8 +489,7 @@ namespace NaiveSocks
                         tasks.Add(task);
                     }
                 }
-                var timeout = Task.Delay(3 * 1000);
-                if (Task.WaitAny(Task.WhenAll(tasks.ToArray()), timeout) == 1) {
+                if (Task.WhenAll(tasks.ToArray()).WithTimeout(3 * 1000).Wait()) {
                     cmd.WriteLine($"waiting timed out.");
                 }
             }, "Usage: mping [start|stop]");

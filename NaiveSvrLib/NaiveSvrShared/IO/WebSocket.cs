@@ -16,7 +16,7 @@ namespace Naive.HttpSvr
     {
         static WebSocket()
         {
-            StartTimeTask();
+            SetTimeTask(true);
         }
 
         public WebSocket(Stream BaseStream, bool isClient)
@@ -96,18 +96,18 @@ namespace Naive.HttpSvr
         public event Action<WebSocket> Activated;
         public States ConnectionState = States.Opening;
 
-        static int _timeTask_id = 0;
-        private static void StartTimeTask()
+        static Timer _timeTaskTimer = new Timer(_ => {
+            CurrentTime += _timeAcc;
+        });
+
+        private static void SetTimeTask(bool run)
         {
-            var id = Interlocked.Increment(ref _timeTask_id);
-            NaiveUtils.RunAsyncTask(async () => {
-                while (true) {
-                    await Task.Delay(_timeAcc * 1000).CAF();
-                    if (id != _timeTask_id)
-                        return;
-                    CurrentTime += _timeAcc;
-                }
-            });
+            var timer = _timeTaskTimer;
+            if (run) {
+                timer.Change(_timeAcc * 1000, _timeAcc * 1000);
+            } else {
+                timer.Change(Timeout.Infinite, Timeout.Infinite);
+            }
         }
 
         private static int _timeAcc = 1;
@@ -138,41 +138,51 @@ namespace Naive.HttpSvr
             _manageInterval = manageInterval;
 
             if (timeAcc * 1000 == manageInterval) {
-                _timeTask_id++;
+                SetTimeTask(false);
                 incrTimeByManageTask = true;
             } else {
                 if (incrTimeByManageTask) {
                     incrTimeByManageTask = false;
-                    StartTimeTask();
+                    SetTimeTask(true);
                 }
             }
         }
 
         static bool incrTimeByManageTask = false;
 
-        static int _manageTaskRunning = 0;
-
         public static int CurrentTime { get; private set; } = 0;
         public int CreateTime = CurrentTime;
         public int LatestActiveTime = CurrentTime;
 
+        static int _manageTaskCurrentInterval;
+
+        static Timer _manageTimer = new Timer(_ => {
+            //Logging.debug("websocket management task");
+            if (incrTimeByManageTask)
+                CurrentTime += _timeAcc;
+            CheckManagedWebsocket();
+            RunAdditionalTasks();
+            var interval = _manageTaskCurrentInterval;
+            var newInterval = _manageInterval;
+            if (ManagedWebSockets.Count == 0 && AdditionalManagementTasks.Count == 0
+                    && Interlocked.CompareExchange(ref _manageTaskCurrentInterval, 0, interval) == interval) {
+                _manageTimer.Change(Timeout.Infinite, Timeout.Infinite);
+                Logging.debug("websocket management task stopped.");
+            } else if (interval != newInterval) {
+                if (Interlocked.CompareExchange(ref _manageTaskCurrentInterval, newInterval, interval) == interval) {
+                    _manageTimer.Change(newInterval, newInterval);
+                }
+            }
+        });
+
         private static void CheckManageTask()
         {
-            if (Interlocked.CompareExchange(ref _manageTaskRunning, 1, 0) != 0)
-                return;
-            NaiveUtils.RunAsyncTask(async () => {
+            var interval = _manageInterval;
+            if (Interlocked.CompareExchange(ref _manageTaskCurrentInterval, interval, 0) == 0) {
                 Logging.debug("websocket management task started.");
-                do {
-                    await Task.Delay(_manageInterval).CAF();
-                    if (incrTimeByManageTask)
-                        CurrentTime += _timeAcc;
-                    CheckManagedWebsocket();
-                    RunAdditionalTasks();
-                }
-                while (!(ManagedWebSockets.Count == 0 && AdditionalManagementTasks.Count == 0
-                        && Interlocked.CompareExchange(ref _manageTaskRunning, 0, 1) == 1));
-                Logging.debug("websocket management task stopped.");
-            });
+                _manageTaskCurrentInterval = interval;
+                _manageTimer.Change(interval, interval);
+            }
         }
 
         private static void RunAdditionalTasks()
@@ -192,7 +202,8 @@ namespace Naive.HttpSvr
                     remove = true;
                 }
                 if (remove)
-                    AdditionalManagementTasks.RemoveAt(i);
+                    lock (AdditionalManagementTasks)
+                        AdditionalManagementTasks.RemoveAt(i);
             }
         }
 
@@ -248,7 +259,7 @@ namespace Naive.HttpSvr
 
         static List<Func<bool>> AdditionalManagementTasks = new List<Func<bool>>();
 
-        public static void AddAdditionalManagementTask(Func<bool> func)
+        public static void AddManagementTask(Func<bool> func)
         {
             lock (AdditionalManagementTasks)
                 AdditionalManagementTasks.Add(func);
