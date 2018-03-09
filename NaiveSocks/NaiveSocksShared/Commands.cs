@@ -306,7 +306,7 @@ namespace NaiveSocks
                             }
                             x.Close();
                         });
-                        listener.Start().Forget();
+                        listener.Run().Forget();
                         TestSocketWrite(sw, ep, 32 * 1024, 1024);
                         listener.Stop();
                     },
@@ -320,7 +320,7 @@ namespace NaiveSocks
                             }
                             x.Close();
                         });
-                        listener.Start().Forget();
+                        listener.Run().Forget();
                         TestSocketWrite(sw, ep, 32 * 1024, 1024);
                         listener.Stop();
                     },
@@ -335,7 +335,7 @@ namespace NaiveSocks
                             }
                             x.Close();
                         });
-                        listener.Start().Forget();
+                        listener.Run().Forget();
                         TestSocketWrite(sw, ep, 32 * 1024, 1024);
                         listener.Stop();
                     },
@@ -351,7 +351,7 @@ namespace NaiveSocks
                             }
                             x.Close();
                         });
-                        listener.Start().Forget();
+                        listener.Run().Forget();
                         TestSocketWrite(sw, ep, 32 * 1024, 1024);
                         listener.Stop();
                     },
@@ -365,7 +365,7 @@ namespace NaiveSocks
                             }
                             x.Close();
                         });
-                        listener.Start().Forget();
+                        listener.Run().Forget();
                         NaiveUtils.RunAsyncTask(async () => {
                             var socket = await NaiveUtils.ConnectTcpAsync(AddrPort.Parse(ep.ToString()), 5000);
                             var stream = new SocketStream2(socket);
@@ -388,7 +388,7 @@ namespace NaiveSocks
                             }
                             x.Close();
                         };
-                        listener.Start().Forget();
+                        listener.Run().Forget();
                         {
                             var socket = NaiveUtils.ConnectTcpAsync(AddrPort.Parse(ep.ToString()), 5000).RunSync();
                             var stream = new SocketStream2(socket);

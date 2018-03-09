@@ -262,13 +262,15 @@ namespace NaiveSocks
 
         public bool LogInfo { get; set; } = false;
 
-        public async Task Start()
+        public Task Run() => Run(10);
+
+        public async Task Run(int backlog)
         {
             stopping = false;
             EndPoint ep;
             try {
                 BaseListener.Server.NoDelay = true;
-                BaseListener.Start(10);
+                BaseListener.Start(backlog);
                 ep = BaseListener.LocalEndpoint;
             } catch (Exception e) {
                 Logging.error($"[listener] starting listening on {BaseListener.LocalEndpoint}: {e.Message}");

@@ -58,7 +58,7 @@ namespace NaiveSocks
                             addrString = Encoding.ASCII.GetString(dnBuf, 0, length);
                             break;
                         default:
-                            Logger.warning("unknown addr type {addrType} ({remoteEP})");
+                            Logger.warning($"unknown addr type {addrType} ({remoteEP})");
                             await Task.Delay(10 * 1000 + NaiveUtils.Random.Next(20 * 1000)).CAF();
                             return;
                         }

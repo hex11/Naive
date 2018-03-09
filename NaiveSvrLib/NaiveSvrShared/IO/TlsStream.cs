@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Net.Security;
 using System.Security.Authentication;
 using System.Text;
@@ -13,12 +14,14 @@ namespace NaiveSocks
         public IMyStream RealBaseStream { get; }
         public SslStream SslStream { get; }
 
+        public override Stream BaseStream => SslStream;
+
         public override string ToString() => $"{{Tls on {RealBaseStream}}}";
 
-        public TlsStream(IMyStream baseStream) : base(null)
+        public TlsStream(IMyStream baseStream)
         {
             RealBaseStream = baseStream;
-            BaseStream = SslStream = new SslStream(baseStream.ToStream(), false);
+            SslStream = new SslStream(baseStream.ToStream(), false);
         }
 
         public Task AuthAsClient(string targetHost)
@@ -29,6 +32,11 @@ namespace NaiveSocks
         public Task AuthAsClient(string targetHost, SslProtocols protocols)
         {
             return SslStream.AuthenticateAsClientAsync(targetHost, null, protocols, false);
+        }
+
+        public Task AuthAsServer(System.Security.Cryptography.X509Certificates.X509Certificate certificate)
+        {
+            return SslStream.AuthenticateAsServerAsync(certificate);
         }
     }
 }

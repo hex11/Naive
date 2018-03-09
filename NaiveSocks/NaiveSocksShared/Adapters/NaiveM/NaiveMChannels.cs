@@ -144,20 +144,26 @@ namespace NaiveSocks
         private static async Task<IMsgStream> ConnectHttpChunked(ConnectingSettings settings, byte[] key, string reqPath, string encType)
         {
             var stream = settings.TlsEnabled
-                ? MyStream.FromStream(await NaiveUtils.ConnectTlsAsync(settings.Host, 10 * 1000))
-                : MyStream.FromSocket(await NaiveUtils.ConnectTcpAsync(settings.Host, 10 * 1000));
+                ? MyStream.FromStream(await NaiveUtils.ConnectTlsAsync(settings.Host, settings.Timeout * 1000))
+                : MyStream.FromSocket(await NaiveUtils.ConnectTcpAsync(settings.Host, settings.Timeout * 1000));
             try {
-                var stream2 = MyStream.ToStream(stream);
-                var httpClient = new HttpClient(stream2);
-                var response = await httpClient.Request(new HttpRequest() {
-                    Method = "GET",
-                    Path = reqPath,
-                    Headers = settings.Headers
-                });
-                if (response.StatusCode != "200")
-                    throw new Exception($"remote response: '{response.StatusCode} {response.ReasonPhrase}'");
-                if (!response.TestHeader(HttpHeaders.KEY_Transfer_Encoding, HttpHeaders.VALUE_Transfer_Encoding_chunked))
-                    throw new Exception("test header failed: Transfer-Encoding != chunked");
+                async Task request()
+                {
+                    var stream2 = MyStream.ToStream(stream);
+                    var httpClient = new HttpClient(stream2);
+                    var response = await httpClient.Request(new HttpRequest() {
+                        Method = "GET",
+                        Path = reqPath,
+                        Headers = settings.Headers
+                    });
+                    if (response.StatusCode != "200")
+                        throw new Exception($"remote response: '{response.StatusCode} {response.ReasonPhrase}'");
+                    if (!response.TestHeader(HttpHeaders.KEY_Transfer_Encoding, HttpHeaders.VALUE_Transfer_Encoding_chunked))
+                        throw new Exception("test header failed: Transfer-Encoding != chunked");
+                }
+                if (await request().WithTimeout(settings.Timeout * 1000)) {
+                    throw new TimeoutException("HTTP requesting timed out.");
+                }
                 var msf = new HttpChunkedEncodingMsgStream(stream);
                 NaiveProtocol.ApplyEncryption(msf, key, encType);
                 return msf;

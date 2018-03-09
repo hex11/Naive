@@ -123,7 +123,7 @@ namespace NaiveSocks
         {
             listener = new Listener(listen);
             listener.Accepted += OnNewConnection;
-            listener.Start().Forget();
+            listener.Run().Forget();
         }
 
         public override void Stop()

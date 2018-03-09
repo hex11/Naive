@@ -176,7 +176,7 @@ namespace Naive.HttpSvr
         {
             if (p.disconnecting)
                 return;
-            Logging.exception(ex, Logging.Level.Error, $"{stamp} ({p?.remoteEP}) httpConnection processing");
+            Logging.exception(ex, Logging.Level.Error, $"{stamp} ({p.myStream}) httpConnection processing");
         }
 
         public class NaiveHttpListener

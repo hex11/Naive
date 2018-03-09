@@ -352,13 +352,17 @@ namespace NaiveSocks
 
         public class StreamWrapperBase : MyStream, IMyStreamSync
         {
-            public StreamWrapperBase(Stream stream)
+            protected StreamWrapperBase()
             {
-                BaseStream = stream;
                 Connected = true;
             }
 
-            public Stream BaseStream { get; protected set; }
+            public StreamWrapperBase(Stream stream) : this()
+            {
+                BaseStream = stream;
+            }
+
+            public virtual Stream BaseStream { get; }
 
             public override async Task Close()
             {

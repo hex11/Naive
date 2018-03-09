@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Android.App;
 using Android.Content;
@@ -89,6 +90,7 @@ namespace NaiveSocksAndroid
                         .AddAction(BuildServiceAction(Actions.STOP, "Stop", Android.Resource.Drawable.StarOff, 1))
                         .AddAction(BuildServiceAction(Actions.RELOAD, "Reload", Android.Resource.Drawable.StarOff, 2))
                         .AddAction(BuildServiceAction(Actions.GC, "GC", Android.Resource.Drawable.StarOff, 3))
+                        .AddAction(BuildServiceAction(Actions.GC_0, "GC(gen0)", Android.Resource.Drawable.StarOff, 5))
                         .SetSmallIcon(Resource.Drawable.N)
                         .SetPriority((int)NotificationPriority.Min)
                         .SetVisibility(NotificationCompat.VisibilitySecret)
@@ -155,11 +157,13 @@ namespace NaiveSocksAndroid
         public override StartCommandResult OnStartCommand(Intent intent, [GeneratedEnum] StartCommandFlags flags, int startId)
         {
             if (intent != null) {
-                if (intent.Action == Actions.STOP) {
+                switch (intent.Action) {
+                case Actions.STOP:
                     StopForeground(true);
                     this.StopSelf();
                     notificationManager.Notify(MainNotificationId, restartBuilder.Build());
-                } else if (intent.Action == Actions.RELOAD) {
+                    break;
+                case Actions.RELOAD:
                     try {
                         Controller.Reload();
                         putLine("controller reloaded");
@@ -167,15 +171,19 @@ namespace NaiveSocksAndroid
                         ShowToast("reloading error: " + e.Message);
                         putLine("reloading error: " + e.ToString());
                     }
-                } else if (intent.Action == Actions.GC) {
+                    break;
+                case Actions.GC:
+                case Actions.GC_0:
                     var before = GC.GetTotalMemory(false);
-                    GC.Collect();
+                    GC.Collect(intent.Action == Actions.GC ? GC.MaxGeneration : 0);
                     putLine($"GC Done. {before:N0} -> {GC.GetTotalMemory(false):N0}");
-                } else if (intent.Action == Actions.COL_NOTIF) {
+                    break;
+                case Actions.COL_NOTIF:
                     lock (builder) {
                         StopForeground(true);
                         StartForeground(MainNotificationId, builder.Build());
                     }
+                    break;
                 }
             }
             return StartCommandResult.Sticky;
@@ -188,6 +196,7 @@ namespace NaiveSocksAndroid
 
         public override void OnDestroy()
         {
+            notifyTimer.Dispose();
             isDestroyed = true;
             Logging.Logged -= Logging_Logged;
             Logging.warning("service is being destroyed.");
@@ -299,26 +308,22 @@ namespace NaiveSocksAndroid
             }
         }
 
-        int notifTaskId = 0;
+        Timer notifyTimer;
 
         void onScreen(bool on)
         {
             isScreenOn = on;
             int manageIntervalSeconds;
             if (on) {
-                var _id = ++notifTaskId;
-                NaiveUtils.RunAsyncTask(async () => {
-                    while (true) {
-                        await Task.Delay(2000);
-                        if (_id != notifTaskId || !isScreenOn || isDestroyed)
-                            return;
+                if (notifyTimer == null)
+                    notifyTimer = new Timer(_ => {
                         updateNotif();
-                    }
-                });
-                if (_needUpdateNotif)
-                    updateNotif();
+                    });
+                notifyTimer.Change(2000, 2000);
+                updateNotif();
                 manageIntervalSeconds = currentConfig.manage_interval_screen_on;
             } else {
+                notifyTimer.Change(Timeout.Infinite, Timeout.Infinite);
                 manageIntervalSeconds = currentConfig.manage_interval_screen_off;
             }
             WebSocket.ConfigManageTask(manageIntervalSeconds, manageIntervalSeconds * 1000);
@@ -375,6 +380,7 @@ namespace NaiveSocksAndroid
             public const string STOP = "stop!";
             public const string RELOAD = "reload!";
             public const string GC = "gc!";
+            public const string GC_0 = "gc!0";
             public const string COL_NOTIF = "colnotif!";
         }
     }

@@ -52,7 +52,9 @@ namespace Naive.HttpSvr
 
         public static async Task<WebSocketClient> ConnectToTlsAsync(AddrPort dest, string path, int timeout)
         {
-            var stream = await NaiveUtils.ConnectTlsAsync(dest, timeout);
+            var stream = await NaiveUtils.ConnectTlsAsync(dest, timeout,
+                System.Security.Authentication.SslProtocols.Tls11
+                | System.Security.Authentication.SslProtocols.Tls12);
             try {
                 var ws = new WebSocketClient(stream, path);
                 ws.Host = dest.Host;
