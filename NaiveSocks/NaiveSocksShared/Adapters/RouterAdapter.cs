@@ -24,6 +24,7 @@ namespace NaiveSocks
         public class Rule
         {
             public string abp { get; set; }
+            public string abpuri { get; set; }
             public string abpfile { get; set; }
 
             public string eq { get; set; }
@@ -43,6 +44,8 @@ namespace NaiveSocks
             public AdapterRef to { get; set; }
         }
 
+        Logger Logg => logging ? Logger : null;
+
         Action<InConnection> _handler;
 
         protected override void Init()
@@ -57,27 +60,88 @@ namespace NaiveSocks
                 return (x) => { };
             var parsedRules = rules.Select((rule) => {
                 // returns Rule or Func<InConnection, bool>
-                if (rule.abpfile == null && rule.abp == null) {
+                if (rule.abpfile == null && rule.abp == null && rule.abpuri == null) {
                     return (object)rule;
                 } else {
                     try {
-                        Stopwatch sw = Stopwatch.StartNew();
-                        var abpString = rule.abp;
-                        if (abpString == null) {
-                            var realPath = Controller.ProcessFilePath(rule.abpfile);
-                            if (!File.Exists(realPath)) {
-                                Logger.warning($"abp file {realPath.Quoted()} does not exist.");
-                                return new Func<InConnection, bool>((x) => false);
+                        Func<InConnection, bool> currentAbpFilter = null;
+                        void load()
+                        {
+                            Stopwatch sw = Stopwatch.StartNew();
+                            var abpString = rule.abp;
+                            if (abpString == null) {
+                                var realPath = Controller.ProcessFilePath(rule.abpfile);
+                                if (!File.Exists(realPath)) {
+                                    Logger.warning($"abp file {realPath.Quoted()} does not exist.");
+                                    currentAbpFilter = null;
+                                }
+                                abpString = File.ReadAllText(realPath, Encoding.UTF8);
                             }
-                            abpString = File.ReadAllText(realPath, Encoding.UTF8);
+                            if (rule.base64) {
+                                abpString = Encoding.UTF8.GetString(Convert.FromBase64String(abpString));
+                            }
+                            currentAbpFilter = ParseABPFilter(abpString);
+                            Logg?.info($"loaded abp filter" +
+                                $" {(rule.abpfile == null ? "(inline/network)" : rule.abpfile.Quoted())}" +
+                                $" in {sw.ElapsedMilliseconds} ms");
                         }
-                        if (rule.base64) {
-                            abpString = Encoding.UTF8.GetString(Convert.FromBase64String(abpString));
+                        if (rule.abpfile != null || rule.abp != null)
+                            load();
+                        if (rule.abpuri != null) {
+                            var abpfile = rule.abpfile;
+                            var filepath = rule.abpfile == null ? null : Controller.ProcessFilePath(abpfile);
+                            var haveOldFile = filepath != null && File.Exists(filepath);
+                            var uristr = rule.abpuri;
+                            var uri = new Uri(uristr);
+                            var tag = abpfile ?? uristr;
+                            AsyncHelper.Run(async () => {
+                                if (haveOldFile)
+                                    Logger.info($"'{abpfile}' abp file is being checking update...");
+                                else if (abpfile != null)
+                                    Logger.info($"'{abpfile}' abp file is being downloading...");
+                                else
+                                    Logger.info($"loading abp file from network...");
+                                try {
+                                    var webreq = WebRequest.CreateHttp(uri);
+                                    if (haveOldFile) {
+                                        webreq.IfModifiedSince = new FileInfo(filepath).LastWriteTime;
+                                    }
+                                    HttpWebResponse resp;
+                                    try {
+                                        resp = await webreq.GetResponseAsync() as HttpWebResponse;
+                                    } catch (WebException e) when (e.Response is HttpWebResponse r) {
+                                        resp = r;
+                                    }
+                                    if (resp.StatusCode == HttpStatusCode.OK) {
+                                        if (filepath != null) {
+                                            using (var fs = File.Open(filepath, FileMode.Create, FileAccess.ReadWrite)) {
+                                                await NaiveUtils.StreamCopyAsync(resp.GetResponseStream(), fs);
+                                            }
+                                        } else {
+                                            rule.abp = await resp.GetResponseStream().ReadAllTextAsync();
+                                        }
+                                        if (haveOldFile)
+                                            Logger.info($"'{tag}' is updated.");
+                                        else
+                                            Logger.info($"'{tag}' is downloaded.");
+                                        if (resp.GetResponseHeader("Last-Modified").IsNullOrEmpty() == false) {
+                                            new FileInfo(filepath).LastWriteTime = resp.LastModified;
+                                        }
+                                        load();
+                                    } else if (resp.StatusCode == HttpStatusCode.NotModified) {
+                                        // nothing to do.
+                                        Logger.info($"'{tag}' is up to date.");
+                                    } else {
+                                        Logger.warning($"'{tag}' response from server: {resp.StatusCode}.");
+                                    }
+                                } catch (Exception e) {
+                                    Logger.error($"'{tag}' downloading: {e.Message}");
+                                }
+                            });
                         }
-                        var parsedAbpFilter = ParseABPFilter(abpString);
-                        if (logging)
-                            Logger.info($"loaded abp filter {(rule.abpfile == null ? "(inline)" : rule.abpfile.Quoted())} in {sw.ElapsedMilliseconds} ms");
-                        return new Func<InConnection, bool>((x) => parsedAbpFilter(x) && onConnectionHit(rule, x));
+                        return new Func<InConnection, bool>((x) => {
+                            return (currentAbpFilter?.Invoke(x) ?? false) && onConnectionHit(rule, x);
+                        });
                     } catch (Exception e) {
                         Logger.exception(e);
                         return new Func<InConnection, bool>((x) => false);
@@ -225,8 +289,7 @@ namespace NaiveSocks
                         blackRegexUrlList.Add(new Regex(regex.Groups[1].Value, RegexOptions.ECMAScript));
                     }
                 } else {
-                    if (logging)
-                        Logger.warning($"unsupported/wrong ABP filter at line {i + 1}: {line.Quoted()}");
+                    Logg?.warning($"unsupported/wrong ABP filter at line {i + 1}: {line.Quoted()}");
                 }
             }
             return (x) => {
