@@ -105,12 +105,26 @@ namespace NaiveSocks
             string sid = Guid.NewGuid().ToString("N").Substring(0, 8);
             if (count > 1) {
                 int httpStart = count - httpCount;
+                var streams = new IMsgStream[count];
                 var tasks = Enumerable.Range(0, count).Select(x => NaiveUtils.RunAsyncTask(async () => {
                     if (settings.ImuxConnectionsDelay > 0)
                         await Task.Delay(settings.ImuxConnectionsDelay * x);
-                    return await connect(ImuxPrefix + NaiveUtils.SerializeArray(sid, wsCount.ToString(), x.ToString(), wssoCount.ToString(), httpCount.ToString()), x >= httpStart);
+                    string parameter = NaiveUtils.SerializeArray(sid, wsCount.ToString(), x.ToString(),
+                                                    wssoCount.ToString(), httpCount.ToString());
+                    streams[x] = await connect(ImuxPrefix + parameter, x >= httpStart);
                 })).ToArray();
-                var streams = await Task.WhenAll(tasks);
+                try {
+                    await Task.WhenAll(tasks);
+                } catch (Exception) {
+                    foreach (var item in streams) {
+                        try {
+                            item?.Close(CloseOpt.Close).Forget();
+                        } catch (Exception e) {
+                            Logging.warning($"NaiveMChs.ConnectTo(): error cleaning msgtream: " + e.Message);
+                        }
+                    }
+                    throw;
+                }
                 if (httpCount == 0 && wssoCount == 0) {
                     msgStream = new InverseMuxStream(streams);
                 } else {
