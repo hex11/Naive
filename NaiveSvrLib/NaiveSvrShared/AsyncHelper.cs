@@ -132,6 +132,12 @@ namespace Naive.HttpSvr
             await asyncTask();
         }
 
+        public static async Task SetTimeout(TimeSpan timeout, Func<Task> asyncTask)
+        {
+            await Task.Delay(timeout);
+            await asyncTask();
+        }
+
         public static async void SetTimeout(int timeout, Action action)
         {
             await Task.Delay(timeout);
