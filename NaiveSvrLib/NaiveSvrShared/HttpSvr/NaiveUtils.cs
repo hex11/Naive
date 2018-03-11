@@ -1032,6 +1032,8 @@ namespace Naive.HttpSvr
         {
             var response = new HttpResponse();
             var line = input.ReadLine();
+            if (line == null)
+                throw new Exception("unexpected EOF");
             var splits = line.Split(new[] { ' ' }, 3);
             response.StatusCode = splits[1];
             response.ReasonPhrase = splits[2];

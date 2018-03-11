@@ -40,8 +40,8 @@ namespace Naive.HttpSvr
         {
             Socket socket = await NaiveUtils.ConnectTcpAsync(dest, timeout);
             try {
-                var socketStream = NaiveSocks.MyStream.FromSocket(socket);
-                var ws = new WebSocketClient(NaiveSocks.MyStream.ToStream(socketStream), path);
+                var socketStream = MyStream.FromSocket(socket);
+                var ws = new WebSocketClient(MyStream.ToStream(socketStream), path);
                 ws.Host = dest.Host;
                 return ws;
             } catch (Exception) {
@@ -106,7 +106,6 @@ namespace Naive.HttpSvr
             => HandshakeAsync(enterRecvLoop, null);
         public async Task HandshakeAsync(bool enterRecvLoop, Dictionary<string, string> addHeaders)
         {
-            var sw = new StreamWriter(BaseStream, NaiveUtils.UTF8Encoding, 1440, true);
             var wskey = Guid.NewGuid().ToString("D");
             var headers = new Dictionary<string, string> {
                 ["Upgrade"] = "websocket",
@@ -121,12 +120,13 @@ namespace Naive.HttpSvr
                     headers[item.Key] = item.Value;
                 }
             }
-            await HttpClient.WriteHttpRequestHeaderAsync(sw, "GET", Path, headers);
-            await sw.FlushAsync();
+            var strw = new StringWriter(new StringBuilder(1024));
+            HttpClient.WriteHttpRequestHeader(strw, "GET", Path, headers);
+            await BaseStream.WriteAsync(NaiveUtils.GetUTF8Bytes(strw.ToString()));
             var responseString = await NaiveUtils.ReadStringUntil(BaseStream, NaiveUtils.DoubleCRLFBytes);
             HttpResponse response;
             try {
-                response = await HttpClient.ReadHttpResponseHeaderAsync(new StringReader(responseString));
+                response = HttpClient.ReadHttpResponseHeader(new StringReader(responseString));
             } catch (Exception e) {
                 throw new Exception("error parsing response:\n" + responseString, e);
             }
@@ -134,7 +134,7 @@ namespace Naive.HttpSvr
             if (statusCode == "101"
                 && response.TestHeader("Connection", "Upgrade")
                 && response.TestHeader("Upgrade", "websocket")
-                && response.TestHeader("Sec-WebSocket-Accept", WebSocketServer.GetWebsocketAcceptKey(wskey))
+                && response.TestHeader("Sec-WebSocket-Accept", GetWebsocketAcceptKey(wskey))
             ) {
                 ConnectionState = States.Open;
                 if (enterRecvLoop)

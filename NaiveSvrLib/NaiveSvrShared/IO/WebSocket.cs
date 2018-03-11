@@ -238,7 +238,7 @@ namespace Naive.HttpSvr
                             Logging.debug($"{item} still pinging.");
                         }
                     } else {
-                        item._manageState = ManageState.Normal;
+                        //item._manageState = ManageState.Normal;
                     }
                 } catch (Exception e) {
                     Logging.exception(e, Logging.Level.Error, "WebSocket manage task exception, ignored.");

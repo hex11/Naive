@@ -80,8 +80,9 @@ namespace NaiveSocks
                             if (rule.base64) {
                                 abpString = Encoding.UTF8.GetString(Convert.FromBase64String(abpString));
                             }
+                            var isreloading = currentAbpFilter != null;
                             currentAbpFilter = ParseABPFilter(abpString);
-                            Logg?.info($"loaded abp filter" +
+                            Logg?.info($"{(isreloading ? "re" : null)}loaded abp filter" +
                                 $" {(rule.abpfile == null ? "(inline/network)" : rule.abpfile.Quoted())}" +
                                 $" in {sw.ElapsedMilliseconds} ms");
                         }

@@ -262,9 +262,9 @@ namespace NaiveSocksAndroid
                 return;
             lock (builder) {
                 _needUpdateNotif = false;
-                var titleFmt = notification_show_logs ?
+                var titleFmt = /* notification_show_logs ?
                     "{0}/{1} cxn, {2:N0} KB, {3:N0} pkt - NaiveSocks"
-                    : "{0}/{1} cxn, {2:N0} KB, {3:N0} pkt";
+                    : */"{0}/{1} cxn, {2:N0} KB, {3:N0} pkt";
                 var title = string.Format(titleFmt, Controller.RunningConnections, Controller.TotalHandledConnections, MyStream.TotalCopiedBytes / 1024, MyStream.TotalCopiedPackets);
                 if (title != lastTitle) {
                     _needRenotify = true;
@@ -302,7 +302,7 @@ namespace NaiveSocksAndroid
                 } else {
                     textLines = new string[1];
                     builder.SetStyle(null);
-                    builder.SetContentTitle("NaiveSocks");
+                    builder.SetContentTitle((Java.Lang.ICharSequence)null);
                 }
                 updateNotif();
             }

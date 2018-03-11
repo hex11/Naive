@@ -145,11 +145,15 @@ namespace NaiveSocks
 
         private static async Task<IMsgStream> ConnectWebSocket(ConnectingSettings settings, byte[] key, string reqPath, string encType)
         {
+            int timeoutms = settings.Timeout * 1000;
             var ws = settings.TlsEnabled
-                ? await WebSocketClient.ConnectToTlsAsync(settings.Host, reqPath, settings.Timeout * 1000)
-                : await WebSocketClient.ConnectToAsync(settings.Host, reqPath, settings.Timeout * 1000);
+                ? await WebSocketClient.ConnectToTlsAsync(settings.Host, reqPath, timeoutms)
+                : await WebSocketClient.ConnectToAsync(settings.Host, reqPath, timeoutms);
             ws.AddToManaged(settings.Timeout / 2, settings.Timeout);
-            await ws.HandshakeAsync(false, settings.Headers);
+            if (await ws.HandshakeAsync(false, settings.Headers).WithTimeout(timeoutms)) {
+                ws.Close();
+                throw new TimeoutException("websocket handshake timed out.");
+            }
             NaiveProtocol.ApplyEncryption(ws, key, encType);
             //ws.ApplyAesStreamFilter(key);
             return ws;
@@ -157,9 +161,10 @@ namespace NaiveSocks
 
         private static async Task<IMsgStream> ConnectHttpChunked(ConnectingSettings settings, byte[] key, string reqPath, string encType)
         {
+            int timeoutms = settings.Timeout * 1000;
             var stream = settings.TlsEnabled
-                ? MyStream.FromStream(await NaiveUtils.ConnectTlsAsync(settings.Host, settings.Timeout * 1000))
-                : MyStream.FromSocket(await NaiveUtils.ConnectTcpAsync(settings.Host, settings.Timeout * 1000));
+                ? MyStream.FromStream(await NaiveUtils.ConnectTlsAsync(settings.Host, timeoutms))
+                : MyStream.FromSocket(await NaiveUtils.ConnectTcpAsync(settings.Host, timeoutms));
             try {
                 async Task request()
                 {
@@ -175,7 +180,7 @@ namespace NaiveSocks
                     if (!response.TestHeader(HttpHeaders.KEY_Transfer_Encoding, HttpHeaders.VALUE_Transfer_Encoding_chunked))
                         throw new Exception("test header failed: Transfer-Encoding != chunked");
                 }
-                if (await request().WithTimeout(settings.Timeout * 1000)) {
+                if (await request().WithTimeout(timeoutms)) {
                     throw new TimeoutException("HTTP requesting timed out.");
                 }
                 var msf = new HttpChunkedEncodingMsgStream(stream);
