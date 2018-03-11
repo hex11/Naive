@@ -1,5 +1,4 @@
-﻿using System.Net;
-using System.Text;
+﻿using System.Text;
 using System.Threading.Tasks;
 using Naive.HttpSvr;
 using System;
@@ -42,7 +41,7 @@ namespace NaiveSocks
         public override string ToString() => $"{{NClient name={string.Join(",", names)}{(WhenDisconnected.IsCompleted ? " disconnected" : "")}}}";
     }
 
-    public class NNetworkAdapter : OutAdapter, ICanReload, INetwork, IHttpRequestAsyncHandler
+    public class NNetworkAdapter : WebBaseAdapter, ICanReload, INetwork, IHttpRequestAsyncHandler
     {
         public override string ToString() => $"{{NNetwork '{domain}'}}";
 
@@ -54,13 +53,10 @@ namespace NaiveSocks
 
         List<NClient> clients = new List<NClient>();
 
-        HttpSvr httpsvr;
-
         protected override void Init()
         {
             base.Init();
             domain = domain.TrimStart('.');
-            httpsvr = new HttpSvr(this);
         }
 
         public bool Reloading(object oldInstance)
@@ -79,7 +75,7 @@ namespace NaiveSocks
                 if (host == domain) {
                     if (connection.Dest.Port == 80) {
                         await connection.SetConnectResult(ConnectResults.Conneceted);
-                        var httpConnection = new HttpConnection(MyStream.ToStream(connection.DataStream), new EPPair(new IPEndPoint(IPAddress.Loopback, 1), new IPEndPoint(IPAddress.Loopback, 2)), httpsvr);
+                        var httpConnection = CreateHttpConnectionFromMyStream(connection.DataStream, HttpSvr);
                         httpConnection.SetTag("connection", connection);
                         await httpConnection.Process();
                     }
@@ -94,7 +90,7 @@ namespace NaiveSocks
                     } else if (if_notfound == null) {
                         if (connection.Dest.Port == 80) {
                             await connection.SetConnectResult(ConnectResults.Conneceted);
-                            var httpConnection = CreateHttpConnectionFromMyStream(connection.DataStream, httpsvr);
+                            var httpConnection = CreateHttpConnectionFromMyStream(connection.DataStream, HttpSvr);
                             httpConnection.SetTag("name", name);
                             httpConnection.SetTag("connection", connection);
                             await httpConnection.Process();
@@ -110,18 +106,6 @@ namespace NaiveSocks
             } else if (if_notmatch != null) {
                 connection.RedirectTo(if_notmatch);
             }
-        }
-
-        public static HttpConnection CreateHttpConnectionFromMyStream(IMyStream myStream, NaiveHttpServer httpSvr)
-        {
-            EPPair epPair;
-            if (myStream is SocketStream ss) {
-                epPair = ss.EPPair;
-            } else {
-                // use fake eppair
-                epPair = new EPPair(new IPEndPoint(IPAddress.Loopback, 1), new IPEndPoint(IPAddress.Loopback, 2));
-            }
-            return new HttpConnection(myStream.ToStream(), epPair, httpSvr);
         }
 
         public void AddClient(NClient client)
@@ -140,59 +124,44 @@ namespace NaiveSocks
             });
         }
 
-        public Task HandleRequestAsync(HttpConnection p)
+        public override async Task HandleRequestAsync(HttpConnection p)
         {
-            return httpsvr.ClientList(p, null);
+            if (p.Url_path == "/" && p.Method == "GET") {
+                var con = p.GetTag("connection") as InConnection;
+                await ClientList(p, con);
+            } else {
+                p.setStatusCode("404 Not Found");
+                await p.writeLineAsync("<h1>Client not found</h1>");
+            }
+            await p.EndResponseAsync();
         }
 
-        class HttpSvr : NaiveHttpServerAsync
+        public async Task ClientList(HttpConnection p, InConnection con)
         {
-            public HttpSvr(NNetworkAdapter adapter)
-            {
-                Adapter = adapter;
+            p.setStatusCode("200 OK");
+            var sb = new StringBuilder(512);
+            sb.AppendLine("<html><head><meta name='viewport' content='width=device-width, initial-scale=1'></head>")
+              .AppendLine($"<body style='margin: 0 auto; max-width: 100ch; padding: 8px;'>" +
+                            $"<h1 style='text-align: center'>NNetwork '{domain}'</h1>");
+            sb.AppendLine("<h2>Connected Clients</h2><pre style='overflow: auto;'>");
+            foreach (var item in clients) {
+                sb.AppendLine($"{string.Join("\t", item.names)}\tCreateTime: {item.CreateTime - WebSocket.CurrentTime}");
             }
-
-            public NNetworkAdapter Adapter { get; }
-
-            public override async Task HandleRequestAsync(HttpConnection p)
-            {
-                if (p.Url_path == "/" && p.Method == "GET") {
-                    var con = p.GetTag("connection") as InConnection;
-                    await ClientList(p, con);
-                } else {
-                    p.setStatusCode("404 Not Found");
-                    await p.writeLineAsync("<h1>Client not found</h1>");
-                }
-                await p.EndResponseAsync();
+            sb.AppendLine()
+              .AppendLine("</pre><h2>Request Info</h2><pre style='overflow: auto;'>")
+              .AppendLine($"Url: {p.Url}")
+              .AppendLine($"Host: {p.Host}")
+              .AppendLine($"BaseStream: {p.myStream}")
+              .AppendLine($"EndPoint: {p.epPair}")
+              .AppendLine($"Server Time: {DateTime.Now}");
+            if (con != null) {
+                sb.AppendLine($"Dest: {con.Dest}");
             }
-
-            public async Task ClientList(HttpConnection p, InConnection con)
-            {
-                p.setStatusCode("200 OK");
-                var sb = new StringBuilder(512);
-                sb.AppendLine("<html><head><meta name='viewport' content='width=device-width, initial-scale=1'></head>")
-                  .AppendLine($"<body style='margin: 0 auto; max-width: 100ch; padding: 8px;'>" +
-                                $"<h1 style='text-align: center'>NNetwork '{Adapter.domain}'</h1>");
-                sb.AppendLine("<h2>Connected Clients</h2><pre style='overflow: auto;'>");
-                foreach (var item in Adapter.clients) {
-                    sb.AppendLine($"{string.Join("\t", item.names)}\tCreateTime: {item.CreateTime - WebSocket.CurrentTime}");
-                }
-                sb.AppendLine()
-                  .AppendLine("</pre><h2>Request Info</h2><pre style='overflow: auto;'>")
-                  .AppendLine($"Url: {p.Url}")
-                  .AppendLine($"Host: {p.Host}")
-                  .AppendLine($"BaseStream: {p.myStream}")
-                  .AppendLine($"EndPoint: {p.epPair}")
-                  .AppendLine($"Server Time: {DateTime.Now}");
-                if (con != null) {
-                    sb.AppendLine($"Dest: {con.Dest}");
-                }
-                sb.AppendLine()
-                  .AppendLine("RawRequest:")
-                  .Append(HttpUtil.HtmlEncode(p.RawRequest))
-                  .AppendLine("</pre></body></html>");
-                await p.writeAsync(sb.ToString());
-            }
+            sb.AppendLine()
+              .AppendLine("RawRequest:")
+              .Append(HttpUtil.HtmlEncode(p.RawRequest))
+              .AppendLine("</pre></body></html>");
+            await p.writeAsync(sb.ToString());
         }
     }
 }

@@ -13,6 +13,8 @@
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\Naive0\Naive0InAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\Naive0\Naive0OutAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\SS\SSInAdapter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Adapters\Web\WebBaseAdapter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Adapters\Web\WebFileAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Compression\LZ4\LZ4Codec.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Compression\LZ4\LZ4Codec.Unsafe.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Compression\LZ4\LZ4Codec.Unsafe32.Dirty.cs" />
@@ -43,7 +45,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\Socks\SocksOutAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\RouterAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\SS\SSOutAdapter.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Adapters\WebconAdapter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Adapters\Web\WebConAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)RrChannels.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\Socks\Socks5Client.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\Socks\Socks5Server.cs" />
@@ -54,6 +56,7 @@
   <ItemGroup>
     <Folder Include="$(MSBuildThisFileDirectory)Adapters\Http\" />
     <Folder Include="$(MSBuildThisFileDirectory)Adapters\Direct\" />
+    <Folder Include="$(MSBuildThisFileDirectory)Adapters\Web\" />
     <Folder Include="$(MSBuildThisFileDirectory)Adapters\Socks\" />
     <Folder Include="$(MSBuildThisFileDirectory)Adapters\NaiveM\" />
   </ItemGroup>

@@ -7,12 +7,13 @@ using System.Text;
 using System.Threading.Tasks;
 using Naive.HttpSvr;
 using System.Linq;
+using Nett;
 
 namespace NaiveSocks
 {
     public class HttpInAdapter : InAdapterWithListenField, IHttpRequestAsyncHandler
     {
-        public AdapterRef webout { get; set; }
+        public AdapterRef[] webouts { get; set; }
 
         public bool verbose { get; set; }
 #if DEBUG
@@ -25,6 +26,18 @@ namespace NaiveSocks
         }
 
         HttpServer httpServer;
+
+        public override void SetConfig(TomlTable toml)
+        {
+            base.SetConfig(toml);
+            if (toml.TryGetValue<AdapterRef>("webout", out var ada)) {
+                var newarr = new AdapterRef[1 + (webouts?.Length ?? 0)];
+                newarr[0] = ada;
+                if (webouts?.Length > 0) {
+                    Array.Copy(webouts, 0, newarr, 1, webouts.Length);
+                }
+            }
+        }
 
         protected override void Init()
         {
@@ -95,12 +108,17 @@ namespace NaiveSocks
                 } else if (p.Url.StartsWith("http://") || p.Url.StartsWith("https://")) {
                     await handleHttp(p);
                 } else {
-                    if (adapter.webout != null) {
-                        if (!(adapter.webout.Adapter is IHttpRequestAsyncHandler ihrah)) {
-                            Logging.warning($"{adapter.QuotedName}: value of 'webout' ({adapter.webout.Adapter}) is not a http handler.");
-                            return;
+                    AdapterRef[] webouts = adapter.webouts;
+                    if (webouts != null) {
+                        foreach (var adaRef in webouts) {
+                            if (!(adaRef.Adapter is IHttpRequestAsyncHandler ihrah)) {
+                                adapter.Logger.warning($"webout adapter ({adaRef}) is not a http handler.");
+                            } else {
+                                await ihrah.HandleRequestAsync(p);
+                                if (p.Handled)
+                                    return;
+                            }
                         }
-                        await ihrah.HandleRequestAsync(p);
                     } else {
                         Logging.info($"{adapter.QuotedName}: unhandled web Request: {p.Method} {p.Url}");
                     }

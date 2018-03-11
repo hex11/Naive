@@ -2,6 +2,7 @@
 using Naive.HttpSvr;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
@@ -10,20 +11,20 @@ using System.Threading.Tasks;
 
 namespace NaiveSocks
 {
-    class WebconAdapter : OutAdapter, ICanReload, IHttpRequestAsyncHandler
+    class WebConAdapter : WebBaseAdapter, ICanReload, IHttpRequestAsyncHandler
     {
         public string passwd { get; set; }
+
+        public string[] path_page { get; set; } = new[] { "/", "/webcon", "/webcon.html" };
+        public string[] path_ws { get; set; } = new[] { "/admin/consolews" };
 
         public override string ToString() => $"{{Webcon}}";
 
         ConsoleHub consoleHub;
 
-        HttpSvr httpsvr;
-
         public bool Reloading(object oldInstance)
         {
-            if (oldInstance is WebconAdapter old) {
-                httpsvr = old.httpsvr;
+            if (oldInstance is WebConAdapter old) {
                 consoleHub = old.consoleHub;
             }
             return false;
@@ -36,106 +37,79 @@ namespace NaiveSocks
                 Logger.warning("passwd is null or empty!");
             }
             if (consoleHub == null) {
-                httpsvr = new HttpSvr(this);
                 consoleHub = new ConsoleHub();
                 Commands.AddCommands(consoleHub.CommandHub, Controller, "");
             }
         }
 
-        public Task HandleRequestAsync(HttpConnection p)
+        public override Task HandleRequestAsync(HttpConnection p)
         {
-            return httpsvr.HandleRequestAsync(p);
+            if (path_page.Contains(p.Url_path))
+                return ws(p);
+            if (path_page.Contains(p.Url_path)) {
+                p.Handled = true;
+                p.setStatusCode("200 OK");
+                return p.writeAsync(webconHtml);
+            }
+            return NaiveUtils.CompletedTask;
         }
 
-        public override async Task HandleConnection(InConnection connection)
+        private async Task ws(HttpConnection p)
         {
-            if (connection.Dest.Port == 80) {
-                await connection.SetConnectResult(ConnectResults.Conneceted);
-                HttpConnection httpConnection = NNetworkAdapter.CreateHttpConnectionFromMyStream(connection.DataStream, httpsvr);
-                await httpConnection.Process();
-            }
-        }
-
-        class HttpSvr : NaiveHttpServerAsync
-        {
-            public HttpSvr(WebconAdapter adapter)
+            var wss = new WebSocketServer(p);
+            var realPasswd = passwd;
+            var aesEnabled = false;
+            void start()
             {
-                Adapter = adapter;
+                LambdaConsoleClient concli = new LambdaConsoleClient() {
+                    OnWrite = (str) => {
+                        wss.SendStringAsync(str);
+                    }
+                };
+                wss.Received += (m) => {
+                    concli.InputLine(m.data as string);
+                };
+                wss.Closed += (w) => {
+                    concli.Close();
+                };
+                new Thread(() => {
+                    try {
+                        consoleHub.StartSessionSelectLoop(concli);
+                    } catch (Exception e) { }
+                }) { IsBackground = true, Name = "consolewsSession" }.Start();
             }
-
-            public WebconAdapter Adapter { get; }
-
-            public override Task HandleRequestAsync(HttpConnection p)
-            {
-                if (p.Url_path == "/admin/consolews")
-                    return ws(p);
-                if (p.Url_path == "/" || p.Url_path == "/webcon" || p.Url_path == "/webcon.html") {
-                    p.Handled = true;
-                    p.setStatusCode("200 OK");
-                    return p.writeAsync(webconHtml);
-                }
-                return NaiveUtils.CompletedTask;
+            wss.AddToManaged();
+            if (!(await wss.HandleRequestAsync(false).CAF()).IsConnected)
+                return;
+            if (p.ParseUrlQstr()["encryption"] == "1") {
+                wss.ApplyAesStreamFilter(GetMD5FromString(realPasswd));
+                await wss.StartVerify(true).CAF();
             }
-
-            private async Task ws(HttpConnection p)
-            {
-                var wss = new WebSocketServer(p);
-                var realPasswd = Adapter.passwd;
-                var aesEnabled = false;
-                void start()
-                {
-                    LambdaConsoleClient concli = new LambdaConsoleClient() {
-                        OnWrite = (str) => {
-                            wss.SendStringAsync(str);
-                        }
-                    };
-                    wss.Received += (m) => {
-                        concli.InputLine(m.data as string);
-                    };
-                    wss.Closed += (w) => {
-                        concli.Close();
-                    };
-                    new Thread(() => {
-                        try {
-                            Adapter.consoleHub.StartSessionSelectLoop(concli);
-                        } catch (Exception e) { }
-                    }) { IsBackground = true, Name = "consolewsSession" }.Start();
-                }
-                wss.AddToManaged();
-                if (!(await wss.HandleRequestAsync(false).CAF()).IsConnected)
+            int chances = 3;
+            while (true) {
+                await wss.SendStringAsync("passwd:\r\n");
+                var passwd = await wss.RecvString();
+                if (passwd == null)
                     return;
-                if (p.ParseUrlQstr()["encryption"] == "1") {
+                if (!aesEnabled && passwd == "__AesStreamFilter__") {
                     wss.ApplyAesStreamFilter(GetMD5FromString(realPasswd));
-                    await wss.StartVerify(true).CAF();
+                    await wss.StartVerify(false);
+                    continue;
                 }
-                int chances = 3;
-                while (true) {
-                    await wss.SendStringAsync("passwd:\r\n");
-                    var passwd = await wss.RecvString();
-                    if (passwd == null)
+                if (passwd == realPasswd) {
+                    break;
+                } else {
+                    Logger.warning($"wrong passwd from {p.myStream}");
+                    if (--chances <= 0) {
+                        await wss.SendStringAsync("session end.\r\n");
                         return;
-                    if (!aesEnabled && passwd == "__AesStreamFilter__") {
-                        wss.ApplyAesStreamFilter(GetMD5FromString(realPasswd));
-                        await wss.StartVerify(false);
-                        continue;
-                    }
-                    if (passwd == realPasswd) {
-                        break;
-                    } else {
-                        Adapter.Logger.warning($"wrong passwd from {p.myStream}");
-                        if (--chances <= 0) {
-                            await wss.SendStringAsync("session end.\r\n");
-                            return;
-                        }
                     }
                 }
-                await wss.SendStringAsync("success.\r\n");
-                start();
-                await wss.RecvLoopAsync().CAF();
             }
+            await wss.SendStringAsync("success.\r\n");
+            start();
+            await wss.RecvLoopAsync().CAF();
         }
-
-
 
         public static byte[] GetMD5FromString(string str)
         {

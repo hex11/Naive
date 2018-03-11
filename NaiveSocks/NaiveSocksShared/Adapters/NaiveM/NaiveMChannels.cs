@@ -159,7 +159,6 @@ namespace NaiveSocks
                 throw new TimeoutException("websocket handshake timed out.");
             }
             NaiveProtocol.ApplyEncryption(ws, key, encType);
-            //ws.ApplyAesStreamFilter(key);
             return ws;
         }
 
@@ -191,7 +190,7 @@ namespace NaiveSocks
                 NaiveProtocol.ApplyEncryption(msf, key, encType);
                 return msf;
             } catch (Exception) {
-                MyStream.CloseWithTimeout(stream);
+                MyStream.CloseWithTimeout(stream).Forget();
                 throw;
             }
         }

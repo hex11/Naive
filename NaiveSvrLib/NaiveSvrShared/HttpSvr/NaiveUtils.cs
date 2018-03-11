@@ -103,12 +103,23 @@ namespace Naive.HttpSvr
                 p.Handled = true;
                 p.ResponseStatusCode = "200 OK";
                 await hitFile(p, path);
-            } else if (Directory.Exists(path) && allowListDir) {
+            } else if (allowListDir && Directory.Exists(path)) {
                 p.Handled = true;
                 p.ResponseStatusCode = "200 OK";
-                if (p.Url_path != "/") {
-                    await p.writeLineAsync("<a href=\"../\">../</a><br/>");
-                }
+                await WriteDirListPage(p, path);
+            } else {
+                //p.ResponseStatusCode = "404 Not Found";
+                //p.writeLine("file not found");
+            }
+        }
+
+        public static async Task WriteDirListPage(HttpConnection p, string path)
+        {
+            await p.writeAsync("<html><head><meta name='viewport' content='width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1'></head><body>");
+            if (p.Url_path != "/") {
+                await p.writeLineAsync("<a href=\"../\">../</a><br/>");
+            }
+            try {
                 foreach (var item in Directory.EnumerateDirectories(path)) {
                     var name = new DirectoryInfo(item).Name;
                     await p.writeLineAsync($"<a href=\"{HttpUtil.UrlEncode(name)}/\">{HttpUtil.HtmlAttributeEncode(name)}/</a><br/>");
@@ -117,10 +128,11 @@ namespace Naive.HttpSvr
                     var name = new FileInfo(item).Name;
                     await p.writeLineAsync($"<a href=\"{HttpUtil.UrlEncode(name)}\">{HttpUtil.HtmlAttributeEncode(name)}</a><br/>");
                 }
-            } else {
-                //p.ResponseStatusCode = "404 Not Found";
-                //p.writeLine("file not found");
+            } catch (UnauthorizedAccessException e) {
+                p.ResponseStatusCode = "200 OK";
+                await p.writeAsync($"<p>Exception: {e.GetType()}</p>");
             }
+            await p.writeAsync("</body></html>");
         }
 
         public static async Task HandleFileAsync(HttpConnection p, string path)

@@ -105,7 +105,8 @@ namespace NaiveSocks
             RegisteredOutTypes.Add("naivec", typeof(NaiveMOutAdapter));
             RegisteredOutTypes.Add("naive0", typeof(Naive0OutAdapter));
             RegisteredOutTypes.Add("ss", typeof(SSOutAdapter));
-            RegisteredOutTypes.Add("webcon", typeof(WebconAdapter));
+            RegisteredOutTypes.Add("webcon", typeof(WebConAdapter));
+            RegisteredOutTypes.Add("webfile", typeof(WebFileAdapter));
 
             RegisteredOutTypes.Add("router", typeof(RouterAdapter));
             RegisteredOutTypes.Add("fail", typeof(FailAdapter));
@@ -239,20 +240,24 @@ namespace NaiveSocks
                 }
             foreach (var r in refs.Where(x => x.IsTable)) {
                 var tt = r.Ref as TomlTable;
-                var adapter = NewRegisteredOutType(tt);
-                if (tt.TryGetValue("name", out string n)) {
-                    adapter.Name = n;
+                try {
+                    var adapter = NewRegisteredOutType(tt);
+                    if (tt.TryGetValue("name", out string n)) {
+                        adapter.Name = n;
+                    }
+                    if (adapter.Name == null) {
+                        int i = 0;
+                        string name;
+                        do {
+                            name = $"_{tt["type"].Get<string>()}_" + ((i++ == 0) ? "" : i.ToString());
+                        } while (newcfg.OutAdapters.Any(x => x.Name == name));
+                        adapter.Name = name;
+                    }
+                    r.Adapter = adapter;
+                    newcfg.OutAdapters.Add(adapter);
+                } catch (Exception e) {
+                    Logger.exception(e, Logging.Level.Error, $"TOML inline table:");
                 }
-                if (adapter.Name == null) {
-                    int i = 0;
-                    string name;
-                    do {
-                        name = $"_{tt["type"].Get<string>()}_" + ((i++ == 0) ? "" : i.ToString());
-                    } while (newcfg.OutAdapters.Any(x => x.Name == name));
-                    adapter.Name = name;
-                }
-                r.Adapter = adapter;
-                newcfg.OutAdapters.Add(adapter);
             }
             bool notExistAndNeed(string name) =>
                     newcfg.OutAdapters.Any(x => x.Name == name) == false
