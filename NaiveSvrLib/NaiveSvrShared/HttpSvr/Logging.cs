@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 
@@ -19,7 +20,9 @@ namespace Naive.HttpSvr
 
         public static bool HistroyEnabled = true;
         public static uint HistroyMax = 50;
-        private static LinkedList<Log> logsHistory = new LinkedList<Log>();
+        //private static LinkedList<Log> logsHistory = new LinkedList<Log>();
+
+        static LogBuffer logBuffer = new LogBuffer(32 * 1024);
 
         public static bool WriteLogToConsole = false;
         public static bool WriteLogToConsoleWithTime = true;
@@ -30,15 +33,19 @@ namespace Naive.HttpSvr
         public struct Log
         {
             public Level level;
+            public DateTime time;
             public long runningTime;
-            private string _timestamp;
+
+            public string text;
+
+            public string _timestamp;
             public string timestamp
             {
                 get {
                     if (_timestamp == null) {
                         var sec = (runningTime / 1000).ToString();
                         var ms = runningTime % 1000;
-                        _timestamp = $"[{time.ToString("yy/MM/dd HH:mm:ss")} ({sec}.{ms.ToString("000")}) {levelStr}]:";
+                        _timestamp = $"[{time.ToString("MM/dd HH:mm:ss")} ({sec}.{ms.ToString("000")}) {levelStr}]:";
                     }
                     return _timestamp;
                 }
@@ -48,21 +55,19 @@ namespace Naive.HttpSvr
             {
                 get => level == Level.Warning ? "Warn" : level.ToString();
             }
-
-            public string text;
-            public DateTime time;
         }
 
         private static void log(Log log)
         {
             if (HistroyEnabled) {
-                lock (lockLogsHistory) {
-                    if (HistroyMax > 0)
-                        logsHistory.AddLast(log);
-                    while (logsHistory.Count > HistroyMax) {
-                        logsHistory.RemoveFirst();
-                    }
-                }
+                //lock (lockLogsHistory) {
+                //    if (HistroyMax > 0)
+                //        logsHistory.AddLast(log);
+                //    while (logsHistory.Count > HistroyMax) {
+                //        logsHistory.RemoveFirst();
+                //    }
+                //}
+                logBuffer.Add(log);
             }
             if (WriteLogToConsole)
                 writeToConsole(log);
@@ -145,28 +150,17 @@ namespace Naive.HttpSvr
 
         public static void clearLogsHistory()
         {
-            lock (lockLogsHistory) {
-                logsHistory.Clear();
-            }
+            logBuffer.Clear();
         }
 
         public static ICollection<Log> getLogsHistroyCollection()
         {
-            return logsHistory;
+            return logBuffer.GetLogs();
         }
 
         public static Log[] getLogsHistoryArray()
         {
-            lock (lockLogsHistory) {
-                var logs = new Log[logsHistory.Count];
-                int i = 0;
-                var cur = logsHistory.First;
-                while (cur != null && i < logs.Length) {
-                    logs[i++] = cur.Value;
-                    cur = cur.Next;
-                }
-                return logs;
-            }
+            return logBuffer.GetLogs();
         }
 
         public static void log(string text)
@@ -426,6 +420,142 @@ namespace Naive.HttpSvr
                 else
                     log(Logging.getExceptionText(ex, text), level);
             } catch (Exception) { }
+        }
+    }
+
+    public unsafe class LogBuffer
+    {
+        static UTF8Encoding Encoding => NaiveUtils.UTF8Encoding;
+
+        public LogBuffer(int size)
+        {
+            this.bufferSize = size;
+            buffer = (byte*)Marshal.AllocHGlobal(size);
+            GC.AddMemoryPressure(size);
+            logs = new Queue<myLog>(1024);
+        }
+
+        ~LogBuffer()
+        {
+            Marshal.FreeHGlobal((IntPtr)buffer);
+            GC.RemoveMemoryPressure(bufferSize);
+        }
+
+        Queue<myLog> logs;
+
+        public object Lock => logs;
+
+        byte* buffer;
+        int bufferSize;
+        int head, tail;
+
+        int remaining => (tail > head) ? tail - head - 1 : bufferSize - head + tail;
+        int remainingSeq => (tail > head) ? tail - head - 1 : bufferSize - head;
+
+        public void Add(Logging.Log log)
+        {
+            lock (logs) {
+                var ml = new myLog(log);
+                var str = log.text;
+                var strLen = ml.strLen = str.Length;
+                var bufLen = ml.bufLen = Encoding.GetByteCount(str);
+                if (bufLen > bufferSize)
+                    return;
+                while (remainingSeq < bufLen) {
+                    if (tail < head)
+                        head = 0;
+                    Shift();
+                }
+                ml.bufOffset = head;
+                head += bufLen;
+                if (bufLen > 0)
+                    fixed (char* pStr = str) {
+                        Encoding.GetBytes(pStr, strLen, buffer + ml.bufOffset, bufLen);
+                    }
+                logs.Enqueue(ml);
+            }
+        }
+
+        void Shift()
+        {
+            logs.Dequeue();
+            if (logs.Count > 0) {
+                tail = logs.Peek().bufOffset;
+            } else {
+                tail = head;
+            }
+        }
+
+        public void SetBufferSize(int newBufferSize)
+        {
+            if (newBufferSize == bufferSize)
+                return;
+            lock (logs) {
+                if (newBufferSize > bufferSize || (head < bufferSize && tail < head)) {
+                    ResizeBuffer(newBufferSize);
+                } else {
+                    // TODO
+                }
+            }
+        }
+
+        private void ResizeBuffer(int newBufferSize)
+        {
+            buffer = (byte*)Marshal.ReAllocHGlobal((IntPtr)buffer, (IntPtr)newBufferSize);
+        }
+
+        public void Clear()
+        {
+            lock (logs) {
+                logs.Clear();
+                head = tail = 0;
+            }
+        }
+
+        public Logging.Log[] GetLogs()
+        {
+            lock (logs) {
+                var ret = new Logging.Log[logs.Count];
+                var i = 0;
+                foreach (var item in logs) {
+                    ret[i++] = item.GetLog(this);
+                }
+                return ret;
+            }
+        }
+
+        struct myLog
+        {
+            public myLog(Logging.Log log)
+            {
+                level = log.level;
+                time = log.time;
+                runningTime = log.runningTime;
+                bufOffset = bufLen = strLen = 0;
+            }
+
+            public Logging.Level level;
+            public DateTime time;
+            public long runningTime;
+            public int bufOffset, bufLen, strLen;
+
+            public Logging.Log GetLog(LogBuffer logBuffer)
+            {
+                var l = new Logging.Log {
+                    level = this.level,
+                    time = this.time,
+                    runningTime = this.runningTime,
+                };
+                if (strLen == 0) {
+                    l.text = "";
+                } else {
+                    var str = new string('\0', strLen);
+                    fixed (char* pStr = str)
+                        Encoding.GetChars(logBuffer.buffer + bufOffset, bufLen, pStr, strLen);
+                    l.text = str;
+                }
+                return l;
+            }
         }
     }
 }

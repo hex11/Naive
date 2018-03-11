@@ -366,6 +366,20 @@ namespace Naive.HttpSvr
             if (value < 0)
                 throw new ArgumentOutOfRangeException(argName, argName + " can not less than zero");
         }
+        
+        public static void CopyBytes(byte[] src, int srcOffset, byte[] dst, int dstOffset, int count)
+        {
+            if (count > 4096) {
+                Buffer.BlockCopy(src, srcOffset, dst, dstOffset, count);
+                return;
+            } else if (count > 128) {
+                Array.Copy(src, srcOffset, dst, dstOffset, count);
+            } else {
+                for (int i = 0; i < count; i++) {
+                    dst[dstOffset++] = src[srcOffset++];
+                }
+            }
+        }
 
         public static unsafe void XorBytes(byte[] src, int srcOffset, byte[] dst, int dstOffset, int count)
         {

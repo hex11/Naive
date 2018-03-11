@@ -51,7 +51,7 @@ Usage: {NAME}.exe [-h|--help] [(-c|--config) FILE] [--no-cli] [--no-log-stdout]
         private static void Main(string[] args)
         {
             Console.Title = NAME;
-            Logging.HistroyEnabled = false;
+            //Logging.HistroyEnabled = false;
             Logging.WriteLogToConsole = true;
             CmdConsole.ConsoleOnStdIO.Lock = Logging.ConsoleLock;
 

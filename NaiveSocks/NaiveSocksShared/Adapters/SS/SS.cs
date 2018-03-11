@@ -137,7 +137,7 @@ namespace NaiveSocks
                     h.TransformBlock(info, 0, info.Length, info, 0);
                     c[0] = (byte)i;
                     T = h.TransformFinalBlock(c, 0, 1);
-                    Buffer.BlockCopy(T, 0, output, cur, (i < N) ? T.Length : outputLen - cur);
+                    NaiveUtils.CopyBytes(T, 0, output, cur, (i < N) ? T.Length : outputLen - cur);
                     cur += T.Length;
                 }
             }
@@ -225,7 +225,7 @@ namespace NaiveSocks
                     if (unusedEncryptedCounter == 0) {
                         realEncryptedCounterPos = 0;
                         for (int j = 0; j < encryptedCounterSize; j += blockSize) {
-                            Buffer.BlockCopy(Counter, 0, counterBlocks, j, blockSize);
+                            NaiveUtils.CopyBytes(Counter, 0, counterBlocks, j, blockSize);
                             IncrementCounter();
                         }
                         EcbTransform.TransformBlock(counterBlocks, 0, encryptedCounterSize, encryptedCounterBlocks, 0);
@@ -293,9 +293,9 @@ namespace NaiveSocks
                 var count = thisBlockEnd - pos;
                 if (IsEncrypting) {
                     NaiveUtils.XorBytes(feedingBack, feedingPos, bs.Bytes, pos, count);
-                    Buffer.BlockCopy(bs.Bytes, pos, toBeFeedBack, feedingPos, count);
+                    NaiveUtils.CopyBytes(bs.Bytes, pos, toBeFeedBack, feedingPos, count);
                 } else {
-                    Buffer.BlockCopy(bs.Bytes, pos, toBeFeedBack, feedingPos, count);
+                    NaiveUtils.CopyBytes(bs.Bytes, pos, toBeFeedBack, feedingPos, count);
                     NaiveUtils.XorBytes(feedingBack, feedingPos, bs.Bytes, pos, count);
                 }
                 pos += count;

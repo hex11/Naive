@@ -150,7 +150,7 @@ namespace LZ4pn
                 if (length < 0)
                     throw new InvalidOperationException("Compression has been corrupted");
                 var buffer = new byte[length];
-                Buffer.BlockCopy(result, 0, buffer, 0, length);
+                Naive.HttpSvr.NaiveUtils.CopyBytes(result, 0, buffer, 0, length);
                 return buffer;
             }
             return result;
@@ -320,7 +320,7 @@ namespace LZ4pn
                 if (length < 0)
                     throw new InvalidOperationException("Compression has been corrupted");
                 var buffer = new byte[length];
-                Buffer.BlockCopy(result, 0, buffer, 0, length);
+                Naive.HttpSvr.NaiveUtils.CopyBytes(result, 0, buffer, 0, length);
                 return buffer;
             }
             return result;
@@ -512,7 +512,7 @@ namespace LZ4pn
 
             if (length != outputLength) {
                 var buffer = new byte[length];
-                Buffer.BlockCopy(result, 0, buffer, 0, length);
+                Naive.HttpSvr.NaiveUtils.CopyBytes(result, 0, buffer, 0, length);
                 result = buffer;
             }
 
@@ -576,7 +576,7 @@ namespace LZ4pn
 
             if (length != outputLength) {
                 var buffer = new byte[length];
-                Buffer.BlockCopy(result, 0, buffer, 0, length);
+                Naive.HttpSvr.NaiveUtils.CopyBytes(result, 0, buffer, 0, length);
                 result = buffer;
             }
 

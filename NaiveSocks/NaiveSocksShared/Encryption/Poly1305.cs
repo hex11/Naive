@@ -152,7 +152,7 @@ namespace Org.BouncyCastle.Crypto.Macs
                 }
 
                 int toCopy = System.Math.Min((len - copied), BlockSize - currentBlockOffset);
-                Buffer.BlockCopy(input, copied + inOff, currentBlock, currentBlockOffset, toCopy);
+                Naive.HttpSvr.NaiveUtils.CopyBytes(input, copied + inOff, currentBlock, currentBlockOffset, toCopy);
                 copied += toCopy;
                 currentBlockOffset += toCopy;
             }

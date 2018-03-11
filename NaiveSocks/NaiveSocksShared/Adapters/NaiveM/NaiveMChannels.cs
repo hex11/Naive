@@ -646,7 +646,7 @@ namespace NaiveSocks
 
         void WriteToBuffer(byte[] buffer, ref int cur, byte[] src, int offset, int count)
         {
-            Buffer.BlockCopy(src, offset, buffer, cur, count);
+            NaiveUtils.CopyBytes(src, offset, buffer, cur, count);
             cur += count;
         }
 

@@ -146,6 +146,33 @@ namespace NaiveSocks
                     c.WriteLine($"    - '{item.Name}': {item}");
                 }
             });
+            cmdHub.AddCmdHandler(prefix + "logs", command => {
+                var logs = Logging.getLogsHistoryArray();
+                var cmd = command.ArgOrNull(0);
+                if (cmd == "dump") {
+                    var path = command.ArgOrNull(1);
+                    if (path == null) {
+                        command.WriteLine("missing path.");
+                        return;
+                    }
+                    using (var sw = new StreamWriter(
+                        File.Open(path, FileMode.Create, FileAccess.ReadWrite, FileShare.ReadWrite),
+                        NaiveUtils.UTF8Encoding, 8192)) {
+                        foreach (var item in logs) {
+                            sw.Write(item.timestamp);
+                            sw.Write(item.text);
+                            sw.WriteLine();
+                        }
+                    }
+                } else if (cmd == "show") {
+                    foreach (var item in logs) {
+                        command.WriteLine(item.timestamp + item.text);
+                    }
+                    command.WriteLine($"(total {logs.Length} logs)");
+                } else {
+                    command.WriteLine("wrong arguments.");
+                }
+            }, "Usage: logs (dump PATH)|show");
             cmdHub.AddCmdHandler(prefix + "gc", command => {
                 NaiveUtils.GCCollect(command.WriteLine);
             });
@@ -162,7 +189,7 @@ namespace NaiveSocks
                     ["alloc & copy 32 KiB bytes 1024 times"] = () => {
                         var arr = new byte[32 * 1024];
                         for (int i = 0; i < 1024; i++) {
-                            Buffer.BlockCopy(new byte[32 * 1024], 0, arr, 0, 32 * 1024);
+                            NaiveUtils.CopyBytes(new byte[32 * 1024], 0, arr, 0, 32 * 1024);
                         }
                     },
                     ["encrypt 3 bytes 32 * 1024 times (ws filter - aes-128-ofb)"] = () => {

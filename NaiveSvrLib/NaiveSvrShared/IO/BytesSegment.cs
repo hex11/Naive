@@ -84,17 +84,31 @@ namespace Naive.HttpSvr
 
         public void CopyTo(BytesSegment dst, int count)
         {
-            Buffer.BlockCopy(Bytes, Offset, dst.Bytes, dst.Offset, count);
+            Copy(Bytes, Offset, dst.Bytes, dst.Offset, count);
         }
 
         public void CopyTo(BytesSegment dst, int srcBegin, int count)
         {
-            Buffer.BlockCopy(Bytes, Offset + srcBegin, dst.Bytes, dst.Offset, count);
+            Copy(Bytes, Offset + srcBegin, dst.Bytes, dst.Offset, count);
         }
 
         public void CopyTo(BytesSegment dst, int srcBegin, int count, int dstBegin)
         {
-            Buffer.BlockCopy(Bytes, Offset + srcBegin, dst.Bytes, dst.Offset + dstBegin, count);
+            Copy(Bytes, Offset + srcBegin, dst.Bytes, dst.Offset + dstBegin, count);
+        }
+
+        static void Copy(byte[] src, int srcOffset, byte[] dst, int dstOffset, int count)
+        {
+            if (count > 4096) {
+                Buffer.BlockCopy(src, srcOffset, dst, dstOffset, count);
+                return;
+            } else if (count > 128) {
+                Array.Copy(src, srcOffset, dst, dstOffset, count);
+            } else {
+                for (int i = 0; i < count; i++) {
+                    dst[dstOffset++] = src[srcOffset++];
+                }
+            }
         }
 
         public static implicit operator BytesSegment(byte[] bytes)
