@@ -72,7 +72,10 @@ namespace NaiveSocks
                 Key = key
             });
 
-        public static async Task<NaiveMChannels> ConnectTo(ConnectingSettings settings)
+        public static Task<NaiveMChannels> ConnectTo(ConnectingSettings settings)
+            => ConnectTo(settings, CancellationToken.None);
+
+        public static async Task<NaiveMChannels> ConnectTo(ConnectingSettings settings, CancellationToken ct)
         {
             const string ImuxPrefix = "chs2:";
             var key = settings.Key;
@@ -114,13 +117,14 @@ namespace NaiveSocks
                     streams[x] = await connect(ImuxPrefix + parameter, x >= httpStart);
                 })).ToArray();
                 try {
-                    await Task.WhenAll(tasks);
+                    await Task.WhenAny(Task.WhenAll(tasks), Task.Delay(-1, ct));
+                    ct.ThrowIfCancellationRequested();
                 } catch (Exception) {
                     foreach (var item in streams) {
                         try {
                             item?.Close(CloseOpt.Close).Forget();
                         } catch (Exception e) {
-                            Logging.warning($"NaiveMChs.ConnectTo(): error cleaning msgtream: " + e.Message);
+                            Logging.warning("NaiveMChs.ConnectTo(): error cleaning msgtream: " + e.Message);
                         }
                     }
                     throw;

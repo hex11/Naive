@@ -218,63 +218,62 @@ namespace NaiveSocks
             var maxage = TimeSpan.Zero;
             if (TryParseTime(rule.abpuri_maxage, out var sec))
                 maxage = TimeSpan.FromSeconds((double)sec);
-            var haveOldFile = filepath != null && File.Exists(filepath);
-            var fi = new FileInfo(filepath);
-            var lastWriteTime = haveOldFile ? fi.LastWriteTime : DateTime.MinValue;
             var uristr = rule.abpuri;
             var uri = new Uri(uristr);
             var tag = abpfile ?? uristr;
+            var haveOldFile = filepath != null && File.Exists(filepath);
+            var fi = new FileInfo(filepath);
+            var lastWriteTime = haveOldFile ? fi.LastWriteTime : DateTime.MinValue;
             DateTime nextRun;
             if (!ignoreMaxage && haveOldFile && DateTime.Now - lastWriteTime < maxage) {
                 Logger.info($"'{abpfile}' no need to update (abpuri_maxage='{rule.abpuri_maxage}')");
                 nextRun = lastWriteTime + maxage;
-                goto SCHEDULE_NEXT_RUN;
             } else {
                 nextRun = DateTime.Now + maxage;
-            }
-            AsyncHelper.Run(async () => {
-                if (haveOldFile)
-                    Logger.info($"'{abpfile}' is being checking update...");
-                else if (abpfile != null)
-                    Logger.info($"'{abpfile}' is being downloading...");
-                else
-                    Logger.info($"loading abp file from network...");
-                try {
-                    var webreq = WebRequest.CreateHttp(uri);
-                    if (haveOldFile) {
-                        webreq.IfModifiedSince = lastWriteTime;
-                    }
-                    HttpWebResponse resp;
+                AsyncHelper.Run(async () => {
+                    if (haveOldFile)
+                        Logger.info($"'{abpfile}' is being checking update...");
+                    else if (abpfile != null)
+                        Logger.info($"'{abpfile}' is being downloading...");
+                    else
+                        Logger.info($"loading abp file from network...");
                     try {
-                        resp = await webreq.GetResponseAsync() as HttpWebResponse;
-                    } catch (WebException e) when (e.Response is HttpWebResponse r) {
-                        resp = r;
-                    }
-                    if (resp.StatusCode == HttpStatusCode.OK) {
-                        if (filepath != null) {
-                            await SaveResponseToFile(filepath, resp);
+                        var webreq = WebRequest.CreateHttp(uri);
+                        webreq.AllowAutoRedirect = true;
+                        if (haveOldFile) {
+                            webreq.IfModifiedSince = lastWriteTime;
+                        }
+                        HttpWebResponse resp;
+                        try {
+                            resp = await webreq.GetResponseAsync() as HttpWebResponse;
+                        } catch (WebException e) when (e.Response is HttpWebResponse r) {
+                            resp = r;
+                        }
+                        if (resp.StatusCode == HttpStatusCode.OK) {
+                            if (filepath != null) {
+                                await SaveResponseToFile(filepath, resp);
+                            } else {
+                                rule.abp = await resp.GetResponseStream().ReadAllTextAsync();
+                            }
+                            if (haveOldFile)
+                                Logger.info($"'{tag}' is updated.");
+                            else
+                                Logger.info($"'{tag}' is downloaded.");
+                            if (resp.GetResponseHeader("Last-Modified").IsNullOrEmpty() == false) {
+                                fi.LastWriteTime = resp.LastModified;
+                            }
+                            load();
+                        } else if (resp.StatusCode == HttpStatusCode.NotModified) {
+                            Logger.info($"'{tag}' remote file haven't been modified.");
                         } else {
-                            rule.abp = await resp.GetResponseStream().ReadAllTextAsync();
+                            Logger.warning($"'{tag}' response from server: {resp.StatusCode}.");
                         }
-                        if (haveOldFile)
-                            Logger.info($"'{tag}' is updated.");
-                        else
-                            Logger.info($"'{tag}' is downloaded.");
-                        if (resp.GetResponseHeader("Last-Modified").IsNullOrEmpty() == false) {
-                            fi.LastWriteTime = resp.LastModified;
-                        }
-                        load();
-                    } else if (resp.StatusCode == HttpStatusCode.NotModified) {
-                        Logger.info($"'{tag}' remote file haven't modified.");
-                    } else {
-                        Logger.warning($"'{tag}' response from server: {resp.StatusCode}.");
+                    } catch (Exception e) {
+                        Logger.error($"'{tag}' downloading: {e.Message}");
                     }
-                } catch (Exception e) {
-                    Logger.error($"'{tag}' downloading: {e.Message}");
-                }
-            });
-            SCHEDULE_NEXT_RUN:
-            Logg.info($"'{tag}' scheduled next checking at {nextRun}");
+                });
+            }
+            Logg.info($"'{tag}' next checking at {nextRun}");
             AsyncHelper.SetTimeout(nextRun - DateTime.Now, async () => {
                 if (!IsRunning)
                     return;

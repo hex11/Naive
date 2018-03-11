@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using Nett;
+using System.Threading;
 
 namespace NaiveSocks
 {
@@ -312,7 +313,8 @@ namespace NaiveSocks
                         Timeout = adapter.timeout
                     };
                     state = 1;
-                    var nms = await NaiveMChannels.ConnectTo(settings);
+                    var ct = new CancellationTokenSource(30 * 1000).Token;
+                    var nms = await NaiveMChannels.ConnectTo(settings, ct);
                     state = 2;
                     nms.OutAdapter = adapter;
                     nms.InAdapter = adapter;

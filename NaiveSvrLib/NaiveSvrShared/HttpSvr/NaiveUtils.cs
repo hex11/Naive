@@ -366,7 +366,7 @@ namespace Naive.HttpSvr
             if (value < 0)
                 throw new ArgumentOutOfRangeException(argName, argName + " can not less than zero");
         }
-        
+
         public static void CopyBytes(byte[] src, int srcOffset, byte[] dst, int dstOffset, int count)
         {
             if (count > 4096) {
@@ -455,6 +455,7 @@ namespace Naive.HttpSvr
             Connecting,
             Handshake,
             ConnectingError,
+            HandshakeError,
             TimedOut
         }
 
@@ -494,7 +495,7 @@ namespace Naive.HttpSvr
                 try {
                     return await handshake(destTcp.Client);
                 } catch (Exception) {
-                    if (Interlocked.Exchange(ref state, (int)ConnectingState.ConnectingError) == (int)ConnectingState.Handshake) {
+                    if (Interlocked.Exchange(ref state, (int)ConnectingState.HandshakeError) == (int)ConnectingState.Handshake) {
                         destTcp.Close();
                     }
                     throw;
@@ -509,6 +510,7 @@ namespace Naive.HttpSvr
                         destTcp.Close();
                         break;
                     case (int)ConnectingState.ConnectingError:
+                    case (int)ConnectingState.HandshakeError:
                         await connectTask; // to throw the exception
                         break;
                     }
