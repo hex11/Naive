@@ -19,7 +19,7 @@ namespace NaiveSocks
                 p.Url_path = index;
             }
             try {
-                await NaiveUtils.HandleDirectoryAsync(p, dir, allow_list);
+                await NaiveUtils.HandleDirectoryAsync(p, Controller.ProcessFilePath(dir), allow_list);
             } finally {
                 p.Url_path = realPath;
             }

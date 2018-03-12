@@ -44,7 +44,7 @@ namespace NaiveSocks
 
         public override Task HandleRequestAsync(HttpConnection p)
         {
-            if (path_page.Contains(p.Url_path))
+            if (path_ws.Contains(p.Url_path))
                 return ws(p);
             if (path_page.Contains(p.Url_path)) {
                 p.Handled = true;
