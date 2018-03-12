@@ -11,7 +11,7 @@ using System.Threading.Tasks;
 
 namespace NaiveSocks
 {
-    class WebConAdapter : WebBaseAdapter, ICanReload, IHttpRequestAsyncHandler
+    class WebConAdapter : WebBaseAdapter, ICanReload
     {
         public string passwd { get; set; }
 
@@ -22,8 +22,9 @@ namespace NaiveSocks
 
         ConsoleHub consoleHub;
 
-        public bool Reloading(object oldInstance)
+        public override bool Reloading(object oldInstance)
         {
+            base.Reloading(oldInstance);
             if (oldInstance is WebConAdapter old) {
                 consoleHub = old.consoleHub;
             }
@@ -42,7 +43,7 @@ namespace NaiveSocks
             }
         }
 
-        public override Task HandleRequestAsync(HttpConnection p)
+        public override Task HandleRequestAsyncImpl(HttpConnection p)
         {
             if (path_ws.Contains(p.Url_path))
                 return ws(p);

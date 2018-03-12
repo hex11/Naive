@@ -25,18 +25,17 @@ namespace NaiveSocks
             try {
                 var dataStream = baseResult.Stream;
                 var asStream = MyStream.ToStream(dataStream);
-                var sw = new StreamWriter(asStream, NaiveUtils.UTF8Encoding, 1440, true);
+                var sw = new StringWriter(new StringBuilder(1024));
                 var destStr = dest.ToString();
-                await HttpClient.WriteHttpRequestHeaderAsync(sw, "CONNECT", destStr, new Dictionary<string, string> {
+                HttpClient.WriteHttpRequestHeader(sw, "CONNECT", destStr, new Dictionary<string, string> {
                     ["Host"] = destStr
                 });
-                await sw.FlushAsync();
-                sw.Dispose();
+                await dataStream.WriteAsync(NaiveUtils.GetUTF8Bytes(sw.ToString()));
                 var responseStr = await NaiveUtils.ReadStringUntil(asStream, NaiveUtils.DoubleCRLFBytes);
                 var sr = new StringReader(responseStr);
                 var response = HttpClient.ReadHttpResponseHeader(sr);
                 if (response.StatusCode != "200") {
-                    throw new Exception($"remote server returns response '{response.StatusCode} {response.ReasonPhrase}'");
+                    throw new Exception($"remote server response '{response.StatusCode} {response.ReasonPhrase}'");
                 }
                 return new ConnectResult(ConnectResults.Conneceted, dataStream);
             } catch (Exception) {

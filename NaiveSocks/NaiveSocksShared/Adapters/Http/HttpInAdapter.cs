@@ -15,6 +15,7 @@ namespace NaiveSocks
     {
         public AdapterRef[] webouts { get; set; }
 
+        public bool logging { get; set; }
         public bool verbose { get; set; }
 #if DEBUG
         = true;
@@ -36,6 +37,7 @@ namespace NaiveSocks
                 if (webouts?.Length > 0) {
                     Array.Copy(webouts, 0, newarr, 1, webouts.Length);
                 }
+                webouts = newarr;
             }
         }
 
@@ -63,13 +65,6 @@ namespace NaiveSocks
             return httpServer.HandleRequestAsync(p);
         }
 
-        private class HttpConn : HttpConnection
-        {
-            public HttpConn(Stream stream, EPPair ePPair, NaiveHttpServer server) : base(stream, ePPair, server)
-            {
-            }
-        }
-
         private class HttpServer : NaiveHttpServerAsync
         {
             public HttpServer(HttpInAdapter adapter)
@@ -78,13 +73,19 @@ namespace NaiveSocks
             }
 
             HttpInAdapter adapter { get; }
+            Logger Logger => adapter.Logger;
             bool verbose => adapter.verbose;
+            bool logging => adapter.logging | verbose;
 
             public override async Task HandleRequestAsync(HttpConnection p)
             {
-                if (verbose)
-                    Logging.info($"{adapter.QuotedName}: [{p.Id}({p.requestCount})] {p.Method} {p.Url}");
+                if (logging)
+                    Logger.info($"[{p.Id}({p.requestCount})] {p.Method} {p.Url}");
                 if (p.Method == "CONNECT") {
+                    if (adapter.@out == null) {
+                        adapter.Logger.info($"unhandled tunnel request (no 'out'): {p.Method} {p.Url}");
+                        return;
+                    }
                     p.EnableKeepAlive = false;
                     var dest = AddrPort.Parse(p.Url);
                     var stream = p.SwitchProtocol();
@@ -106,21 +107,25 @@ namespace NaiveSocks
                         MyStream.CloseWithTimeout(mystream);
                     }
                 } else if (p.Url.StartsWith("http://") || p.Url.StartsWith("https://")) {
+                    if (adapter.@out == null) {
+                        Logger.info($"unhandled proxy request (no 'out'): {p.Method} {p.Url}");
+                        return;
+                    }
                     await handleHttp(p);
                 } else {
                     AdapterRef[] webouts = adapter.webouts;
-                    if (webouts != null) {
-                        foreach (var adaRef in webouts) {
-                            if (!(adaRef.Adapter is IHttpRequestAsyncHandler ihrah)) {
-                                adapter.Logger.warning($"webout adapter ({adaRef}) is not a http handler.");
-                            } else {
-                                await ihrah.HandleRequestAsync(p);
-                                if (p.Handled)
-                                    return;
-                            }
+                    if (webouts == null) {
+                        Logger.info($"unhandled web request (no 'webouts'): {p.Method} {p.Url}");
+                        return;
+                    }
+                    foreach (var adaRef in webouts) {
+                        if (!(adaRef.Adapter is IHttpRequestAsyncHandler ihrah)) {
+                            Logger.warning($"webout adapter ({adaRef}) is not a http handler.");
+                        } else {
+                            await ihrah.HandleRequestAsync(p);
+                            if (p.Handled)
+                                return;
                         }
-                    } else {
-                        Logging.info($"{adapter.QuotedName}: unhandled web Request: {p.Method} {p.Url}");
                     }
                 }
             }
@@ -236,10 +241,10 @@ namespace NaiveSocks
                                 if (p.inputDataStream != null) {
                                     await Utils.StreamCopyAsync(p.inputDataStream, destCommonStream);
                                     if (verbose)
-                                        Logging.info($"{adapter.QuotedName} {p}: copying input data {p.inputDataStream.Length} bytes.");
+                                        Logger.info($"{p}: copying input data {p.inputDataStream.Length} bytes.");
                                 }
                                 if (!keepAlive) {
-                                    Logging.warning($"{adapter.QuotedName} {p}: keep-alvie changed to false. ({dest})");
+                                    Logger.warning($"{p}: keep-alvie changed to false. ({dest})");
                                     var copyingResponse2 = NaiveUtils.RunAsyncTask(async () => {
                                         await copyingResponse;
                                         await clientStream.Shutdown(SocketShutdown.Send);
@@ -250,14 +255,14 @@ namespace NaiveSocks
                                     });
                                     await Task.WhenAll(copyingResponse2, copingRequese);
                                     if (verbose)
-                                        Logging.info($"{adapter.QuotedName} {p} completed: no keep-alive.");
+                                        Logger.info($"{p} completed: no keep-alive.");
                                     break;
                                 }
                                 var recvNext = p._ReceiveNextRequest();
                                 Task completed = await Task.WhenAny(recvNext, copyingResponse);
                                 if (completed == copyingResponse) {
                                     if (verbose)
-                                        Logging.info($"{adapter.QuotedName} {p} completed: copyingResponse.");
+                                        Logger.info($"{p} completed: copyingResponse.");
                                     await completed;
                                     await clientStream.Close();
                                     return;
@@ -268,17 +273,17 @@ namespace NaiveSocks
                                         }
                                     } catch (IOException e) when (e.InnerException is SocketException se) {
                                         if (verbose)
-                                            Logging.warning($"{adapter.QuotedName} {p}: receiving request error {se.SocketErrorCode}");
+                                            Logger.warning($"{p}: receiving request error {se.SocketErrorCode}");
                                         return;
                                     }
                                 }
                                 if (verbose)
-                                    Logging.info($"{adapter.QuotedName} {p}: {p.Method} {p.Url}");
+                                    Logger.info($"{p}: {p.Method} {p.Url}");
                                 var newDest = parseUrl(p.Url, out realurl, out var newIsHttps);
                                 if (newDest != dest || newIsHttps != isHttps) {
                                     string proto(bool x) => x ? "https" : "http";
                                     if (verbose)
-                                        Logging.warning($"{adapter.QuotedName} {p}: dest changed." +
+                                        Logger.warning($"{p}: dest changed." +
                                             $" ({proto(isHttps)}){dest} -> ({proto(newIsHttps)}){newDest}");
                                     await destStream.Shutdown(SocketShutdown.Send);
                                     await copyingResponse;
@@ -291,7 +296,7 @@ namespace NaiveSocks
                             }
                         }
                     } finally {
-                        MyStream.CloseWithTimeout(destStream);
+                        MyStream.CloseWithTimeout(destStream).Forget();
                     }
                 } finally {
                     tcsProcessing.TrySetResult(0);

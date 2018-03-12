@@ -89,7 +89,13 @@ namespace Naive.HttpSvr
             return HandleDirectoryAsync(p, dirpath, HandleFileAsync, allowListDir);
         }
 
-        public static async Task HandleDirectoryAsync(HttpConnection p, string dirpath, Func<HttpConnection, string, Task> hitFile = null, bool allowListDir = true)
+        public static Task HandleDirectoryAsync(HttpConnection p, string dirpath, Func<HttpConnection, string, Task> hitFile = null, bool allowListDir = true)
+        {
+            return HandleDirectoryAsync(p, dirpath, hitFile, allowListDir ? (Func<HttpConnection, string, Task>)WriteDirListPage : null);
+        }
+
+        public static async Task HandleDirectoryAsync(HttpConnection p, string dirpath,
+            Func<HttpConnection, string, Task> hitFile, Func<HttpConnection, string, Task> hitDir)
         {
             if (p == null)
                 throw new ArgumentNullException(nameof(p));
@@ -99,14 +105,14 @@ namespace Naive.HttpSvr
             var path = Path.Combine(dirpath, p.Url_path.TrimStart('/'));
             if (p.Url_path.Contains(".."))
                 return;
-            if (File.Exists(path)) {
+            if (hitFile != null && File.Exists(path)) {
                 p.Handled = true;
                 p.ResponseStatusCode = "200 OK";
                 await hitFile(p, path);
-            } else if (allowListDir && Directory.Exists(path)) {
+            } else if (hitDir != null && Directory.Exists(path)) {
                 p.Handled = true;
                 p.ResponseStatusCode = "200 OK";
-                await WriteDirListPage(p, path);
+                await hitDir(p, path);
             } else {
                 //p.ResponseStatusCode = "404 Not Found";
                 //p.writeLine("file not found");
@@ -115,24 +121,69 @@ namespace Naive.HttpSvr
 
         public static async Task WriteDirListPage(HttpConnection p, string path)
         {
-            await p.writeAsync("<html><head><meta name='viewport' content='width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1'></head><body>");
+            await p.writeAsync(dirHead);
             if (p.Url_path != "/") {
-                await p.writeLineAsync("<a href=\"../\">../</a><br/>");
+                await p.writeLineAsync("<div class='item dir up'><a href=\"../\">../</a></div>");
             }
             try {
-                foreach (var item in Directory.EnumerateDirectories(path)) {
-                    var name = new DirectoryInfo(item).Name;
-                    await p.writeLineAsync($"<a href=\"{HttpUtil.UrlEncode(name)}/\">{HttpUtil.HtmlAttributeEncode(name)}/</a><br/>");
-                }
-                foreach (var item in Directory.EnumerateFiles(path)) {
-                    var name = new FileInfo(item).Name;
-                    await p.writeLineAsync($"<a href=\"{HttpUtil.UrlEncode(name)}\">{HttpUtil.HtmlAttributeEncode(name)}</a><br/>");
-                }
+                await WriteDirList(p, path);
             } catch (UnauthorizedAccessException e) {
-                p.ResponseStatusCode = "200 OK";
                 await p.writeAsync($"<p>Exception: {e.GetType()}</p>");
             }
-            await p.writeAsync("</body></html>");
+            await p.writeAsync(dirFoot);
+        }
+
+        const string dirHead = @"
+<html><head>
+<meta name='viewport' content='width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1'>
+<style>
+	body {
+		font-family: sans-serif;
+		max-width: 40em;
+		margin: 1em auto;
+	}
+	.item {
+		margin: 4px;
+		transition: all .3s;
+	}
+	.item a {
+		padding: .1em;
+		text-decoration: none;
+		color: black;
+		display: block;
+		word-wrap: break-word;
+	}
+	.dir.up {
+		background: orange;
+		position: sticky;
+		top: 0;
+	}
+	.dir {
+		background: lightgreen;
+	}
+	.file {
+		background: lightskyblue;
+	}
+	.dir:hover, .file:hover {
+		background: #eee;
+		transition: all .06s;
+	}
+</style>
+</head><body>
+";
+
+        const string dirFoot = "</body></html>";
+
+        private static async Task WriteDirList(HttpConnection p, string path)
+        {
+            foreach (var item in Directory.EnumerateDirectories(path)) {
+                var name = new DirectoryInfo(item).Name;
+                await p.writeLineAsync($"<div class='item dir'><a href=\"{HttpUtil.UrlEncode(name)}/\">{HttpUtil.HtmlAttributeEncode(name)}/</a></div>");
+            }
+            foreach (var item in Directory.EnumerateFiles(path)) {
+                var name = new FileInfo(item).Name;
+                await p.writeLineAsync($"<div class='item file'><a href=\"{HttpUtil.UrlEncode(name)}\">{HttpUtil.HtmlAttributeEncode(name)}</a></div>");
+            }
         }
 
         public static async Task HandleFileAsync(HttpConnection p, string path)

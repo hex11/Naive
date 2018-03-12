@@ -124,7 +124,7 @@ namespace NaiveSocks
             });
         }
 
-        public override async Task HandleRequestAsync(HttpConnection p)
+        public override async Task HandleRequestAsyncImpl(HttpConnection p)
         {
             if (p.Url_path == "/" && p.Method == "GET") {
                 var con = p.GetTag("connection") as InConnection;

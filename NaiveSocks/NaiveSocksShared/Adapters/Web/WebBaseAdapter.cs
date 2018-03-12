@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace NaiveSocks
 {
-    public abstract class WebBaseAdapter : OutAdapter, IHttpRequestAsyncHandler
+    public abstract class WebBaseAdapter : OutAdapter, IHttpRequestAsyncHandler, ICanReload
     {
         HttpSvrImpl _httpSvr;
         public virtual NaiveHttpServerAsync HttpSvr
@@ -24,7 +24,16 @@ namespace NaiveSocks
             await httpConnection.Process();
         }
 
-        public abstract Task HandleRequestAsync(HttpConnection p);
+        public Task HandleRequestAsync(HttpConnection p)
+        {
+            if (_newInstance != null)
+                return _newInstance.HandleRequestAsync(p);
+            return HandleRequestAsyncImpl(p);
+        }
+
+        public abstract Task HandleRequestAsyncImpl(HttpConnection p);
+
+        WebBaseAdapter _newInstance, _oldInstance;
 
         public static HttpConnection CreateHttpConnectionFromMyStream(IMyStream myStream, NaiveHttpServer httpSvr)
         {
@@ -36,6 +45,23 @@ namespace NaiveSocks
                 epPair = new EPPair(new IPEndPoint(IPAddress.Loopback, 1), new IPEndPoint(IPAddress.Loopback, 2));
             }
             return new HttpConnection(myStream.ToStream(), epPair, httpSvr);
+        }
+
+        public virtual bool Reloading(object oldInstance)
+        {
+            if (oldInstance is WebBaseAdapter wb) {
+                _oldInstance = wb;
+            }
+            return false;
+        }
+
+        public override void Start()
+        {
+            base.Start();
+            if (_oldInstance != null) {
+                _oldInstance._newInstance = this;
+                _oldInstance = null;
+            }
         }
 
         class HttpSvrImpl : NaiveHttpServerAsync

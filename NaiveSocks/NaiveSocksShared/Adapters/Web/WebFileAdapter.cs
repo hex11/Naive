@@ -12,7 +12,7 @@ namespace NaiveSocks
         public bool allow_list { get; set; }
         public string index { get; set; }
 
-        public override async Task HandleRequestAsync(HttpConnection p)
+        public override async Task HandleRequestAsyncImpl(HttpConnection p)
         {
             var realPath = p.Url_path;
             if (index != null) {
