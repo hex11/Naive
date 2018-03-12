@@ -519,7 +519,8 @@ namespace Naive.HttpSvr
             Handshake,
             ConnectingError,
             HandshakeError,
-            TimedOut
+            TimedOut,
+            Canceled
         }
 
         public static Task<Socket> ConnectTcpAsync(AddrPort dest, int timeout)
@@ -527,7 +528,13 @@ namespace Naive.HttpSvr
             return ConnectTcpAsync(dest, timeout, async x => x);
         }
 
-        public static async Task<T> ConnectTcpAsync<T>(AddrPort dest, int timeout, Func<Socket, Task<T>> handshake)
+        public static Task<T> ConnectTcpAsync<T>(AddrPort dest, int timeout, Func<Socket, Task<T>> handshake)
+        {
+            return ConnectTcpAsync(dest, timeout, handshake, CancellationToken.None);
+        }
+
+        public static async Task<T> ConnectTcpAsync<T>(AddrPort dest, int timeout,
+                                                Func<Socket, Task<T>> handshake, CancellationToken ct)
         {
             var state = (int)ConnectingState.Resolving;
             TcpClient destTcp = null;
@@ -538,30 +545,41 @@ namespace Naive.HttpSvr
                 if (addrs.Length == 0)
                     throw new Exception($"no address resolved for '{dest.Host}'");
                 var addr = addrs[0];
+                ct.ThrowIfCancellationRequested();
                 destTcp = new TcpClient(addr.AddressFamily);
                 if (Interlocked.Exchange(ref state, (int)ConnectingState.Connecting) != (int)ConnectingState.Resolving) {
                     destTcp.Close();
                     return default(T);
                 }
-                try {
-                    ConfigureSocket(destTcp.Client);
-                    await destTcp.ConnectAsync(addr, dest.Port);
-                } catch (Exception) {
-                    if (Interlocked.Exchange(ref state, (int)ConnectingState.ConnectingError) == (int)ConnectingState.Connecting) {
+                using (ct.Register(x => {
+                    var originalState = Interlocked.Exchange(ref state, (int)ConnectingState.Canceled);
+                    switch (originalState) {
+                    case (int)ConnectingState.Connecting:
+                    case (int)ConnectingState.Handshake:
                         destTcp.Close();
+                        break;
+                    }
+                }, false)) {
+                    try {
+                        ConfigureSocket(destTcp.Client);
+                        await destTcp.ConnectAsync(addr, dest.Port);
+                    } catch (Exception) when (!ct.IsCancellationRequested) {
+                        if (Interlocked.Exchange(ref state, (int)ConnectingState.ConnectingError) == (int)ConnectingState.Connecting) {
+                            destTcp.Close();
+                            throw;
+                        }
+                        return default(T);
+                    }
+                    if (Interlocked.Exchange(ref state, (int)ConnectingState.Handshake) != (int)ConnectingState.Connecting)
+                        return default(T);
+                    try {
+                        return await handshake(destTcp.Client);
+                    } catch (Exception) when (!ct.IsCancellationRequested) {
+                        if (Interlocked.Exchange(ref state, (int)ConnectingState.HandshakeError) == (int)ConnectingState.Handshake) {
+                            destTcp.Close();
+                        }
                         throw;
                     }
-                    return default(T);
-                }
-                if (Interlocked.Exchange(ref state, (int)ConnectingState.Handshake) != (int)ConnectingState.Connecting)
-                    return default(T);
-                try {
-                    return await handshake(destTcp.Client);
-                } catch (Exception) {
-                    if (Interlocked.Exchange(ref state, (int)ConnectingState.HandshakeError) == (int)ConnectingState.Handshake) {
-                        destTcp.Close();
-                    }
-                    throw;
                 }
             });
             if (timeout > 0) {
@@ -595,12 +613,16 @@ namespace Naive.HttpSvr
 
         public static Task<Stream> ConnectTlsAsync(AddrPort dest, int timeout,
             System.Security.Authentication.SslProtocols protocols)
+            => ConnectTlsAsync(dest, timeout, protocols, CancellationToken.None);
+
+        public static Task<Stream> ConnectTlsAsync(AddrPort dest, int timeout,
+            System.Security.Authentication.SslProtocols protocols, CancellationToken ct)
         {
             return ConnectTcpAsync(dest, timeout, async socket => {
                 var tls = new NaiveSocks.TlsStream(NaiveSocks.MyStream.FromSocket(socket));
                 await tls.AuthAsClient(dest.Host, protocols);
                 return tls.ToStream();
-            });
+            }, ct);
         }
 
         public static void ConfigureSocket(Socket socket)

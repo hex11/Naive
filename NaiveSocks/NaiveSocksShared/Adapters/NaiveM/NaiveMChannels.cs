@@ -82,7 +82,7 @@ namespace NaiveSocks
             if (settings.Headers?.ContainsKey("Host") == false) {
                 settings.Headers["Host"] = (settings.Host.Port == 80) ? settings.Host.Host : settings.Host.ToString();
             }
-            Task<IMsgStream> connect(string addStr, bool isHttp = false)
+            Task<IMsgStream> connect(string addStr, bool isHttp, CancellationToken ctt)
             {
                 var req = new NaiveProtocol.Request(AddrPort.Empty) {
                     additionalString = addStr
@@ -94,9 +94,9 @@ namespace NaiveSocks
                 reqbytes = NaiveProtocol.EncryptOrDecryptBytes(true, key, reqbytes);
                 var reqPath = string.Format(settings.UrlFormat, settings.Path, HttpUtil.UrlEncode(Convert.ToBase64String(reqbytes)));
                 if (isHttp) {
-                    return ConnectHttpChunked(settings, key, reqPath, settings.Encryption);
+                    return ConnectHttpChunked(settings, key, reqPath, settings.Encryption, ctt);
                 } else {
-                    return ConnectWebSocket(settings, key, reqPath, settings.Encryption);
+                    return ConnectWebSocket(settings, key, reqPath, settings.Encryption, ctt);
                 }
             }
             IMsgStream msgStream;
@@ -108,23 +108,48 @@ namespace NaiveSocks
             string sid = Guid.NewGuid().ToString("N").Substring(0, 8);
             if (count > 1) {
                 int httpStart = count - httpCount;
+                var myCts = new CancellationTokenSource();
+                var fail = new TaskCompletionSource<int>();
+                bool canceled = false;
                 var streams = new IMsgStream[count];
                 var tasks = Enumerable.Range(0, count).Select(x => NaiveUtils.RunAsyncTask(async () => {
                     if (settings.ImuxConnectionsDelay > 0)
                         await Task.Delay(settings.ImuxConnectionsDelay * x);
+                    if (myCts.Token.IsCancellationRequested)
+                        return;
                     string parameter = NaiveUtils.SerializeArray(sid, wsCount.ToString(), x.ToString(),
                                                     wssoCount.ToString(), httpCount.ToString());
-                    streams[x] = await connect(ImuxPrefix + parameter, x >= httpStart);
+                    IMsgStream stream;
+                    try {
+                        stream = await connect(ImuxPrefix + parameter, x >= httpStart, myCts.Token);
+                    } catch (Exception e) {
+                        Logging.debug($"{sid}-{x}: {e.Message}");
+                        fail.TrySetException(e);
+                        return;
+                    }
+                    lock (streams) {
+                        if (!canceled) {
+                            streams[x] = stream;
+                            return;
+                        }
+                    }
+                    stream.Close(CloseOpt.Close).Forget();
                 })).ToArray();
                 try {
-                    await Task.WhenAny(Task.WhenAll(tasks), Task.Delay(-1, ct));
-                    ct.ThrowIfCancellationRequested();
+                    using (ct.Register((x) => ((TaskCompletionSource<int>)x).TrySetCanceled(), fail, false)) {
+                        var task = await Task.WhenAny(Task.WhenAll(tasks), fail.Task);
+                        await task;
+                    }
                 } catch (Exception) {
-                    foreach (var item in streams) {
-                        try {
-                            item?.Close(CloseOpt.Close).Forget();
-                        } catch (Exception e) {
-                            Logging.warning("NaiveMChs.ConnectTo(): error cleaning msgtream: " + e.Message);
+                    myCts.Cancel();
+                    lock (streams) {
+                        canceled = true;
+                        foreach (var item in streams) {
+                            try {
+                                item?.Close(CloseOpt.Close).Forget();
+                            } catch (Exception e) {
+                                Logging.warning("NaiveMChs.ConnectTo(): error cleaning msgtream: " + e.Message);
+                            }
                         }
                     }
                     throw;
@@ -141,18 +166,19 @@ namespace NaiveSocks
                     );
                 }
             } else {
-                msgStream = await connect("channels");
+                msgStream = await connect("channels", false, ct);
             }
             var ncs = new NaiveMChannels(new NaiveMultiplexing(msgStream));
             return ncs;
         }
 
-        private static async Task<IMsgStream> ConnectWebSocket(ConnectingSettings settings, byte[] key, string reqPath, string encType)
+        private static async Task<IMsgStream> ConnectWebSocket(ConnectingSettings settings,
+            byte[] key, string reqPath, string encType, CancellationToken ct)
         {
             int timeoutms = settings.Timeout * 1000;
             var ws = settings.TlsEnabled
-                ? await WebSocketClient.ConnectToTlsAsync(settings.Host, reqPath, timeoutms)
-                : await WebSocketClient.ConnectToAsync(settings.Host, reqPath, timeoutms);
+                ? await WebSocketClient.ConnectToTlsAsync(settings.Host, reqPath, timeoutms, ct)
+                : await WebSocketClient.ConnectToAsync(settings.Host, reqPath, timeoutms, ct);
             ws.AddToManaged(settings.Timeout / 2, settings.Timeout);
             if (await ws.HandshakeAsync(false, settings.Headers).WithTimeout(timeoutms)) {
                 ws.Close();
@@ -162,26 +188,30 @@ namespace NaiveSocks
             return ws;
         }
 
-        private static async Task<IMsgStream> ConnectHttpChunked(ConnectingSettings settings, byte[] key, string reqPath, string encType)
+        private static async Task<IMsgStream> ConnectHttpChunked(ConnectingSettings settings, byte[] key, string reqPath, string encType, CancellationToken ct)
         {
             int timeoutms = settings.Timeout * 1000;
             var stream = settings.TlsEnabled
-                ? MyStream.FromStream(await NaiveUtils.ConnectTlsAsync(settings.Host, timeoutms))
-                : MyStream.FromSocket(await NaiveUtils.ConnectTcpAsync(settings.Host, timeoutms));
+                ? MyStream.FromStream(await NaiveUtils.ConnectTlsAsync(settings.Host, timeoutms, NaiveUtils.TlsProtocols, ct))
+                : MyStream.FromSocket(await NaiveUtils.ConnectTcpAsync(settings.Host, timeoutms, async x => x, ct));
             try {
                 async Task request()
                 {
-                    var stream2 = MyStream.ToStream(stream);
-                    var httpClient = new HttpClient(stream2);
-                    var response = await httpClient.Request(new HttpRequest() {
-                        Method = "GET",
-                        Path = reqPath,
-                        Headers = settings.Headers
-                    });
-                    if (response.StatusCode != "200")
-                        throw new Exception($"remote response: '{response.StatusCode} {response.ReasonPhrase}'");
-                    if (!response.TestHeader(HttpHeaders.KEY_Transfer_Encoding, HttpHeaders.VALUE_Transfer_Encoding_chunked))
-                        throw new Exception("test header failed: Transfer-Encoding != chunked");
+                    using (ct.Register(x => {
+                        ((IMyStream)x).Close().Forget();
+                    }, stream, false)) {
+                        var stream2 = MyStream.ToStream(stream);
+                        var httpClient = new HttpClient(stream2);
+                        var response = await httpClient.Request(new HttpRequest() {
+                            Method = "GET",
+                            Path = reqPath,
+                            Headers = settings.Headers
+                        });
+                        if (response.StatusCode != "200")
+                            throw new Exception($"remote response: '{response.StatusCode} {response.ReasonPhrase}'");
+                        if (!response.TestHeader(HttpHeaders.KEY_Transfer_Encoding, HttpHeaders.VALUE_Transfer_Encoding_chunked))
+                            throw new Exception("test header failed: Transfer-Encoding != chunked");
+                    }
                 }
                 if (await request().WithTimeout(timeoutms)) {
                     throw new TimeoutException("HTTP requesting timed out.");

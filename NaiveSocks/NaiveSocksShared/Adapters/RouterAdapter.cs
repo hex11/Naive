@@ -8,6 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using System.Threading;
 
 namespace NaiveSocks
 {
@@ -20,6 +21,8 @@ namespace NaiveSocks
         public AdapterRef @default { get; set; }
 
         public override string ToString() => $"{{Router rules={rules?.Count ?? 0} default={@default}}}";
+
+        CancellationTokenSource ctsOnStop = new CancellationTokenSource();
 
         public class Rule
         {
@@ -53,6 +56,12 @@ namespace NaiveSocks
         {
             base.Init();
             _handler = ConnectionHandlerFromRules(rules);
+        }
+
+        public override void Stop()
+        {
+            base.Stop();
+            ctsOnStop.Cancel();
         }
 
         Action<InConnection> ConnectionHandlerFromRules(List<Rule> rules)
@@ -278,7 +287,7 @@ namespace NaiveSocks
                 if (!IsRunning)
                     return;
                 UpdateAbpFile(rule, load, true);
-            }).Forget();
+            }, ctsOnStop.Token).Forget();
         }
 
         private static async Task SaveResponseToFile(string filepath, HttpWebResponse resp)

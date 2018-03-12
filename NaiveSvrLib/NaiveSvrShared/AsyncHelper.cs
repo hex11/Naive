@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Naive.HttpSvr
@@ -132,9 +133,9 @@ namespace Naive.HttpSvr
             await asyncTask();
         }
 
-        public static async Task SetTimeout(TimeSpan timeout, Func<Task> asyncTask)
+        public static async Task SetTimeout(TimeSpan timeout, Func<Task> asyncTask, CancellationToken ct)
         {
-            await Task.Delay(timeout);
+            await Task.Delay(timeout, ct);
             await asyncTask();
         }
 

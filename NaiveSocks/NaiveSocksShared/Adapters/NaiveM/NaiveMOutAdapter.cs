@@ -167,15 +167,29 @@ namespace NaiveSocks
             }
         }
 
+        object timerLock = new object();
+        Timer timer;
+        int timerCurrentDueTime = -1;
+
         private void CheckPoolWithDelay()
         {
-            var d = _using_delay;
-            NaiveUtils.RunAsyncTask(async () => {
-                await Task.Delay(d * 1000);
-                if (!IsRunning)
-                    return;
-                CheckPool();
-            });
+            if (timer == null) {
+                timer = new Timer((x) => {
+                    lock (timerLock) {
+                        timerCurrentDueTime = -1;
+                        if (!IsRunning)
+                            return;
+                    }
+                    CheckPool();
+                });
+            }
+            var ms = _using_delay * 1000;
+            lock (timerLock) {
+                if (timerCurrentDueTime == -1 || timerCurrentDueTime > ms) {
+                    timerCurrentDueTime = ms;
+                    timer.Change(ms, -1);
+                }
+            }
         }
 
         private void CheckPool()

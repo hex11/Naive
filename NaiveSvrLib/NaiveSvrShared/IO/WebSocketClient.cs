@@ -36,9 +36,13 @@ namespace Naive.HttpSvr
             return ConnectToAsync(dest, path, 15 * 1000);
         }
 
-        public static async Task<WebSocketClient> ConnectToAsync(AddrPort dest, string path, int timeout)
+        public static Task<WebSocketClient> ConnectToAsync(AddrPort dest, string path, int timeout)
+            => ConnectToAsync(dest, path, timeout, CancellationToken.None);
+
+        public static async Task<WebSocketClient> ConnectToAsync(AddrPort dest, string path,
+                                                                int timeout, CancellationToken ct)
         {
-            Socket socket = await NaiveUtils.ConnectTcpAsync(dest, timeout);
+            Socket socket = await NaiveUtils.ConnectTcpAsync(dest, timeout, async x => x, ct);
             try {
                 var socketStream = MyStream.FromSocket(socket);
                 var ws = new WebSocketClient(MyStream.ToStream(socketStream), path);
@@ -50,11 +54,16 @@ namespace Naive.HttpSvr
             }
         }
 
-        public static async Task<WebSocketClient> ConnectToTlsAsync(AddrPort dest, string path, int timeout)
+        public static Task<WebSocketClient> ConnectToTlsAsync(AddrPort dest, string path, int timeout)
+            => ConnectToTlsAsync(dest, path, timeout, CancellationToken.None);
+
+        public static async Task<WebSocketClient> ConnectToTlsAsync(AddrPort dest, string path,
+                                                                    int timeout, CancellationToken ct)
         {
             var stream = await NaiveUtils.ConnectTlsAsync(dest, timeout,
                 System.Security.Authentication.SslProtocols.Tls11
-                | System.Security.Authentication.SslProtocols.Tls12);
+                | System.Security.Authentication.SslProtocols.Tls12,
+                ct);
             try {
                 var ws = new WebSocketClient(stream, path);
                 ws.Host = dest.Host;
