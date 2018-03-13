@@ -66,7 +66,7 @@ namespace NaiveSocks
             return false;
         }
 
-        static Random rd = new Random();
+        static Random rd => NaiveUtils.Random;
 
         public override async Task HandleConnection(InConnection connection)
         {

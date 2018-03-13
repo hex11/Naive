@@ -766,7 +766,7 @@ namespace Naive.HttpSvr
         }
 
         private readonly byte[] maskbytes = new byte[] { 12, 34, 45, 78 };
-        private static readonly Random rd = new Random();
+        private static Random rd => NaiveUtils.Random;
         private void genMaskBytes()
         {
             rd.NextBytes(maskbytes);

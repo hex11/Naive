@@ -7,10 +7,10 @@ using Naive.HttpSvr;
 
 namespace NaiveSocks
 {
-    public partial class NaiveProtocol
+    public static class NaiveProtocol
     {
         private static Encoding Encoding => NaiveUtils.UTF8Encoding;
-        private static Random rd = new Random();
+        private static Random rd => NaiveUtils.Random;
 
         private const string CONNECT = "";
         private static readonly byte[] iv128 = NaiveUtils.UTF8Encoding.GetBytes("2333366666123456");

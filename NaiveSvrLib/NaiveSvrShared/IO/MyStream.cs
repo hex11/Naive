@@ -138,7 +138,7 @@ namespace NaiveSocks
             }
         }
 
-        private static Random rd = new Random();
+        private static Random rd => NaiveUtils.Random;
 
         public virtual Task Shutdown(SocketShutdown direction)
         {

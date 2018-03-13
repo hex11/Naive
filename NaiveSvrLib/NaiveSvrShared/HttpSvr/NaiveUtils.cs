@@ -23,7 +23,16 @@ namespace Naive.HttpSvr
         public static readonly UTF8Encoding UTF8Encoding = new UTF8Encoding(false);
         public static readonly Task CompletedTask = AsyncHelper.CompletedTask;
 
-        public static readonly Random Random = new Random();
+        [ThreadStatic]
+        static Random _random;
+        public static Random Random
+        {
+            get {
+                if (_random == null)
+                    _random = new Random();
+                return _random;
+            }
+        }
 
         public static byte[] GetUTF8Bytes(string str) => UTF8Encoding.GetBytes(str);
 
@@ -565,9 +574,16 @@ namespace Naive.HttpSvr
             return string.Join(separator, strs.Where(x => !string.IsNullOrEmpty(x)));
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static T CastTo<T>(this object obj)
         {
             return (T)obj;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static T As<T>(this object obj) where T : class
+        {
+            return obj as T;
         }
 
         public static int ToInt(this string str)
