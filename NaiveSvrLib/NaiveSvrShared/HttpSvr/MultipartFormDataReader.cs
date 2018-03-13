@@ -118,7 +118,7 @@ namespace Naive.HttpSvr
             int matchingPos = 0;
             int boundaryLength = Boundary.Length;
             if (state == 1) {
-                matchingPos = 2;
+                state = 2;
                 return 0;
             }
             var buf = new BytesSegment(buffer, offset, count);

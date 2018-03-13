@@ -1,8 +1,10 @@
-﻿using System;
+﻿using Naive.HttpSvr;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace NaiveTemplate
 {
@@ -33,7 +35,32 @@ namespace NaiveTemplate
                 if (item.Type == Template.NodeType.Text) {
                     writer.Write(item.Str);
                 } else if (item.Type == Template.NodeType.Expression) {
-                    writer.Write(data.GetValue(item.Str));
+                    var v = data.GetValue(item.Str);
+                    if (v is Action<TextWriter> write) {
+                        write(writer);
+                    } else if (v is Func<TextWriter, Task> writeAsync) {
+                        writeAsync(writer).RunSync();
+                    } else {
+                        writer.Write(v);
+                    }
+                }
+            }
+        }
+
+        public async Task RunAsync(Template template, ITemplateData data, TextWriter writer)
+        {
+            foreach (var item in template.nodes) {
+                if (item.Type == Template.NodeType.Text) {
+                    await writer.WriteAsync(item.Str);
+                } else if (item.Type == Template.NodeType.Expression) {
+                    var v = data.GetValue(item.Str);
+                    if (v is Action<TextWriter> write) {
+                        await Task.Run(() => write(writer));
+                    } else if (v is Func<TextWriter, Task> writeAsync) {
+                        await writeAsync(writer);
+                    } else {
+                        await writer.WriteAsync(v?.ToString());
+                    }
                 }
             }
         }
@@ -46,12 +73,30 @@ namespace NaiveTemplate
 
     public class TemplaterData : ITemplateData
     {
-        public IDictionary<string, object> Dict;
+        public IDictionary<string, object> Dict { get; }
+
+        public TemplaterData() : this(new Dictionary<string, object>())
+        {
+        }
 
         public TemplaterData(IDictionary<string, object> dict)
         {
             this.Dict = dict;
         }
+
+        TemplaterData add(string key, object value)
+        {
+            Dict.Add(key, value);
+            return this;
+        }
+
+        public void Add(string key, object obj) => add(key, obj);
+
+        public void Add(string key, string value) => add(key, value);
+
+        public void Add(string key, Action<TextWriter> writer) => add(key, writer);
+
+        public void Add(string key, Func<TextWriter, Task> asyncWriter) => add(key, asyncWriter);
 
         public object GetValue(string key)
         {
@@ -178,7 +223,7 @@ namespace NaiveTemplate
                             cur++;
                             continue;
                         }
-                        if (compareString(input, ExpressionEnd, cur)) {
+                        if (compareString(input, cur, ExpressionEnd)) {
                             cur += ExpressionEnd.Length;
                             yield return CreateExoressionEnd();
                             break;
@@ -187,33 +232,28 @@ namespace NaiveTemplate
                         yield return CreateIdentifier(word);
                     }
                 }
-                yield break;
             }
 
-            public static bool compareString(string str, string str2, int begin)
+            public static bool compareString(string str, int strOffset, string pattern)
             {
-                if (str.Length - begin < str2.Length) return false;
-                for (int i = 0; i < str2.Length; i++) {
-                    if (str[i + begin] != str2[i]) return false;
+                if (str.Length - strOffset < pattern.Length) return false;
+                for (int i = 0; i < pattern.Length; i++) {
+                    if (str[i + strOffset] != pattern[i]) return false;
                 }
                 return true;
             }
 
-            private int min(int a, int b) => a > b ? b : a;
+            private static int min(int a, int b) => a > b ? b : a;
 
             private string getNextWord()
             {
                 sb.Clear();
-                while (true) {
-                    if (cur >= input.Length)
-                        break;
-                    var ch = input[cur];
+                while (cur < input.Length) {
+                    var ch = input[cur++];
                     if (isSpace(ch) && sb.Length > 0) {
                         break;
                     }
-                    cur++;
-                    bool _isSpecialChar = isSpecialChar(ch);
-                    if (_isSpecialChar) {
+                    if (isSpecialChar(ch)) {
                         if (sb.Length == 0)
                             return ch.ToString();
                         cur--;

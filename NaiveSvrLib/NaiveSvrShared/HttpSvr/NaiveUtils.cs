@@ -38,205 +38,33 @@ namespace Naive.HttpSvr
             qstr = splits.Length >= 2 ? splits[1] : "";
         }
 
-        public static NameValueCollection ParseUrlQstr(this HttpConnection p)
+        public static NameValueCollection ParseUrlQstr(HttpConnection p) => WebSvrHelper.ParseUrlQstr(p);
+
+        public static NameValueCollection ParsePostData(HttpConnection p) => WebSvrHelper.ParsePostData(p);
+
+        public static string ReadAllInputData(HttpConnection p) => WebSvrHelper.ReadAllInputData(p);
+
+        public static string ReadAllInputData(HttpConnection p, Encoding encoding)
         {
-            return HttpUtil.ParseQueryString(p.Url_qstr);
+            return WebSvrHelper.ReadAllInputData(p, encoding);
         }
 
-        public static NameValueCollection ParsePostData(this HttpConnection p)
-        {
-            var data = p.ReadAllInputData();
-            return HttpUtil.ParseQueryString(data);
-        }
+        public static string GetHttpHeader(HttpConnection p) => WebSvrHelper.GetHttpHeader(p);
 
-        public static string ReadAllInputData(this HttpConnection p) => p.ReadAllInputData(Encoding.UTF8);
+        public static bool HandleIfNotModified(HttpConnection p, string lastModified = null, string etag = null)
+            => WebSvrHelper.HandleIfNotModified(p, lastModified, etag);
 
-        public static string ReadAllInputData(this HttpConnection p, Encoding encoding)
-        {
-            return new StreamReader(p.inputDataStream, encoding).ReadToEnd();
-        }
+        public static Task HandleDirectoryAsync(HttpConnection p, string dirpath, bool allowListDir = true) => WebSvrHelper.HandleDirectoryAsync(p, dirpath, allowListDir);
 
-        public static string GetHttpHeader(this HttpConnection p)
-        {
-            //StringBuilder sb = new StringBuilder(128);
-            //sb.AppendLine($"{p.Method} {p.Url} {p.HttpVersion}");
-            //foreach (var item in p.RequestHeaders) {
-            //    sb.AppendLine($"{item.Key}: {item.Value}");
-            //}
-            //return sb.ToString();
-            return p.RawRequest;
-        }
+        public static Task HandleDirectoryAsync(HttpConnection p, string dirpath, Func<HttpConnection, string, Task> hitFile = null, bool allowListDir = true) => WebSvrHelper.HandleDirectoryAsync(p, dirpath, hitFile, allowListDir);
 
-        public static bool HandleIfNotModified(this HttpConnection p, string lastModified = null, string etag = null)
-        {
-            if (lastModified != null) {
-                p.setHeader("Last-Modified", lastModified);
-            }
-            if (etag != null) {
-                p.setHeader("Etag", etag);
-            }
-            p.setHeader("Cache-Control", "public,max-age=3600");
-            var notmod =
-                (etag != null && p.GetReqHeader("If-None-Match") == etag)
-                || (lastModified != null && p.GetReqHeader("If-Modified-Since") == lastModified);
-            if (notmod)
-                p.ResponseStatusCode = "304 Not Modified";
-            return notmod;
-        }
-
-        public static Task HandleDirectoryAsync(HttpConnection p, string dirpath, bool allowListDir = true)
-        {
-            return HandleDirectoryAsync(p, dirpath, HandleFileAsync, allowListDir);
-        }
-
-        public static Task HandleDirectoryAsync(HttpConnection p, string dirpath, Func<HttpConnection, string, Task> hitFile = null, bool allowListDir = true)
-        {
-            return HandleDirectoryAsync(p, dirpath, hitFile, allowListDir ? (Func<HttpConnection, string, Task>)WriteDirListPage : null);
-        }
-
-        public static async Task HandleDirectoryAsync(HttpConnection p, string dirpath,
+        public static Task HandleDirectoryAsync(HttpConnection p, string dirpath,
             Func<HttpConnection, string, Task> hitFile, Func<HttpConnection, string, Task> hitDir)
-        {
-            if (p == null)
-                throw new ArgumentNullException(nameof(p));
-            if (dirpath == null)
-                throw new ArgumentNullException(nameof(dirpath));
+            => WebSvrHelper.HandleDirectoryAsync(p, dirpath, hitFile, hitDir);
 
-            var path = Path.Combine(dirpath, p.Url_path.TrimStart('/'));
-            if (p.Url_path.Contains(".."))
-                return;
-            if (hitFile != null && File.Exists(path)) {
-                p.Handled = true;
-                p.ResponseStatusCode = "200 OK";
-                await hitFile(p, path);
-            } else if (hitDir != null && Directory.Exists(path)) {
-                p.Handled = true;
-                p.ResponseStatusCode = "200 OK";
-                await hitDir(p, path);
-            } else {
-                //p.ResponseStatusCode = "404 Not Found";
-                //p.writeLine("file not found");
-            }
-        }
+        public static Task HandleFileAsync(HttpConnection p, string path) => WebSvrHelper.HandleFileAsync(p, path);
 
-        public static async Task WriteDirListPage(HttpConnection p, string path)
-        {
-            await p.writeAsync(dirHead);
-            if (p.Url_path != "/") {
-                await p.writeLineAsync("<div class='item dir up'><a href=\"../\">../</a></div>");
-            }
-            try {
-                await WriteDirList(p, path);
-            } catch (UnauthorizedAccessException e) {
-                await p.writeAsync($"<p>Exception: {e.GetType()}</p>");
-            }
-            await p.writeAsync(dirFoot);
-        }
-
-        const string dirHead = @"
-<html><head>
-<meta name='viewport' content='width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1'>
-<style>
-	body {
-		font-family: sans-serif;
-		max-width: 40em;
-		margin: 1em auto;
-	}
-	.item {
-		margin: 4px;
-		transition: all .3s;
-	}
-	.item a {
-		padding: .1em;
-		text-decoration: none;
-		color: black;
-		display: block;
-		word-wrap: break-word;
-	}
-	.dir.up {
-		background: orange;
-		position: sticky;
-		top: 0;
-	}
-	.dir {
-		background: lightgreen;
-	}
-	.file {
-		background: lightskyblue;
-	}
-	.dir:hover, .file:hover {
-		background: #eee;
-		transition: all .06s;
-	}
-</style>
-</head><body>
-";
-
-        const string dirFoot = "</body></html>";
-
-        private static async Task WriteDirList(HttpConnection p, string path)
-        {
-            foreach (var item in Directory.EnumerateDirectories(path)) {
-                var name = new DirectoryInfo(item).Name;
-                await p.writeLineAsync($"<div class='item dir'><a href=\"{HttpUtil.UrlEncode(name)}/\">{HttpUtil.HtmlAttributeEncode(name)}/</a></div>");
-            }
-            foreach (var item in Directory.EnumerateFiles(path)) {
-                var name = new FileInfo(item).Name;
-                await p.writeLineAsync($"<div class='item file'><a href=\"{HttpUtil.UrlEncode(name)}\">{HttpUtil.HtmlAttributeEncode(name)}</a></div>");
-            }
-        }
-
-        public static async Task HandleFileAsync(HttpConnection p, string path)
-        {
-            FileInfo fi = new FileInfo(path);
-            using (var fs = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)) {
-                var type = GetHttpContentTypeFromPath(path);
-                if (type != null) {
-                    p.setHeader(HttpHeaders.KEY_Content_Type, type);
-                } else {
-                    p.setHeader(HttpHeaders.KEY_Content_Type, "application/octet-stream");
-                }
-                if (p.HandleIfNotModified(fi.LastWriteTimeUtc.ToString("R")))
-                    return;
-                await NaiveUtils.HandleFileStreamAsync(p, fs, (type == null ? fi.Name : null), false);
-            }
-        }
-
-        struct KeyValueStringPair
-        {
-            public KeyValueStringPair(string key, string value)
-            {
-                Key = key;
-                Value = value;
-            }
-
-            public string Key;
-            public string Value;
-        }
-
-        static KeyValueStringPair[] HttpContentTypes = new[] {
-            new KeyValueStringPair(".html", "text/html; charset=UTF-8"),
-            new KeyValueStringPair(".htm", "text/html; charset=UTF-8"),
-            new KeyValueStringPair(".css", "text/css"),
-            new KeyValueStringPair(".js", "text/javascript"),
-            new KeyValueStringPair(".gif", "image/gif"),
-            new KeyValueStringPair(".png", "image/png"),
-            new KeyValueStringPair(".jpeg", "image/jpeg"),
-            new KeyValueStringPair(".jpg", "image/jpeg"),
-            new KeyValueStringPair(".ico", "image/x-icon"),
-            new KeyValueStringPair(".txt", "text/plain"),
-            new KeyValueStringPair(".json", "application/json"),
-            new KeyValueStringPair(".mp4", "video/mp4"),
-        };
-
-        public static string GetHttpContentTypeFromPath(string path)
-        {
-            foreach (var item in HttpContentTypes) {
-                if (path.EndsWith(item.Key))
-                    return item.Value;
-            }
-            return null;
-        }
+        public static string GetHttpContentTypeFromPath(string path) => WebSvrHelper.GetHttpContentTypeFromPath(path);
 
         public static IPEndPoint ParseIPEndPoint(string endPoint)
         {
@@ -253,58 +81,22 @@ namespace Naive.HttpSvr
             => HandleFileDownloadAsync(p, path, new FileInfo(path));
         public static Task HandleFileDownloadAsync(HttpConnection p, string path, FileInfo fileInfo)
             => HandleFileDownloadAsync(p, path, fileInfo.Name);
-        public static async Task HandleFileDownloadAsync(HttpConnection p, string path, string fileName)
+        public static Task HandleFileDownloadAsync(HttpConnection p, string path, string fileName)
         {
-            p.Handled = true;
-            p.outputStream.CurrentCompressionType = CompressionType.None;
-            if (File.Exists(path) == false) {
-                p.ResponseStatusCode = "404 Not Found";
-                return;
-            }
-            using (var fs = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)) {
-                p.ResponseStatusCode = "200 OK";
-                p.ResponseHeaders[HttpHeaders.KEY_Content_Type] = "application/octet-stream";
-                p.ResponseHeaders["Content-Disposition"] = $"attachment; filename=\"{fileName}\"";
-                await HandleSeekableStreamAsync(p, fs);
-            }
+            return WebSvrHelper.HandleFileDownloadAsync(p, path, fileName);
         }
 
-        public static async Task HandleFileStreamAsync(this HttpConnection p, Stream fs, string fileName, bool setContentType)
+        public static Task HandleFileStreamAsync(HttpConnection p, Stream fs, string fileName, bool setContentType)
         {
-            if (setContentType)
-                p.ResponseHeaders[HttpHeaders.KEY_Content_Type] = "application/octet-stream";
-            if (fileName != null)
-                p.ResponseHeaders["Content-Disposition"] = $"attachment; filename=\"{fileName}\"";
-            await HandleSeekableStreamAsync(p, fs);
+            return WebSvrHelper.HandleFileStreamAsync(p, fs, fileName, setContentType);
         }
 
         public static void HandleSeekableStream(this HttpConnection p, Stream fs)
             => HandleSeekableStreamAsync(p, fs).RunSync();
 
-        private static readonly Regex regexBytes = new Regex(@"bytes=(\d+)-(\d+)?");
-        public static async Task HandleSeekableStreamAsync(this HttpConnection p, Stream stream)
+        public static Task HandleSeekableStreamAsync(HttpConnection p, Stream stream)
         {
-            var fileLength = stream.Length;
-            long beginpos = 0;
-            long endpos = fileLength - 1;
-            p.ResponseHeaders["Accept-Ranges"] = "bytes";
-            if (p.RequestHeaders["Range"] is string ranges) {
-                var match = regexBytes.Match(ranges);
-                beginpos = Convert.ToInt64(match.Groups[1].Value);
-                if (match.Groups[2].Success) {
-                    endpos = Convert.ToInt64(match.Groups[2].Value);
-                }
-                p.ResponseStatusCode = "206 Partial Content";
-                p.ResponseHeaders["Content-Range"] = $"bytes {beginpos}-{endpos}/{fileLength}";
-            }
-            long realLength = endpos - beginpos + 1;
-            if (p.outputStream.CurrentCompressionType == CompressionType.None) {
-                await p.outputStream.SwitchToKnownLengthModeAsync(realLength);
-            } else {
-                await p.outputStream.SwitchToChunkedModeAsync();
-            }
-            stream.Position = beginpos;
-            await StreamCopyAsync(from: stream, to: p.outputStream, size: realLength, bs: 64 * 1024);
+            return WebSvrHelper.HandleSeekableStreamAsync(p, stream);
         }
 
         public static void StreamToStream(Stream from, Stream to, long size = -1, int bs = 16 * 1024)

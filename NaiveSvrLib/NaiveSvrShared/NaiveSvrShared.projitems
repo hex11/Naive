@@ -27,6 +27,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\System.Web\Helpers.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\System.Web\HttpEncoder.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\System.Web\HttpUtility.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\WebSvrHelper.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IO\BytesSegment.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IO\BytesView.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IO\FilterBase.cs" />

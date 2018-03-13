@@ -76,6 +76,8 @@ namespace NaiveSocks
         public string WorkingDirectory => CurrentConfig?.WorkingDirectory ?? ".";
         public string ProcessFilePath(string input)
         {
+            if (input == null)
+                return null;
             if (WorkingDirectory?.Length == 0 || WorkingDirectory == "." || Path.IsPathRooted(input))
                 return input;
             return Path.Combine(WorkingDirectory, input);
