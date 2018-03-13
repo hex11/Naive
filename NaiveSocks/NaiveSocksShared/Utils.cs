@@ -170,6 +170,45 @@ namespace NaiveSocks
 
             return p == pattern.Length;
         }
+
+        public static bool IsMatch(string input, string pattern, int patOffset, int patLen)
+        {
+            int star = -1, ss = 0, s = 0, p = 0;
+            while (s < input.Length) {
+                if (p < patLen) {
+                    if ((pattern[patOffset + p] == '?') || (pattern[patOffset + p] == input[s])) {
+                        //advancing both pointers when (both characters match) or ('?' found in pattern)
+                        //note that pattern[p] will not advance beyond its length 
+                        s++;
+                        p++;
+                        continue;
+                    } else if (pattern[patOffset + p] == '*') {
+                        // * found in pattern, track index of *, only advancing pattern pointer 
+                        star = p++;
+                        ss = s;
+                        continue;
+                    }
+                }
+
+                if (star != -1) {
+                    //current characters didn't match, last pattern pointer was *, current pattern pointer is not *
+                    //only advancing pattern pointer
+                    p = star + 1;
+                    s = ++ss;
+                } else {
+                    //current pattern pointer is not star, last patter pointer was not *
+                    //characters do not match
+                    return false;
+                }
+            }
+
+            //check for remaining characters in pattern
+            while (p < patLen && pattern[patOffset + p] == '*') {
+                p++;
+            }
+
+            return p == patLen;
+        }
     }
 
     public static class TomlExt

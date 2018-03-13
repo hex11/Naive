@@ -88,7 +88,7 @@ namespace Naive.HttpSvr
             if (dirpath == null)
                 throw new ArgumentNullException(nameof(dirpath));
 
-            var r = CheckDirectory(dirpath, p.Url_path, out var path);
+            var r = CheckPath(dirpath, p.Url_path, out var path);
             if (r == PathResult.IllegalPath)
                 return;
             if (r == PathResult.File && hitFile != null) {
@@ -113,7 +113,7 @@ namespace Naive.HttpSvr
             Directory
         }
 
-        public static PathResult CheckDirectory(string dirPath, string relPath, out string path)
+        public static PathResult CheckPath(string dirPath, string relPath, out string path)
         {
             relPath = relPath.TrimStart('/');
             if (relPath.Contains("..") || Path.IsPathRooted(relPath)) {

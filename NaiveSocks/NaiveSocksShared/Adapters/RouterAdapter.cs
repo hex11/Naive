@@ -337,55 +337,172 @@ namespace NaiveSocks
             return false;
         }
 
+        struct Range
+        {
+            public int offset, length;
+
+            public Range(int offset, int length)
+            {
+                this.offset = offset;
+                this.length = length;
+            }
+        }
+
+        struct SubString
+        {
+            public string str;
+            public int Offset, Length;
+
+            public bool StartsWith(string pattern)
+            {
+                if (pattern.Length > Length)
+                    return false;
+                for (int i = 0; i < pattern.Length; i++) {
+                    if (str[Offset + i] != pattern[i])
+                        return false;
+                }
+                return true;
+            }
+
+            public void AppendTo(StringBuilder sb, int start)
+                => AppendTo(sb, start, Length - start);
+
+            public void AppendTo(StringBuilder sb, int start, int count)
+                => sb.Append(str, Offset + start, count);
+
+            public bool IsNullOrWhiteSpace()
+            {
+                for (int i = 0; i < Length; i++) {
+                    if (!char.IsWhiteSpace(str[Offset + i]))
+                        return false;
+                }
+                return true;
+            }
+
+            public void TrimSelf()
+            {
+                while (Length > 0 && char.IsWhiteSpace(this[0])) {
+                    Offset++;
+                    Length--;
+                }
+                while (Length > 0 && char.IsWhiteSpace(this[Length - 1])) {
+                    Length--;
+                }
+            }
+
+            public bool Contains(char ch, int offset)
+                => RouterAdapter.Contains(str, new Range(Offset + offset, Length - offset), ch);
+
+            public char this[int i] => str[Offset + i];
+
+            public string Get() => str.Substring(Offset, Length);
+            public override string ToString() => Get();
+        }
+
         Func<InConnection, bool> ParseABPFilter(string ruleset)
         {
-            var ruleLines = ruleset.Split('\r', '\n');
-            var blackDomainList = new List<string>();
+            //var ruleLines = ruleset.Split('\r', '\n');
+            int rlen = ruleset.Length;
+            int lineCount = 0;
+            for (int i = 0; i < ruleset.Length; i++) {
+                if (ruleset[i] == '\n')
+                    lineCount++;
+            }
+            string bigString = null;
+            var bssb = new StringBuilder(ruleset.Length);
+            var blackDomainList = new List<Range>(lineCount / 2);
             var blackRegexUrlList = new List<Regex>();
-            var blackWildcardUrlList = new List<string>();
-            var whiteDomainList = new List<string>();
+            var blackWildcardUrlList = new List<Range>(lineCount / 2);
+            var whiteDomainList = new List<Range>();
             var whiteRegexUrlList = new List<Regex>();
-            var whiteWildcardUrlList = new List<string>();
-            var resultCache = new Dictionary<string, bool>();
-            for (int i = 0; i < ruleLines.Length; i++) {
-                var line = ruleLines[i];
-                if (string.IsNullOrWhiteSpace(line))
+            var whiteWildcardUrlList = new List<Range>();
+            var resultCache = new Dictionary<string, bool>(32);
+            int cur = 0;
+            int lineNum = 0;
+            while (cur < rlen) {
+                var begin = cur;
+                while (cur < rlen && ruleset[cur++] != '\n') {
+                }
+                var line = new SubString() {
+                    str = ruleset,
+                    Offset = begin,
+                    Length = cur - begin
+                };
+                lineNum++;
+                line.TrimSelf();
+                if (line.Length == 0)
                     continue;
                 var firstCh = line[0];
                 if (firstCh == '!' || firstCh == '#' || firstCh == '[')
                     continue;
                 if (line.StartsWith("||")) {
-                    blackDomainList.Add(line.Substring(2));
+                    var offset = bssb.Length;
+                    var len = line.Length - 2;
+                    if (line.Contains('*', 2)) {
+                        bssb.Append("*.");
+                        blackDomainList.Add(new Range(offset, len + 2));
+                        offset += 2;
+                    }
+                    line.AppendTo(bssb, 2);
+                    blackDomainList.Add(new Range(offset, len));
                 } else if (line.StartsWith("|")) {
-                    var wc = line.Substring(1) + "*";
-                    blackWildcardUrlList.Add(wc);
+                    var offset = bssb.Length;
+                    var len = line.Length - 1 + 1;
+                    //var wc = line.Substring(1) + "*";
+                    line.AppendTo(bssb, 1); bssb.Append('*');
+                    blackWildcardUrlList.Add(new Range(offset, len));
                 } else if (line.StartsWith("@@||")) {
-                    whiteDomainList.Add(line.Substring(4));
+                    var offset = bssb.Length;
+                    var len = line.Length - 4;
+                    if (line.Contains('*', 4)) {
+                        bssb.Append("*.");
+                        whiteDomainList.Add(new Range(offset, len + 2));
+                        offset += 2;
+                    }
+                    line.AppendTo(bssb, 4);
+                    whiteDomainList.Add(new Range(offset, len));
                 } else if (line.StartsWith("@@|")) {
-                    var wc = line.Substring(3) + "*";
-                    whiteWildcardUrlList.Add(wc);
+                    var offset = bssb.Length;
+                    var len = line.Length - 3 + 1;
+                    //var wc = line.Substring(3) + "*";
+                    line.AppendTo(bssb, 4); bssb.Append('*');
+                    whiteWildcardUrlList.Add(new Range(offset, len));
                 } else if (line.StartsWith("@@")) {
                     if (line.Length > 2 && (line[2].IsValidDomainCharacter() || line[2] == '*')) {
-                        var wc = "*" + line.Substring(2) + "*";
-                        whiteWildcardUrlList.Add(wc);
+                        var offset = bssb.Length;
+                        var len = line.Length - 2 + 2;
+                        //var wc = "*" + line.Substring(2) + "*";
+                        bssb.Append('*'); line.AppendTo(bssb, 2); bssb.Append('*');
+                        whiteWildcardUrlList.Add(new Range(offset, len));
                     } else if (line.Length > 2 && line[2] == '/') {
-                        var regex = Regex.Match(line, "/(.+)/");
+                        var regex = Regex.Match(line.Get(), "/(.+)/");
                         if (regex.Success) {
                             whiteRegexUrlList.Add(new Regex(regex.Groups[1].Value, RegexOptions.ECMAScript));
                         }
                     }
                 } else if (line[0].IsValidDomainCharacter() || line[0] == '*') {
-                    var wc = "*" + line + "*";
-                    blackWildcardUrlList.Add(wc);
+                    //var wc = "*" + line + "*";
+                    var offset = bssb.Length;
+                    var len = line.Length + 2;
+                    bssb.Append('*').Append(line).Append('*');
+                    blackWildcardUrlList.Add(new Range(offset, len));
                 } else if (line[0] == '/') {
-                    var regex = Regex.Match(line, "/(.+)/");
+                    var regex = Regex.Match(line.Get(), "/(.+)/");
                     if (regex.Success) {
                         blackRegexUrlList.Add(new Regex(regex.Groups[1].Value, RegexOptions.ECMAScript));
                     }
                 } else {
-                    Logg?.warning($"unsupported/wrong ABP filter at line {i + 1}: {line.Quoted()}");
+                    Logg?.warning($"unsupported/wrong ABP filter at line {lineNum + 1}: {line.Get().Quoted()}");
                 }
             }
+            bigString = bssb.ToString();
+            bssb = null;
+            blackDomainList.TrimExcess();
+            blackRegexUrlList.TrimExcess();
+            blackWildcardUrlList.TrimExcess();
+            whiteDomainList.TrimExcess();
+            whiteRegexUrlList.TrimExcess();
+            whiteWildcardUrlList.TrimExcess();
             return (x) => {
                 var host = x.Dest.Host;
                 lock (resultCache) {
@@ -394,7 +511,7 @@ namespace NaiveSocks
                         || !resultCache.TryGetValue(host, out hit)) {
                         var url = x.Url ?? (x.Dest.Port == 443 ? $"https://{host}/" : $"http://{host}/");
                         foreach (var item in blackDomainList) {
-                            hit = MatchDomain(host, item);
+                            hit = MatchDomain(host, bigString, item);
                             if (hit) goto IF_HIT;
                         }
                         foreach (var item in blackRegexUrlList) {
@@ -402,13 +519,13 @@ namespace NaiveSocks
                             if (hit) goto IF_HIT;
                         }
                         foreach (var item in blackWildcardUrlList) {
-                            hit = MatchWildcard(url, item);
+                            hit = MatchWildcard(url, bigString, item);
                             if (hit) goto IF_HIT;
                         }
                         IF_HIT:
                         if (hit) {
                             foreach (var item in whiteDomainList) {
-                                if (MatchDomain(host, item)) {
+                                if (MatchDomain(host, bigString, item)) {
                                     hit = false;
                                     goto IF_NOT_HIT;
                                 }
@@ -420,7 +537,7 @@ namespace NaiveSocks
                                 }
                             }
                             foreach (var item in whiteWildcardUrlList) {
-                                if (MatchWildcard(url, item)) {
+                                if (MatchWildcard(url, bigString, item)) {
                                     hit = false;
                                     goto IF_NOT_HIT;
                                 }
@@ -441,23 +558,51 @@ namespace NaiveSocks
             return Wildcard.IsMatch(input, pattern);
         }
 
+        static bool MatchWildcard(string input, string pattern, Range sub)
+        {
+            return Wildcard.IsMatch(input, pattern, sub.offset, sub.length);
+        }
+
         static bool MatchRegex(string input, Regex regex)
         {
             return regex.IsMatch(input);
         }
 
-        static bool MatchDomain(string input, string pattern)
+        static bool MatchDomain(string input, string pattern, Range sub)
         {
-            if (pattern.Contains("*")) {
-                return Wildcard.IsMatch(input, pattern);
+            if (Contains(pattern, sub, '*')) {
+                return Wildcard.IsMatch(input, pattern, sub.offset, sub.length);
             } else {
-                var i = input.IndexOf(pattern);
+                var i = IndexOf(input, pattern, sub.offset, sub.length);
                 if (i >= 0) {
-                    if (input[0] == '.' || (i == 0 || input[i - 1] == '.') && i + pattern.Length == input.Length)
+                    if ((i == 0 || input[i - 1] == '.') && i + sub.length == input.Length)
                         return true;
                 }
             }
             return false;
+        }
+
+        static bool Contains(string input, Range inputSub, char ch)
+        {
+            for (int i = 0; i < inputSub.length; i++) {
+                if (input[inputSub.offset + i] == ch)
+                    return true;
+            }
+            return false;
+        }
+
+        static int IndexOf(string input, string pattern, int patOffset, int patLen)
+        {
+            for (int i = 0; i <= input.Length - patLen; i++) {
+                for (int j = 0; j < patLen; j++) {
+                    if (input[i + j] != pattern[patOffset + j])
+                        goto WRONG;
+                }
+                return i;
+                WRONG:
+                ;
+            }
+            return -1;
         }
 
         public override async Task HandleConnection(InConnection connection)

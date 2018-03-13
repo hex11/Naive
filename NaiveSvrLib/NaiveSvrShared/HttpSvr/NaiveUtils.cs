@@ -23,14 +23,15 @@ namespace Naive.HttpSvr
         public static readonly UTF8Encoding UTF8Encoding = new UTF8Encoding(false);
         public static readonly Task CompletedTask = AsyncHelper.CompletedTask;
 
-        [ThreadStatic]
-        static Random _random;
+        // https://stackoverflow.com/a/19271062/8924979
+        static int seed = Environment.TickCount;
+        static readonly ThreadLocal<Random> _random =
+            new ThreadLocal<Random>(() => new Random(Interlocked.Increment(ref seed)));
+
         public static Random Random
         {
             get {
-                if (_random == null)
-                    _random = new Random();
-                return _random;
+                return _random.Value;
             }
         }
 
