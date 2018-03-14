@@ -11,9 +11,11 @@ using Nett;
 
 namespace NaiveSocks
 {
-    public class HttpInAdapter : InAdapterWithListenField, IHttpRequestAsyncHandler
+    public class HttpInAdapter : InAdapterWithListenField, IHttpRequestAsyncHandler, IConnectionHandler
     {
         public AdapterRef[] webouts { get; set; }
+
+        public Dictionary<string, AdapterRef[]> hosts { get; set; }
 
         public bool logging { get; set; }
         public bool verbose { get; set; }
@@ -45,7 +47,8 @@ namespace NaiveSocks
         {
             base.Init();
             httpServer = new HttpServer(this);
-            httpServer.AddListener(listen);
+            if (listen != null)
+                httpServer.AddListener(listen);
         }
 
         public override void Start()
@@ -63,6 +66,13 @@ namespace NaiveSocks
         public Task HandleRequestAsync(HttpConnection p)
         {
             return httpServer.HandleRequestAsync(p);
+        }
+
+        public async Task HandleConnection(InConnection connection)
+        {
+            await connection.SetConnectResult(ConnectResults.Conneceted);
+            var httpConn = WebBaseAdapter.CreateHttpConnectionFromMyStream(connection.DataStream, httpServer);
+            await httpConn.Process();
         }
 
         private class HttpServer : NaiveHttpServerAsync
@@ -104,7 +114,7 @@ namespace NaiveSocks
                     try {
                         await adapter.HandleIncommingConnection(inc);
                     } finally {
-                        MyStream.CloseWithTimeout(mystream);
+                        MyStream.CloseWithTimeout(mystream).Forget();
                     }
                 } else if (p.Url.StartsWith("http://") || p.Url.StartsWith("https://")) {
                     if (adapter.@out == null) {
@@ -113,21 +123,35 @@ namespace NaiveSocks
                     }
                     await handleHttp(p);
                 } else {
-                    AdapterRef[] webouts = adapter.webouts;
-                    if (webouts == null) {
-                        Logger.info($"unhandled web request (no 'webouts'): {p.Method} {p.Url}");
-                        return;
-                    }
-                    foreach (var adaRef in webouts) {
-                        if (!(adaRef.Adapter is IHttpRequestAsyncHandler ihrah)) {
-                            Logger.warning($"webout adapter ({adaRef}) is not a http handler.");
-                        } else {
-                            await ihrah.HandleRequestAsync(p);
-                            if (p.Handled)
+                    var host = p.Host;
+                    var hosts = adapter.hosts;
+                    if (host != null && hosts != null) {
+                        if (hosts.TryGetValue(host, out var outs)) {
+                            if (await HandleByAdapters(p, outs))
                                 return;
                         }
                     }
+                    var webouts = adapter.webouts;
+                    if (webouts == null) {
+                        Logger.info($"unhandled web request (no 'webouts'/'hosts'): {p.Method} {p.Url}");
+                        return;
+                    }
+                    await HandleByAdapters(p, webouts);
                 }
+            }
+
+            async Task<bool> HandleByAdapters(HttpConnection p, AdapterRef[] adapters)
+            {
+                foreach (var adaRef in adapters) {
+                    if (!(adaRef.Adapter is IHttpRequestAsyncHandler ihrah)) {
+                        Logger.warning($"adapter ({adaRef}) is not a http handler.");
+                    } else {
+                        await ihrah.HandleRequestAsync(p);
+                        if (p.Handled)
+                            return true;
+                    }
+                }
+                return false;
             }
 
             static IMyStream getStream(HttpConnection p) => p.myStream;

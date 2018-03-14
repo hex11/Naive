@@ -435,7 +435,7 @@ namespace NaiveSocks
         public Logger Logg { get; set; }
 
         public int RulesCount { get; set; }
-        
+
 
         public void Parse(string ruleset)
         {
@@ -576,25 +576,24 @@ namespace NaiveSocks
                         hit = MatchWildcard(u, bigString, item);
                         if (hit) goto IF_HIT;
                     }
+                    goto IF_NOT_HIT;
                     IF_HIT:
-                    if (hit) {
-                        foreach (var item in whiteDomainList) {
-                            if (MatchDomain(host, bigString, item)) {
-                                hit = false;
-                                goto IF_NOT_HIT;
-                            }
+                    foreach (var item in whiteDomainList) {
+                        if (MatchDomain(host, bigString, item)) {
+                            hit = false;
+                            goto IF_NOT_HIT;
                         }
-                        foreach (var item in whiteRegexUrlList) {
-                            if (MatchRegex(u, item)) {
-                                hit = false;
-                                goto IF_NOT_HIT;
-                            }
+                    }
+                    foreach (var item in whiteRegexUrlList) {
+                        if (MatchRegex(u, item)) {
+                            hit = false;
+                            goto IF_NOT_HIT;
                         }
-                        foreach (var item in whiteWildcardUrlList) {
-                            if (MatchWildcard(u, bigString, item)) {
-                                hit = false;
-                                goto IF_NOT_HIT;
-                            }
+                    }
+                    foreach (var item in whiteWildcardUrlList) {
+                        if (MatchWildcard(u, bigString, item)) {
+                            hit = false;
+                            goto IF_NOT_HIT;
                         }
                     }
                     IF_NOT_HIT:

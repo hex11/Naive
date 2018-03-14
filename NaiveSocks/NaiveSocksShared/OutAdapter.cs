@@ -123,7 +123,7 @@ namespace NaiveSocks
         }
     }
 
-    public class FailAdapter : OutAdapter
+    public class FailAdapter : OutAdapter, IConnectionProvider, IHttpRequestAsyncHandler
     {
         public string reason { get; set; }
 
@@ -131,7 +131,24 @@ namespace NaiveSocks
 
         public override async Task HandleConnection(InConnection connection)
         {
-            await connection.SetConnectResult(new ConnectResult(ConnectResults.Failed) { FailedReason = reason });
+            await connection.SetConnectResult(GetConnectResult());
+        }
+
+        public Task<ConnectResult> Connect(ConnectArgument arg)
+        {
+            return Task.FromResult(GetConnectResult());
+        }
+
+        private ConnectResult GetConnectResult()
+        {
+            return new ConnectResult(ConnectResults.Failed) { FailedReason = reason };
+        }
+
+        public Task HandleRequestAsync(HttpConnection p)
+        {
+            p.Handled = true;
+            p.ResponseStatusCode = "404 Not Found";
+            return AsyncHelper.CompletedTask;
         }
     }
 }

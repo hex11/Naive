@@ -80,7 +80,7 @@ namespace Naive.HttpSvr
             return HandleDirectoryAsync(p, dirpath, hitFile, allowListDir ? (Func<HttpConnection, string, Task>)WriteDirListPage : null);
         }
 
-        public static async Task HandleDirectoryAsync(HttpConnection p, string dirpath,
+        public static Task HandleDirectoryAsync(HttpConnection p, string dirpath,
             Func<HttpConnection, string, Task> hitFile, Func<HttpConnection, string, Task> hitDir)
         {
             if (p == null)
@@ -90,19 +90,20 @@ namespace Naive.HttpSvr
 
             var r = CheckPath(dirpath, p.Url_path, out var path);
             if (r == PathResult.IllegalPath)
-                return;
+                return AsyncHelper.CompletedTask;
             if (r == PathResult.File && hitFile != null) {
                 p.Handled = true;
                 p.ResponseStatusCode = "200 OK";
-                await hitFile(p, path);
+                return hitFile(p, path);
             } else if (r == PathResult.Directory && hitDir != null) {
                 p.Handled = true;
                 p.ResponseStatusCode = "200 OK";
-                await hitDir(p, path);
+                return hitDir(p, path);
             } else {
                 //p.ResponseStatusCode = "404 Not Found";
                 //p.writeLine("file not found");
             }
+            return AsyncHelper.CompletedTask;
         }
 
         public enum PathResult
@@ -228,7 +229,7 @@ namespace Naive.HttpSvr
                 }
                 if (p.HandleIfNotModified(fi.LastWriteTimeUtc.ToString("R")))
                     return;
-                await NaiveUtils.HandleFileStreamAsync(p, fs, (type == null ? fi.Name : null), false);
+                await HandleFileStreamAsync(p, fs, (type == null ? fi.Name : null), false);
             }
         }
 
@@ -283,19 +284,17 @@ namespace Naive.HttpSvr
             }
             using (var fs = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)) {
                 p.ResponseStatusCode = "200 OK";
-                p.ResponseHeaders[HttpHeaders.KEY_Content_Type] = "application/octet-stream";
-                p.ResponseHeaders["Content-Disposition"] = $"attachment; filename=\"{fileName}\"";
-                await HandleSeekableStreamAsync(p, fs);
+                await HandleFileStreamAsync(p, fs, fileName, true);
             }
         }
 
-        public static async Task HandleFileStreamAsync(this HttpConnection p, Stream fs, string fileName, bool setContentType)
+        public static Task HandleFileStreamAsync(this HttpConnection p, Stream fs, string fileName, bool setContentType)
         {
             if (setContentType)
                 p.ResponseHeaders[HttpHeaders.KEY_Content_Type] = "application/octet-stream";
             if (fileName != null)
                 p.ResponseHeaders["Content-Disposition"] = $"attachment; filename=\"{fileName}\"";
-            await HandleSeekableStreamAsync(p, fs);
+            return HandleSeekableStreamAsync(p, fs);
         }
 
         public static void HandleSeekableStream(this HttpConnection p, Stream fs)

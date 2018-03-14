@@ -187,7 +187,7 @@ namespace Naive.HttpSvr
                 } catch (DisconnectedException) {
                     return;
                 } catch (Exception e) {
-                    if (disconnecting)
+                    if (disconnecting || myStream.State.IsClosed)
                         break;
                     server.logException(e, Logging.Level.Warning, $"[{server.mark}#{id}({requestCount}) {remoteEP}] handling");
                     if (ConnectionState == States.SwitchedProtocol)
@@ -330,21 +330,21 @@ namespace Naive.HttpSvr
             }
         }
 
-        private async Task processRequest()
+        private Task processRequest()
         {
             Handled = false;
-            await ProcessRequest();
+            return ProcessRequest();
         }
 
-        protected virtual async Task ProcessRequest()
+        protected virtual Task ProcessRequest()
         {
             Requested?.Invoke(this);
             if (Handled)
-                return;
+                return AsyncHelper.CompletedTask;
             if (server is IHttpRequestAsyncHandler asyncServer)
-                await asyncServer.HandleRequestAsync(this).CAF();
+                return asyncServer.HandleRequestAsync(this);
             else
-                await Task.Run(() => server.HandleRequest(this)).CAF();
+                return Task.Run(() => server.HandleRequest(this));
         }
 
         private void initInputDataStream()

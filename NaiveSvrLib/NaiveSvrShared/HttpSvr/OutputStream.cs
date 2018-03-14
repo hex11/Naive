@@ -131,6 +131,8 @@ namespace Naive.HttpSvr
                 }
             } catch (IOException e) when (e.InnerException is SocketException) {
                 throw new DisconnectedException(e.InnerException.Message);
+            } catch (SocketException se) {
+                throw new DisconnectedException(se.Message);
             }
             Actived?.Invoke(this);
         }
