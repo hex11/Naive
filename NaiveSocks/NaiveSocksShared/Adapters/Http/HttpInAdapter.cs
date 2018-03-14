@@ -87,14 +87,14 @@ namespace NaiveSocks
             bool verbose => adapter.verbose;
             bool logging => adapter.logging | verbose;
 
-            public override async Task HandleRequestAsync(HttpConnection p)
+            public override Task HandleRequestAsync(HttpConnection p)
             {
                 if (logging)
                     Logger.info($"[{p.Id}({p.requestCount})] {p.Method} {p.Url}");
                 if (p.Method == "CONNECT") {
                     if (adapter.@out == null) {
                         adapter.Logger.info($"unhandled tunnel request (no 'out'): {p.Method} {p.Url}");
-                        return;
+                        return AsyncHelper.CompletedTask;
                     }
                     p.EnableKeepAlive = false;
                     var dest = AddrPort.Parse(p.Url);
@@ -111,33 +111,34 @@ namespace NaiveSocks
                             return null;
                         }
                     }, () => str);
-                    try {
-                        await adapter.HandleIncommingConnection(inc);
-                    } finally {
-                        MyStream.CloseWithTimeout(mystream).Forget();
-                    }
+                    return adapter.HandleIncommingConnection(inc);
                 } else if (p.Url.StartsWith("http://") || p.Url.StartsWith("https://")) {
                     if (adapter.@out == null) {
                         Logger.info($"unhandled proxy request (no 'out'): {p.Method} {p.Url}");
-                        return;
+                        return AsyncHelper.CompletedTask;
                     }
-                    await handleHttp(p);
+                    return handleHttp(p);
                 } else {
-                    var host = p.Host;
-                    var hosts = adapter.hosts;
-                    if (host != null && hosts != null) {
-                        if (hosts.TryGetValue(host, out var outs)) {
-                            if (await HandleByAdapters(p, outs))
-                                return;
-                        }
-                    }
-                    var webouts = adapter.webouts;
-                    if (webouts == null) {
-                        Logger.info($"unhandled web request (no 'webouts'/'hosts'): {p.Method} {p.Url}");
-                        return;
-                    }
-                    await HandleByAdapters(p, webouts);
+                    return HandleWeb(p);
                 }
+            }
+
+            async Task HandleWeb(HttpConnection p)
+            {
+                var host = p.Host;
+                var hosts = adapter.hosts;
+                if (host != null && hosts != null) {
+                    if (hosts.TryGetValue(host, out var outs)) {
+                        if (await HandleByAdapters(p, outs))
+                            return;
+                    }
+                }
+                var webouts = adapter.webouts;
+                if (webouts == null) {
+                    Logger.info($"unhandled web request (no 'webouts'/'hosts'): {p.Method} {p.Url}");
+                    return;
+                }
+                await HandleByAdapters(p, webouts);
             }
 
             async Task<bool> HandleByAdapters(HttpConnection p, AdapterRef[] adapters)

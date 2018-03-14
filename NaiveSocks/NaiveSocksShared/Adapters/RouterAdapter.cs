@@ -15,6 +15,7 @@ namespace NaiveSocks
     public class RouterAdapter : OutAdapter
     {
         public bool logging { get; set; }
+        public bool log_uri { get; set; }
 
         public List<Rule> rules { get; set; }
 
@@ -349,7 +350,11 @@ namespace NaiveSocks
             }
             if (logging) {
                 var ms = sw.ElapsedMilliseconds;
-                Logger.info($"{connection.Redirected} <- {connection.Url ?? connection.Dest.ToString()} ({ms} ms)");
+                var dest = connection.Dest.ToString();
+                if (log_uri && connection.Url != null) {
+                    dest = connection.Url;
+                }
+                Logger.info($"{connection.Redirected} <- {dest} - '{connection.InAdapter?.Name}' ({ms} ms)");
             }
             return AsyncHelper.CompletedTask;
         }
