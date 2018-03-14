@@ -20,7 +20,7 @@ namespace NaiveSocks
 
         public AdapterRef @default { get; set; }
 
-        public override string ToString() => $"{{Router rules={rules?.Count ?? 0} default={@default}}}";
+        public override string ToString() => $"{{Router rulesets={rules?.Count ?? 0} default={@default}}}";
 
         CancellationTokenSource ctsOnStop = new CancellationTokenSource();
 
@@ -160,10 +160,12 @@ namespace NaiveSocks
                                 abpString = Encoding.UTF8.GetString(Convert.FromBase64String(abpString));
                             }
                             var isreloading = currentAbpFilter != null;
-                            currentAbpFilter = ParseABPFilter(abpString);
+                            var abpProcessor = new AbpProcessor();
+                            abpProcessor.Parse(abpString);
+                            currentAbpFilter = abpProcessor.Check;
                             Logg?.info($"{(isreloading ? "re" : null)}loaded abp filter" +
                                 $" {(rule.abpfile == null ? "(inline/network)" : rule.abpfile.Quoted())}" +
-                                $" in {sw.ElapsedMilliseconds} ms");
+                                $" {abpProcessor.RulesCount} rules in {sw.ElapsedMilliseconds} ms");
                         } catch (Exception e) {
                             Logger.exception(e, Logging.Level.Error, "loading abp filter");
                         }
@@ -283,11 +285,12 @@ namespace NaiveSocks
                 });
             }
             Logg.info($"'{tag}' next checking at {nextRun}");
-            AsyncHelper.SetTimeout(nextRun - DateTime.Now, async () => {
+            AsyncHelper.Run(async () => {
+                await Task.Delay(nextRun - DateTime.Now, ctsOnStop.Token);
                 if (!IsRunning)
                     return;
                 UpdateAbpFile(rule, load, true);
-            }, ctsOnStop.Token).Forget();
+            }).Forget();
         }
 
         private static async Task SaveResponseToFile(string filepath, HttpWebResponse resp)
@@ -337,6 +340,23 @@ namespace NaiveSocks
             return false;
         }
 
+        public override Task HandleConnection(InConnection connection)
+        {
+            var sw = Stopwatch.StartNew();
+            _handler(connection);
+            if (connection.IsRedirected == false) {
+                connection.RedirectTo(@default);
+            }
+            if (logging) {
+                var ms = sw.ElapsedMilliseconds;
+                Logger.info($"{connection.Redirected} <- {connection.Url ?? connection.Dest.ToString()} ({ms} ms)");
+            }
+            return AsyncHelper.CompletedTask;
+        }
+    }
+
+    class AbpProcessor
+    {
         struct Range
         {
             public int offset, length;
@@ -391,7 +411,7 @@ namespace NaiveSocks
             }
 
             public bool Contains(char ch, int offset)
-                => RouterAdapter.Contains(str, new Range(Offset + offset, Length - offset), ch);
+                => AbpProcessor.Contains(str, new Range(Offset + offset, Length - offset), ch);
 
             public char this[int i] => str[Offset + i];
 
@@ -399,24 +419,41 @@ namespace NaiveSocks
             public override string ToString() => Get();
         }
 
-        Func<InConnection, bool> ParseABPFilter(string ruleset)
+
+        // Put strings into a big string, to avoid lots of short strings in the heap.
+        private string bigString;
+
+        private List<Range> blackDomainList;
+        private List<Regex> blackRegexUrlList;
+        private List<Range> blackWildcardUrlList;
+        private List<Range> whiteDomainList;
+        private List<Regex> whiteRegexUrlList;
+        private List<Range> whiteWildcardUrlList;
+
+        private Dictionary<string, bool> resultCache;
+
+        public Logger Logg { get; set; }
+
+        public int RulesCount { get; set; }
+        
+
+        public void Parse(string ruleset)
         {
-            //var ruleLines = ruleset.Split('\r', '\n');
             int rlen = ruleset.Length;
             int lineCount = 0;
             for (int i = 0; i < ruleset.Length; i++) {
                 if (ruleset[i] == '\n')
                     lineCount++;
             }
-            string bigString = null;
             var bssb = new StringBuilder(ruleset.Length);
-            var blackDomainList = new List<Range>(lineCount / 2);
-            var blackRegexUrlList = new List<Regex>();
-            var blackWildcardUrlList = new List<Range>(lineCount / 2);
-            var whiteDomainList = new List<Range>();
-            var whiteRegexUrlList = new List<Regex>();
-            var whiteWildcardUrlList = new List<Range>();
-            var resultCache = new Dictionary<string, bool>(32);
+            blackDomainList = new List<Range>(lineCount / 2);
+            blackRegexUrlList = new List<Regex>();
+            blackWildcardUrlList = new List<Range>(lineCount / 2);
+            whiteDomainList = new List<Range>();
+            whiteRegexUrlList = new List<Regex>();
+            whiteWildcardUrlList = new List<Range>();
+            resultCache = new Dictionary<string, bool>(32);
+            RulesCount = 0;
             int cur = 0;
             int lineNum = 0;
             while (cur < rlen) {
@@ -435,10 +472,12 @@ namespace NaiveSocks
                 var firstCh = line[0];
                 if (firstCh == '!' || firstCh == '#' || firstCh == '[')
                     continue;
+                RulesCount++;
                 if (line.StartsWith("||")) {
                     var offset = bssb.Length;
                     var len = line.Length - 2;
                     if (line.Contains('*', 2)) {
+                        // add "*." + value
                         bssb.Append("*.");
                         blackDomainList.Add(new Range(offset, len + 2));
                         offset += 2;
@@ -455,6 +494,7 @@ namespace NaiveSocks
                     var offset = bssb.Length;
                     var len = line.Length - 4;
                     if (line.Contains('*', 4)) {
+                        // add "*." + value
                         bssb.Append("*.");
                         whiteDomainList.Add(new Range(offset, len + 2));
                         offset += 2;
@@ -490,10 +530,16 @@ namespace NaiveSocks
                     var regex = Regex.Match(line.Get(), "/(.+)/");
                     if (regex.Success) {
                         blackRegexUrlList.Add(new Regex(regex.Groups[1].Value, RegexOptions.ECMAScript));
+                    } else {
+                        goto WRONG;
                     }
                 } else {
-                    Logg?.warning($"unsupported/wrong ABP filter at line {lineNum + 1}: {line.Get().Quoted()}");
+                    goto WRONG;
                 }
+                continue;
+                WRONG:
+                RulesCount--;
+                Logg?.warning($"unsupported/wrong ABP filter at line {lineNum + 1}: {line.Get().Quoted()}");
             }
             bigString = bssb.ToString();
             bssb = null;
@@ -503,55 +549,61 @@ namespace NaiveSocks
             whiteDomainList.TrimExcess();
             whiteRegexUrlList.TrimExcess();
             whiteWildcardUrlList.TrimExcess();
-            return (x) => {
-                var host = x.Dest.Host;
-                lock (resultCache) {
-                    bool hit = false;
-                    if (x.Url != null // no cache for connections with a Url
-                        || !resultCache.TryGetValue(host, out hit)) {
-                        var url = x.Url ?? (x.Dest.Port == 443 ? $"https://{host}/" : $"http://{host}/");
-                        foreach (var item in blackDomainList) {
-                            hit = MatchDomain(host, bigString, item);
-                            if (hit) goto IF_HIT;
-                        }
-                        foreach (var item in blackRegexUrlList) {
-                            hit = MatchRegex(url, item);
-                            if (hit) goto IF_HIT;
-                        }
-                        foreach (var item in blackWildcardUrlList) {
-                            hit = MatchWildcard(url, bigString, item);
-                            if (hit) goto IF_HIT;
-                        }
-                        IF_HIT:
-                        if (hit) {
-                            foreach (var item in whiteDomainList) {
-                                if (MatchDomain(host, bigString, item)) {
-                                    hit = false;
-                                    goto IF_NOT_HIT;
-                                }
-                            }
-                            foreach (var item in whiteRegexUrlList) {
-                                if (MatchRegex(url, item)) {
-                                    hit = false;
-                                    goto IF_NOT_HIT;
-                                }
-                            }
-                            foreach (var item in whiteWildcardUrlList) {
-                                if (MatchWildcard(url, bigString, item)) {
-                                    hit = false;
-                                    goto IF_NOT_HIT;
-                                }
-                            }
-                        }
-                        IF_NOT_HIT:
-                        if (x.Url == null)
-                            resultCache.Add(host, hit);
-                    }
-                    return hit;
-                }
-            };
         }
-        // But it works!
+
+        public bool Check(InConnection conn)
+        {
+            return Check(conn.Dest, conn.Url);
+        }
+
+        public bool Check(AddrPort dest, string url)
+        {
+            var host = dest.Host;
+            lock (resultCache) {
+                bool hit = false;
+                if (url != null // no cache for connections with a Url
+                    || !resultCache.TryGetValue(host, out hit)) {
+                    var u = url ?? (dest.Port == 443 ? $"https://{host}/" : $"http://{host}/");
+                    foreach (var item in blackDomainList) {
+                        hit = MatchDomain(host, bigString, item);
+                        if (hit) goto IF_HIT;
+                    }
+                    foreach (var item in blackRegexUrlList) {
+                        hit = MatchRegex(u, item);
+                        if (hit) goto IF_HIT;
+                    }
+                    foreach (var item in blackWildcardUrlList) {
+                        hit = MatchWildcard(u, bigString, item);
+                        if (hit) goto IF_HIT;
+                    }
+                    IF_HIT:
+                    if (hit) {
+                        foreach (var item in whiteDomainList) {
+                            if (MatchDomain(host, bigString, item)) {
+                                hit = false;
+                                goto IF_NOT_HIT;
+                            }
+                        }
+                        foreach (var item in whiteRegexUrlList) {
+                            if (MatchRegex(u, item)) {
+                                hit = false;
+                                goto IF_NOT_HIT;
+                            }
+                        }
+                        foreach (var item in whiteWildcardUrlList) {
+                            if (MatchWildcard(u, bigString, item)) {
+                                hit = false;
+                                goto IF_NOT_HIT;
+                            }
+                        }
+                    }
+                    IF_NOT_HIT:
+                    if (url == null)
+                        resultCache.Add(host, hit);
+                }
+                return hit;
+            }
+        }
 
         static bool MatchWildcard(string input, string pattern)
         {
@@ -603,19 +655,6 @@ namespace NaiveSocks
                 ;
             }
             return -1;
-        }
-
-        public override async Task HandleConnection(InConnection connection)
-        {
-            var sw = Stopwatch.StartNew();
-            _handler(connection);
-            if (connection.IsRedirected == false) {
-                connection.RedirectTo(@default);
-            }
-            if (logging) {
-                var ms = sw.ElapsedMilliseconds;
-                Logger.info($"{connection.Redirected} <- {connection.Url ?? connection.Dest.ToString()} ({ms} ms)");
-            }
         }
     }
 }

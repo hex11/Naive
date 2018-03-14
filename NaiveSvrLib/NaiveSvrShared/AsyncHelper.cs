@@ -9,7 +9,7 @@ namespace Naive.HttpSvr
 {
     public static class AsyncHelper
     {
-        public static readonly Task CompletedTask = Task.FromResult<object>(null);
+        public static readonly Task CompletedTask = Task.FromResult<int>(0);
 
         public static Task AsDelay(this int timeout)
         {
@@ -132,6 +132,9 @@ namespace Naive.HttpSvr
             await Task.Delay(timeout);
             await asyncTask();
         }
+
+        public static Task SetTimeout(TimeSpan timeout, Func<Task> asyncTask)
+            => SetTimeout(timeout, asyncTask, CancellationToken.None);
 
         public static async Task SetTimeout(TimeSpan timeout, Func<Task> asyncTask, CancellationToken ct)
         {
