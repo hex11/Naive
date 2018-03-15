@@ -390,9 +390,11 @@ namespace NaiveSocks
             public async Task ConnectIfNot()
             {
                 if (nms == null) {
-                    lock (_lock) {
-                        if (connectTask == null) {
-                            connectTask = Connect();
+                    if (connectTask == null) { // double-checked locking
+                        lock (_lock) {
+                            if (connectTask == null) {
+                                connectTask = Connect();
+                            }
                         }
                     }
                     await connectTask;

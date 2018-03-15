@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Nett;
 using Naive.HttpSvr;
 using System.Text;
+using System.Reflection;
 
 namespace NaiveSocks
 {
@@ -41,9 +42,11 @@ namespace NaiveSocks
     public abstract class Adapter : IAdapter
     {
         public string Name { get; set; }
-        public Controller Controller { get; private set; }
 
+        public Controller Controller { get; private set; }
         public Logger Logger { get; } = new Logger();
+
+        public string flags { get; set; }
 
         public string QuotedName
         {
@@ -84,6 +87,32 @@ namespace NaiveSocks
 
         public virtual void SetConfig(TomlTable toml)
         {
+            if (!flags.IsNullOrEmpty()) {
+                var flgs = flags.Split(' ');
+                foreach (var item in flgs) {
+                    var flg = item;
+                    bool val = true;
+                    if (flg.StartsWith("!")) {
+                        val = false;
+                        flg = flg.Substring(1);
+                    }
+                    var prop = this.GetType().GetProperty(flg, BindingFlags.Instance | BindingFlags.Public);
+                    if (prop == null) {
+                        Logger.warning($"flags: can not find public property '{flg}'.");
+                        continue;
+                    }
+                    if (prop.PropertyType != typeof(bool)) {
+                        Logger.warning($"flags: the type of property '{flg}' is not bool.");
+                        continue;
+                    }
+                    if (prop.CanWrite == false) {
+                        Logger.warning($"flags: the property '{flg}' is not writable.");
+                        continue;
+                    }
+                    //Logger.warning($"flags: {flg}={val}");
+                    prop.SetValue(this, val);
+                }
+            }
         }
 
         protected virtual void Init() { }

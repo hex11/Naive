@@ -117,7 +117,7 @@ namespace NaiveTemplate
             new Parser(this, template).Parse();
         }
 
-        private class Parser
+        private struct Parser
         {
             private readonly Template t;
             private readonly string str;
@@ -174,7 +174,7 @@ namespace NaiveTemplate
             }
         }
 
-        public class Node
+        public struct Node
         {
             public NodeType Type;
             public string Str;
@@ -303,7 +303,7 @@ namespace NaiveTemplate
             }
         }
 
-        public class Token
+        public struct Token
         {
             public TokenType Type;
             public string Str;

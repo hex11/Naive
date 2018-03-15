@@ -222,8 +222,7 @@ namespace NaiveSocks
                 foreach (var item in t.@in) {
                     try {
                         var tt = item.Value;
-                        var adapter = NewRegisteredInType(tt);
-                        adapter.Name = item.Key;
+                        var adapter = NewRegisteredInType(tt, item.Key);
                         newcfg.InAdapters.Add(adapter);
                     } catch (Exception e) {
                         Logger.exception(e, Logging.Level.Error, $"TOML table 'in.{item.Key}':");
@@ -233,8 +232,7 @@ namespace NaiveSocks
                 foreach (var item in t.@out) {
                     try {
                         var tt = item.Value;
-                        var adapter = NewRegisteredOutType(tt);
-                        adapter.Name = item.Key;
+                        var adapter = NewRegisteredOutType(tt, item.Key);
                         newcfg.OutAdapters.Add(adapter);
                     } catch (Exception e) {
                         Logger.exception(e, Logging.Level.Error, $"TOML table 'out.{item.Key}':");
@@ -243,18 +241,17 @@ namespace NaiveSocks
             foreach (var r in refs.Where(x => x.IsTable)) {
                 var tt = r.Ref as TomlTable;
                 try {
-                    var adapter = NewRegisteredOutType(tt);
+                    string name = null;
                     if (tt.TryGetValue("name", out string n)) {
-                        adapter.Name = n;
+                        name = n;
                     }
-                    if (adapter.Name == null) {
+                    if (name == null) {
                         int i = 0;
-                        string name;
                         do {
                             name = $"_{tt["type"].Get<string>()}_" + ((i++ == 0) ? "" : i.ToString());
                         } while (newcfg.OutAdapters.Any(x => x.Name == name));
-                        adapter.Name = name;
                     }
+                    var adapter = NewRegisteredOutType(tt, name);
                     r.Adapter = adapter;
                     newcfg.OutAdapters.Add(adapter);
                 } catch (Exception e) {
@@ -270,10 +267,6 @@ namespace NaiveSocks
             if (notExistAndNeed("fail")) {
                 newcfg.OutAdapters.Add(new FailAdapter() { Name = "fail" });
             }
-            foreach (var item in newcfg.InAdapters.Union<Adapter>(newcfg.OutAdapters)) {
-                item.Logger.ParentLogger = this.Logger;
-                item.Logger.Stamp = item.Name;
-            }
             foreach (var r in refs) {
                 if (r.IsName) {
                     r.Adapter = FindAdapter<IAdapter>(newcfg, r.Ref as string, -1);
@@ -282,16 +275,24 @@ namespace NaiveSocks
             return newcfg;
         }
 
-        private InAdapter NewRegisteredInType(TomlTable tt)
+        private void SetLogger(Adapter adapter)
         {
-            var instance = NewRegisteredType<InAdapter>(RegisteredInTypes, RegisteredInCreators, tt);
-            instance.SetConfig(tt);
-            return instance;
+            adapter.Logger.ParentLogger = this.Logger;
+            adapter.Logger.Stamp = adapter.Name;
         }
 
-        private OutAdapter NewRegisteredOutType(TomlTable tt)
+        private InAdapter NewRegisteredInType(TomlTable tt, string name)
+            => NewRegisteredAdapter(RegisteredInTypes, RegisteredInCreators, tt, name);
+
+        private OutAdapter NewRegisteredOutType(TomlTable tt, string name)
+            => NewRegisteredAdapter(RegisteredOutTypes, RegisteredOutCreators, tt, name);
+
+        private T NewRegisteredAdapter<T>(Dictionary<string, Type> types, Dictionary<string, Func<TomlTable, T>> creators,
+            TomlTable tt, string name) where T : Adapter
         {
-            var instance = NewRegisteredType<OutAdapter>(RegisteredOutTypes, RegisteredOutCreators, tt);
+            var instance = NewRegisteredType<T>(types, creators, tt);
+            instance.Name = name;
+            SetLogger(instance);
             instance.SetConfig(tt);
             return instance;
         }
@@ -318,7 +319,8 @@ namespace NaiveSocks
                 return;
             var newCfg = LoadConfig(newCfgFile, null);
             if (newCfg == null) {
-                error("reloading failed.");
+                error("failed to load the new configuration.");
+                info("still running with previous configuration.");
                 return;
             }
             info($"new configuration loaded. {newCfg.InAdapters.Count} InAdapters, {newCfg.OutAdapters.Count} OutAdapters.");

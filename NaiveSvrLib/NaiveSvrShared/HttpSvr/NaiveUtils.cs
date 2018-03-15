@@ -690,6 +690,41 @@ namespace Naive.HttpSvr
             return newBytes;
         }
 
+        public static bool IsAnyOf(this string thisStr, string str1, string str2)
+        {
+            return thisStr == str1 || thisStr == str2;
+        }
+
+        public static IsOrStruct<T> Is<T>(this T thisVal, T val)
+        {
+            return new IsOrStruct<T>(thisVal).Or(val);
+        }
+
+        public struct IsOrStruct<T>
+        {
+            T Value;
+            bool result;
+
+            public IsOrStruct(T value)
+            {
+                Value = value;
+                result = false;
+            }
+
+            public IsOrStruct<T> Or(object val)
+            {
+                if (!result)
+                    result |= Value.Equals(val);
+                return this;
+            }
+
+            public bool Result => result;
+
+            public bool IsFalse => !result;
+
+            public static implicit operator bool(IsOrStruct<T> x) => x.Result;
+        }
+
         static Action<int, // generation
             GCCollectionMode, // mode
             bool, // blocking
@@ -703,11 +738,13 @@ namespace Naive.HttpSvr
             if (!dotNet46_GC_Collect_inited) {
                 dotNet46_GC_Collect_inited = true;
                 Type delegateType = typeof(Action<int, GCCollectionMode, bool, bool>);
-                dotNet46_GC_Collect = typeof(GC)
+                var tmp = typeof(GC)
                     .GetMethod("Collect", delegateType.GetGenericArguments())
                     ?.CreateDelegate(delegateType) as Action<int, GCCollectionMode, bool, bool>;
-                if (dotNet46_GC_Collect == null)
+                if (tmp == null)
                     onLog("(cannot get delegate of new GC.Collect in .NET 4.6)");
+                else
+                    dotNet46_GC_Collect = tmp;
             }
             string getMemStat() => $"Total Memory: {GC.GetTotalMemory(false).ToString("N0")}. ";
             onLog($"GC...  {getMemStat()}");

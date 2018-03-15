@@ -49,6 +49,16 @@ namespace Naive.HttpSvr
             Boundary = GetBoundary(p);
         }
 
+        public static bool Check(HttpConnection p)
+        {
+            var contentType = p.GetReqHeader(HttpHeaders.KEY_Content_Type);
+            if (contentType == null)
+                return false;
+            if (!contentType.StartsWith("multipart/form-data;"))
+                return false;
+            return true;
+        }
+
         private static byte[] GetBoundary(HttpConnection p)
         {
             const string boundary = "boundary=";

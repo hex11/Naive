@@ -547,7 +547,6 @@ namespace NaiveSocks
                 Logg?.warning($"unsupported/wrong ABP filter at line {lineNum + 1}: {line.Get().Quoted()}");
             }
             bigString = bssb.ToString();
-            bssb = null;
             blackDomainList.TrimExcess();
             blackRegexUrlList.TrimExcess();
             blackWildcardUrlList.TrimExcess();

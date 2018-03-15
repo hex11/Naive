@@ -150,49 +150,7 @@ namespace Naive.HttpSvr
             await Engine.Instance.RunAsync(tmpl, data, p.outputWriter);
         }
 
-        static Lazy<Template> lazyListTmpl = new Lazy<Template>(() => new Template(@"<!DOCTYPE html>
-<html>
-<head>
-<meta name='viewport' content='width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1'>
-<style>
-	body {
-		font-family: sans-serif;
-		max-width: 40em;
-		margin: 1em auto;
-	}
-	.item {
-		margin: 4px;
-		transition: all .3s;
-	}
-	.item a {
-		padding: .1em;
-		text-decoration: none;
-		color: black;
-		display: block;
-		word-wrap: break-word;
-	}
-	.dir.up {
-		background: orange;
-		position: sticky;
-		top: 0;
-	}
-	.dir {
-		background: lightgreen;
-	}
-	.file {
-		background: lightskyblue;
-	}
-	.dir:hover, .file:hover {
-		background: #eee;
-		transition: all .06s;
-	}
-</style>
-{{head}}</head>
-<body>
-{{list}}{{foot}}</body>
-</html>
-"), true);
-
+        static Lazy<Template> lazyListTmpl = new Lazy<Template>(() => new Template(listTmplString), true);
         static Template dirTmpl = new Template("<div class='item dir'><a href='{{url}}/'>{{name}}/</a></div>\n");
         static Template fileTmpl = new Template("<div class='item file'><a href='{{url}}'>{{name}}</a></div>\n");
 
@@ -263,7 +221,7 @@ namespace Naive.HttpSvr
         public static string GetHttpContentTypeFromPath(string path)
         {
             foreach (var item in HttpContentTypes) {
-                if (path.EndsWith(item.Key))
+                if (path.EndsWith(item.Key, StringComparison.OrdinalIgnoreCase))
                     return item.Value;
             }
             return null;
@@ -276,6 +234,9 @@ namespace Naive.HttpSvr
             => HandleFileDownloadAsync(p, path, fileInfo.Name);
         public static async Task HandleFileDownloadAsync(HttpConnection p, string path, string fileName)
         {
+            if (p.Method.Is("GET").Or("HEAD").IsFalse) {
+                throw new Exception($"method is neither 'GET' nor 'HEAD' but '{p.Method}'");
+            }
             p.Handled = true;
             p.outputStream.CurrentCompressionType = CompressionType.None;
             if (File.Exists(path) == false) {
@@ -290,6 +251,9 @@ namespace Naive.HttpSvr
 
         public static Task HandleFileStreamAsync(this HttpConnection p, Stream fs, string fileName, bool setContentType)
         {
+            if (p.Method.Is("GET").Or("HEAD").IsFalse) {
+                throw new Exception($"method is neither 'GET' nor 'HEAD' but '{p.Method}'");
+            }
             if (setContentType)
                 p.ResponseHeaders[HttpHeaders.KEY_Content_Type] = "application/octet-stream";
             if (fileName != null)
@@ -316,14 +280,126 @@ namespace Naive.HttpSvr
                 p.ResponseStatusCode = "206 Partial Content";
                 p.ResponseHeaders["Content-Range"] = $"bytes {beginpos}-{endpos}/{fileLength}";
             }
-            long realLength = endpos - beginpos + 1;
-            if (p.outputStream.CurrentCompressionType == CompressionType.None) {
-                await p.outputStream.SwitchToKnownLengthModeAsync(realLength);
+            if (p.Method == "HEAD") {
+                await p.outputStream.SwitchToKnownLengthModeAsync(fileLength);
+                await p.EndResponseAsync();
             } else {
-                await p.outputStream.SwitchToChunkedModeAsync();
+                long realLength = endpos - beginpos + 1;
+                if (p.outputStream.CurrentCompressionType == CompressionType.None) {
+                    await p.outputStream.SwitchToKnownLengthModeAsync(realLength);
+                } else {
+                    await p.outputStream.SwitchToChunkedModeAsync();
+                }
+                stream.Position = beginpos;
+                await NaiveUtils.StreamCopyAsync(from: stream, to: p.outputStream, size: realLength, bs: 64 * 1024);
             }
-            stream.Position = beginpos;
-            await NaiveUtils.StreamCopyAsync(from: stream, to: p.outputStream, size: realLength, bs: 64 * 1024);
         }
+
+        const string listTmplString = @"<!DOCTYPE html>
+<html>
+<head>
+<meta name='theme-color' content='orange'>
+<meta name='viewport' content='width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1'>
+<style>
+	body {
+		font-family: sans-serif;
+		max-width: 40em;
+		margin: 10px auto;
+		padding: 0 8px;
+	}
+	.item {
+		/*padding: .1em;*/
+		margin: 4px 0;
+		transition: all .3s;
+	}
+	.item a {
+		padding: 2px;
+		text-decoration: none;
+		color: black;
+		word-wrap: break-word;
+	}
+	.item a,
+	.dir.up a {
+		display: block;
+	}
+	.dir.up a {
+		line-height: 48px;
+	}
+	.item a:hover {
+		text-decoration: underline;
+	}
+	.dir.up {
+		background: orange;
+		position: sticky;
+		top: 0;
+	}
+	.dir {
+		background: lightgreen;
+	}
+	.file {
+		background: lightskyblue;
+	}
+	.upload-form {
+		background: lightgray;
+		margin-top: 8px;
+	}
+	.float-bottom {
+		position: sticky;
+		bottom: 0;
+	}
+	.dir:hover, .file:hover {
+		background: #eee;
+		transition: all .06s;
+	}
+	.boxsizing {
+		-webkit-box-sizing: border-box;
+		   -moz-box-sizing: border-box;
+		        box-sizing: border-box;
+	}
+	.flexbox {
+		display: flex;
+	}
+	.input-and-button input{
+		-webkit-box-sizing: border-box;
+		   -moz-box-sizing: border-box;
+		        box-sizing: border-box;
+		vertical-align: middle;
+		height: 2em;
+	}
+</style>
+{{head}}</head>
+<body>
+<div class='info'>{{info}}</div>
+{{list}}
+<div id='upload-top' style='margin-top: 20px;'></div>
+<div class='float-bottom'>
+	<form hidden class='item upload-form flexbox' id='upload-file' method='post' action='?upload' enctype='multipart/form-data' onclick='javascript: jumpToUpload()'>
+		<input style='flex: 1;' type='file' name='files' multiple>
+		<input style='width: 80px;' type='submit' value='Upload'>
+	</form>
+</div>
+<form hidden class='item upload-form' id='upload-text' method='post' action='?upload' enctype='multipart/form-data'>
+	<div class='input-and-button flexbox'>
+		<input style='font-family: monospace; flex: 1;' type='text' name='textFileName' placeholder='text file name'>
+		<input style='width: 80px;' type='submit' value='Upload'>
+	</div>
+	<textarea class='boxsizing' style='display: block; width: 100%; font-family: monospace;' name='textContent' placeholder='text content' rows='6'></textarea>
+</form>
+{{foot}}
+<script type='text/javascript'>
+	var uploadAllowed = '{{can_upload}}';
+	if(uploadAllowed == 'true'){
+		var eles = document.getElementsByClassName('upload-form');
+		for (var i = eles.length - 1; i >= 0; i--) {
+			eles[i].hidden = false
+		}
+	}
+	function jumpToUpload() {
+		window.location.hash = '#upload-top';
+	}
+</script>
+</body>
+</html>
+";
     }
 }
