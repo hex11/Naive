@@ -79,14 +79,11 @@ namespace NaiveSocksAndroid
             powerManager = (PowerManager)GetSystemService(Context.PowerService);
             notificationManager = (NotificationManager)GetSystemService(Context.NotificationService);
 
-            bigText = new NotificationCompat.BigTextStyle();
-            bigText.BigText("NaiveSocks service is starting...");
-
             builder = new NotificationCompat.Builder(this)
                         .SetContentIntent(BuildIntentToShowMainActivity())
                         .SetContentTitle("NaiveSocks")
                         //.SetSubText("running")
-                        .SetStyle(bigText)
+                        //.SetStyle(bigText)
                         //.AddAction(BuildServiceAction(Actions.COL_NOTIF, "Collapse", Android.Resource.Drawable.StarOff, 4))
                         .AddAction(BuildServiceAction(Actions.STOP, "Stop", Android.Resource.Drawable.StarOff, 1))
                         .AddAction(BuildServiceAction(Actions.RELOAD, "Reload", Android.Resource.Drawable.StarOff, 2))
@@ -197,7 +194,7 @@ namespace NaiveSocksAndroid
 
         public override void OnDestroy()
         {
-            notifyTimer.Dispose();
+            notifyTimer?.Dispose();
             isDestroyed = true;
             Logging.Logged -= Logging_Logged;
             Logging.warning("service is being destroyed.");
@@ -280,6 +277,8 @@ namespace NaiveSocksAndroid
                     _needRenotify = true;
                     builder.SetContentText(textLines.Get(-1));
                     if (notification_show_logs) {
+                        if (bigText == null)
+                            bigText = new NotificationCompat.BigTextStyle();
                         bigText.BigText(string.Join("\n", textLines.Where(x => !string.IsNullOrEmpty(x))));
                         builder.SetStyle(bigText);
                     }
@@ -321,8 +320,10 @@ namespace NaiveSocksAndroid
                 manageIntervalSeconds = currentConfig.manage_interval_screen_on;
                 var notifInterval = currentConfig.notif_update_interval;
                 if (manageIntervalSeconds == notifInterval) {
-                    var tid = _tid++;
+                    var tid = ++_tid;
                     WebSocket.AddManagementTask(() => {
+                        if (isDestroyed)
+                            return true;
                         updateNotif();
                         return tid != _tid;
                     });
@@ -332,11 +333,11 @@ namespace NaiveSocksAndroid
                             updateNotif();
                         });
                     notifyTimer.Change(notifInterval * 1000, notifInterval * 1000);
-                    updateNotif();
                 }
+                updateNotif();
             } else {
                 _tid++;
-                notifyTimer.Change(Timeout.Infinite, Timeout.Infinite);
+                notifyTimer?.Change(-1, -1);
                 manageIntervalSeconds = currentConfig.manage_interval_screen_off;
             }
             WebSocket.ConfigManageTask(manageIntervalSeconds, manageIntervalSeconds * 1000);
