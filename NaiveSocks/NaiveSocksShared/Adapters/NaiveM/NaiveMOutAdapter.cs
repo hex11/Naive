@@ -56,6 +56,8 @@ namespace NaiveSocks
 
         public bool fastopen { get; set; } = true;
 
+        public bool log_dest { get; set; } = true;
+
         private bool _ping_enabled;
         public bool ping_enabled
         {
@@ -332,9 +334,10 @@ namespace NaiveSocks
                     state = 2;
                     nms.OutAdapter = adapter;
                     nms.InAdapter = adapter;
-                    nms.Logged += (log) => Logger.info(log);
+                    nms.Logger = Logger;
+                    nms.LogDest = adapter.log_dest;
                     nms.GotRemoteInConnection = (inc) => {
-                        Logger.info($"conn from remote {(inc as NaiveMChannels.InConnection)?.Channel}" +
+                        Logger.info($"inbound {(inc as NaiveMChannels.InConnection)?.Channel}" +
                                         $" (dest={inc.Dest}) redirecting to 127.1");
                         adapter.CheckPool();
                         inc.Dest.Host = "127.0.0.1";

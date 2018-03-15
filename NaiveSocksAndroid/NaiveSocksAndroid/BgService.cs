@@ -59,7 +59,8 @@ namespace NaiveSocksAndroid
         class Config
         {
             public int manage_interval_screen_off { get; set; } = 20;
-            public int manage_interval_screen_on { get; set; } = 5;
+            public int manage_interval_screen_on { get; set; } = 2;
+            public int notif_update_interval { get; set; } = 2;
         }
 
         bool notification_show_logs = true;
@@ -310,19 +311,31 @@ namespace NaiveSocksAndroid
 
         Timer notifyTimer;
 
+        int _tid = 0;
+
         void onScreen(bool on)
         {
             isScreenOn = on;
             int manageIntervalSeconds;
             if (on) {
-                if (notifyTimer == null)
-                    notifyTimer = new Timer(_ => {
-                        updateNotif();
-                    });
-                notifyTimer.Change(2000, 2000);
-                updateNotif();
                 manageIntervalSeconds = currentConfig.manage_interval_screen_on;
+                var notifInterval = currentConfig.notif_update_interval;
+                if (manageIntervalSeconds == notifInterval) {
+                    var tid = _tid++;
+                    WebSocket.AddManagementTask(() => {
+                        updateNotif();
+                        return tid != _tid;
+                    });
+                } else {
+                    if (notifyTimer == null)
+                        notifyTimer = new Timer(_ => {
+                            updateNotif();
+                        });
+                    notifyTimer.Change(notifInterval * 1000, notifInterval * 1000);
+                    updateNotif();
+                }
             } else {
+                _tid++;
                 notifyTimer.Change(Timeout.Infinite, Timeout.Infinite);
                 manageIntervalSeconds = currentConfig.manage_interval_screen_off;
             }

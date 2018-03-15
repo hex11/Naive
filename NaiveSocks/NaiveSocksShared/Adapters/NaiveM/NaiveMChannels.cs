@@ -19,7 +19,8 @@ namespace NaiveSocks
 
         public IConnectionHandler OutAdapter;
 
-        public Action<string> Logged;
+        public Logger Logger;
+        public bool LogDest;
 
         public Func<string, INetwork> NetworkProvider;
 
@@ -250,9 +251,12 @@ namespace NaiveSocks
                 async Task<NaiveProtocol.Reply> readReply()
                 {
                     var response = await result.GetReply(keepOpen: true).CAF();
-                    Logged?.Invoke($"#{result.Channel.Parent.Id}ch{result.Channel.Id} req={arg.Dest} " +
-                        $"reply={response.status}{(string.IsNullOrEmpty(response.additionalString) ? "" : $" ({response.additionalString})")} " +
-                        $"in {(DateTime.Now - beginTime).TotalMilliseconds:0} ms");
+                    Logger?.info($"#{result.Channel.Parent.Id}ch{result.Channel.Id}" +
+                        $" req={(LogDest ? arg.Dest.ToString() : "***")}" +
+                        $" reply={response.status}" +
+                            (response.additionalString.IsNullOrEmpty()
+                                ? "" : $" ({response.additionalString})") +
+                        $" in {(DateTime.Now - beginTime).TotalMilliseconds:0} ms");
                     return response;
                 }
                 var readReplyTask = readReply();
@@ -297,7 +301,7 @@ namespace NaiveSocks
             } else if (req.additionalString.StartsWith("network") == true) {
                 await HandleNetwork(request);
             } else {
-                Logging.warning($"unknown cmd: '{req.additionalString}' from {request.Channel}.");
+                Logger?.warning($"unknown cmd: '{req.additionalString}' from {request.Channel}.");
                 await request.Reply(new NaiveProtocol.Reply(AddrPort.Empty, 255, "notsupport"));
             }
         }
@@ -415,7 +419,7 @@ namespace NaiveSocks
                     return;
                 pingTaskVersion++;
                 if (value) {
-                    pingTask = _PingTask((t) => Logged?.Invoke($"{BaseChannels.ToString()}: {t}"), CancellationToken.None, pingTaskVersion);
+                    pingTask = _PingTask((t) => Logger?.info($"{BaseChannels.ToString()}: {t}"), CancellationToken.None, pingTaskVersion);
                 } else {
                     pingTask = null;
                 }
