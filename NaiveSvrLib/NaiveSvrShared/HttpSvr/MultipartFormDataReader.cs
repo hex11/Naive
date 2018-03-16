@@ -146,7 +146,7 @@ namespace Naive.HttpSvr
                     }
                 } else {
                     if (matchingPos > 0) {
-                        i -= matchingPos - 1;
+                        i += -matchingPos + 1;
                         matchingPos = 0;
                     }
                 }
@@ -159,7 +159,7 @@ namespace Naive.HttpSvr
                     if (buf.Len > boundaryLength) {
                         var readuntil = boundaryLength;
                         do {
-                            bufRead += await BaseStream.ReadAsync(buffer, offset, readuntil - bufRead, cancellationToken);
+                            bufRead += await BaseStream.ReadAsync(buffer, offset + bufRead, readuntil - bufRead, cancellationToken);
                         } while (bufRead < readuntil);
                         goto SEARCH;
                     } else {
@@ -257,7 +257,7 @@ namespace Naive.HttpSvr
             if (sbuffer.Length > 0) {
                 count = Math.Min(sbuffer.Length, count);
                 sbuffer.Pop(new BytesSegment(buffer, offset, count), count);
-                return Task.FromResult(count);
+                return NaiveUtils.GetCachedTaskInt(count);
             }
             return BaseStream.ReadAsync(buffer, offset, count, cancellationToken);
         }
