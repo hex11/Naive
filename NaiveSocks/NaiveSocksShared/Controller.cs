@@ -542,7 +542,7 @@ namespace NaiveSocks
 
         private async Task onConnectionException(InConnection inc, Exception e)
         {
-            debug(Logging.getExceptionText(e, ""));
+            Logger.exception(e, Logging.Level.Error, $"Handling {inc}");
             if (inc.CallbackCalled == false) {
                 await inc.SetConnectResult(new ConnectResult(ConnectResults.Failed) {
                     FailedReason = $"exception: {e.GetType()}: {e.Message}"

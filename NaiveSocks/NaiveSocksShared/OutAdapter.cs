@@ -1,6 +1,7 @@
 ﻿using Naive.HttpSvr;
 using System;
 using System.Net;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace NaiveSocks
@@ -22,17 +23,18 @@ namespace NaiveSocks
 
     public class ConnectArgument
     {
-        public override string ToString() => $"{{ConnArg {InAdapter} dest={Dest}}}";
+        public override string ToString() => $"{{Request from {InAdapter} dest={Dest}}}";
         public IAdapter InAdapter { get; }
         public Controller Controller => InAdapter.Controller;
+
         public AddrPort Dest;
+        public string Url { get; set; }
+        public CancellationToken CancellationToken { get; set; }
 
         public ConnectArgument(IAdapter inAdapter)
         {
             InAdapter = inAdapter;
         }
-
-        public string Url { get; set; }
     }
 
     public abstract class OutAdapter : Adapter, IConnectionHandler

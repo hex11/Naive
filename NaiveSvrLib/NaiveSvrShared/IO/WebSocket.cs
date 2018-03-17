@@ -501,20 +501,20 @@ namespace Naive.HttpSvr
                 var stream = BaseStream;
                 var buf = _read_buf;
 
-                Task readAsync(int count) => _readAsync(stream, buf, count);
-                await readAsync(2).CAF();
+                await _readAsync(2).CAF();
                 wf.fin = (buf[0] & 0x80) > 0;
                 wf.opcode = (buf[0] & 0x0F);
                 var mask = (buf[1] & 0x80) > 0;
                 var payloadlen = (int)(buf[1] & 0x7F);
                 if (payloadlen == 126) {
-                    await readAsync(2).CAF();
+                    await _readAsync(2).CAF();
                     payloadlen = (int)buf[0] << 8 | buf[1];
                 } else if (payloadlen == 127) {
-                    await readAsync(8).CAF();
+                    await _readAsync(8).CAF();
                     ulong longlen = 0;
+                    int cur = 0;
                     for (int i = 8 - 1; i >= 0; i--)
-                        longlen |= (ulong)buf[i] << (i * 8);
+                        longlen |= (ulong)buf[cur++] << (i * 8);
                     if (longlen > int.MaxValue)
                         throw new NotImplementedException($"payload is larget than Int32.MaxValue ({longlen} > {int.MaxValue})");
                     payloadlen = (int)longlen;
@@ -525,12 +525,12 @@ namespace Naive.HttpSvr
                     throw new Exception($"payload is larger than buffer ({payloadlen} > {optionalBuffer.Length - offset})");
                 var maskkey = buf;
                 if (mask) {
-                    await readAsync(4).CAF();
+                    await _readAsync(4).CAF();
                 }
                 var payload = optionalBuffer ?? new byte[payloadlen];
                 bv.Set(payload, offset, payloadlen);
                 if (payloadlen > 0) {
-                    await _readAsync(stream, payload, offset, payloadlen).CAF();
+                    await WebSocket._readAsync(stream, payload, offset, payloadlen).CAF();
                     if (mask) {
                         for (int i = 0; i < payloadlen; i++) {
                             payload[offset + i] ^= maskkey[i % 4];
@@ -647,6 +647,8 @@ namespace Naive.HttpSvr
                 _unfin = msg;
             }
         }
+
+        Task _readAsync(int count) => _readAsync(BaseStream, _read_buf, count);
 
         private static async Task _readAsync(Stream stream, byte[] buf, int count)
         {

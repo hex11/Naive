@@ -323,7 +323,7 @@ namespace Naive.HttpSvr
 		display: block;
 	}
 	.dir.up a {
-		line-height: 48px;
+		line-height: 30px;
 	}
 	.item a:hover {
 		text-decoration: underline;
@@ -372,13 +372,13 @@ namespace Naive.HttpSvr
 <div class='info'>{{info}}</div>
 {{list}}
 <div id='upload-top' style='margin-top: 20px;'></div>
-<div class='float-bottom'>
-	<form hidden class='item upload-form flexbox' id='upload-file' method='post' action='?upload' enctype='multipart/form-data' onclick='javascript: jumpToUpload()'>
+<div class='float-bottom upload-only' hidden=''>
+	<form class='item upload-form flexbox' id='upload-file' method='post' action='?upload' enctype='multipart/form-data' onclick='javascript: jumpToUpload()'>
 		<input style='flex: 1;' type='file' name='files' multiple>
 		<input style='width: 80px;' type='submit' value='Upload'>
 	</form>
 </div>
-<form hidden class='item upload-form' id='upload-text' method='post' action='?upload' enctype='multipart/form-data'>
+<form hidden='' class='item upload-form upload-only' id='upload-text' method='post' action='?upload' enctype='multipart/form-data'>
 	<div class='input-and-button flexbox'>
 		<input style='font-family: monospace; flex: 1;' type='text' name='textFileName' placeholder='text file name'>
 		<input style='width: 80px;' type='submit' value='Upload'>
@@ -389,7 +389,7 @@ namespace Naive.HttpSvr
 <script type='text/javascript'>
 	var uploadAllowed = '{{can_upload}}';
 	if(uploadAllowed == 'true'){
-		var eles = document.getElementsByClassName('upload-form');
+		var eles = document.getElementsByClassName('upload-only');
 		for (var i = eles.length - 1; i >= 0; i--) {
 			eles[i].hidden = false
 		}

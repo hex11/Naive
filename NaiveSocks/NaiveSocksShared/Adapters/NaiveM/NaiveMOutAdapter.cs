@@ -404,6 +404,7 @@ namespace NaiveSocks
             public async Task<ConnectResult> Connect(ConnectArgument arg)
             {
                 await ConnectIfNot();
+                arg.CancellationToken.ThrowIfCancellationRequested();
                 return await nms.Connect(arg);
             }
         }
