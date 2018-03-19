@@ -99,9 +99,12 @@ namespace NaiveSocks
                         info = "read/wring error";
                         goto FAIL;
                     }
+                    Logger.info($"uploaded '{fileName}' by {pp.myStream}.");
                     count++;
                 } else if (reader.CurrentPartName == "textFileName") {
                     textFileName = await reader.ReadAllTextAsync();
+                } else if (reader.CurrentPartName == "textFileEncoding") {
+                    encoding = await reader.ReadAllTextAsync();
                 } else if (reader.CurrentPartName == "textContent") {
                     if (!TryOpenFile(path, textFileName, out var fs, out info, out var realPath))
                         goto FAIL;
@@ -124,43 +127,86 @@ namespace NaiveSocks
                         File.Delete(realPath);
                         if (e is DisconnectedException)
                             return;
-                        info = "read/wring error";
+                        info = $"read/write error on '{textFileName}'";
                         goto FAIL;
                     }
+                    Logger.info($"uploaded text '{textFileName}' by {pp.myStream}.");
+                    count++;
+                } else if (reader.CurrentPartName == "dirName") {
+                    var dirName = await reader.ReadAllTextAsync();
+                    if (!CheckPathForWriting(path, dirName, out info, out var realPath))
+                        goto FAIL;
+                    try {
+                        Directory.CreateDirectory(realPath);
+                    } catch (Exception) {
+                        info = $"Failed to create directory '{dirName}'";
+                        goto FAIL;
+                    }
+                    Logger.info($"created dir '{dirName}' by {pp.myStream}.");
+                    count++;
+                } else if (reader.CurrentPartName == "delFile") {
+                    var delFile = await reader.ReadAllTextAsync();
+                    if (!CheckPathForWriting(path, delFile, out info, out var realPath, out var r))
+                        goto FAIL;
+                    try {
+                        if (r == WebSvrHelper.PathResult.Directory) {
+                            Directory.Delete(realPath);
+                        } else if (r == WebSvrHelper.PathResult.File) {
+                            File.Delete(realPath);
+                        } else {
+                            info = $"Failed to delete '{delFile}' (not found)";
+                            goto FAIL;
+                        }
+                    } catch (Exception) {
+                        info = $"Failed to delete '{delFile}'";
+                        goto FAIL;
+                    }
+                    Logger.info($"deleted '{delFile}' by {pp.myStream}.");
                     count++;
                 } else {
                     info = $"Unknown part name '{reader.CurrentPartName}'";
                     goto FAIL;
                 }
             }
-            info = $"Uploaded {count} file(s).";
+            info = $"Finished {count} operation{(count > 1 ? "s" : null)}.";
             FAIL:
             await HandleDirList(pp, path, info);
         }
 
-        private bool TryOpenFile(string path, string fileName, out Stream fs, out string failReason, out string realPath)
+        private bool TryOpenFile(string basePath, string relPath, out Stream fs, out string failReason, out string realPath)
         {
             fs = null;
+            if (!CheckPathForWriting(basePath, relPath, out failReason, out realPath))
+                return false;
+            try {
+                fs = File.Open(realPath, FileMode.Create, FileAccess.Write, FileShare.Read);
+            } catch (Exception e) {
+                failReason = ($"Can not open '{relPath}'.");
+                return false;
+            }
+            return true;
+        }
+
+        bool CheckPathForWriting(string basePath, string relPath, out string failReason, out string realPath)
+            => CheckPathForWriting(basePath, relPath, out failReason, out realPath, out _);
+
+        bool CheckPathForWriting(string basePath, string relPath, out string failReason, out string realPath, out WebSvrHelper.PathResult r)
+        {
+            r = WebSvrHelper.PathResult.IllegalPath;
             failReason = null;
-            if (fileName.IsNullOrEmpty()) {
+            if (relPath.IsNullOrEmpty()) {
                 failReason = "Empty filename.";
                 realPath = null;
                 return false;
             }
-            var r = WebSvrHelper.CheckPath(path, fileName, out realPath);
+            r = WebSvrHelper.CheckPath(basePath, relPath, out realPath);
             if (r == WebSvrHelper.PathResult.IllegalPath) {
-                failReason = ($"Illegal filename '{fileName}'");
+                failReason = ($"Illegal filename '{relPath}'");
                 return false;
             }
             if ((r == WebSvrHelper.PathResult.File || r == WebSvrHelper.PathResult.Directory)
                 && !allow_edit) {
-                failReason = ($"File '{fileName}' exists and no allow = 'edit'.");
-                return false;
-            }
-            try {
-                fs = File.Open(realPath, FileMode.Create, FileAccess.Write, FileShare.Read);
-            } catch (Exception e) {
-                failReason = ($"Can not open '{fileName}'.");
+                failReason = ($"File '{relPath}' exists and no allow = 'edit'.");
                 return false;
             }
             return true;
