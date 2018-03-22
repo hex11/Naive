@@ -15,10 +15,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Nett" Version="0.8.0" />
-  </ItemGroup>
-
-  <ItemGroup>
+    <ProjectReference Include="..\..\repos\GitHub.com\hex11\Nett\Source\Nett\Nett.csproj" />
     <ProjectReference Include="..\NaiveSvrLibStandard\NaiveSvrLibStandard.csproj" />
   </ItemGroup>
 

@@ -25,6 +25,10 @@ Project("{D954291E-2A0B-460D-934E-DC6B0785DB48}") = "NaiveSocksCliShared", "Naiv
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "DotNetCore", "DotNetCore", "{C4FDEA2C-B470-4F74-BE1F-3F744B5479A7}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Deps", "Deps", "{80C7A2DF-57C1-4B94-ACF1-8323E9941253}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Nett", "..\repos\GitHub.com\hex11\Nett\Source\Nett\Nett.csproj", "{78B1EC58-7899-4A2D-904F-0957558F1544}"
+EndProject
 Global
 	GlobalSection(SharedMSBuildProjectFiles) = preSolution
 		NaiveSvrLib\NaiveSvrShared\NaiveSvrShared.projitems*{0b623dfc-5129-419c-bb03-823809f9178d}*SharedItemsImports = 13
@@ -74,6 +78,12 @@ Global
 		{A6D5ADD3-5B85-4CD8-BE28-6AC19B8F6786}.Release(Debug)|Any CPU.Build.0 = Release|Any CPU
 		{A6D5ADD3-5B85-4CD8-BE28-6AC19B8F6786}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A6D5ADD3-5B85-4CD8-BE28-6AC19B8F6786}.Release|Any CPU.Build.0 = Release|Any CPU
+		{78B1EC58-7899-4A2D-904F-0957558F1544}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{78B1EC58-7899-4A2D-904F-0957558F1544}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{78B1EC58-7899-4A2D-904F-0957558F1544}.Release(Debug)|Any CPU.ActiveCfg = Release|Any CPU
+		{78B1EC58-7899-4A2D-904F-0957558F1544}.Release(Debug)|Any CPU.Build.0 = Release|Any CPU
+		{78B1EC58-7899-4A2D-904F-0957558F1544}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{78B1EC58-7899-4A2D-904F-0957558F1544}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -81,6 +91,7 @@ Global
 	GlobalSection(NestedProjects) = preSolution
 		{F172074F-C119-47FD-BC38-173847ED2083} = {C4FDEA2C-B470-4F74-BE1F-3F744B5479A7}
 		{A6D5ADD3-5B85-4CD8-BE28-6AC19B8F6786} = {C4FDEA2C-B470-4F74-BE1F-3F744B5479A7}
+		{78B1EC58-7899-4A2D-904F-0957558F1544} = {80C7A2DF-57C1-4B94-ACF1-8323E9941253}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {0BAEFEEE-0666-494C-9B5A-A75BF2B43B94}

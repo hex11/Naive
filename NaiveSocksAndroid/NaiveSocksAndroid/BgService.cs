@@ -10,6 +10,7 @@ using Android.Content;
 using Android.OS;
 using Android.Runtime;
 using Android.Support.V4.App;
+using Android.Support.V4.Content;
 using Android.Util;
 using Android.Views;
 using Android.Widget;
@@ -41,6 +42,8 @@ namespace NaiveSocksAndroid
         )]
     public class BgService : Service
     {
+        static bool isN = Build.VERSION.SdkInt >= BuildVersionCodes.N;
+
         public Controller Controller { get; private set; }
 
         private PowerManager powerManager;
@@ -81,7 +84,7 @@ namespace NaiveSocksAndroid
 
             builder = new NotificationCompat.Builder(this)
                         .SetContentIntent(BuildIntentToShowMainActivity())
-                        .SetContentTitle("NaiveSocks")
+                        //.SetContentTitle("NaiveSocks")
                         //.SetSubText("running")
                         //.SetStyle(bigText)
                         //.AddAction(BuildServiceAction(Actions.COL_NOTIF, "Collapse", Android.Resource.Drawable.StarOff, 4))
@@ -90,16 +93,21 @@ namespace NaiveSocksAndroid
                         .AddAction(BuildServiceAction(Actions.GC, "GC", Android.Resource.Drawable.StarOff, 3))
                         .AddAction(BuildServiceAction(Actions.GC_0, "GC(gen0)", Android.Resource.Drawable.StarOff, 5))
                         .SetSmallIcon(Resource.Drawable.N)
+                        .SetColor(unchecked((int)0xFF2196F3))
                         .SetPriority((int)NotificationPriority.Min)
                         .SetVisibility(NotificationCompat.VisibilitySecret)
                         //.SetShowWhen(false)
                         .SetOngoing(true);
+            if (!isN) {
+                builder.SetContentTitle("NaiveSocks");
+            }
 
             restartBuilder = new NotificationCompat.Builder(this)
                         .SetContentIntent(BuildServicePendingIntent("start!", 10086))
                         .SetContentTitle("NaiveSocks service is stopped")
                         .SetContentText("touch here to restart")
                         .SetSmallIcon(Resource.Drawable.N)
+                        .SetColor(unchecked((int)0xFF2196F3))
                         .SetAutoCancel(true)
                         .SetPriority((int)NotificationPriority.Min)
                         .SetVisibility(NotificationCompat.VisibilitySecret)
@@ -256,26 +264,36 @@ namespace NaiveSocksAndroid
 
         void updateNotif()
         {
+            void SetSingleLineText(string text)
+            {
+                if (isN) {
+                    builder.SetSubText(text);
+                } else {
+                    builder.SetContentText(text);
+                }
+            }
+
             if (isDestroyed)
                 return;
             lock (builder) {
                 _needUpdateNotif = false;
-                var titleFmt = /* notification_show_logs ?
+                var titleFmt = (notification_show_logs && !isN) ?
                     "{0}/{1} cxn, {2:N0} KB, {3:N0} pkt - NaiveSocks"
-                    : */"{0}/{1} cxn, {2:N0} KB, {3:N0} pkt";
+                    : "{0}/{1} cxn, {2:N0} KB, {3:N0} pkt";
                 var title = string.Format(titleFmt, Controller.RunningConnections, Controller.TotalHandledConnections, MyStream.TotalCopiedBytes / 1024, MyStream.TotalCopiedPackets);
                 if (title != lastTitle) {
                     _needRenotify = true;
                     lastTitle = title;
-                    if (notification_show_logs)
+                    if (notification_show_logs) {
                         builder.SetContentTitle(title);
-                    else
-                        builder.SetContentText(title);
+                    } else {
+                        SetSingleLineText(title);
+                    }
                 }
                 if (textLinesChanged) {
                     textLinesChanged = false;
                     _needRenotify = true;
-                    builder.SetContentText(textLines.Get(-1));
+                    SetSingleLineText(textLines.Get(-1));
                     if (notification_show_logs) {
                         if (bigText == null)
                             bigText = new NotificationCompat.BigTextStyle();

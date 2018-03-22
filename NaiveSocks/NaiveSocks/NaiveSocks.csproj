@@ -47,9 +47,6 @@
     <Prefer32Bit>true</Prefer32Bit>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="Nett, Version=0.8.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\..\packages\Nett.0.8.0\lib\Net40\Nett.dll</HintPath>
-    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Windows.Forms" />
@@ -68,9 +65,12 @@
     <None Include="App.config">
       <SubType>Designer</SubType>
     </None>
-    <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\..\repos\GitHub.com\hex11\Nett\Source\Nett\Nett.csproj">
+      <Project>{78b1ec58-7899-4a2d-904f-0957558f1544}</Project>
+      <Name>Nett</Name>
+    </ProjectReference>
     <ProjectReference Include="..\..\NaiveSvrLib\NaiveSvrLib\NaiveSvrLib.csproj">
       <Project>{b6fdce48-2582-4cbc-b1ed-4a6952e183d2}</Project>
       <Name>NaiveSvrLib</Name>

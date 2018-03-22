@@ -378,13 +378,27 @@ namespace Naive.HttpSvr
 		<input style='width: 80px;' type='submit' value='Upload'>
 	</form>
 </div>
-<form hidden='' class='item upload-form upload-only' id='upload-text' method='post' action='?upload' enctype='multipart/form-data'>
-	<div class='input-and-button flexbox'>
-		<input style='font-family: monospace; flex: 1;' type='text' name='textFileName' placeholder='text file name'>
-		<input style='width: 80px;' type='submit' value='Upload'>
-	</div>
-	<textarea class='boxsizing' style='display: block; width: 100%; font-family: monospace;' name='textContent' placeholder='text content' rows='6'></textarea>
-</form>
+<div hidden='' class='upload-only'>
+	<form class='item upload-form' id='upload-mkdir' method='post' action='?upload' enctype='multipart/form-data'>
+		<div class='input-and-button flexbox'>
+			<input style='font-family: monospace; flex: 1;' type='text' name='dirName' placeholder='directory name'>
+			<input style='width: 80px;' type='submit' value='Mkdir'>
+		</div>
+	</form>
+	<form class='item upload-form' id='upload-text' method='post' action='?upload' enctype='multipart/form-data'>
+		<div class='input-and-button flexbox'>
+			<input style='font-family: monospace; flex: 1;' type='text' name='textFileName' placeholder='text file name'>
+			<input style='width: 80px;' type='submit' value='Upload'>
+		</div>
+		<textarea class='boxsizing' style='display: block; width: 100%; font-family: monospace;' name='textContent' placeholder='text content' rows='6'></textarea>
+	</form>
+	<form class='item upload-form' id='upload-del' method='post' action='?upload' enctype='multipart/form-data'>
+		<div class='input-and-button flexbox'>
+			<input style='font-family: monospace; flex: 1;' type='text' name='delFile' placeholder='file (or empty directory) to be deleted'>
+			<input style='width: 80px;' type='submit' value='Delete'>
+		</div>
+	</form>
+</div>
 {{foot}}
 <script type='text/javascript'>
 	var uploadAllowed = '{{can_upload}}';

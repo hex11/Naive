@@ -185,6 +185,7 @@ namespace NaiveSocks
             var refs = new List<AdapterRef>();
             try {
                 var tomlSettings = TomlSettings.Create(cfg => cfg
+                        .AllowNonstandard(true)
                         .ConfigureType<IPEndPoint>(type => type
                             .WithConversionFor<TomlString>(convert => convert
                                 .ToToml(custom => custom.ToString())
@@ -212,7 +213,7 @@ namespace NaiveSocks
                 tomlTable = Toml.ReadString(toml, tomlSettings);
                 t = tomlTable.Get<NaiveSocks.Config>();
             } catch (Exception e) {
-                error($"TOML error: " + e.Message);
+                Logger.exception(e, Logging.Level.Error, "TOML Error");
                 return null;
             }
             ConfigTomlLoaded?.Invoke(tomlTable);
@@ -260,7 +261,7 @@ namespace NaiveSocks
             }
             bool notExistAndNeed(string name) =>
                     newcfg.OutAdapters.Any(x => x.Name == name) == false
-                        && refs.Any(x => x.IsName && x.Ref as string == name);
+                        /* && refs.Any(x => x.IsName && x.Ref as string == name) */;
             if (notExistAndNeed("direct")) {
                 newcfg.OutAdapters.Add(new DirectOutAdapter() { Name = "direct" });
             }
