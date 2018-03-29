@@ -175,6 +175,12 @@ namespace NaiveSocks
                         command.WriteLine(item.timestamp + item.text);
                     }
                     command.WriteLine($"(total {logs.Length} logs)");
+                } else if (cmd == "test") {
+                    var strs = Enumerable.Range(1, 9).Select(x => new string((char)('0' + x), x)).ToArray();
+                    for (int i = 0; i < 10_000; i++) {
+                        int num = NaiveUtils.Random.Next(0, 9);
+                        Logging.log(strs[num], Logging.Level.Debug);
+                    }
                 } else {
                     command.WriteLine("wrong arguments.");
                 }

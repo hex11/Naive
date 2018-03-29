@@ -281,9 +281,14 @@ namespace Naive.HttpSvr
             sb.AppendFormat("(ThreadName:{0})", Thread.CurrentThread.Name);
         }
 
+        static long StartTimeTicks = -1;
+
         public static long getRuntime()
         {
-            return (long)(DateTime.Now - Process.GetCurrentProcess().StartTime).TotalMilliseconds;
+            if (StartTimeTicks == -1) {
+                StartTimeTicks = Process.GetCurrentProcess().StartTime.Ticks;
+            }
+            return (DateTime.Now.Ticks - StartTimeTicks) / 10000;
         }
 
         public static long Runtime => getRuntime();
@@ -473,6 +478,9 @@ namespace Naive.HttpSvr
                         Encoding.GetBytes(pStr, strLen, buffer + ml.bufOffset, bufLen);
                     }
                 logs.Enqueue(ml);
+#if DEBUG
+                GetLogs();
+#endif
             }
         }
 
@@ -493,6 +501,7 @@ namespace Naive.HttpSvr
             lock (logs) {
                 if (newBufferSize > bufferSize || (head < bufferSize && tail < head)) {
                     ResizeBuffer(newBufferSize);
+                    bufferSize = newBufferSize;
                 } else {
                     // TODO
                 }
@@ -532,12 +541,19 @@ namespace Naive.HttpSvr
                 time = log.time;
                 runningTime = log.runningTime;
                 bufOffset = bufLen = strLen = 0;
+#if DEBUG
+                hash = log.text.GetHashCode();
+#endif
             }
 
             public Logging.Level level;
             public DateTime time;
             public long runningTime;
             public int bufOffset, bufLen, strLen;
+
+#if DEBUG
+            int hash;
+#endif
 
             public Logging.Log GetLog(LogBuffer logBuffer)
             {
@@ -554,6 +570,11 @@ namespace Naive.HttpSvr
                         Encoding.GetChars(logBuffer.buffer + bufOffset, bufLen, pStr, strLen);
                     l.text = str;
                 }
+#if DEBUG
+                if (l.text.GetHashCode() != hash) {
+                    Console.CmdConsole.StdIO.Write("Log checksum failed!\n", Console.Color32.FromConsoleColor(ConsoleColor.Red));
+                }
+#endif
                 return l;
             }
         }
