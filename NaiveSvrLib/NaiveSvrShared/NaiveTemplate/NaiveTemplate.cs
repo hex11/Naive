@@ -130,32 +130,21 @@ namespace NaiveTemplate
 
             public void Parse()
             {
-                var tokens = new Tokenizer(str).GetTokenIterator();
-                bool inExpression = false;
-                bool hasIdentifier = false;
-                foreach (var token in tokens) {
-                    if (inExpression) {
-                        if (token.Type == TokenType.Identifier) {
-                            if (hasIdentifier)
-                                throw createException("wrong syntax.");
-                            hasIdentifier = true;
-                            addExpression(token);
-                        } else if (token.Type == TokenType.ExpressionEnd) {
-                            if (hasIdentifier == false)
-                                throw createException("empty expression.");
-                            inExpression = false;
-                        }
+                var tokens = new Tokens(str);
+                while (true) {
+                    if (tokens.TryExpect(TokenType.Text)) {
+                        addTextNode(tokens.Consume());
+                    } else if (tokens.TryExpectAndConsume(TokenType.ExpressionBegin)) {
+                        addExpression(tokens.ExpectAndConsume(TokenType.Identifier));
+                        tokens.ExpectAndConsume(TokenType.ExpressionEnd);
+                    } else if (tokens.TryExpectAndConsume(TokenType.EndOfFile)) {
+                        break;
                     } else {
-                        if (token.Type == TokenType.ExpressionBegin) {
-                            inExpression = true;
-                            hasIdentifier = false;
-                        } else if (token.Type == TokenType.Text) {
-                            addTextNode(token);
-                        }
+                        throw new ParserException($"unexpected token {tokens.Peek().TypeAndPosition}") {
+                            Token = tokens.Peek()
+                        };
                     }
                 }
-                if (inExpression)
-                    throw createException("unexpected EOF.");
             }
 
             private void addTextNode(Token token)
@@ -166,11 +155,6 @@ namespace NaiveTemplate
             private void addExpression(Token token)
             {
                 t.nodes.Add(new Node() { Type = NodeType.Expression, Str = token.Str });
-            }
-
-            private Exception createException(string msg)
-            {
-                return new Exception(msg);
             }
         }
 
@@ -186,120 +170,242 @@ namespace NaiveTemplate
             Expression
         }
 
-        public class Tokenizer
+        public class Tokens
         {
-            private const string ExpressionBegin = "{{";
-            private const string ExpressionEnd = "}}";
-            public Tokenizer(string input)
+            private Tokenizer tokenizer;
+            private IEnumerator<Token> enumerator;
+
+            private Token current;
+
+            public Tokens(string input)
             {
-                this.Input = input;
-                this.len = input.Length;
+                tokenizer.Init(input);
+                enumerator = tokenizer.GetTokenIterator().GetEnumerator();
+                Next();
             }
 
-            public string Input { get; }
-            private string input => Input;
-
-            private int cur;
-            private int len;
-            private StringBuilder sb = new StringBuilder();
-
-            public IEnumerable<Token> GetTokenIterator()
+            void Next()
             {
-                while (cur < len) {
-                    int textBegin = cur;
-                    var nextBegin = Input.IndexOf(ExpressionBegin, cur);
-                    if (nextBegin == -1) {
-                        cur = len;
-                    } else {
-                        cur = nextBegin;
-                    }
-                    yield return CreateTextToken(textBegin);
-                    if (nextBegin == -1) break;
-                    yield return CreateExoressionBegin();
-                    cur += ExpressionBegin.Length;
+                if (enumerator.MoveNext())
+                    current = enumerator.Current;
+                else
+                    current = new Token { Type = TokenType.EndOfFile };
+            }
+
+            public Token Peek()
+            {
+                return current;
+            }
+
+            public bool TryExpect(TokenType tt)
+            {
+                return Peek().Type == tt;
+            }
+
+            public void Expect(TokenType tt)
+            {
+                if (!TryExpect(tt))
+                    throw new ParserException($"expected token type {tt}, taken {Peek().TypeAndPosition}") {
+                        Token = Peek()
+                    };
+            }
+
+            public Token Consume()
+            {
+                var t = Peek();
+                Next();
+                return t;
+            }
+
+            public Token ExpectAndConsume(TokenType tt)
+            {
+                Expect(tt);
+                return Consume();
+            }
+
+            public bool TryExpectAndConsume(TokenType tt)
+            {
+                var r = Peek().Type == tt;
+                if (r) {
+                    Consume();
+                }
+                return r;
+            }
+
+            private struct Tokenizer
+            {
+                private const string ExpressionBegin = "{{";
+                private const string ExpressionEnd = "}}";
+
+                public void Init(string input)
+                {
+                    this.Input = input;
+                    this.len = input.Length;
+                    this.curPosition = new TextPosition(1, 1);
+                }
+
+                public string Input;
+                private string input => Input;
+
+                private char curChar => input[cur];
+
+                private int cur;
+                private int len;
+
+                TextPosition curPosition;
+
+                public IEnumerable<Token> GetTokenIterator()
+                {
                     while (cur < len) {
-                        var ch = Input[cur];
-                        if (char.IsWhiteSpace(ch)) {
-                            cur++;
-                            continue;
+                        int textBegin = cur;
+                        var nextBegin = Input.IndexOf(ExpressionBegin, cur);
+                        int textLen = (nextBegin == -1) ? len - textBegin : nextBegin - textBegin;
+                        yield return CreateTextToken(Peek(textLen));
+                        Consume(textLen);
+                        if (nextBegin == -1) break;
+                        yield return CreateExoressionBegin();
+                        Consume(ExpressionBegin.Length);
+                        while (cur < len) {
+                            if (ConsumeAllSpaces())
+                                continue;
+                            if (TryExpect(ExpressionEnd)) {
+                                yield return CreateExoressionEnd();
+                                Consume(ExpressionEnd.Length);
+                                break;
+                            }
+                            var wordBeginPos = curPosition;
+                            var word = ConsumeWord();
+                            yield return CreateToken(TokenType.Identifier, word, wordBeginPos);
                         }
-                        if (compareString(input, cur, ExpressionEnd)) {
-                            cur += ExpressionEnd.Length;
-                            yield return CreateExoressionEnd();
+                    }
+                }
+
+                private string Peek(int length)
+                {
+                    return Input.Substring(cur, length);
+                }
+
+                private bool TryExpect(string pattern)
+                {
+                    return CompareString(input, cur, pattern);
+                }
+
+                private bool TryExpectAndConsume(string pattern)
+                {
+                    bool r;
+                    if (r = TryExpect(pattern)) {
+                        Consume(pattern.Length);
+                    }
+                    return r;
+                }
+
+                private char Consume()
+                {
+                    var ch = Input[cur++];
+                    if (ch == '\n') {
+                        curPosition.Line++;
+                        curPosition.Column = 1;
+                    } else {
+                        curPosition.Column++;
+                    }
+                    return ch;
+                }
+
+                private void Consume(int count)
+                {
+                    for (int i = 0; i < count; i++) {
+                        Consume();
+                    }
+                }
+
+                private bool ConsumeAllSpaces()
+                {
+                    if (cur >= len)
+                        return false;
+                    if (!isSpace(curChar))
+                        return false;
+                    do {
+                        Consume();
+                    } while (isSpace(curChar));
+                    return true;
+                }
+
+                public static bool CompareString(string str, int strOffset, string pattern)
+                {
+                    if (str.Length - strOffset < pattern.Length) return false;
+                    for (int i = 0; i < pattern.Length; i++) {
+                        if (str[i + strOffset] != pattern[i]) return false;
+                    }
+                    return true;
+                }
+
+                private string ConsumeWord()
+                {
+                    var begin = cur;
+                    while (cur < input.Length) {
+                        var ch = input[cur];
+                        if (isSpace(ch)) {
+                            if (cur > begin)
+                                break;
+                            else
+                                begin++;
+                        }
+                        if (isSpecialChar(ch)) {
+                            if (cur - begin == 0)
+                                Consume();
                             break;
                         }
-                        var word = getNextWord();
-                        yield return CreateIdentifier(word);
+                        Consume();
                     }
+                    var end = cur;
+                    ConsumeAllSpaces();
+                    return Input.Substring(begin, end - begin);
                 }
-            }
 
-            public static bool compareString(string str, int strOffset, string pattern)
-            {
-                if (str.Length - strOffset < pattern.Length) return false;
-                for (int i = 0; i < pattern.Length; i++) {
-                    if (str[i + strOffset] != pattern[i]) return false;
+                private static bool isSpace(char ch)
+                {
+                    return ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n';
                 }
-                return true;
-            }
 
-            private static int min(int a, int b) => a > b ? b : a;
-
-            private string getNextWord()
-            {
-                sb.Clear();
-                while (cur < input.Length) {
-                    var ch = input[cur++];
-                    if (isSpace(ch) && sb.Length > 0) {
-                        break;
-                    }
-                    if (isSpecialChar(ch)) {
-                        if (sb.Length == 0)
-                            return ch.ToString();
-                        cur--;
-                        return sb.ToString();
-                    }
-                    sb.Append(ch);
+                private static bool isSpecialChar(char ch)
+                {
+                    return ch == '}';
                 }
-                return sb.ToString();
-            }
 
-            private static bool isSpace(char ch)
-            {
-                return ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n';
-            }
+                private Token CreateExoressionBegin()
+                {
+                    return CreateToken(TokenType.ExpressionBegin, ExpressionBegin);
+                }
 
-            private static bool isSpecialChar(char ch)
-            {
-                return ch == '}';
-            }
+                private Token CreateExoressionEnd()
+                {
+                    return CreateToken(TokenType.ExpressionEnd, ExpressionEnd);
+                }
 
-            private static Token CreateExoressionBegin()
-            {
-                return new Token() { Type = TokenType.ExpressionBegin, Str = ExpressionBegin };
-            }
+                private Token CreateIdentifier(string str)
+                {
+                    return CreateToken(TokenType.Identifier, str);
+                }
 
-            private static Token CreateExoressionEnd()
-            {
-                return new Token() { Type = TokenType.ExpressionEnd, Str = ExpressionEnd };
-            }
+                private Token CreateTextToken(int begin)
+                {
+                    return CreateTextToken(Input.Substring(begin, cur - begin));
+                }
 
-            private static Token CreateIdentifier(string str)
-            {
-                return new Token() { Type = TokenType.Identifier, Str = str };
-            }
+                private Token CreateTextToken(string text)
+                {
+                    return CreateToken(TokenType.Text, text);
+                }
 
-            private Token CreateTextToken(int begin)
-            {
-                return CreateTextToken(Input.Substring(begin, cur - begin));
-            }
+                private Token CreateToken(TokenType tt, string str)
+                {
+                    return CreateToken(tt, str, curPosition);
+                }
 
-            private Token CreateTextToken(string text)
-            {
-                return new Token() {
-                    Str = text,
-                    Type = TokenType.Text
-                };
+                private Token CreateToken(TokenType tt, string str, TextPosition pos)
+                {
+                    return new Token { Type = tt, Str = str, Position = pos };
+                }
             }
         }
 
@@ -307,18 +413,56 @@ namespace NaiveTemplate
         {
             public TokenType Type;
             public string Str;
+            public TextPosition Position;
+
             public override string ToString()
             {
                 return $"{Type}|{Str}";
+            }
+
+            public string TypeAndPosition
+                => "Type " + Type.ToString() + " at " + Position.ToString();
+        }
+
+        public struct TextPosition
+        {
+            public int Line;
+            public int Column;
+
+            public TextPosition(int line, int column)
+            {
+                Line = line;
+                Column = column;
+            }
+
+            public override string ToString()
+            {
+                return $"Line {Line} Column {Column}";
             }
         }
 
         public enum TokenType
         {
+            Undefined,
+            EndOfFile,
             Text,
             ExpressionBegin,
             ExpressionEnd,
             Identifier,
+        }
+
+
+        [Serializable]
+        public class ParserException : Exception
+        {
+            public ParserException() { }
+            public ParserException(string message) : base(message) { }
+            public ParserException(string message, Exception inner) : base(message, inner) { }
+            protected ParserException(
+              System.Runtime.Serialization.SerializationInfo info,
+              System.Runtime.Serialization.StreamingContext context) : base(info, context) { }
+
+            public Token Token { get; internal set; }
         }
     }
 }
