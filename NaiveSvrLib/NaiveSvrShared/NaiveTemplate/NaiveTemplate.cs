@@ -31,11 +31,12 @@ namespace NaiveTemplate
 
         public void Run(Template template, ITemplateData data, TextWriter writer)
         {
-            foreach (var item in template.nodes) {
-                if (item.Type == Template.NodeType.Text) {
-                    writer.Write(item.Str);
-                } else if (item.Type == Template.NodeType.Expression) {
-                    var v = data.GetValue(item.Str);
+            for (int i = 0; i < template.nodes.Count;) {
+                var node = template.nodes[i++];
+                if (node.Type == Template.NodeType.Text) {
+                    writer.Write(node.Str);
+                } else if (node.Type == Template.NodeType.Tag) {
+                    var v = data.GetValue(node.Str);
                     if (v is Action<TextWriter> write) {
                         write(writer);
                     } else if (v is Func<TextWriter, Task> writeAsync) {
@@ -43,17 +44,25 @@ namespace NaiveTemplate
                     } else {
                         writer.Write(v);
                     }
+                } else if (node.Type == Template.NodeType.SectionBegin) {
+                    var v = data.GetValue(node.Str);
+                    if (v == null || (v is bool b && b == false)) {
+                        i = SkipSection(template, i);
+                    } else {
+                        // TODO
+                    }
                 }
             }
         }
 
         public async Task RunAsync(Template template, ITemplateData data, TextWriter writer)
         {
-            foreach (var item in template.nodes) {
-                if (item.Type == Template.NodeType.Text) {
-                    await writer.WriteAsync(item.Str);
-                } else if (item.Type == Template.NodeType.Expression) {
-                    var v = data.GetValue(item.Str);
+            for (int i = 0; i < template.nodes.Count;) {
+                var node = template.nodes[i++];
+                if (node.Type == Template.NodeType.Text) {
+                    await writer.WriteAsync(node.Str);
+                } else if (node.Type == Template.NodeType.Tag) {
+                    var v = data.GetValue(node.Str);
                     if (v is Action<TextWriter> write) {
                         await Task.Run(() => write(writer));
                     } else if (v is Func<TextWriter, Task> writeAsync) {
@@ -61,8 +70,29 @@ namespace NaiveTemplate
                     } else {
                         await writer.WriteAsync(v?.ToString());
                     }
+                } else if (node.Type == Template.NodeType.SectionBegin) {
+                    var v = data.GetValue(node.Str);
+                    if (v == null || (v is bool b && b == false)) {
+                        i = SkipSection(template, i);
+                    } else {
+                        // TODO
+                    }
                 }
             }
+        }
+
+        private static int SkipSection(Template template, int i)
+        {
+            int unclosed = 1;
+            while (unclosed > 0) {
+                var n = template.nodes[i++];
+                if (n.Type == Template.NodeType.SectionBegin)
+                    unclosed++;
+                else if (n.Type == Template.NodeType.SectionEnd)
+                    unclosed--;
+            }
+
+            return i;
         }
     }
 
@@ -121,40 +151,93 @@ namespace NaiveTemplate
         {
             private readonly Template t;
             private readonly string str;
+            private Tokens tokens;
+
+            private int unclosedSections;
 
             public Parser(Template t, string str)
             {
                 this.t = t;
                 this.str = str;
+                tokens = new Tokens(str);
+                unclosedSections = 0;
             }
 
             public void Parse()
             {
-                var tokens = new Tokens(str);
+                ParseSection();
+            }
+
+            // returns true if the section is closed.
+            bool ParseSection(bool inSection = false, string sectionTag = null)
+            {
                 while (true) {
                     if (tokens.TryExpect(TokenType.Text)) {
-                        addTextNode(tokens.Consume());
-                    } else if (tokens.TryExpectAndConsume(TokenType.ExpressionBegin)) {
-                        addExpression(tokens.ExpectAndConsume(TokenType.Identifier));
-                        tokens.ExpectAndConsume(TokenType.ExpressionEnd);
+                        addPlainText(tokens.Consume());
+                    } else if (tokens.TryExpectAndConsume(TokenType.TagBegin)) {
+                        if (tokens.TryExpectAndConsume(TokenType.Hash)) {
+                            var tag = tokens.ExpectAndConsume(TokenType.Identifier);
+                            var tagStr = tag.Str;
+                            tokens.ExpectAndConsume(TokenType.TagEnd);
+                            add(NodeType.SectionBegin, tagStr);
+                            if (!ParseSection(true, tagStr)) {
+                                throw CreateException($"section '{tagStr}' is not closed", tag);
+                            }
+                        } else if (tokens.TryExpect(TokenType.Slash)) {
+                            if (!inSection) {
+                                throw CreateUnexpectedTokenException();
+                            } else {
+                                tokens.Consume();
+                                if (tokens.TryExpect(TokenType.Identifier)) {
+                                    var t = tokens.Consume();
+                                    if (sectionTag != t.Str)
+                                        throw CreateException($"wrong tag, should be '{sectionTag}'", t);
+                                } // the tag can be omited.
+                                tokens.ExpectAndConsume(TokenType.TagEnd);
+                                add(NodeType.SectionEnd, sectionTag);
+                                return true;
+                            }
+                        } else {
+                            addTag(tokens.ExpectAndConsume(TokenType.Identifier));
+                            tokens.ExpectAndConsume(TokenType.TagEnd);
+                        }
                     } else if (tokens.TryExpectAndConsume(TokenType.EndOfFile)) {
                         break;
                     } else {
-                        throw new ParserException($"unexpected token {tokens.Peek().TypeAndPosition}") {
-                            Token = tokens.Peek()
-                        };
+                        throw CreateUnexpectedTokenException();
                     }
                 }
+                return false;
             }
 
-            private void addTextNode(Token token)
+
+            private Exception CreateUnexpectedTokenException() => CreateUnexpectedTokenException(tokens.Peek());
+
+            private Exception CreateUnexpectedTokenException(Token token)
+            {
+                return CreateException("Unexpected token Type " + token.Type, token);
+            }
+
+            private Exception CreateException(string message, Token token)
+            {
+                return new ParserException(message + " at " + token.Position) {
+                    Token = token
+                };
+            }
+
+            private void addPlainText(Token token)
             {
                 t.nodes.Add(new Node() { Type = NodeType.Text, Str = token.Str });
             }
 
-            private void addExpression(Token token)
+            private void addTag(Token token)
             {
-                t.nodes.Add(new Node() { Type = NodeType.Expression, Str = token.Str });
+                t.nodes.Add(new Node() { Type = NodeType.Tag, Str = token.Str });
+            }
+
+            private void add(NodeType type, string str)
+            {
+                t.nodes.Add(new Node() { Type = type, Str = str });
             }
         }
 
@@ -167,7 +250,9 @@ namespace NaiveTemplate
         public enum NodeType
         {
             Text,
-            Expression
+            Tag,
+            SectionBegin,
+            SectionEnd
         }
 
         public class Tokens
@@ -266,16 +351,25 @@ namespace NaiveTemplate
                         yield return CreateExoressionBegin();
                         Consume(ExpressionBegin.Length);
                         while (cur < len) {
+                            // in expression:
                             if (ConsumeAllSpaces())
                                 continue;
-                            if (TryExpect(ExpressionEnd)) {
+                            var ch = curChar;
+                            if (ch == '#') {
+                                yield return CreateToken(TokenType.Hash, "#");
+                                Consume();
+                            } else if (ch == '/') {
+                                yield return CreateToken(TokenType.Slash, "/");
+                                Consume();
+                            } else if (TryExpect(ExpressionEnd)) {
                                 yield return CreateExoressionEnd();
                                 Consume(ExpressionEnd.Length);
                                 break;
+                            } else {
+                                var wordBeginPos = curPosition;
+                                var word = ConsumeWord();
+                                yield return CreateToken(TokenType.Identifier, word, wordBeginPos);
                             }
-                            var wordBeginPos = curPosition;
-                            var word = ConsumeWord();
-                            yield return CreateToken(TokenType.Identifier, word, wordBeginPos);
                         }
                     }
                 }
@@ -313,8 +407,20 @@ namespace NaiveTemplate
 
                 private void Consume(int count)
                 {
-                    for (int i = 0; i < count; i++) {
-                        Consume();
+                    int newlines = 0;
+                    int lastNewlinePosition = 0;
+                    for (int i = 0; i < count; i++, cur++) {
+                        var ch = Input[cur];
+                        if (ch == '\n') {
+                            newlines++;
+                            lastNewlinePosition = cur;
+                        }
+                    }
+                    if (newlines == 0) {
+                        curPosition.Column += count;
+                    } else {
+                        curPosition.Line += newlines;
+                        curPosition.Column = cur - lastNewlinePosition;
                     }
                 }
 
@@ -364,22 +470,22 @@ namespace NaiveTemplate
 
                 private static bool isSpace(char ch)
                 {
-                    return ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n';
+                    return ch == ' ' | ch == '\t' | ch == '\r' | ch == '\n';
                 }
 
                 private static bool isSpecialChar(char ch)
                 {
-                    return ch == '}';
+                    return ch == '}' | ch == '#' | ch == '/' | ch == '^' | ch == '!';
                 }
 
                 private Token CreateExoressionBegin()
                 {
-                    return CreateToken(TokenType.ExpressionBegin, ExpressionBegin);
+                    return CreateToken(TokenType.TagBegin, ExpressionBegin);
                 }
 
                 private Token CreateExoressionEnd()
                 {
-                    return CreateToken(TokenType.ExpressionEnd, ExpressionEnd);
+                    return CreateToken(TokenType.TagEnd, ExpressionEnd);
                 }
 
                 private Token CreateIdentifier(string str)
@@ -446,11 +552,12 @@ namespace NaiveTemplate
             Undefined,
             EndOfFile,
             Text,
-            ExpressionBegin,
-            ExpressionEnd,
+            TagBegin,
+            TagEnd,
             Identifier,
+            Hash,
+            Slash,
         }
-
 
         [Serializable]
         public class ParserException : Exception

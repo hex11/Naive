@@ -300,6 +300,7 @@ namespace Naive.HttpSvr
 <head>
 <meta name='theme-color' content='orange'>
 <meta name='viewport' content='width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1'>
+{{#title}}<title>{{title}}</title>{{/}}
 <style>
 	body {
 		font-family: sans-serif;
@@ -371,14 +372,15 @@ namespace Naive.HttpSvr
 <body>
 <div class='info'>{{info}}</div>
 {{list}}
+{{#can_upload}}
 <div id='upload-top' style='margin-top: 20px;'></div>
-<div class='float-bottom upload-only' hidden=''>
+<div class='float-bottom'>
 	<form class='item upload-form flexbox' id='upload-file' method='post' action='?upload' enctype='multipart/form-data' onclick='javascript: jumpToUpload()'>
-		<input style='flex: 1;' type='file' name='files' multiple>
+		<div style='flex: 1;'><input style='flex: 1;' type='file' name='files' multiple></div>
 		<input style='width: 80px;' type='submit' value='Upload'>
 	</form>
 </div>
-<div hidden='' class='upload-only'>
+<div class='upload-div'>
 	<form class='item upload-form' id='upload-mkdir' method='post' action='?upload' enctype='multipart/form-data'>
 		<div class='input-and-button flexbox'>
 			<input style='font-family: monospace; flex: 1;' type='text' name='dirName' placeholder='directory name'>
@@ -399,19 +401,15 @@ namespace Naive.HttpSvr
 		</div>
 	</form>
 </div>
+{{/can_upload}}
 {{foot}}
+{{#can_upload}}
 <script type='text/javascript'>
-	var uploadAllowed = '{{can_upload}}';
-	if(uploadAllowed == 'true'){
-		var eles = document.getElementsByClassName('upload-only');
-		for (var i = eles.length - 1; i >= 0; i--) {
-			eles[i].hidden = false
-		}
-	}
 	function jumpToUpload() {
 		window.location.hash = '#upload-top';
 	}
 </script>
+{{/can_upload}}
 </body>
 </html>
 ";

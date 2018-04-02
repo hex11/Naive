@@ -234,7 +234,7 @@ namespace NaiveSocks
             if (infoText != null) {
                 dat["info"] = infoText;
             }
-            dat["can_upload"] = allow_create ? "true" : "false";
+            dat["can_upload"] = allow_create | allow_edit;
             return WebSvrHelper.WriteDirListPage(pp, path, _tmpl, new NaiveTemplate.TemplaterData(dat));
         }
     }
