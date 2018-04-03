@@ -1,5 +1,6 @@
 ﻿using Naive.HttpSvr;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -31,12 +32,24 @@ namespace NaiveTemplate
 
         public void Run(Template template, ITemplateData data, TextWriter writer)
         {
-            for (int i = 0; i < template.nodes.Count;) {
+            Run(template, (object)data, writer);
+        }
+
+        public void Run(Template template, Func<string, object> data, TextWriter writer)
+        {
+            Run(template, (object)data, writer);
+        }
+
+        private int Run(Template template, object data, TextWriter writer, int offset = 0)
+        {
+            object currentObj = null;
+            Func<string, object> newData = null;
+            for (int i = offset; i < template.nodes.Count;) {
                 var node = template.nodes[i++];
                 if (node.Type == Template.NodeType.Text) {
                     writer.Write(node.Str);
                 } else if (node.Type == Template.NodeType.Tag) {
-                    var v = data.GetValue(node.Str);
+                    var v = GetVal(data, node.Str);
                     if (v is Action<TextWriter> write) {
                         write(writer);
                     } else if (v is Func<TextWriter, Task> writeAsync) {
@@ -44,25 +57,65 @@ namespace NaiveTemplate
                     } else {
                         writer.Write(v);
                     }
-                } else if (node.Type == Template.NodeType.SectionBegin) {
-                    var v = data.GetValue(node.Str);
-                    if (v == null || (v is bool b && b == false)) {
-                        i = SkipSection(template, i);
+                } else if (node.Type == Template.NodeType.SectionBegin
+                            | node.Type == Template.NodeType.SectionBeginInverted) {
+                    var v = GetVal(data, node.Str);
+                    var isFalse = v == null || (v is bool b && b == false);
+                    bool isInversed = node.Type == Template.NodeType.SectionBeginInverted;
+                    if (isFalse ^ isInversed) {
+                        SkipSection(template, ref i);
                     } else {
-                        // TODO
+                        if (newData == null)
+                            newData = new Func<string, object>((x) => {
+                                return GetVal(currentObj, x) ?? GetVal(data, x);
+                            });
+                        if (v is IEnumerable enu) {
+                            int end = 0;
+                            foreach (var item in enu) {
+                                currentObj = item;
+                                end = Run(template, newData, writer, i);
+                            }
+                            if (end > 0) {
+                                i = end;
+                            } else {
+                                if (isInversed) {
+                                    i = Run(template, data, writer, i);
+                                } else {
+                                    SkipSection(template, ref i);
+                                }
+                            }
+                        } else {
+                            currentObj = v;
+                            i = Run(template, newData, writer, i);
+                        }
                     }
+                } else if (node.Type == Template.NodeType.SectionEnd) {
+                    return i;
                 }
             }
+            return -1;
         }
 
-        public async Task RunAsync(Template template, ITemplateData data, TextWriter writer)
+        public Task RunAsync(Template template, ITemplateData data, TextWriter writer)
         {
-            for (int i = 0; i < template.nodes.Count;) {
+            return RunAsync(template, (object)data, writer);
+        }
+
+        public Task RunAsync(Template template, Func<string, object> data, TextWriter writer)
+        {
+            return RunAsync(template, (object)data, writer);
+        }
+
+        private async Task<int> RunAsync(Template template, object data, TextWriter writer, int offset = 0)
+        {
+            object currentObj = null;
+            Func<string, object> newData = null;
+            for (int i = offset; i < template.nodes.Count;) {
                 var node = template.nodes[i++];
                 if (node.Type == Template.NodeType.Text) {
                     await writer.WriteAsync(node.Str);
                 } else if (node.Type == Template.NodeType.Tag) {
-                    var v = data.GetValue(node.Str);
+                    var v = GetVal(data, node.Str);
                     if (v is Action<TextWriter> write) {
                         await Task.Run(() => write(writer));
                     } else if (v is Func<TextWriter, Task> writeAsync) {
@@ -70,18 +123,46 @@ namespace NaiveTemplate
                     } else {
                         await writer.WriteAsync(v?.ToString());
                     }
-                } else if (node.Type == Template.NodeType.SectionBegin) {
-                    var v = data.GetValue(node.Str);
-                    if (v == null || (v is bool b && b == false)) {
-                        i = SkipSection(template, i);
+                } else if (node.Type == Template.NodeType.SectionBegin
+                            | node.Type == Template.NodeType.SectionBeginInverted) {
+                    var v = GetVal(data, node.Str);
+                    var isFalse = v == null || (v is bool b && b == false);
+                    bool isInversed = node.Type == Template.NodeType.SectionBeginInverted;
+                    if (isFalse ^ isInversed) {
+                        SkipSection(template, ref i);
                     } else {
-                        // TODO
+                        if (newData == null)
+                            newData = new Func<string, object>((x) => {
+                                return GetVal(currentObj, x) ?? GetVal(data, x);
+                            });
+                        if (v is IEnumerable enu) {
+                            int end = 0;
+                            foreach (var item in enu) {
+                                currentObj = item;
+                                end = await RunAsync(template, newData, writer, i);
+                            }
+                            if (end > 0) {
+                                i = end;
+                            } else {
+                                if (isInversed) {
+                                    i = await RunAsync(template, data, writer, i);
+                                } else {
+                                    SkipSection(template, ref i);
+                                }
+                            }
+                        } else {
+                            currentObj = v;
+                            i = await RunAsync(template, newData, writer, i);
+                        }
                     }
+                } else if (node.Type == Template.NodeType.SectionEnd) {
+                    return i;
                 }
             }
+            return -1;
         }
 
-        private static int SkipSection(Template template, int i)
+        private static void SkipSection(Template template, ref int i)
         {
             int unclosed = 1;
             while (unclosed > 0) {
@@ -91,8 +172,19 @@ namespace NaiveTemplate
                 else if (n.Type == Template.NodeType.SectionEnd)
                     unclosed--;
             }
+        }
 
-            return i;
+        private static object GetVal(object obj, string key)
+        {
+            if (obj is ITemplateData data) {
+                return data.GetValue(key);
+            } else if (obj is Func<string, object> fun) {
+                return fun(key);
+            } else if (obj is IDictionary<string, object> dict) {
+                if (dict.TryGetValue(key, out var val))
+                    return val;
+            }
+            return null;
         }
     }
 
@@ -153,14 +245,11 @@ namespace NaiveTemplate
             private readonly string str;
             private Tokens tokens;
 
-            private int unclosedSections;
-
             public Parser(Template t, string str)
             {
                 this.t = t;
                 this.str = str;
                 tokens = new Tokens(str);
-                unclosedSections = 0;
             }
 
             public void Parse()
@@ -169,22 +258,24 @@ namespace NaiveTemplate
             }
 
             // returns true if the section is closed.
-            bool ParseSection(bool inSection = false, string sectionTag = null)
+            bool ParseSection(string sectionTag = null)
             {
                 while (true) {
                     if (tokens.TryExpect(TokenType.Text)) {
                         addPlainText(tokens.Consume());
                     } else if (tokens.TryExpectAndConsume(TokenType.TagBegin)) {
-                        if (tokens.TryExpectAndConsume(TokenType.Hash)) {
+                        if (tokens.TryExpect(TokenType.Hash) || tokens.TryExpect(TokenType.Caret)) {
+                            var nodeType = tokens.Consume().Type == TokenType.Hash
+                                ? NodeType.SectionBegin : NodeType.SectionBeginInverted;
                             var tag = tokens.ExpectAndConsume(TokenType.Identifier);
                             var tagStr = tag.Str;
                             tokens.ExpectAndConsume(TokenType.TagEnd);
-                            add(NodeType.SectionBegin, tagStr);
-                            if (!ParseSection(true, tagStr)) {
+                            add(nodeType, tagStr);
+                            if (!ParseSection(tagStr)) {
                                 throw CreateException($"section '{tagStr}' is not closed", tag);
                             }
                         } else if (tokens.TryExpect(TokenType.Slash)) {
-                            if (!inSection) {
+                            if (sectionTag == null) {
                                 throw CreateUnexpectedTokenException();
                             } else {
                                 tokens.Consume();
@@ -196,6 +287,10 @@ namespace NaiveTemplate
                                 tokens.ExpectAndConsume(TokenType.TagEnd);
                                 add(NodeType.SectionEnd, sectionTag);
                                 return true;
+                            }
+                        } else if (tokens.TryExpectAndConsume(TokenType.Exclamation)) {
+                            while (tokens.Consume().Type != TokenType.TagEnd) {
+                                // skip to TagEnd
                             }
                         } else {
                             addTag(tokens.ExpectAndConsume(TokenType.Identifier));
@@ -252,6 +347,7 @@ namespace NaiveTemplate
             Text,
             Tag,
             SectionBegin,
+            SectionBeginInverted,
             SectionEnd
         }
 
@@ -360,6 +456,12 @@ namespace NaiveTemplate
                                 Consume();
                             } else if (ch == '/') {
                                 yield return CreateToken(TokenType.Slash, "/");
+                                Consume();
+                            } else if (ch == '^') {
+                                yield return CreateToken(TokenType.Caret, "^");
+                                Consume();
+                            } else if (ch == '!') {
+                                yield return CreateToken(TokenType.Exclamation, "!");
                                 Consume();
                             } else if (TryExpect(ExpressionEnd)) {
                                 yield return CreateExoressionEnd();
@@ -556,7 +658,9 @@ namespace NaiveTemplate
             TagEnd,
             Identifier,
             Hash,
+            Caret,
             Slash,
+            Exclamation,
         }
 
         [Serializable]

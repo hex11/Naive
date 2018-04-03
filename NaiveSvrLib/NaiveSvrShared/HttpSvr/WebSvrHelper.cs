@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -140,6 +141,7 @@ namespace Naive.HttpSvr
         {
             tmpl = tmpl ?? lazyListTmpl.Value;
             data = data ?? new TemplaterData();
+            data.Add("isTop", p.Url_path == "/");
             data.Add("list", async x => {
                 try {
                     await WriteDirList(x, path, p.Url_path != "/");
@@ -147,6 +149,19 @@ namespace Naive.HttpSvr
                     await x.WriteAsync($"<p>Unauthorized</p>");
                 }
             });
+            var subData = new TemplaterData();
+            data.Add("dirs", Directory.EnumerateDirectories(path).Select(x=> {
+                var name = new DirectoryInfo(x).Name;
+                subData.Dict["url"] = HttpUtil.UrlEncode(name);
+                subData.Dict["name"] = HttpUtil.HtmlAttributeEncode(name);
+                return subData;
+            }));
+            data.Add("files", Directory.EnumerateFiles(path).Select(x => {
+                var name = new FileInfo(x).Name;
+                subData.Dict["url"] = HttpUtil.UrlEncode(name);
+                subData.Dict["name"] = HttpUtil.HtmlAttributeEncode(name);
+                return subData;
+            }));
             await Engine.Instance.RunAsync(tmpl, data, p.outputWriter);
         }
 
@@ -295,7 +310,10 @@ namespace Naive.HttpSvr
             }
         }
 
-        const string listTmplString = @"<!DOCTYPE html>
+        const string listTmplString = @"{{!
+	This is not only a template of list page,
+	but also a test for the template engine.
+}}<!DOCTYPE html>
 <html>
 <head>
 <meta name='theme-color' content='orange'>
@@ -368,10 +386,12 @@ namespace Naive.HttpSvr
 		height: 2em;
 	}
 </style>
-{{head}}</head>
+{{ head }}</head>
 <body>
-<div class='info'>{{info}}</div>
-{{list}}
+{{#info}}<div class='info'>{{info}}</div>{{/}}
+{{^isTop}}<div class='item dir up'><a href='../'>../</a></div>{{/}}
+{{#dirs}}<div class='item dir'><a href='{{url}}/'>{{name}}/</a></div>{{/}}
+{{#files}}<div class='item file'><a href='{{url}}'>{{name}}</a></div>{{/}}
 {{#can_upload}}
 <div id='upload-top' style='margin-top: 20px;'></div>
 <div class='float-bottom'>
