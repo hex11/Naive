@@ -141,6 +141,12 @@ namespace Naive.HttpSvr
         {
             tmpl = tmpl ?? lazyListTmpl.Value;
             data = data ?? new TemplaterData();
+            SetDirListData(p, path, data);
+            await Engine.Instance.RunAsync(tmpl, data, p.outputWriter);
+        }
+
+        public static void SetDirListData(HttpConnection p, string path, TemplaterData data)
+        {
             data.Add("isTop", p.Url_path == "/");
             data.Add("list", async x => {
                 try {
@@ -150,19 +156,18 @@ namespace Naive.HttpSvr
                 }
             });
             var subData = new TemplaterData();
-            data.Add("dirs", Directory.EnumerateDirectories(path).Select(x=> {
-                var name = new DirectoryInfo(x).Name;
+            data.Add("dirs", Directory.EnumerateDirectories(path).Select(x => {
+                var name = Path.GetFileName(x);
                 subData.Dict["url"] = HttpUtil.UrlEncode(name);
                 subData.Dict["name"] = HttpUtil.HtmlAttributeEncode(name);
                 return subData;
             }));
             data.Add("files", Directory.EnumerateFiles(path).Select(x => {
-                var name = new FileInfo(x).Name;
+                var name = Path.GetFileName(x);
                 subData.Dict["url"] = HttpUtil.UrlEncode(name);
                 subData.Dict["name"] = HttpUtil.HtmlAttributeEncode(name);
                 return subData;
             }));
-            await Engine.Instance.RunAsync(tmpl, data, p.outputWriter);
         }
 
         static Lazy<Template> lazyListTmpl = new Lazy<Template>(() => new Template(listTmplString), true);
@@ -176,13 +181,13 @@ namespace Naive.HttpSvr
             }
             var data = new TemplaterData();
             foreach (var item in Directory.EnumerateDirectories(path)) {
-                var name = new DirectoryInfo(item).Name;
+                var name = Path.GetFileName(item);
                 data.Dict["url"] = HttpUtil.UrlEncode(name);
                 data.Dict["name"] = HttpUtil.HtmlAttributeEncode(name);
                 await Engine.Instance.RunAsync(dirTmpl, data, p);
             }
             foreach (var item in Directory.EnumerateFiles(path)) {
-                var name = new FileInfo(item).Name;
+                var name = Path.GetFileName(item);
                 data.Dict["url"] = HttpUtil.UrlEncode(name);
                 data.Dict["name"] = HttpUtil.HtmlAttributeEncode(name);
                 await Engine.Instance.RunAsync(fileTmpl, data, p);

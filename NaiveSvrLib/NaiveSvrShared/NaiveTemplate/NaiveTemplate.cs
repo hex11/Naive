@@ -42,13 +42,12 @@ namespace NaiveTemplate
 
         private int Run(Template template, object data, TextWriter writer, int offset = 0)
         {
-            object currentObj = null;
-            Func<string, object> newData = null;
+            List<object> dataChain = data as List<object>;
             for (int i = offset; i < template.nodes.Count;) {
                 var node = template.nodes[i++];
                 if (node.Type == Template.NodeType.Text) {
                     writer.Write(node.Str);
-                } else if (node.Type == Template.NodeType.Tag) {
+                } else if (node.Type == Template.NodeType.VarTag) {
                     var v = GetVal(data, node.Str);
                     if (v is Action<TextWriter> write) {
                         write(writer);
@@ -65,15 +64,17 @@ namespace NaiveTemplate
                     if (isFalse ^ isInversed) {
                         SkipSection(template, ref i);
                     } else {
-                        if (newData == null)
-                            newData = new Func<string, object>((x) => {
-                                return GetVal(currentObj, x) ?? GetVal(data, x);
-                            });
+                        if (dataChain == null) {
+                            dataChain = new List<object>();
+                            dataChain.Add(data);
+                        }
+                        var chainPos = dataChain.Count;
+                        dataChain.Add(null);
                         if (v is IEnumerable enu) {
                             int end = 0;
                             foreach (var item in enu) {
-                                currentObj = item;
-                                end = Run(template, newData, writer, i);
+                                dataChain[chainPos] = item;
+                                end = Run(template, dataChain, writer, i);
                             }
                             if (end > 0) {
                                 i = end;
@@ -85,9 +86,10 @@ namespace NaiveTemplate
                                 }
                             }
                         } else {
-                            currentObj = v;
-                            i = Run(template, newData, writer, i);
+                            dataChain[chainPos] = v;
+                            i = Run(template, dataChain, writer, i);
                         }
+                        dataChain.RemoveAt(chainPos);
                     }
                 } else if (node.Type == Template.NodeType.SectionEnd) {
                     return i;
@@ -108,13 +110,12 @@ namespace NaiveTemplate
 
         private async Task<int> RunAsync(Template template, object data, TextWriter writer, int offset = 0)
         {
-            object currentObj = null;
-            Func<string, object> newData = null;
+            List<object> dataChain = data as List<object>;
             for (int i = offset; i < template.nodes.Count;) {
                 var node = template.nodes[i++];
                 if (node.Type == Template.NodeType.Text) {
                     await writer.WriteAsync(node.Str);
-                } else if (node.Type == Template.NodeType.Tag) {
+                } else if (node.Type == Template.NodeType.VarTag) {
                     var v = GetVal(data, node.Str);
                     if (v is Action<TextWriter> write) {
                         await Task.Run(() => write(writer));
@@ -131,15 +132,17 @@ namespace NaiveTemplate
                     if (isFalse ^ isInversed) {
                         SkipSection(template, ref i);
                     } else {
-                        if (newData == null)
-                            newData = new Func<string, object>((x) => {
-                                return GetVal(currentObj, x) ?? GetVal(data, x);
-                            });
+                        if (dataChain == null) {
+                            dataChain = new List<object>();
+                            dataChain.Add(data);
+                        }
+                        var chainPos = dataChain.Count;
+                        dataChain.Add(null);
                         if (v is IEnumerable enu) {
                             int end = 0;
                             foreach (var item in enu) {
-                                currentObj = item;
-                                end = await RunAsync(template, newData, writer, i);
+                                dataChain[chainPos] = item;
+                                end = await RunAsync(template, dataChain, writer, i);
                             }
                             if (end > 0) {
                                 i = end;
@@ -151,9 +154,10 @@ namespace NaiveTemplate
                                 }
                             }
                         } else {
-                            currentObj = v;
-                            i = await RunAsync(template, newData, writer, i);
+                            dataChain[chainPos] = v;
+                            i = await RunAsync(template, dataChain, writer, i);
                         }
+                        dataChain.RemoveAt(chainPos);
                     }
                 } else if (node.Type == Template.NodeType.SectionEnd) {
                     return i;
@@ -176,6 +180,13 @@ namespace NaiveTemplate
 
         private static object GetVal(object obj, string key)
         {
+            if (obj is List<object> chain) {
+                for (int i = chain.Count - 1; i >= 0; i--) {
+                    var r = GetVal(chain[i], key);
+                    if (r != null)
+                        return r;
+                }
+            }
             if (obj is ITemplateData data) {
                 return data.GetValue(key);
             } else if (obj is Func<string, object> fun) {
@@ -206,7 +217,7 @@ namespace NaiveTemplate
             this.Dict = dict;
         }
 
-        TemplaterData add(string key, object value)
+        private TemplaterData add(string key, object value)
         {
             Dict.Add(key, value);
             return this;
@@ -293,7 +304,7 @@ namespace NaiveTemplate
                                 // skip to TagEnd
                             }
                         } else {
-                            addTag(tokens.ExpectAndConsume(TokenType.Identifier));
+                            addVarTag(tokens.ExpectAndConsume(TokenType.Identifier));
                             tokens.ExpectAndConsume(TokenType.TagEnd);
                         }
                     } else if (tokens.TryExpectAndConsume(TokenType.EndOfFile)) {
@@ -325,9 +336,9 @@ namespace NaiveTemplate
                 t.nodes.Add(new Node() { Type = NodeType.Text, Str = token.Str });
             }
 
-            private void addTag(Token token)
+            private void addVarTag(Token token)
             {
-                t.nodes.Add(new Node() { Type = NodeType.Tag, Str = token.Str });
+                t.nodes.Add(new Node() { Type = NodeType.VarTag, Str = token.Str });
             }
 
             private void add(NodeType type, string str)
@@ -345,7 +356,7 @@ namespace NaiveTemplate
         public enum NodeType
         {
             Text,
-            Tag,
+            VarTag,
             SectionBegin,
             SectionBeginInverted,
             SectionEnd
@@ -415,8 +426,8 @@ namespace NaiveTemplate
 
             private struct Tokenizer
             {
-                private const string ExpressionBegin = "{{";
-                private const string ExpressionEnd = "}}";
+                private const string DelimiterBegin = "{{";
+                private const string DelimiterEnd = "}}";
 
                 public void Init(string input)
                 {
@@ -439,13 +450,15 @@ namespace NaiveTemplate
                 {
                     while (cur < len) {
                         int textBegin = cur;
-                        var nextBegin = Input.IndexOf(ExpressionBegin, cur);
+                        var nextBegin = Input.IndexOf(DelimiterBegin, cur);
                         int textLen = (nextBegin == -1) ? len - textBegin : nextBegin - textBegin;
-                        yield return CreateTextToken(Peek(textLen));
-                        Consume(textLen);
+                        if (textLen > 0) {
+                            yield return CreateTextToken(Peek(textLen));
+                            Consume(textLen);
+                        }
                         if (nextBegin == -1) break;
                         yield return CreateExoressionBegin();
-                        Consume(ExpressionBegin.Length);
+                        Consume(DelimiterBegin.Length);
                         while (cur < len) {
                             // in expression:
                             if (ConsumeAllSpaces())
@@ -463,9 +476,9 @@ namespace NaiveTemplate
                             } else if (ch == '!') {
                                 yield return CreateToken(TokenType.Exclamation, "!");
                                 Consume();
-                            } else if (TryExpect(ExpressionEnd)) {
+                            } else if (TryExpect(DelimiterEnd)) {
                                 yield return CreateExoressionEnd();
-                                Consume(ExpressionEnd.Length);
+                                Consume(DelimiterEnd.Length);
                                 break;
                             } else {
                                 var wordBeginPos = curPosition;
@@ -582,12 +595,12 @@ namespace NaiveTemplate
 
                 private Token CreateExoressionBegin()
                 {
-                    return CreateToken(TokenType.TagBegin, ExpressionBegin);
+                    return CreateToken(TokenType.TagBegin, DelimiterBegin);
                 }
 
                 private Token CreateExoressionEnd()
                 {
-                    return CreateToken(TokenType.TagEnd, ExpressionEnd);
+                    return CreateToken(TokenType.TagEnd, DelimiterEnd);
                 }
 
                 private Token CreateIdentifier(string str)

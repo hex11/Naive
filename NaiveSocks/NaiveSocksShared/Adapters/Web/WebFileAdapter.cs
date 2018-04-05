@@ -28,6 +28,8 @@ namespace NaiveSocks
             base.SetConfig(toml);
             if (allow != null) {
                 foreach (var item in allow.Split(' ', ',')) {
+                    if (item.IsNullOrEmpty())
+                        continue;
                     if (item == "list") {
                         allow_list = true;
                     } else if (item == "create") {
@@ -61,7 +63,7 @@ namespace NaiveSocks
                 }
             }
             var realPath = p.Url_path;
-            if (index != null) {
+            if (index != null && p.Url_path == "/") {
                 p.Url_path = index;
             }
             try {
