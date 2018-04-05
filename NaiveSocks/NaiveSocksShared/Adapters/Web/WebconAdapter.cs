@@ -18,8 +18,6 @@ namespace NaiveSocks
         public string[] path_page { get; set; } = new[] { "/", "/webcon", "/webcon.html" };
         public string[] path_ws { get; set; } = new[] { "/admin/consolews" };
 
-        public override string ToString() => $"{{Webcon}}";
-
         ConsoleHub consoleHub;
 
         public override bool Reloading(object oldInstance)

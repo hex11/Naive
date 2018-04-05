@@ -3,6 +3,7 @@ using System.Net.Sockets;
 using System.Threading.Tasks;
 using Naive.HttpSvr;
 using System;
+using System.Text;
 
 namespace NaiveSocks
 {
@@ -22,7 +23,12 @@ namespace NaiveSocks
             return await Dns.GetHostAddressesAsync(name);
         }
 
-        public override string ToString() => $"{{DirectOut{(force_dest.IsDefault ? "" : " force_dest=" + force_dest)}}}";
+        protected override void GetDetail(GetDetailContext ctx)
+        {
+            base.GetDetail(ctx);
+            if(force_dest.IsDefault == false)
+                ctx.AddField("force_dest", force_dest);
+        }
     }
 
     public class ConnectHelper

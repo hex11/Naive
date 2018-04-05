@@ -129,8 +129,6 @@ namespace NaiveSocks
     {
         public string reason { get; set; }
 
-        public override string ToString() => $"{{AlwaysFail}}";
-
         public override async Task HandleConnection(InConnection connection)
         {
             await connection.SetConnectResult(GetConnectResult());

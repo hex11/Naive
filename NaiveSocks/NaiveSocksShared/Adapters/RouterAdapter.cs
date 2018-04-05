@@ -21,7 +21,12 @@ namespace NaiveSocks
 
         public AdapterRef @default { get; set; }
 
-        public override string ToString() => $"{{Router rulesets={rules?.Count ?? 0} default={@default}}}";
+        protected override void GetDetail(GetDetailContext ctx)
+        {
+            base.GetDetail(ctx);
+            ctx.AddField("rulesets", rules?.Count ?? 0);
+            ctx.AddField("default", @default);
+        }
 
         CancellationTokenSource ctsOnStop = new CancellationTokenSource();
 

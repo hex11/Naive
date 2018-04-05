@@ -43,7 +43,11 @@ namespace NaiveSocks
 
     public class NNetworkAdapter : WebBaseAdapter, ICanReload, INetwork, IHttpRequestAsyncHandler
     {
-        public override string ToString() => $"{{NNetwork '{domain}'}}";
+        protected override void GetDetail(GetDetailContext ctx)
+        {
+            base.GetDetail(ctx);
+            ctx.AddField("domain", domain);
+        }
 
         public string domain { get; set; }
         public AdapterRef if_notfound { get; set; }

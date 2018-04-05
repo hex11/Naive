@@ -1,5 +1,6 @@
 ﻿using System.Net;
 using System.Net.Sockets;
+using System.Text;
 using Naive.HttpSvr;
 
 namespace NaiveSocks
@@ -8,7 +9,11 @@ namespace NaiveSocks
     {
         public AddrPort dest { get; set; }
 
-        public override string ToString() => $"{{DirectIn listen={listen} dest={dest}}}";
+        protected override void GetDetail(GetDetailContext ctx)
+        {
+            base.GetDetail(ctx);
+            ctx.AddField("dest", dest);
+        }
 
         public override void OnNewConnection(TcpClient tcpClient)
         {

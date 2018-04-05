@@ -24,7 +24,7 @@ namespace NaiveSocks
         public override string ToString()
         {
             if (Adapter != null)
-                return IsName ? $"ref'{Adapter.Name}'" : $"new'{Adapter.Name}'";
+                return IsName ? $"ref'{Adapter.Name}'" : $"inline'{Adapter.Name}'";
             else
                 return $"ref'{Ref}'(Not Found)";
         }
@@ -119,14 +119,67 @@ namespace NaiveSocks
 
         public override string ToString()
         {
-            if (Name != null)
-                return Name.Quoted();
-            return base.ToString();
+            return ToString(true);
         }
 
-        public virtual void GetDetailString(StringBuilder sb)
+        public string ToString(bool withName)
+        {
+            var sb = new StringBuilder();
+            ToString(sb, withName);
+            return sb.ToString();
+        }
+
+        public void ToString(StringBuilder sb, bool withName = true)
+        {
+            sb.Append('{');
+            if (withName) {
+                sb.Append('\'').Append(Name).Append('\'');
+                sb.Append(' ');
+            }
+            sb.Append(TypeName);
+            GetDetailString(sb);
+            sb.Append('}');
+        }
+
+        public virtual string TypeName
+        {
+            get {
+                var name = this.GetType().Name;
+                if (name.EndsWith("Adapter")) {
+                    return name.Substring(0, name.Length - "Adapter".Length);
+                }
+                return name;
+            }
+        }
+
+        public void GetDetailString(StringBuilder sb)
+        {
+            GetDetail(new GetDetailContext(sb));
+        }
+
+        protected virtual void GetDetail(GetDetailContext ctx)
         {
 
+        }
+
+        protected struct GetDetailContext
+        {
+            public GetDetailContext(StringBuilder stringBuilder)
+            {
+                StringBuilder = stringBuilder;
+            }
+
+            public StringBuilder StringBuilder { get; set; }
+
+            public void AddField<T>(string name, T value)
+            {
+                StringBuilder.Append(' ').Append(name).Append('=').Append(value.ToString());
+            }
+
+            public void AddTag(string tag)
+            {
+                StringBuilder.Append(' ').Append(tag);
+            }
         }
     }
 
@@ -167,9 +220,11 @@ namespace NaiveSocks
     {
         public IPEndPoint listen { get; set; }
 
-        public override string ToString() => $"{{{AdapterType} listen={listen}}}";
-
-        public virtual string AdapterType => GetType().Name;
+        protected override void GetDetail(GetDetailContext ctx)
+        {
+            base.GetDetail(ctx);
+            ctx.AddField("listen", listen);
+        }
 
         public override void SetConfig(TomlTable toml)
         {

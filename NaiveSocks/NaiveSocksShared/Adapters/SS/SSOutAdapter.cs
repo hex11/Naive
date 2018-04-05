@@ -10,21 +10,25 @@ using System.IO;
 
 namespace NaiveSocks
 {
-    public class SSOutAdapter : OutAdapter2
+    public class SsOutAdapter : OutAdapter2
     {
         public AddrPort server { get; set; }
         public string key { get; set; }
         public string encryption { get; set; } = "aes-128-ctr";
         public int connect_timeout { get; set; } = 10;
 
-        public override string ToString() => $"{{SsOut server={server}}}";
+        protected override void GetDetail(GetDetailContext ctx)
+        {
+            base.GetDetail(ctx);
+            ctx.AddField("server", server);
+        }
 
         private Func<IMyStream, IMyStream> getEncryptionStream;
 
         public override void Start()
         {
             base.Start();
-            getEncryptionStream = SS.GetCipherByName(encryption).GetEncryptionStreamFunc(key);
+            getEncryptionStream = Ss.GetCipherByName(encryption).GetEncryptionStreamFunc(key);
         }
 
         public override async Task<ConnectResult> ProtectedConnect(ConnectArgument arg)

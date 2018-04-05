@@ -21,12 +21,10 @@ namespace NaiveSocks
 
         private Func<bool, IIVEncryptor> enc;
 
-        public override string AdapterType => "Naive0In";
-
         public override void SetConfig(TomlTable toml)
         {
             base.SetConfig(toml);
-            this.enc = SS.GetCipherByName("aes-256-ctr").GetEncryptorFunc(key);
+            this.enc = Ss.GetCipherByName("aes-256-ctr").GetEncryptorFunc(key);
         }
 
         public override void OnNewConnection(TcpClient client)

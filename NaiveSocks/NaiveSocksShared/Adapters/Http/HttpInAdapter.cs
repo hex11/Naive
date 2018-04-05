@@ -23,11 +23,6 @@ namespace NaiveSocks
         = true;
 #endif
 
-        public override string ToString()
-        {
-            return $"{{HttpIn listen={listen}}}";
-        }
-
         HttpServer httpServer;
 
         public override void SetConfig(TomlTable toml)

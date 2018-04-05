@@ -8,17 +8,15 @@ using System.Threading.Tasks;
 
 namespace NaiveSocks
 {
-    public class SSInAdapter : InAdapterWithListener
+    public class SsInAdapter : InAdapterWithListener
     {
         public string key { get; set; }
         private Func<IMyStream, IMyStream> getEncryptionStream;
         public string encryption { get; set; } = "aes-128-ctr";
 
-        public override string AdapterType => "SsIn";
-
         public override void Start()
         {
-            getEncryptionStream = SS.GetCipherByName(encryption).GetEncryptionStreamFunc(key);
+            getEncryptionStream = Ss.GetCipherByName(encryption).GetEncryptionStreamFunc(key);
             base.Start();
         }
 

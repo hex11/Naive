@@ -33,12 +33,16 @@ namespace NaiveSocks
 
         int free => poolConnecting + pool.Count;
 
-        public override string ToString() => $"{{Naive0Out server={server}}}";
+        protected override void GetDetail(GetDetailContext ctx)
+        {
+            base.GetDetail(ctx);
+            ctx.AddField("server", server);
+        }
 
         public override void SetConfig(TomlTable toml)
         {
             base.SetConfig(toml);
-            this.enc = SS.GetCipherByName("aes-256-ctr").GetEncryptorFunc(key);
+            this.enc = Ss.GetCipherByName("aes-256-ctr").GetEncryptorFunc(key);
         }
 
         public override void Start()

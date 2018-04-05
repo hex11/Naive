@@ -9,7 +9,7 @@ using System.Collections.Generic;
 
 namespace NaiveSocks
 {
-    public static class SS
+    public static class Ss
     {
         public static SymmetricAlgorithm GetEcbAlg(byte[] realKey)
         {
@@ -21,7 +21,7 @@ namespace NaiveSocks
             return provider;
         }
 
-        // copy & plste from ss-csharp. (modified)
+        // copy & paste from ss-csharp. (modified)
         public static void BytesToKey(byte[] password, byte[] key)
         {
             var result = new byte[16 + password.Length];
@@ -51,7 +51,7 @@ namespace NaiveSocks
         public static Cipher GetCipherByName(string cipherName)
         {
             if (Ciphers.TryGetValue(cipherName, out var cipher) == false) {
-                throw new Exception($"encryption '{cipherName}' is not supported.\n(supported: {string.Join(", ", SS.Ciphers.Keys)})");
+                throw new Exception($"encryption '{cipherName}' is not supported.\n(supported: {string.Join(", ", Ss.Ciphers.Keys)})");
             }
             return cipher;
         }

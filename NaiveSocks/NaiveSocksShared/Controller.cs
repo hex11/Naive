@@ -30,6 +30,8 @@ namespace NaiveSocks
 
             public string FilePath;
             public string WorkingDirectory = ".";
+
+            public int FailedCount;
         }
 
         public class ConfigFile
@@ -97,7 +99,7 @@ namespace NaiveSocks
             RegisteredInTypes.Add("naive", typeof(NaiveMInAdapter));
             RegisteredInTypes.Add("naivec", typeof(NaiveMInAdapter));
             RegisteredInTypes.Add("naive0", typeof(Naive0InAdapter));
-            RegisteredInTypes.Add("ss", typeof(SSInAdapter));
+            RegisteredInTypes.Add("ss", typeof(SsInAdapter));
 
             RegisteredOutTypes.Add("direct", typeof(DirectOutAdapter));
             RegisteredOutTypes.Add("socks", typeof(SocksOutAdapter));
@@ -106,7 +108,7 @@ namespace NaiveSocks
             RegisteredOutTypes.Add("naive", typeof(NaiveMOutAdapter));
             RegisteredOutTypes.Add("naivec", typeof(NaiveMOutAdapter));
             RegisteredOutTypes.Add("naive0", typeof(Naive0OutAdapter));
-            RegisteredOutTypes.Add("ss", typeof(SSOutAdapter));
+            RegisteredOutTypes.Add("ss", typeof(SsOutAdapter));
             RegisteredOutTypes.Add("webcon", typeof(WebConAdapter));
             RegisteredOutTypes.Add("webfile", typeof(WebFileAdapter));
 
@@ -170,6 +172,8 @@ namespace NaiveSocks
         {
             CurrentConfig = LoadConfig(configFile, null) ?? CurrentConfig;
             Logger.info($"configuration loaded. {InAdapters.Count} InAdapters, {OutAdapters.Count} OutAdapters.");
+            if (CurrentConfig.FailedCount > 0)
+                Logger.warning($"And {CurrentConfig.FailedCount} ERRORs");
         }
 
         private Config LoadConfig(ConfigFile cf, Config newcfg)
@@ -219,6 +223,7 @@ namespace NaiveSocks
             ConfigTomlLoaded?.Invoke(tomlTable);
             newcfg.LoggingLevel = t.log_level;
             newcfg.Aliases = t.aliases;
+            int failedCount = 0;
             if (t.@in != null)
                 foreach (var item in t.@in) {
                     try {
@@ -227,6 +232,7 @@ namespace NaiveSocks
                         newcfg.InAdapters.Add(adapter);
                     } catch (Exception e) {
                         Logger.exception(e, Logging.Level.Error, $"TOML table 'in.{item.Key}':");
+                        failedCount++;
                     }
                 }
             if (t.@out != null)
@@ -237,6 +243,7 @@ namespace NaiveSocks
                         newcfg.OutAdapters.Add(adapter);
                     } catch (Exception e) {
                         Logger.exception(e, Logging.Level.Error, $"TOML table 'out.{item.Key}':");
+                        failedCount++;
                     }
                 }
             foreach (var r in refs.Where(x => x.IsTable)) {
@@ -257,6 +264,7 @@ namespace NaiveSocks
                     newcfg.OutAdapters.Add(adapter);
                 } catch (Exception e) {
                     Logger.exception(e, Logging.Level.Error, $"TOML inline table:");
+                    failedCount++;
                 }
             }
             bool notExistAndNeed(string name) =>
@@ -273,6 +281,7 @@ namespace NaiveSocks
                     r.Adapter = FindAdapter<IAdapter>(newcfg, r.Ref as string, -1);
                 }
             }
+            newcfg.FailedCount = failedCount;
             return newcfg;
         }
 
@@ -357,25 +366,32 @@ namespace NaiveSocks
                 }
                 return true;
             }
+            int failedCount = 0;
             foreach (var item in OutAdapters) {
-                info($"OutAdapter '{item.Name}': {item}");
+                info($"OutAdapter '{item.Name}' = {item.ToString(false)}");
                 try {
                     item.InternalInit(this);
                     item.InternalStart(checkIcr(item));
                 } catch (Exception e) {
-                    Logger.exception(e, Logging.Level.Error, $"starting OutAdapter '{item.Name}': {item}");
+                    Logger.exception(e, Logging.Level.Error, $"starting OutAdapter '{item.Name}' = {item}");
+                    failedCount++;
                 }
             }
             foreach (var item in InAdapters) {
-                info($"InAdapter '{item.Name}': {item} -> {item.@out?.Adapter?.Name?.Quoted() ?? "(No OutAdapter)"}");
+                info($"InAdapter '{item.Name}' = {item.ToString(false)} -> {item.@out?.Adapter?.Name?.Quoted() ?? "(No OutAdapter)"}");
                 try {
                     item.InternalInit(this);
                     item.InternalStart(checkIcr(item));
                 } catch (Exception e) {
-                    Logger.exception(e, Logging.Level.Error, $"starting InAdapter '{item.Name}': {item}");
+                    Logger.exception(e, Logging.Level.Error, $"starting InAdapter '{item.Name}' = {item}");
+                    failedCount++;
                 }
             }
-            Logger.info($"=====Adapters Started=====");
+            if (failedCount > 0) {
+                Logger.warning($"=====Adapters Started===== ({failedCount} FAILURES)");
+            } else {
+                Logger.info($"=====Adapters Started=====");
+            }
         }
 
         public void Stop() => Stop(CurrentConfig, null);

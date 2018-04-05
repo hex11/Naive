@@ -14,8 +14,6 @@ namespace NaiveSocks
             new SocksInConnection(client, this).Start().Forget();
         }
 
-        public override string ToString() => $"{{SocksIn listen={listen}}}";
-
         private class SocksInConnection : InConnection
         {
             private Socks5Server socks5svr;

@@ -6,15 +6,19 @@ using System.Linq;
 using System.Net;
 using Nett;
 using System.Threading;
+using System.Text;
 
 namespace NaiveSocks
 {
     public class NaiveMOutAdapter : OutAdapter2, IInAdapter, ICanReload, IDnsProvider
     {
-        public override string ToString()
+        protected override void GetDetail(GetDetailContext ctx)
         {
-            string i(bool b, string str) => b ? str : "";
-            return $"{{NaiveMOut server={server}{i(tls, "(TLS)")} enc='{encryption}'}}";
+            base.GetDetail(ctx);
+            ctx.AddField("server", server);
+            if (tls)
+                ctx.AddTag("TLS");
+            ctx.AddField("enc", encryption);
         }
 
         public string uri { get; set; }

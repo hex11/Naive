@@ -144,12 +144,12 @@ namespace NaiveSocks
                 c.WriteLine();
                 c.WriteLine($"  ## InAdapters ({cfg.InAdapters.Count}):");
                 foreach (var item in cfg.InAdapters) {
-                    c.WriteLine($"    - '{item.Name}': {item} -> {item.@out?.ToString() ?? "(No OutAdapter)"}");
+                    c.WriteLine($"    - '{item.Name}': {item.ToString(false)} -> {item.@out?.ToString() ?? "(No OutAdapter)"}");
                 }
                 c.WriteLine();
                 c.WriteLine($"  ## OutAdapters ({cfg.OutAdapters.Count}):");
                 foreach (var item in cfg.OutAdapters) {
-                    c.WriteLine($"    - '{item.Name}': {item}");
+                    c.WriteLine($"    - '{item.Name}': {item.ToString(false)}");
                 }
             });
             cmdHub.AddCmdHandler(prefix + "logs", command => {

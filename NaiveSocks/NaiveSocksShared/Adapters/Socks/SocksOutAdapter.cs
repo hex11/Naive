@@ -25,6 +25,10 @@ namespace NaiveSocks
                 server = toml.Get<AddrPort>("socks");
         }
 
-        public override string ToString() => $"{{SocksOut server={server}}}";
+        protected override void GetDetail(GetDetailContext ctx)
+        {
+            base.GetDetail(ctx);
+            ctx.AddField("server", server);
+        }
     }
 }
