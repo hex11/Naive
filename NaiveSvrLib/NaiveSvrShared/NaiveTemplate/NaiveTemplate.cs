@@ -70,7 +70,7 @@ namespace NaiveTemplate
                         }
                         var chainPos = dataChain.Count;
                         dataChain.Add(null);
-                        if (v is IEnumerable enu) {
+                        if (v is IEnumerable enu && !(v is string)) {
                             int end = 0;
                             foreach (var item in enu) {
                                 dataChain[chainPos] = item;
@@ -138,7 +138,7 @@ namespace NaiveTemplate
                         }
                         var chainPos = dataChain.Count;
                         dataChain.Add(null);
-                        if (v is IEnumerable enu) {
+                        if (v is IEnumerable enu && !(v is string)) {
                             int end = 0;
                             foreach (var item in enu) {
                                 dataChain[chainPos] = item;

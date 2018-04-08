@@ -57,11 +57,13 @@ namespace Naive.HttpSvr
 
         public string GetReqHeader(string key) => RequestHeaders[key] as string;
 
+        static readonly char[] headerValueSeparator = { ',' };
+
         public List<string> GetReqHeaderSplits(string key)
         {
             var val = GetReqHeader(key);
             if (val == null) return null;
-            return (from x in val.Split(',') select x.Trim()).ToList();
+            return val.Split(headerValueSeparator).Select(x => x.Trim()).ToList();
         }
 
         // "GET /query?id=233 HTTP/1.1" for example
@@ -71,6 +73,8 @@ namespace Naive.HttpSvr
         public string Url_path; // "/query"
         public string Url_qstr; // "id=233"
         public string HttpVersion; // "HTTP/1.1"
+
+        public bool IsHttp1_1 { get; private set; }
 
         public string RawRequest { get; private set; }
 
@@ -141,7 +145,7 @@ namespace Naive.HttpSvr
             get {
                 var connection = GetReqHeaderSplits(KEY_Connection);
                 return connection?.Contains(VALUE_Connection_Keepalive) == true
-                || (HttpVersion == "HTTP/1.1" && connection?.Contains(VALUE_Connection_close) != true);
+                || (IsHttp1_1 && (connection?.Contains(VALUE_Connection_close) != true));
             }
         }
 
@@ -256,21 +260,21 @@ namespace Naive.HttpSvr
             } catch (Exception) {
                 return false;
             }
-            await parseRequestAndHeaders();
+            parseRequestAndHeaders();
             initOutputStream();
             initInputDataStream();
             return true;
         }
 
-        private async Task parseRequestAndHeaders()
+        private void parseRequestAndHeaders()
         {
             RequestHeaders = RequestHeaders ?? new HttpHeaderCollection(16);
             RequestHeaders.Clear();
             parseRequest(readLineFromRawRequest());
-            keepAlive = EnableKeepAlive && IsClientSupportKeepAlive;
-            ResponseHeaders[KEY_Connection] = keepAlive ? VALUE_Connection_Keepalive : VALUE_Connection_close;
             while (parseHeader(readLineFromRawRequest()))
                 ;
+            keepAlive = EnableKeepAlive && IsClientSupportKeepAlive;
+            ResponseHeaders[KEY_Connection] = keepAlive ? VALUE_Connection_Keepalive : VALUE_Connection_close;
             Host = GetReqHeader("Host");
             requestCount++;
         }
@@ -284,6 +288,7 @@ namespace Naive.HttpSvr
             Method = splits[0];
             Url = splits[1];
             HttpVersion = splits[2];
+            IsHttp1_1 = HttpVersion == "HTTP/1.1";
             NaiveUtils.SplitUrl(Url, out Url_path, out Url_qstr);
             Url_path = HttpUtil.UrlDecode(Url_path);
         }
@@ -424,9 +429,11 @@ namespace Naive.HttpSvr
         public Task writeLineAsync(string str)
              => outputWriter.WriteLineAsync(str);
 
+        string GetResponseHttpVersion() => IsHttp1_1 ? "HTTP/1.1 " : "HTTP/1.0 ";
+
         internal async Task writeResponseToAsync(TextWriter writer)
         {
-            await writer.WriteAsync("HTTP/1.1 " + ResponseStatusCode + "\r\n");
+            await writer.WriteAsync(GetResponseHttpVersion() + ResponseStatusCode + "\r\n");
             foreach (var kv in ResponseHeaders) {
                 await writer.WriteAsync(kv.Key + ": " + ResponseHeaders[kv.Value] + "\r\n");
             }
@@ -435,7 +442,7 @@ namespace Naive.HttpSvr
 
         internal void writeResponseTo(TextWriter writer)
         {
-            writer.Write("HTTP/1.1 ");
+            writer.Write(GetResponseHttpVersion());
             writer.Write(ResponseStatusCode);
             writer.Write("\r\n");
             foreach (var kv in ResponseHeaders) {

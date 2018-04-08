@@ -12,14 +12,14 @@ namespace NaiveSocks
 {
     public class Controller
     {
-        public Config CurrentConfig = new Config();
+        public LoadedConfig CurrentConfig = new LoadedConfig();
 
         public List<InAdapter> InAdapters => CurrentConfig.InAdapters;
         public List<OutAdapter> OutAdapters => CurrentConfig.OutAdapters;
 
         public Logger Logger { get; } = new Logger();
 
-        public class Config
+        public class LoadedConfig
         {
             public List<InAdapter> InAdapters = new List<InAdapter>();
             public List<OutAdapter> OutAdapters = new List<OutAdapter>();
@@ -176,15 +176,15 @@ namespace NaiveSocks
                 Logger.warning($"And {CurrentConfig.FailedCount} ERRORs");
         }
 
-        private Config LoadConfig(ConfigFile cf, Config newcfg)
+        private LoadedConfig LoadConfig(ConfigFile cf, LoadedConfig newcfg)
         {
             var toml = cf.Context;
-            newcfg = newcfg ?? new Config();
+            newcfg = newcfg ?? new LoadedConfig();
             if (cf.Path != null) {
                 newcfg.FilePath = cf.Path;
                 newcfg.WorkingDirectory = Path.GetDirectoryName(cf.Path);
             }
-            NaiveSocks.Config t;
+            Config t;
             TomlTable tomlTable;
             var refs = new List<AdapterRef>();
             try {
@@ -215,7 +215,7 @@ namespace NaiveSocks
                         )
                     );
                 tomlTable = Toml.ReadString(toml, tomlSettings);
-                t = tomlTable.Get<NaiveSocks.Config>();
+                t = tomlTable.Get<Config>();
             } catch (Exception e) {
                 Logger.exception(e, Logging.Level.Error, "TOML Error");
                 return null;
@@ -395,7 +395,7 @@ namespace NaiveSocks
         }
 
         public void Stop() => Stop(CurrentConfig, null);
-        private void Stop(Config config, List<ICanReload> listNotCallStop)
+        private void Stop(LoadedConfig config, List<ICanReload> listNotCallStop)
         {
             foreach (var item in config.InAdapters) {
                 var reloading = item is ICanReload icr && listNotCallStop?.Contains(icr) == true;
@@ -412,7 +412,7 @@ namespace NaiveSocks
 
         public void Reset()
         {
-            CurrentConfig = new Config();
+            CurrentConfig = new LoadedConfig();
         }
 
         public virtual Task HandleInConnection(InConnection inConnection)
@@ -582,7 +582,7 @@ namespace NaiveSocks
             return FindAdapter<T>(CurrentConfig, name, ttl);
         }
 
-        static T FindAdapter<T>(Config cfg, string name, int ttl) where T : class
+        static T FindAdapter<T>(LoadedConfig cfg, string name, int ttl) where T : class
         {
             if (ttl == -1)
                 ttl = 16;
