@@ -2,6 +2,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -55,7 +56,7 @@ namespace Naive.HttpSvr
 
         public HttpHeaderCollection RequestHeaders;
 
-        public string GetReqHeader(string key) => RequestHeaders[key] as string;
+        public string GetReqHeader(string key) => RequestHeaders[key];
 
         static readonly char[] headerValueSeparator = { ',' };
 
@@ -66,13 +67,20 @@ namespace Naive.HttpSvr
             return val.Split(headerValueSeparator).Select(x => x.Trim()).ToList();
         }
 
-        // "GET /query?id=233 HTTP/1.1" for example
+        // "GET /show+result?id=233 HTTP/1.1" for example
 
-        public string Method; // "GET"
-        public string Url; // "/query?id=233"
-        public string Url_path; // "/query"
-        public string Url_qstr; // "id=233"
-        public string HttpVersion; // "HTTP/1.1"
+        public string Method;       // "GET"
+        public string Url;          // "/show+result?id=233"
+        public string Url_path;     // "/show result"
+        public string Url_qstr;     // "id=233"
+        public string HttpVersion;  // "HTTP/1.1"
+
+        public string RealUrl { get; private set; }
+        public string RealPath { get; private set; }
+        public string RealPathEscaped { get; private set; }
+
+        private NameValueCollection _parsedQstr;
+        public NameValueCollection ParsedQstr => _parsedQstr ?? (_parsedQstr = HttpUtil.ParseQueryString(Url_qstr));
 
         public bool IsHttp1_1 { get; private set; }
 
@@ -181,7 +189,6 @@ namespace Naive.HttpSvr
         private async Task _requestingLoop()
         {
             do {
-                resetResponseStatus();
                 ConnectionState = States.Receiving;
                 if (!await _ReceiveNextRequest().CAF())
                     break;
@@ -234,14 +241,16 @@ namespace Naive.HttpSvr
             ConnectionState = States.ResponseEnded;
         }
 
-        private void checkInputData()
+        private bool checkInputData()
         {
             if (inputDataStream?.IsEOF == false) {
                 log("unread input data is found.", Logging.Level.Warning);
                 if (ConnectionState == States.Processing)
                     ResponseHeaders[KEY_Connection] = VALUE_Connection_close;
                 keepAlive = false;
+                return false;
             }
+            return true;
         }
 
         private void initOutputStream()
@@ -253,13 +262,16 @@ namespace Naive.HttpSvr
 
         public async Task<bool> _ReceiveNextRequest()
         {
-            checkInputData();
+            if (!checkInputData())
+                throw new InvalidOperationException("failed on checking input data");
+            clearStatus(); // to make them be collected faster
             rawRequestPos = 0;
             try {
                 RawRequest = await readRequest().CAF();
             } catch (Exception) {
                 return false;
             }
+            initStatus();
             parseRequestAndHeaders();
             initOutputStream();
             initInputDataStream();
@@ -268,8 +280,6 @@ namespace Naive.HttpSvr
 
         private void parseRequestAndHeaders()
         {
-            RequestHeaders = RequestHeaders ?? new HttpHeaderCollection(16);
-            RequestHeaders.Clear();
             parseRequest(readLineFromRawRequest());
             while (parseHeader(readLineFromRawRequest()))
                 ;
@@ -286,11 +296,12 @@ namespace Naive.HttpSvr
                 throw new Exception("Bad Request: " + requestLine);
             }
             Method = splits[0];
-            Url = splits[1];
+            RealUrl = Url = splits[1];
             HttpVersion = splits[2];
             IsHttp1_1 = HttpVersion == "HTTP/1.1";
-            NaiveUtils.SplitUrl(Url, out Url_path, out Url_qstr);
-            Url_path = HttpUtil.UrlDecode(Url_path);
+            NaiveUtils.SplitUrl(Url, out var path, out Url_qstr);
+            RealPathEscaped = path;
+            RealPath = Url_path = HttpUtil.UrlDecode(path);
         }
 
         private static readonly char[] headerSeparator = new[] { ':' };
@@ -324,11 +335,26 @@ namespace Naive.HttpSvr
             return true;
         }
 
-        private void resetResponseStatus()
+        public void ClearCaches()
         {
+            _parsedQstr = null;
+        }
+
+        private void clearStatus()
+        {
+            ClearCaches();
+            outputStream = null; outputWriter = null; inputDataStream = null;
+            RawRequest = Host = Method = Url = Url_path = Url_qstr = HttpVersion = RealUrl = RealPath = RealPathEscaped = null;
+            RequestHeaders?.Clear();
+            ResponseHeaders?.Clear();
             ResponseStatusCode = defaultResponseCode;
+        }
+
+        private void initStatus()
+        {
+            RequestHeaders = RequestHeaders ?? new HttpHeaderCollection(16);
+
             ResponseHeaders = ResponseHeaders ?? new HttpHeaderCollection(16);
-            ResponseHeaders.Clear();
             ResponseHeaders[KEY_Content_Type] = defaultContentType;
             if (ServerHeader != null) {
                 ResponseHeaders[KEY_Server] = ServerHeader;

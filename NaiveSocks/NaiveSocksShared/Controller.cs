@@ -211,8 +211,44 @@ namespace NaiveSocks
                                     var a = new AdapterRef { IsTable = true, Ref = tml };
                                     refs.Add(a);
                                     return a;
+                                })))
+                        .ConfigureType<AdapterRefOrArray>(type => type
+                            .WithConversionFor<TomlString>(convert => convert
+                                .FromToml(tmlString => {
+                                    var a = new AdapterRefOrArray { obj = tmlString.Get<AdapterRef>() };
+                                    return a;
                                 }))
-                        )
+                            .WithConversionFor<TomlTable>(convert => convert
+                                .FromToml(tmlTable => {
+                                    var a = new AdapterRefOrArray { obj = tmlTable.Get<AdapterRef>() };
+                                    return a;
+                                }))
+                            .WithConversionFor<TomlArray>(convert => convert
+                                .FromToml(tmlTable => {
+                                    var a = new AdapterRefOrArray { obj = tmlTable.Get<AdapterRef[]>() };
+                                    return a;
+                                }))
+                            .WithConversionFor<TomlTableArray>(convert => convert
+                                .FromToml(tmlTable => {
+                                    var a = new AdapterRefOrArray { obj = tmlTable.Get<AdapterRef[]>() };
+                                    return a;
+                                })))
+                        .ConfigureType<StringOrArray>(type => type
+                            .WithConversionFor<TomlString>(convert => convert
+                                .FromToml(tmlString => {
+                                    var a = new StringOrArray { obj = tmlString.Get<string>() };
+                                    return a;
+                                }))
+                            .WithConversionFor<TomlTable>(convert => convert
+                                .FromToml(tmlTable => {
+                                    var a = new StringOrArray { obj = tmlTable.Get<string>() };
+                                    return a;
+                                }))
+                            .WithConversionFor<TomlArray>(convert => convert
+                                .FromToml(tmlTable => {
+                                    var a = new StringOrArray { obj = tmlTable.Get<string[]>() };
+                                    return a;
+                                })))
                     );
                 tomlTable = Toml.ReadString(toml, tomlSettings);
                 t = tomlTable.Get<Config>();

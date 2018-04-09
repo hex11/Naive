@@ -13,9 +13,22 @@ namespace NaiveSocks
 {
     public class HttpInAdapter : InAdapterWithListenField, IHttpRequestAsyncHandler, IConnectionHandler, ICanReload
     {
-        public AdapterRef[] webouts { get; set; }
+        public struct WebRoute
+        {
+            public StringOrArray host { get; set; }
+
+            public string location { get; set; }
+
+            public AdapterRefOrArray to { get; set; }
+
+            public bool chroot { get; set; }
+        }
 
         public Dictionary<string, AdapterRef[]> hosts { get; set; }
+
+        public WebRoute[] webroutes { get; set; }
+
+        public AdapterRef[] webouts { get; set; }
 
         public bool logging { get; set; }
         public bool verbose { get; set; }
@@ -35,6 +48,17 @@ namespace NaiveSocks
                     Array.Copy(webouts, 0, newarr, 1, webouts.Length);
                 }
                 webouts = newarr;
+            }
+            if (webroutes != null) {
+                var troutes = toml.Get<TomlTableArray>(nameof(webroutes)).Items;
+                for (int i = 0; i < webroutes.Length; i++) {
+                    var r = webroutes[i];
+                    if (troutes[i].TryGetValue<string>("location_chroot", out var v)) {
+                        r.location = v;
+                        r.chroot = true;
+                    }
+                    webroutes[i] = r;
+                }
             }
         }
 
@@ -76,6 +100,9 @@ namespace NaiveSocks
             await httpConn.Process();
         }
 
+        static byte[] ConnectedResponse = NaiveUtils.UTF8Encoding.GetBytes(
+                            "HTTP/1.1 200 Connection established\r\nProxy-Agent: NaiveSocks\r\n\r\n");
+
         public Task HandleRequestAsync(HttpConnection p)
         {
             if (newInstance != null) {
@@ -95,8 +122,7 @@ namespace NaiveSocks
                 string str = "(tunnel) remote=" + p.remoteEP;
                 var inc = InConnection.Create(this, dest, async (r) => {
                     if (r.Ok) {
-                        await mystream.WriteAsync(NaiveUtils.UTF8Encoding.GetBytes(
-                            "HTTP/1.1 200 Connection established\r\nProxy-Agent: NaiveSocks\r\n\r\n"));
+                        await mystream.WriteAsync(ConnectedResponse);
                         return mystream;
                     } else {
                         mystream.Close().Forget();
@@ -124,23 +150,61 @@ namespace NaiveSocks
                         return;
                 }
             }
+            if (webroutes != null) {
+                foreach (var r in webroutes) {
+                    if ((r.host.IsNull || (p.Host != null && r.host.IsOrContains(p.Host)))
+                            && (r.location == null || IsInLocation(p.Url_path, r.location))) {
+                        var oldPath = p.Url_path;
+                        if (r.chroot && r.location != null)
+                            p.Url_path = p.Url_path.Substring(r.location.Length);
+                        if (p.Url_path.Length == 0)
+                            p.Url_path = "/";
+                        try {
+                            if (r.to.AsAdapterRef != null) {
+                                if (await HandleByAdapter(p, r.to.AsAdapterRef))
+                                    return;
+                            } else if (r.to.AsArray != null) {
+                                if (await HandleByAdapters(p, r.to.AsArray))
+                                    return;
+                            }
+                        } finally {
+                            p.Url_path = oldPath;
+                        }
+                    }
+                }
+            }
             if (webouts == null) {
-                Logger.info($"unhandled web request (no 'webouts'/'hosts'): {p.Method} {p.Url}");
+                Logger.info($"unhandled web request (no 'webouts'/'hosts'?): {p.Method} {p.Url}");
                 return;
             }
             await HandleByAdapters(p, webouts);
         }
 
+        bool IsInLocation(string path, string location)
+        {
+            if (path.StartsWith(location))
+                if (path.Length == location.Length || path[location.Length] == '/')
+                    return true;
+            return false;
+        }
+
         async Task<bool> HandleByAdapters(HttpConnection p, AdapterRef[] adapters)
         {
             foreach (var adaRef in adapters) {
-                if (!(adaRef.Adapter is IHttpRequestAsyncHandler ihrah)) {
-                    Logger.warning($"adapter ({adaRef}) is not a http handler.");
-                } else {
-                    await ihrah.HandleRequestAsync(p);
-                    if (p.Handled)
-                        return true;
-                }
+                if (await HandleByAdapter(p, adaRef))
+                    return true;
+            }
+            return false;
+        }
+
+        async Task<bool> HandleByAdapter(HttpConnection p, AdapterRef adaRef)
+        {
+            if (!(adaRef.Adapter is IHttpRequestAsyncHandler ihrah)) {
+                Logger.warning($"adapter ({adaRef}) is not a http handler.");
+            } else {
+                await ihrah.HandleRequestAsync(p);
+                if (p.Handled)
+                    return true;
             }
             return false;
         }
@@ -232,6 +296,10 @@ namespace NaiveSocks
                                     keepAlive = false;
                                 continue;
                             }
+                            if (kv.Key.StartsWith("Proxy", StringComparison.OrdinalIgnoreCase)) {
+                                Logger.warning($"Unknown 'Proxy' header ({kv.Key}: {kv.Value})  ");
+                                continue;
+                            }
                             newHeaders[kv.Key] = value;
                         }
                         if (isUpgrade(newHeaders)) {
@@ -242,73 +310,73 @@ namespace NaiveSocks
                     ProcessHeaders();
                     await WriteRequest(destStream);
                     p.SwitchProtocol();
+                    var clientStream = getStream(p);
                     if (keepAlive == false) {
-                        p.SwitchProtocol();
-                        var clientStream = getStream(p);
                         await MyStream.Relay(destStream, clientStream, whenCanReadResponse);
-                    } else {
-                        var clientStream = getStream(p);
-                        var copyingResponse = NaiveUtils.RunAsyncTask(async () => {
-                            await whenCanReadResponse;
-                            await MyStream.StreamCopy(destStream, clientStream, 32 * 1024, true);
-                        });
-                        while (true) { // keep-alive loop
-                            if (p.inputDataStream != null) {
-                                await Utils.StreamCopyAsync(p.inputDataStream, destCommonStream);
-                                if (verbose)
-                                    Logger.info($"{p}: copying input data {p.inputDataStream.Length} bytes.");
-                            }
-                            if (!keepAlive) {
-                                Logger.warning($"{p}: keep-alvie changed to false. ({dest})");
-                                var copyingResponse2 = NaiveUtils.RunAsyncTask(async () => {
-                                    await copyingResponse;
-                                    await clientStream.Shutdown(SocketShutdown.Send);
-                                });
-                                var copingRequese = NaiveUtils.RunAsyncTask(async () => {
-                                    await MyStream.StreamCopy(clientStream, destStream);
-                                    await destStream.Shutdown(SocketShutdown.Send);
-                                });
-                                await Task.WhenAll(copyingResponse2, copingRequese);
-                                if (verbose)
-                                    Logger.info($"{p} completed: no keep-alive.");
-                                break;
-                            }
-                            var recvNext = p._ReceiveNextRequest();
-                            Task completed = await Task.WhenAny(recvNext, copyingResponse);
-                            if (completed == copyingResponse) {
-                                if (verbose)
-                                    Logger.info($"{p} completed: copyingResponse.");
-                                await completed;
-                                await clientStream.Close();
-                                return;
-                            } else {
-                                try {
-                                    if (recvNext.Result == false) {
-                                        return;
-                                    }
-                                } catch (IOException e) when (e.InnerException is SocketException se) {
-                                    if (verbose)
-                                        Logger.warning($"{p}: receiving request error {se.SocketErrorCode}");
-                                    return;
-                                }
-                            }
+                        return;
+                    }
+
+                    var copyingResponse = NaiveUtils.RunAsyncTask(async () => {
+                        await whenCanReadResponse;
+                        await MyStream.StreamCopy(destStream, clientStream, 32 * 1024, true);
+                        // TODO: check response boundary
+                    });
+
+                    while (true) { // keep-alive loop
+                        if (p.inputDataStream != null) {
+                            await MyStream.StreamCopy(p.inputDataStream.ToMyStream(), destStream);
                             if (verbose)
-                                Logger.info($"{p}: {p.Method} {p.Url}");
-                            var newDest = parseUrl(p.Url, out realurl, out var newIsHttps);
-                            if (newDest != dest || newIsHttps != isHttps) {
-                                string proto(bool x) => x ? "https" : "http";
-                                if (verbose)
-                                    Logger.warning($"{p}: dest changed." +
-                                        $" ({proto(isHttps)}){dest} -> ({proto(newIsHttps)}){newDest}");
-                                await destStream.Shutdown(SocketShutdown.Send);
-                                await copyingResponse;
-                                dest = newDest;
-                                isHttps = newIsHttps;
-                                goto connnectDest; // It works!
-                            }
-                            ProcessHeaders();
-                            await WriteRequest(destStream);
+                                Logger.info($"{p}: copied input data {p.inputDataStream.Length} bytes.");
                         }
+                        if (!keepAlive) {
+                            Logger.warning($"{p}: keep-alvie changed to false. ({dest})");
+                            var copyingResponse2 = NaiveUtils.RunAsyncTask(async () => {
+                                await copyingResponse;
+                                await clientStream.Shutdown(SocketShutdown.Send);
+                            });
+                            var copingRequese = NaiveUtils.RunAsyncTask(async () => {
+                                await MyStream.StreamCopy(clientStream, destStream);
+                                await destStream.Shutdown(SocketShutdown.Send);
+                            });
+                            await Task.WhenAll(copyingResponse2, copingRequese);
+                            if (verbose)
+                                Logger.info($"{p} completed: no keep-alive.");
+                            break;
+                        }
+                        var recvNext = p._ReceiveNextRequest();
+                        Task completed = await Task.WhenAny(recvNext, copyingResponse);
+                        if (completed == copyingResponse) {
+                            if (verbose)
+                                Logger.info($"{p} completed: copyingResponse.");
+                            await completed;
+                            await clientStream.Close();
+                            return;
+                        }
+                        try {
+                            if (recvNext.Result == false) {
+                                return;
+                            }
+                        } catch (IOException e) when (e.InnerException is SocketException se) {
+                            if (verbose)
+                                Logger.warning($"{p}: receiving request error {se.SocketErrorCode}");
+                            return;
+                        }
+                        if (verbose)
+                            Logger.info($"{p}: {p.Method} {p.Url}");
+                        var newDest = parseUrl(p.Url, out realurl, out var newIsHttps);
+                        if (newDest != dest || newIsHttps != isHttps) {
+                            string proto(bool x) => x ? "https" : "http";
+                            if (verbose)
+                                Logger.warning($"{p}: dest changed." +
+                                    $" ({proto(isHttps)}){dest} -> ({proto(newIsHttps)}){newDest}");
+                            await destStream.Shutdown(SocketShutdown.Send);
+                            await copyingResponse;
+                            dest = newDest;
+                            isHttps = newIsHttps;
+                            goto connnectDest; // It works!
+                        }
+                        ProcessHeaders();
+                        await WriteRequest(destStream);
                     }
                 } finally {
                     MyStream.CloseWithTimeout(destStream).Forget();

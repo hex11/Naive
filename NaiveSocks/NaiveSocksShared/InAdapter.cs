@@ -5,6 +5,7 @@ using Nett;
 using Naive.HttpSvr;
 using System.Text;
 using System.Reflection;
+using System.Linq;
 
 namespace NaiveSocks
 {
@@ -30,6 +31,22 @@ namespace NaiveSocks
         }
     }
 
+    public struct AdapterRefOrArray
+    {
+        public object obj;
+        public AdapterRef AsAdapterRef => obj as AdapterRef;
+        public AdapterRef[] AsArray => obj as AdapterRef[];
+    }
+
+    public struct StringOrArray
+    {
+        public object obj;
+        public string AsString => obj as string;
+        public string[] AsArray => obj as string[];
+        public bool IsNull => obj == null;
+        public bool IsOrContains(string str) => (AsString != null && str == AsString) || AsArray?.Contains(str) == true;
+    }
+
     public interface ICanReload : IAdapter
     {
         /// <summary>
@@ -47,6 +64,7 @@ namespace NaiveSocks
         public Logger Logger { get; } = new Logger();
 
         public string flags { get; set; }
+        protected virtual bool AutoFlags => true;
 
         public string QuotedName
         {
@@ -87,7 +105,7 @@ namespace NaiveSocks
 
         public virtual void SetConfig(TomlTable toml)
         {
-            if (!flags.IsNullOrEmpty()) {
+            if (AutoFlags && !flags.IsNullOrEmpty()) {
                 var flgs = flags.Split(' ');
                 foreach (var item in flgs) {
                     var flg = item;

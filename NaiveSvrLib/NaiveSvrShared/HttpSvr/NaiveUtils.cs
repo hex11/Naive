@@ -111,15 +111,20 @@ namespace Naive.HttpSvr
 
         public static void StreamToStream(Stream from, Stream to, long size = -1, int bs = 16 * 1024)
         {
-            ReadStream(from, (buf, len) => to.Write(buf, 0, len), size, bs);
+            ReadStream(from, (state, buf, len) => state.Write(buf, 0, len), to, size, bs);
         }
 
         public static Task StreamCopyAsync(Stream from, Stream to, long size = -1, int bs = 16 * 1024)
         {
-            return ReadStreamAsync(from, (buf, len) => to.WriteAsync(buf, 0, len), size, bs);
+            return ReadStreamAsync(from, (state, buf, len) => state.WriteAsync(buf, 0, len), to, size, bs);
         }
 
         public static void ReadStream(Stream from, Action<byte[], int> action, long size = -1, int bs = 16 * 1024)
+        {
+            ReadStream(from, (state, bytes, len) => state(bytes, len), action, size, bs);
+        }
+
+        public static void ReadStream<T>(Stream from, Action<T, byte[], int> action, T state, long size = -1, int bs = 16 * 1024)
         {
             if (size == 0)
                 return;
@@ -133,14 +138,14 @@ namespace Naive.HttpSvr
                     int read = @from.Read(buffer, 0, bufferSize);
                     if (read == 0)
                         break;
-                    action(buffer, read);
+                    action(state, buffer, read);
                 }
             } else {
                 while (true) {
                     int read = @from.Read(buffer, 0, (int)(size > bufferSize ? bufferSize : size));
                     if (read == 0)
                         throw new EndOfStreamException();
-                    action(buffer, read);
+                    action(state, buffer, read);
                     size -= read;
                     if (size <= 0)
                         return;
@@ -148,7 +153,12 @@ namespace Naive.HttpSvr
             }
         }
 
-        public static async Task ReadStreamAsync(Stream from, Func<byte[], int, Task> action, long size = -1, int bs = 16 * 1024)
+        public static Task ReadStreamAsync(Stream from, Func<byte[], int, Task> action, long size = -1, int bs = 16 * 1024)
+        {
+            return ReadStreamAsync(from, (state, bytes, len) => state(bytes, len), action, size, bs);
+        }
+
+        public static async Task ReadStreamAsync<T>(Stream from, Func<T, byte[], int, Task> action, T state, long size = -1, int bs = 16 * 1024)
         {
             if (size == 0)
                 return;
@@ -162,14 +172,14 @@ namespace Naive.HttpSvr
                     int read = await @from.ReadAsync(buffer, 0, bufferSize);
                     if (read == 0)
                         break;
-                    await action(buffer, read);
+                    await action(state, buffer, read);
                 }
             } else {
                 while (true) {
                     int read = await @from.ReadAsync(buffer, 0, (int)(size > bufferSize ? bufferSize : size));
                     if (read == 0)
                         throw new EndOfStreamException();
-                    await action(buffer, read);
+                    await action(state, buffer, read);
                     size -= read;
                     if (size <= 0)
                         return;

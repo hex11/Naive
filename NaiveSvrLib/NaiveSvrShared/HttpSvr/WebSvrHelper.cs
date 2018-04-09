@@ -15,7 +15,7 @@ namespace Naive.HttpSvr
 
         public static NameValueCollection ParseUrlQstr(this HttpConnection p)
         {
-            return HttpUtil.ParseQueryString(p.Url_qstr);
+            return p.ParsedQstr;
         }
 
         public static NameValueCollection ParsePostData(this HttpConnection p)
@@ -147,7 +147,6 @@ namespace Naive.HttpSvr
 
         public static void SetDirListData(HttpConnection p, string path, TemplaterData data)
         {
-            data.Add("isTop", p.Url_path == "/");
             data.Add("list", async x => {
                 try {
                     await WriteDirList(x, path, p.Url_path != "/");
@@ -155,16 +154,25 @@ namespace Naive.HttpSvr
                     await x.WriteAsync($"<p>Unauthorized</p>");
                 }
             });
+            string prefix = null;
+            if (p.RealPathEscaped.EndsWith("/")) {
+                data.Add("upPath", p.Url_path == "/" ? null : "../");
+            } else {
+                data.Add("upPath", p.Url_path == "/" ? null : "./");
+                int slashIndex = p.RealPathEscaped.LastIndexOf('/');
+                if (slashIndex >= 0)
+                    prefix = p.RealPathEscaped.Substring(slashIndex + 1) + "/";
+            }
             var subData = new TemplaterData();
             data.Add("dirs", Directory.EnumerateDirectories(path).Select(x => {
                 var name = Path.GetFileName(x);
-                subData.Dict["url"] = HttpUtil.UrlEncode(name);
+                subData.Dict["url"] = prefix + HttpUtil.UrlEncode(name);
                 subData.Dict["name"] = HttpUtil.HtmlAttributeEncode(name);
                 return subData;
             }));
             data.Add("files", Directory.EnumerateFiles(path).Select(x => {
                 var name = Path.GetFileName(x);
-                subData.Dict["url"] = HttpUtil.UrlEncode(name);
+                subData.Dict["url"] = prefix + HttpUtil.UrlEncode(prefix + name);
                 subData.Dict["name"] = HttpUtil.HtmlAttributeEncode(name);
                 return subData;
             }));
@@ -311,7 +319,8 @@ namespace Naive.HttpSvr
                     await p.outputStream.SwitchToChunkedModeAsync();
                 }
                 stream.Position = beginpos;
-                await NaiveUtils.StreamCopyAsync(from: stream, to: p.outputStream, size: realLength, bs: 64 * 1024);
+                await NaiveUtils.StreamCopyAsync(from: stream, to: p.outputStream,
+                    size: realLength, bs: (int)Math.Min(64 * 1024, realLength));
             }
         }
 
@@ -329,33 +338,36 @@ namespace Naive.HttpSvr
 		font-family: sans-serif;
 		max-width: 40em;
 		margin: 10px auto;
-		padding: 0 8px;
+		padding: 0;
 	}
 	.item {
 		/*padding: .1em;*/
-		margin: 4px 0;
+		/*margin: 4px 0;*/
+		/*border-bottom: solid 1px gray;*/
 		transition: all .3s;
 	}
 	.item a {
-		padding: 2px;
+		padding: 8px 4px;
 		text-decoration: none;
 		color: black;
 		word-wrap: break-word;
+		line-height: 1.2em;
 	}
 	.item a,
-	.dir.up a {
+	.updir a {
 		display: block;
 	}
-	.dir.up a {
+	.updir a {
 		line-height: 30px;
+		box-shadow: 0 3px 3px 0 rgba(0, 0, 0, .2);
 	}
-	.item a:hover {
-		text-decoration: underline;
-	}
-	.dir.up {
+	.updir {
 		background: orange;
 		position: sticky;
 		top: 0;
+	}
+	.item a:hover {
+		text-decoration: underline;
 	}
 	.dir {
 		background: lightgreen;
@@ -371,7 +383,7 @@ namespace Naive.HttpSvr
 		position: sticky;
 		bottom: 0;
 	}
-	.dir:hover, .file:hover {
+	.dir:hover, .file:hover, .updir:hover {
 		background: #eee;
 		transition: all .06s;
 	}
@@ -394,7 +406,7 @@ namespace Naive.HttpSvr
 {{ head }}</head>
 <body>
 {{#info}}<div class='info'>{{info}}</div>{{/}}
-{{^isTop}}<div class='item dir up'><a href='../'>../</a></div>{{/}}
+{{#upPath}}<div class='item updir'><a href='{{upPath}}'>(Up Directory)</a></div>{{/}}
 {{#dirs}}<div class='item dir'><a href='{{url}}/'>{{name}}/</a></div>{{/}}
 {{#files}}<div class='item file'><a href='{{url}}'>{{name}}</a></div>{{/}}
 {{#can_upload}}

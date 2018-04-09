@@ -16,7 +16,7 @@ namespace NaiveSocks
         public string passwd { get; set; }
 
         public string[] path_page { get; set; } = new[] { "/", "/webcon", "/webcon.html" };
-        public string[] path_ws { get; set; } = new[] { "/admin/consolews" };
+        public string[] path_ws { get; set; } = new[] { "/admin/consolews", "/webcon.ws" };
 
         ConsoleHub consoleHub;
 
@@ -98,7 +98,7 @@ namespace NaiveSocks
                 if (passwd == realPasswd) {
                     break;
                 } else {
-                    Logger.warning($"wrong passwd from {p.myStream}");
+                    Logger.warning($"{(passwd.Length == 0 ? "empty" : "wrong")} passwd from {p.myStream}");
                     if (--chances <= 0) {
                         await wss.SendStringAsync("session end.\r\n");
                         return;
@@ -237,7 +237,7 @@ namespace NaiveSocks
                 return;
             if (window.location.protocol == 'http:' || window.location.protocol == 'https:') {
                 var url = (window.location.protocol == ""https:"" ? 'wss://' : 'ws://')
-                    + window.location.host + '/admin/consolews';
+                    + window.location.host + '/webcon.ws';
                 eleInputUrl.value = url;
                 // ws = connectTo(url);
             }
