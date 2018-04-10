@@ -67,7 +67,7 @@
     <Reference Include="Mono.Posix" />
     <Reference Include="Nett, Version=0.8.0.0, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\repos\GitHub.com\hex11\Nett\Source\Nett\bin\Release\netstandard2.0\Nett.dll</HintPath>
+      <HintPath>..\..\Nett\Source\Nett\bin\Release\netstandard2.0\Nett.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Xml" />

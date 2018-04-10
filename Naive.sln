@@ -27,13 +27,14 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "DotNetCore", "DotNetCore", 
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Deps", "Deps", "{80C7A2DF-57C1-4B94-ACF1-8323E9941253}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Nett", "..\repos\GitHub.com\hex11\Nett\Source\Nett\Nett.csproj", "{78B1EC58-7899-4A2D-904F-0957558F1544}"
-EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{E799D879-414C-4926-B177-D56B9DD589C5}"
 	ProjectSection(SolutionItems) = preProject
 		.travis.yml = .travis.yml
+		build.sh = build.sh
 		README.md = README.md
 	EndProjectSection
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Nett", "Nett\Source\Nett\Nett.csproj", "{00C1FC7D-07B4-44FF-886C-4AF17EF31919}"
 EndProject
 Global
 	GlobalSection(SharedMSBuildProjectFiles) = preSolution
@@ -84,12 +85,12 @@ Global
 		{A6D5ADD3-5B85-4CD8-BE28-6AC19B8F6786}.Release(Debug)|Any CPU.Build.0 = Release|Any CPU
 		{A6D5ADD3-5B85-4CD8-BE28-6AC19B8F6786}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A6D5ADD3-5B85-4CD8-BE28-6AC19B8F6786}.Release|Any CPU.Build.0 = Release|Any CPU
-		{78B1EC58-7899-4A2D-904F-0957558F1544}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{78B1EC58-7899-4A2D-904F-0957558F1544}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{78B1EC58-7899-4A2D-904F-0957558F1544}.Release(Debug)|Any CPU.ActiveCfg = Release|Any CPU
-		{78B1EC58-7899-4A2D-904F-0957558F1544}.Release(Debug)|Any CPU.Build.0 = Release|Any CPU
-		{78B1EC58-7899-4A2D-904F-0957558F1544}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{78B1EC58-7899-4A2D-904F-0957558F1544}.Release|Any CPU.Build.0 = Release|Any CPU
+		{00C1FC7D-07B4-44FF-886C-4AF17EF31919}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{00C1FC7D-07B4-44FF-886C-4AF17EF31919}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{00C1FC7D-07B4-44FF-886C-4AF17EF31919}.Release(Debug)|Any CPU.ActiveCfg = Release|Any CPU
+		{00C1FC7D-07B4-44FF-886C-4AF17EF31919}.Release(Debug)|Any CPU.Build.0 = Release|Any CPU
+		{00C1FC7D-07B4-44FF-886C-4AF17EF31919}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{00C1FC7D-07B4-44FF-886C-4AF17EF31919}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -97,7 +98,7 @@ Global
 	GlobalSection(NestedProjects) = preSolution
 		{F172074F-C119-47FD-BC38-173847ED2083} = {C4FDEA2C-B470-4F74-BE1F-3F744B5479A7}
 		{A6D5ADD3-5B85-4CD8-BE28-6AC19B8F6786} = {C4FDEA2C-B470-4F74-BE1F-3F744B5479A7}
-		{78B1EC58-7899-4A2D-904F-0957558F1544} = {80C7A2DF-57C1-4B94-ACF1-8323E9941253}
+		{00C1FC7D-07B4-44FF-886C-4AF17EF31919} = {80C7A2DF-57C1-4B94-ACF1-8323E9941253}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {0BAEFEEE-0666-494C-9B5A-A75BF2B43B94}

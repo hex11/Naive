@@ -1,1 +1,1 @@
-[![Build Status](https://travis-ci.org/NaiveProject/Naive.svg?branch=master)](https://travis-ci.org/NaiveProject/Naive)
+[![Build Status](https://travis-ci.org/hex11/Naive.svg?branch=master)](https://travis-ci.org/hex11/Naive)

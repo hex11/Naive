@@ -736,13 +736,14 @@ namespace NaiveSocks
             }
         }
 
-        public async Task Close(CloseOpt closeOpt)
+        public Task Close(CloseOpt closeOpt)
         {
             if (closeOpt.CloseType == CloseType.Shutdown) {
                 Shutdown();
             } else {
                 CloseIfOpen();
             }
+            return AsyncHelper.CompletedTask;
         }
 
         private void onRecvEOF()

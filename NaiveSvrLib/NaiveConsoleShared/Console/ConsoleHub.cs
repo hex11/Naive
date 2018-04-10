@@ -118,7 +118,7 @@ namespace Naive.Console
                     if (onException != null) {
                         try {
                             onException(e);
-                        } catch (Exception e2) {
+                        } catch (Exception) {
                             // ignore
                         }
                     }

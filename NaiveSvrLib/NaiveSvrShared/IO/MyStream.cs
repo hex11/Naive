@@ -364,12 +364,13 @@ namespace NaiveSocks
 
             public virtual Stream BaseStream { get; }
 
-            public override async Task Close()
+            public override Task Close()
             {
                 if (Connected) {
                     Connected = false;
                     BaseStream.Close();
                 }
+                return AsyncHelper.CompletedTask;
             }
 
             public override Task<int> ReadAsync(BytesSegment bs)

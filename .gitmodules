@@ -1,0 +1,3 @@
+[submodule "Nett"]
+	path = Nett
+	url = https://github.com/hex11/Nett

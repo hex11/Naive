@@ -76,7 +76,8 @@ namespace Naive.HttpSvr
                 {
                     this.awaiter = new WrappedAwaiter<TR, TState, TNR> {
                         awaiter = awaiter,
-                        func = wrapper
+                        func = wrapper,
+                        state = state
                     };
                 }
 

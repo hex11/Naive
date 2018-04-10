@@ -15,8 +15,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\repos\GitHub.com\hex11\Nett\Source\Nett\Nett.csproj" />
     <ProjectReference Include="..\NaiveSvrLibStandard\NaiveSvrLibStandard.csproj" />
+    <ProjectReference Include="..\Nett\Source\Nett\Nett.csproj" />
   </ItemGroup>
 
   <Import Project="..\NaiveSocks\NaiveSocksShared\NaiveSocksShared.projitems" Label="Shared" />
