@@ -38,7 +38,10 @@ namespace NaiveSocks
                     "";
 #endif
 
-        private static string verstionText => "v" + BuildInfo.Version + (__magic_is_packed ? " (single file edition)" : "");
+        private static string verstionText
+            => "v" + BuildInfo.Version
+                    + (BuildInfo.CurrentBuildText.IsNullOrEmpty() ? null : " " + BuildInfo.CurrentBuildText)
+                    + (__magic_is_packed ? " (single file)" : "");
 
         private static string cmdHelpText => $@"{NAME} {verstionText}
 

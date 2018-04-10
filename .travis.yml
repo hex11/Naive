@@ -4,4 +4,13 @@ mono: latest
 dotnet: 2.1.104
 install: []
 script:
-    - ./build.sh
+  - ./build.sh --deploy
+deploy:
+  provider: releases
+  api_key:
+    secure: M0BVo27v5+G2noAu1a+l6mSWwnYkEQdjvbQtuouA2G1L8EFi7tcrfvwwGT1gIh7B+sUdHpiahXpq11iCt2YBbkIKhzxiBSz9x2ZRhay9pB4nO8MXSi0aSfLUBZkj4F4cAGy7+HhXRv/pVPoCtO6/EHfdBgnh1JrbLA06FGlBdO9QYlxd6tE8t/T8Lrp1wrDL+AjGzKipiIOVqoJrCeLyxmeKsOODhmN1kISUqoEK6AEwaiqFbHP9oZrwY4mjalLjRFuukwLdtsjfHsfaawp3h7z41NQz+fLndtxGzVc/peBbIc9FKT6xqmaytOmnhgvTUXLkj7DEny/Lu4hGuIty2XlxGXzoSJmHACNhdoGCM2Ew8XPTPVcirtxKjAbYO1lNbm+GdHphWfsllwuR1++DaUOcDOWSwAp1tlZfLtcXivqMyCOg/AkNh2lSGjPe0s3nOBZETmKJdYNYPy648d25LabEbIH4L1t3cUscwiUwwI6Wt/v+5St0SrveeCikSdm7sV8PUzydzbNE+VMUqiqyVFKSONjUZubzRSKcHREM9aeJyrk5WNnDrQp5ZO5hQGlyksiRVSOC+OgD924AGCoSwqIGkgqDICuQAqQ+VCUulTuvKsOydbF7sjMNbpKkRiYCMQN8ApgtIcmc7e/R/+okON5wBFIzrpC26WEnvTEMzTI=
+  file_glob: true
+  file: bin/to_upload/*
+  skip_cleanup: true
+  on:
+    repo: hex11/Naive

@@ -6,7 +6,14 @@ namespace NaiveSocks
 {
     public static class BuildInfo
     {
-        public const string Version = "0.3.1.2";
+        static BuildInfo()
+        {
+            if (BuildText.StartsWith("_")) {
+                BuildText = null;
+            }
+        }
+
+        public const string Version = "0.3.1.6";
         public const bool Debug =
 #if DEBUG
             true;
@@ -14,7 +21,10 @@ namespace NaiveSocks
             false;
 #endif
 
+        public static string BuildText = "_BUILDTEXT_";
+
         public static string CurrentVersion => Version;
+        public static string CurrentBuildText => BuildText;
         public static bool CurrentDebug => Debug;
     }
 }
