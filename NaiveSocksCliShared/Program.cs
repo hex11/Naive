@@ -63,9 +63,14 @@ Usage: {NAME}.exe [-h|--help] [(-c|--config) FILE] [--no-cli] [--no-log-stdout]
             var argumentParser = new ArgumentParser();
             argumentParser.AddArg(ParasPara.OnePara, "-c", "--config");
             argumentParser.AddArg(ParasPara.NoPara, "-h", "--help");
+            argumentParser.AddArg(ParasPara.NoPara, "-V", "--version");
             var ar = argumentParser.ParseArgs(args);
             if (ar.ContainsKey("-h")) {
                 Console.Write(cmdHelpText);
+                return;
+            }
+            if (ar.ContainsKey("-V")) {
+                Console.Write(NAME + " " + verstionText);
                 return;
             }
             if (ar.ContainsKey("--no-log-stdout")) {
@@ -97,26 +102,25 @@ Usage: {NAME}.exe [-h|--help] [(-c|--config) FILE] [--no-cli] [--no-log-stdout]
                     lastBytes = b;
                 }
             }
-            async Task updateTitleLoopTask(CancellationToken ct)
-            {
-                while (true) {
-                    await Task.Delay(1000);
-                    if (ct.IsCancellationRequested) {
-                        Console.Title = NAME;
-                        return;
-                    }
+            bool titleUpdateRunning = false;
+            Timer titleUpdateTimer = null;
+            titleUpdateTimer = new Timer((x) => {
+                if (titleUpdateRunning) {
                     updateTitle();
+                } else {
+                    titleUpdateTimer.Change(-1, -1);
+                    Console.Title = NAME;
                 }
-            }
-            CancellationTokenSource currentUpdateCTS = null;
+            });
             controller.ConfigTomlLoaded += (x) => {
-                if (currentUpdateCTS != null) {
-                    currentUpdateCTS.Cancel();
-                    currentUpdateCTS = null;
-                }
-                if (x.TryGetValue("update_title", Environment.OSVersion.Platform == PlatformID.Win32NT)) {
-                    currentUpdateCTS = new CancellationTokenSource();
-                    updateTitleLoopTask(currentUpdateCTS.Token).Forget();
+                var toRun = x.TryGetValue("update_title", Environment.OSVersion.Platform == PlatformID.Win32NT);
+                if (toRun == titleUpdateRunning)
+                    return;
+                if (toRun) {
+                    titleUpdateRunning = true;
+                    titleUpdateTimer.Change(1000, 1000);
+                } else {
+                    titleUpdateRunning = false;
                 }
             };
             Logging.info($"{NAME} {verstionText}");

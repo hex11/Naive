@@ -16,7 +16,7 @@ if [[ TRAVIS ]]; then
 	elif [[ $TRAVIS_TAG == "" ]]; then
 		git config --local user.name "hex11"
 		git config --local user.email "hekusu11@gmail.com"
-	    git tag "b-$(date +'%Y%m%d%-H%M%S')"
+	    git tag "b-$(date +'%Y%m%d-%H%M%S')"
 		# sed -i "s/ Version = \".*\";/ Version = \"0.3.$(date +'%y%j.%H%M')\";/" "$BUILDINFO_FILE"
 	fi
 
@@ -25,7 +25,7 @@ if [[ TRAVIS ]]; then
 	# if [[ $TRAVIS_PULL_REQUEST_SLUG != "" ]]; then
 	# 	buildText+=" PR $TRAVIS_PULL_REQUEST_SLUG"
 	# fi
-	buildText+=" branch $TRAVIS_BRANCH commit $SHORT_COMMIT built at $BUILD_TIME"
+	buildText+=" $TRAVIS_BRANCH $SHORT_COMMIT built at $BUILD_TIME"
 	sed -i "s/BuildText = \".*\";/BuildText = \"$buildText\";/" "$BUILDINFO_FILE"
 fi
 
