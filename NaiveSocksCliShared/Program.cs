@@ -58,6 +58,8 @@ Usage: {NAME}.exe [-h|--help] [(-c|--config) FILE] [--no-cli] [--no-log-stdout]
             Logging.WriteLogToConsole = true;
             CmdConsole.ConsoleOnStdIO.Lock = Logging.ConsoleLock;
 
+            LogFileWriter logWriter = null;
+
             //ThreadPool.SetMaxThreads(Environment.ProcessorCount, Environment.ProcessorCount);
 
             var argumentParser = new ArgumentParser();
@@ -81,7 +83,8 @@ Usage: {NAME}.exe [-h|--help] [(-c|--config) FILE] [--no-cli] [--no-log-stdout]
             }
             if (ar.TryGetValue("--log-file", out var logFile)) {
                 Logging.info($"Logging file: {logFile.FirstParaOrThrow}");
-                initLogFile(logFile.FirstParaOrThrow);
+                logWriter = new LogFileWriter(logFile.FirstParaOrThrow, Logging.RootLogger);
+                logWriter.Start();
             }
             if (ar.TryGetValue("-c", out var v)) {
                 specifiedConfigPath = v.FirstParaOrThrow;
@@ -113,14 +116,24 @@ Usage: {NAME}.exe [-h|--help] [(-c|--config) FILE] [--no-cli] [--no-log-stdout]
                 }
             });
             controller.ConfigTomlLoaded += (x) => {
+                if (x.TryGetValue<string>("log_file", out var log_file)) {
+                    log_file = controller.ProcessFilePath(log_file);
+                    if (logWriter?.LogFile != log_file) {
+                        logWriter?.Stop();
+                        if (log_file != null) {
+                            logWriter = new LogFileWriter(log_file, Logging.RootLogger);
+                            logWriter.Start();
+                        }
+                    }
+                }
                 var toRun = x.TryGetValue("update_title", Environment.OSVersion.Platform == PlatformID.Win32NT);
-                if (toRun == titleUpdateRunning)
-                    return;
-                if (toRun) {
-                    titleUpdateRunning = true;
-                    titleUpdateTimer.Change(1000, 1000);
-                } else {
-                    titleUpdateRunning = false;
+                if (toRun != titleUpdateRunning) {
+                    if (toRun) {
+                        titleUpdateRunning = true;
+                        titleUpdateTimer.Change(1000, 1000);
+                    } else {
+                        titleUpdateRunning = false;
+                    }
                 }
             };
             Logging.info($"{NAME} {verstionText}");
@@ -156,11 +169,7 @@ Usage: {NAME}.exe [-h|--help] [(-c|--config) FILE] [--no-cli] [--no-log-stdout]
             var fs = File.Open(logFile, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
             var sw = new StreamWriter(fs, NaiveUtils.UTF8Encoding);
             var pendingFlush = false;
-            var delayFlush = new Func<Task>(async () => {
-                if (pendingFlush)
-                    return;
-                pendingFlush = true;
-                await Task.Delay(100);
+            var delayFlush = new WaitCallback((x) => {
                 lock (sw) {
                     pendingFlush = false;
                     sw.Flush();
@@ -170,13 +179,12 @@ Usage: {NAME}.exe [-h|--help] [(-c|--config) FILE] [--no-cli] [--no-log-stdout]
                 lock (sw) {
                     sw.Write(x.timestamp);
                     sw.WriteLine(x.text);
-                    delayFlush();
+                    if (!pendingFlush) {
+                        pendingFlush = true;
+                        ThreadPool.QueueUserWorkItem(delayFlush);
+                    }
                 }
             };
-            lock (sw) {
-                sw.WriteLine("==========LOG BEGIN==========");
-                sw.Flush();
-            }
         }
     }
 }

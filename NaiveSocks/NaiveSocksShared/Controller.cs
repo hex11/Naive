@@ -32,6 +32,8 @@ namespace NaiveSocks
             public string WorkingDirectory = ".";
 
             public int FailedCount;
+
+            public TomlTable TomlTable;
         }
 
         public class ConfigFile
@@ -71,6 +73,7 @@ namespace NaiveSocks
         public event Action<InConnection> NewConnection;
         public event Action<InConnection> EndConnection;
 
+        public event Action<TomlTable> ConfigTomlLoading;
         public event Action<TomlTable> ConfigTomlLoaded;
 
         public Func<ConfigFile> FuncGetConfigFile;
@@ -171,6 +174,7 @@ namespace NaiveSocks
         public void LoadConfig(ConfigFile configFile)
         {
             CurrentConfig = LoadConfig(configFile, null) ?? CurrentConfig;
+            ConfigTomlLoaded?.Invoke(CurrentConfig.TomlTable);
             Logger.info($"configuration loaded. {InAdapters.Count} InAdapters, {OutAdapters.Count} OutAdapters.");
             if (CurrentConfig.FailedCount > 0)
                 Logger.warning($"And {CurrentConfig.FailedCount} ERRORs");
@@ -256,7 +260,8 @@ namespace NaiveSocks
                 Logger.exception(e, Logging.Level.Error, "TOML Error");
                 return null;
             }
-            ConfigTomlLoaded?.Invoke(tomlTable);
+            ConfigTomlLoading?.Invoke(tomlTable);
+            newcfg.TomlTable = tomlTable;
             newcfg.LoggingLevel = t.log_level;
             newcfg.Aliases = t.aliases;
             int failedCount = 0;
@@ -384,6 +389,7 @@ namespace NaiveSocks
             this.Stop(CurrentConfig, oldNewCanReload);
             warning("starting new adapters...");
             CurrentConfig = newCfg;
+            ConfigTomlLoaded?.Invoke(newCfg.TomlTable);
             this.Start(oldNewCanReload);
         }
 

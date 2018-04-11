@@ -28,7 +28,7 @@ namespace Naive.HttpSvr
         public static bool WriteLogToConsoleWithTime = true;
         public static bool WriteLogToConsoleIndentation = false;
 
-        public static Logger RootLogger { get; } = new Logger(null, (c) => log(c));
+        public static Logger RootLogger { get; } = new Logger(null, (c) => _log(c));
 
         public struct Log
         {
@@ -58,6 +58,11 @@ namespace Naive.HttpSvr
         }
 
         private static void log(Log log)
+        {
+            RootLogger.log(log);
+        }
+
+        private static void _log(Log log)
         {
             if (HistroyEnabled) {
                 //lock (lockLogsHistory) {
@@ -376,7 +381,7 @@ namespace Naive.HttpSvr
             }
         }
 
-        private void log(Logging.Log log)
+        public void log(Logging.Log log)
         {
             if (isNullLogger)
                 return;
@@ -576,6 +581,71 @@ namespace Naive.HttpSvr
                 }
 #endif
                 return l;
+            }
+        }
+    }
+
+    public class LogFileWriter
+    {
+        StreamWriter sw;
+        bool pendingFlush;
+        WaitCallback flush;
+        bool running;
+
+        public LogFileWriter(string logFile, Logger logger)
+        {
+            var fs = File.Open(logFile, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
+            sw = new StreamWriter(fs, NaiveUtils.UTF8Encoding);
+            flush = (x) => {
+                lock (sw) {
+                    if (!running) return;
+                    pendingFlush = false;
+                    sw.Flush();
+                }
+            };
+            LogFile = logFile;
+            Logger = logger;
+        }
+
+        public string LogFile { get; }
+        public Logger Logger { get; }
+
+        public void Start()
+        {
+            running = true;
+            Logger.Logged += Logging_Logged;
+            lock (sw) {
+                sw.WriteLine();
+                sw.WriteLine("==========LOG BEGIN========== at " + DateTime.Now.ToString("u"));
+                sw.WriteLine();
+                DelayFlush();
+            }
+        }
+
+        public void Stop()
+        {
+            lock (sw) {
+                running = false;
+                Logger.Logged -= Logging_Logged;
+                sw.Close();
+            }
+        }
+
+        private void Logging_Logged(Logging.Log x)
+        {
+            lock (sw) {
+                if (!running) return;
+                sw.Write(x.timestamp);
+                sw.WriteLine(x.text);
+                DelayFlush();
+            }
+        }
+
+        private void DelayFlush()
+        {
+            if (!pendingFlush) {
+                pendingFlush = true;
+                ThreadPool.QueueUserWorkItem(flush);
             }
         }
     }
