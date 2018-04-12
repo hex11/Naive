@@ -5,7 +5,7 @@ function STEP {
 	echo "=> $*"
 }
 
-buildrids=("linux-x64" "win-x86" "win-x64")
+buildrids=("linux-x64/tar.gz" "win-x86/zip" "win-x64/zip")
 
 dotnetdir=.
 
@@ -15,14 +15,42 @@ pushd "$dotnetdir"
 
 STEP build dotnet core publish...
 
-dotnet publish -c Release -o bin/publish
+dotnet publish -c Release -o bin/publish/bin
 
-for rid in "${buildrids[@]}"; do
+cat > "bin/publish/run.sh" <<EOF
+#!/bin/sh
+
+dotnet bin/NaiveSocksDotNetCore.dll $*
+EOF
+chmod +x "bin/publish/run.sh"
+
+cat > "bin/publish/run.bat" <<EOF
+@dotnet bin/NaiveSocksDotNetCore.dll %*
+EOF
+
+for x in "${buildrids[@]}"; do
+	rid=${x%/*}
 
 	STEP build dotnet core publish with runtime for $rid...
 
-	dotnet publish -c Release -o "bin/publish-$rid" -r $rid
+	dotnet publish -c Release -o "bin/publish-$rid/bin" -r $rid
 
+		case $rid in
+			linux*)
+				cat > "bin/publish-$rid/run.sh" <<EOF
+#!/bin/sh
+
+bin/NaiveSocksDotNetCore $*
+EOF
+				chmod +x "bin/publish-$rid/run.sh"
+			;;
+			win*)
+				cat > "bin/publish-$rid/run.bat" <<EOF
+@bin\NaiveSocksDotNetCore.exe %*
+EOF
+			;;
+		esac
+	fi
 done
 
 popd
@@ -35,9 +63,17 @@ if getopts "u:" opt; then
 	mkdir -p packs
 	zip -r "packs/${packname}.zip" publish
 
-	for rid in "${buildrids[@]}"; do
-		tar -czvf "packs/${packname}_$rid.tar.gz" publish-$rid
-		# tar --xz -cvf "packs/${packname}_$rid.tar.xz" publish-$rid
+	for x in "${buildrids[@]}"; do
+		rid=${x%/*}
+		packtype=${x#*/}
+		case $packtype in
+			zip)
+				zip -r "packs/${packname}_$rid.zip" publish-$rid
+			;;
+			tar*)
+				tar -cavf "packs/${packname}_$rid.$packtype" publish-$rid
+			;;
+		esac
 	done
 
 	popd
