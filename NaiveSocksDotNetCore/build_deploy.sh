@@ -17,14 +17,14 @@ STEP build dotnet core publish...
 
 dotnet publish -c Release -o bin/publish/bin
 
-cat > "bin/publish/run.sh" <<EOF
+cat > "bin/publish/run.sh" << 'EOF'
 #!/bin/sh
 
 dotnet bin/NaiveSocksDotNetCore.dll $*
 EOF
 chmod +x "bin/publish/run.sh"
 
-cat > "bin/publish/run.bat" <<EOF
+cat > "bin/publish/run.bat" << 'EOF'
 @dotnet bin/NaiveSocksDotNetCore.dll %*
 EOF
 
@@ -37,7 +37,7 @@ for x in "${buildrids[@]}"; do
 
 	case $rid in
 		linux*)
-			cat > "bin/publish-$rid/run.sh" <<EOF
+			cat > "bin/publish-$rid/run.sh" << 'EOF'
 #!/bin/sh
 
 bin/NaiveSocksDotNetCore $*
@@ -45,7 +45,7 @@ EOF
 			chmod +x "bin/publish-$rid/run.sh"
 		;;
 		win*)
-			cat > "bin/publish-$rid/run.bat" <<EOF
+			cat > "bin/publish-$rid/run.bat" << 'EOF'
 @bin\NaiveSocksDotNetCore.exe %*
 EOF
 		;;

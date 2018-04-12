@@ -28,10 +28,11 @@ namespace NaiveSocks
             for (int i = 0; i < paths.Length; i++) {
                 paths[i] = Path.Combine(paths[i], configFilePath);
             }
-            return paths;
+            return paths.Distinct().ToArray();
         }
 
-        private const string NAME = "NaiveSocks" +
+        private const string NAME_NoDebug = "NaiveSocks";
+        private const string NAME = NAME_NoDebug +
 #if DEBUG
                     " (Debug)";
 #else
@@ -45,9 +46,8 @@ namespace NaiveSocks
 
         private static string cmdHelpText => $@"{NAME} {verstionText}
 
-Usage: {NAME}.exe [-h|--help] [(-c|--config) FILE] [--no-cli] [--no-log-stdout]
-                  [--log-file FILE] [--log-stdout-no-time]
-";
+Usage: {NAME_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FILE]
+        [--no-cli] [--no-log-stdout] [--log-file FILE] [--log-stdout-no-time]";
 
         private static bool __magic_is_packed;
 
@@ -68,11 +68,11 @@ Usage: {NAME}.exe [-h|--help] [(-c|--config) FILE] [--no-cli] [--no-log-stdout]
             argumentParser.AddArg(ParasPara.NoPara, "-V", "--version");
             var ar = argumentParser.ParseArgs(args);
             if (ar.ContainsKey("-h")) {
-                Console.Write(cmdHelpText);
+                Console.WriteLine(cmdHelpText);
                 return;
             }
             if (ar.ContainsKey("-V")) {
-                Console.Write(NAME + " " + verstionText);
+                Console.WriteLine(NAME + " " + verstionText);
                 return;
             }
             if (ar.ContainsKey("--no-log-stdout")) {
