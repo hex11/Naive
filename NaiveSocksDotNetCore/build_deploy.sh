@@ -35,22 +35,21 @@ for x in "${buildrids[@]}"; do
 
 	dotnet publish -c Release -o "bin/publish-$rid/bin" -r $rid
 
-		case $rid in
-			linux*)
-				cat > "bin/publish-$rid/run.sh" <<EOF
+	case $rid in
+		linux*)
+			cat > "bin/publish-$rid/run.sh" <<EOF
 #!/bin/sh
 
 bin/NaiveSocksDotNetCore $*
 EOF
-				chmod +x "bin/publish-$rid/run.sh"
-			;;
-			win*)
-				cat > "bin/publish-$rid/run.bat" <<EOF
+			chmod +x "bin/publish-$rid/run.sh"
+		;;
+		win*)
+			cat > "bin/publish-$rid/run.bat" <<EOF
 @bin\NaiveSocksDotNetCore.exe %*
 EOF
-			;;
-		esac
-	fi
+		;;
+	esac
 done
 
 popd
