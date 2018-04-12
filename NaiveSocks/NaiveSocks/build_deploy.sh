@@ -7,7 +7,7 @@ deploydir=bin/Deploy
 
 singlefile="$deploydir/NaiveSocks_SingleFile.exe"
 
-zipname="NaiveSocks_Full.zip"
+packname="NaiveSocks_Full"
 
 files=("NaiveSocks.exe" "NaiveSvrLib.dll" "Nett.dll")
 binaries=()
@@ -45,10 +45,13 @@ if getopts "u:" opt; then
 	echo "to_upload=$OPTARG"
 	mkdir -p "$to_upload"
 	pushd "$deploydir"
-	zip -r "$zipname" ./
+	mkdir -p "packs"
+	zip -n "./packs" -r "packs/$packname.zip" ./
+	tar --exclude "./packs" -czvf "packs/$packname.tar.gz" ./
+	# tar --exclude "./packs" --xz -cvf "packs/$packname.tar.xz" ./
 	popd
-	cp "$deploydir/$zipname" "$to_upload/"
-	cp "$singlefile" "$to_upload/"
+	mv "$deploydir/packs/"* "$to_upload/"
+	mv "$singlefile" "$to_upload/"
 fi
 
 STEP finished!

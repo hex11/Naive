@@ -32,10 +32,13 @@ fi
 nuget restore "$SOLUTION_NAME"
 dotnet restore
 
-msbuild /p:Configuration=Release $SOLUTION_NAME
+msbuild /p:Configuration=Release $SOLUTION_NAME || exit 1
 
 if [[ "$1" == "--deploy" ]]; then
 	pushd NaiveSocks/NaiveSocks/
 	bash build_deploy.sh -u ../../bin/to_upload
+	popd
+	pushd NaiveSocksDotNetCore/
+	bash build_deploy.sh -u ../bin/to_upload
 	popd
 fi
