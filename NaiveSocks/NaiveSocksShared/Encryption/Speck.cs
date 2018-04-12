@@ -37,6 +37,7 @@ namespace NaiveSocks
             ~Ctr128128()
             {
                 Marshal.FreeHGlobal((IntPtr)keyStreamBuf);
+                this.keys.free();
             }
 
             private static void BytesToWords128(byte[] key, out QWords128 words128)
@@ -52,7 +53,7 @@ namespace NaiveSocks
 
             public bool EnableMultiThreading { get; set; } = true;
 
-            uint64[] keys;
+            Keys128128 keys;
             QWords128 counter;
 
             const int KsBlockCount = 8;
@@ -118,7 +119,7 @@ namespace NaiveSocks
             }
 
             static void Update(byte* bytes, int pos, int end,
-                byte* keyStreamBuf, ref int keystreamBufferPos, ref QWords128 counter, uint64[] keys)
+                byte* keyStreamBuf, ref int keystreamBufferPos, ref QWords128 counter, Keys128128 keys)
             {
                 while (pos < end) {
                     var remainningKeystream = KeystreamBufferSize - keystreamBufferPos;
@@ -130,7 +131,7 @@ namespace NaiveSocks
                             ksb[i] = counter;
                             if (++counter.v1 == 0)
                                 ++counter.v0;
-                            Cipher.encrypt_128_128(keys, ref ksb[i]);
+                            Cipher.encrypt_128_128(ref keys, ref ksb[i]);
                         }
                     }
                     var count = end - pos;
@@ -241,12 +242,40 @@ namespace NaiveSocks
             public uint32 v1, v0;
         }
 
+        public struct Keys128128
+        {
+            public uint64[] keys;
+            //public uint64* keys;
+            //public IntPtr ptr;
+
+            public static Keys128128 alloc()
+            {
+                return new Keys128128 { keys = new uint64[32] };
+                //// align to 64 bytes
+                //var r = new Keys128128();
+                //r.ptr = Marshal.AllocHGlobal(32 * 8 + 64);
+                //var offset = (int)((ulong)r.ptr % 64);
+                //if (offset == 0) {
+                //    r.ptr = Marshal.ReAllocHGlobal(r.ptr, (IntPtr)(32 * 8));
+                //    r.keys = (uint64*)r.ptr;
+                //} else {
+                //    r.keys = (uint64*)(r.ptr + (64 - offset));
+                //}
+                //return r;
+            }
+
+            public void free()
+            {
+                //Marshal.FreeHGlobal(ptr);
+            }
+        }
+
         static unsafe class Cipher
         {
             // Reference: https://github.com/dimview/speck_cipher/blob/master/speck_128_128.cpp
 
-            const uint64 ROUNDS128128 = 32;
-            const uint32 ROUNDS64128 = 27;
+            const int ROUNDS128128 = 32;
+            const int ROUNDS64128 = 27;
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             static void speck_round_64(ref uint64 x, ref uint64 y, uint64 k)
@@ -280,15 +309,16 @@ namespace NaiveSocks
                 }
             }
 
-            public static uint64[] getKeySchedules_128_128(QWords128 key)
+            public static Keys128128 getKeySchedules_128_128(QWords128 key)
             {
-                var keys = new uint64[ROUNDS128128];
+                var r = Keys128128.alloc();
+                var keys = r.keys;
                 keys[0] = key.v0;
                 for (uint64 i = 0; i < ROUNDS128128 - 1; i++) {
                     speck_round_64(ref key.v1, ref key.v0, i);
                     keys[1 + i] = key.v0;
                 }
-                return keys;
+                return r;
             }
 
             public static uint32[] getKeySchedules_64_128(DWords128 key)
@@ -306,32 +336,39 @@ namespace NaiveSocks
                 return keys;
             }
 
-            public static void encrypt_128_128(uint64[] keySchedules, ref QWords128 ciphertext)
+            public static void encrypt_128_128(ref Keys128128 keySchedules, ref QWords128 ciphertext)
             {
-                foreach (var item in keySchedules) {
-                    // inlined:
-                    //speck_round_64(ref ciphertext.v1, ref ciphertext.v0, item);
+                var keys = keySchedules.keys;
+                var cv1 = ciphertext.v1;
+                var cv0 = ciphertext.v0;
+                // for (int i = 0; i < ROUNDS128128; i++) {
+                // var key = keys[i];
+                foreach (var key in keys) {
                     const int WORDSIZE = 64;
-                    ciphertext.v1 = (ciphertext.v1 >> 8) | (ciphertext.v1 << (WORDSIZE - 8)); // x = ROTR(x, 8)
-                    ciphertext.v1 += ciphertext.v0;
-                    ciphertext.v1 ^= item;
-                    ciphertext.v0 = (ciphertext.v0 << 3) | (ciphertext.v0 >> (WORDSIZE - 3)); // y = ROTL(y, 3)
-                    ciphertext.v0 ^= ciphertext.v1;
+                    cv1 = (cv1 >> 8) | (cv1 << (WORDSIZE - 8)); // x = ROTR(x, 8)
+                    cv1 += cv0;
+                    cv1 ^= key;
+                    cv0 = (cv0 << 3) | (cv0 >> (WORDSIZE - 3)); // y = ROTL(y, 3)
+                    cv0 ^= cv1;
                 }
+                ciphertext.v1 = cv1;
+                ciphertext.v0 = cv0;
             }
 
             public static void encrypt_64_128(uint32[] keySchedules, ref DWords64 ciphertext)
             {
+                var cv1 = ciphertext.v1;
+                var cv0 = ciphertext.v0;
                 foreach (var item in keySchedules) {
-                    // inlined:
-                    //speck_round_32(ref ciphertext.v1, ref ciphertext.v0, item);
                     const int WORDSIZE = 32;
-                    ciphertext.v1 = (ciphertext.v1 >> 8) | (ciphertext.v1 << (WORDSIZE - 8)); // x = ROTR(x, 8)
-                    ciphertext.v1 += ciphertext.v0;
-                    ciphertext.v1 ^= item;
-                    ciphertext.v0 = (ciphertext.v0 << 3) | (ciphertext.v0 >> (WORDSIZE - 3)); // y = ROTL(y, 3)
-                    ciphertext.v0 ^= ciphertext.v1;
+                    cv1 = (cv1 >> 8) | (cv1 << (WORDSIZE - 8)); // x = ROTR(x, 8)
+                    cv1 += cv0;
+                    cv1 ^= item;
+                    cv0 = (cv0 << 3) | (cv0 >> (WORDSIZE - 3)); // y = ROTL(y, 3)
+                    cv0 ^= cv1;
                 }
+                ciphertext.v1 = cv1;
+                ciphertext.v0 = cv0;
             }
         }
     }

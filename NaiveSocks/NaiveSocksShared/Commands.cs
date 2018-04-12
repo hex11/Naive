@@ -204,9 +204,9 @@ namespace NaiveSocks
                             NaiveUtils.CopyBytes(new byte[32 * 1024], 0, arr, 0, 32 * 1024);
                         }
                     },
-                    ["encrypt 3 bytes 32 * 1024 times (ws filter - aes-128-ofb)"] = () => {
+                    ["encrypt 3 bytes 1024 * 1024 times (ws filter - aes-128-ofb)"] = () => {
                         var filter = WebSocket.GetAesStreamFilter(true, samplekey);
-                        for (int i = 0; i < 32 * 1024; i++) {
+                        for (int i = 0; i < 1024 * 1024; i++) {
                             var buf = new byte[3];
                             var bv = new BytesView(buf);
                             filter(bv);
