@@ -2342,8 +2342,8 @@ namespace NaiveSocksAndroid
 			// aapt resource value: 0x7f080036
 			public const int SYM = 2131230774;
 			
-			// aapt resource value: 0x7f08009f
-			public const int action0 = 2131230879;
+			// aapt resource value: 0x7f0800a2
+			public const int action0 = 2131230882;
 			
 			// aapt resource value: 0x7f08007b
 			public const int action_bar = 2131230843;
@@ -2366,17 +2366,17 @@ namespace NaiveSocksAndroid
 			// aapt resource value: 0x7f080059
 			public const int action_bar_title = 2131230809;
 			
-			// aapt resource value: 0x7f08009c
-			public const int action_container = 2131230876;
+			// aapt resource value: 0x7f08009f
+			public const int action_container = 2131230879;
 			
 			// aapt resource value: 0x7f08007c
 			public const int action_context_bar = 2131230844;
 			
-			// aapt resource value: 0x7f0800a3
-			public const int action_divider = 2131230883;
+			// aapt resource value: 0x7f0800a6
+			public const int action_divider = 2131230886;
 			
-			// aapt resource value: 0x7f08009d
-			public const int action_image = 2131230877;
+			// aapt resource value: 0x7f0800a0
+			public const int action_image = 2131230880;
 			
 			// aapt resource value: 0x7f080003
 			public const int action_menu_divider = 2131230723;
@@ -2393,11 +2393,11 @@ namespace NaiveSocksAndroid
 			// aapt resource value: 0x7f08005b
 			public const int action_mode_close_button = 2131230811;
 			
-			// aapt resource value: 0x7f08009e
-			public const int action_text = 2131230878;
+			// aapt resource value: 0x7f0800a1
+			public const int action_text = 2131230881;
 			
-			// aapt resource value: 0x7f0800ac
-			public const int actions = 2131230892;
+			// aapt resource value: 0x7f0800af
+			public const int actions = 2131230895;
 			
 			// aapt resource value: 0x7f08005c
 			public const int activity_chooser_view_content = 2131230812;
@@ -2432,8 +2432,8 @@ namespace NaiveSocksAndroid
 			// aapt resource value: 0x7f080062
 			public const int buttonPanel = 2131230818;
 			
-			// aapt resource value: 0x7f0800a0
-			public const int cancel_action = 2131230880;
+			// aapt resource value: 0x7f0800a3
+			public const int cancel_action = 2131230883;
 			
 			// aapt resource value: 0x7f080044
 			public const int center = 2131230788;
@@ -2447,8 +2447,8 @@ namespace NaiveSocksAndroid
 			// aapt resource value: 0x7f080072
 			public const int checkbox = 2131230834;
 			
-			// aapt resource value: 0x7f0800a8
-			public const int chronometer = 2131230888;
+			// aapt resource value: 0x7f0800ab
+			public const int chronometer = 2131230891;
 			
 			// aapt resource value: 0x7f08004d
 			public const int clip_horizontal = 2131230797;
@@ -2498,14 +2498,17 @@ namespace NaiveSocksAndroid
 			// aapt resource value: 0x7f08001f
 			public const int disableHome = 2131230751;
 			
+			// aapt resource value: 0x7f08009c
+			public const int drawer_layout = 2131230876;
+			
 			// aapt resource value: 0x7f08007d
 			public const int edit_query = 2131230845;
 			
 			// aapt resource value: 0x7f08002f
 			public const int end = 2131230767;
 			
-			// aapt resource value: 0x7f0800ae
-			public const int end_padder = 2131230894;
+			// aapt resource value: 0x7f0800b1
+			public const int end_padder = 2131230897;
 			
 			// aapt resource value: 0x7f08003e
 			public const int enterAlways = 2131230782;
@@ -2534,6 +2537,9 @@ namespace NaiveSocksAndroid
 			// aapt resource value: 0x7f080053
 			public const int @fixed = 2131230803;
 			
+			// aapt resource value: 0x7f08009d
+			public const int flContent = 2131230877;
+			
 			// aapt resource value: 0x7f080057
 			public const int forever = 2131230807;
 			
@@ -2549,8 +2555,8 @@ namespace NaiveSocksAndroid
 			// aapt resource value: 0x7f080061
 			public const int icon = 2131230817;
 			
-			// aapt resource value: 0x7f0800ad
-			public const int icon_group = 2131230893;
+			// aapt resource value: 0x7f0800b0
+			public const int icon_group = 2131230896;
 			
 			// aapt resource value: 0x7f080039
 			public const int ifRoom = 2131230777;
@@ -2558,8 +2564,8 @@ namespace NaiveSocksAndroid
 			// aapt resource value: 0x7f08005e
 			public const int image = 2131230814;
 			
-			// aapt resource value: 0x7f0800a9
-			public const int info = 2131230889;
+			// aapt resource value: 0x7f0800ac
+			public const int info = 2131230892;
 			
 			// aapt resource value: 0x7f080058
 			public const int italic = 2131230808;
@@ -2585,29 +2591,29 @@ namespace NaiveSocksAndroid
 			// aapt resource value: 0x7f080060
 			public const int list_item = 2131230816;
 			
-			// aapt resource value: 0x7f08009b
-			public const int logparent = 2131230875;
+			// aapt resource value: 0x7f080099
+			public const int logparent = 2131230873;
 			
-			// aapt resource value: 0x7f08009a
-			public const int logparentScroll = 2131230874;
-			
-			// aapt resource value: 0x7f0800b1
-			public const int masked = 2131230897;
-			
-			// aapt resource value: 0x7f0800a2
-			public const int media_actions = 2131230882;
+			// aapt resource value: 0x7f080098
+			public const int logparentScroll = 2131230872;
 			
 			// aapt resource value: 0x7f0800b4
-			public const int menu_reload = 2131230900;
+			public const int masked = 2131230900;
+			
+			// aapt resource value: 0x7f0800a5
+			public const int media_actions = 2131230885;
+			
+			// aapt resource value: 0x7f0800b9
+			public const int menu_reload = 2131230905;
+			
+			// aapt resource value: 0x7f0800b7
+			public const int menu_start = 2131230903;
+			
+			// aapt resource value: 0x7f0800b8
+			public const int menu_stop = 2131230904;
 			
 			// aapt resource value: 0x7f0800b2
-			public const int menu_start = 2131230898;
-			
-			// aapt resource value: 0x7f0800b3
-			public const int menu_stop = 2131230899;
-			
-			// aapt resource value: 0x7f0800af
-			public const int message = 2131230895;
+			public const int message = 2131230898;
 			
 			// aapt resource value: 0x7f080030
 			public const int middle = 2131230768;
@@ -2617,6 +2623,12 @@ namespace NaiveSocksAndroid
 			
 			// aapt resource value: 0x7f080026
 			public const int multiply = 2131230758;
+			
+			// aapt resource value: 0x7f0800b5
+			public const int nav_home = 2131230901;
+			
+			// aapt resource value: 0x7f0800b6
+			public const int nav_logs = 2131230902;
 			
 			// aapt resource value: 0x7f080092
 			public const int navigation_header_container = 2131230866;
@@ -2630,14 +2642,17 @@ namespace NaiveSocksAndroid
 			// aapt resource value: 0x7f08001d
 			public const int normal = 2131230749;
 			
-			// aapt resource value: 0x7f0800ab
-			public const int notification_background = 2131230891;
+			// aapt resource value: 0x7f0800ae
+			public const int notification_background = 2131230894;
 			
-			// aapt resource value: 0x7f0800a5
-			public const int notification_main_column = 2131230885;
+			// aapt resource value: 0x7f0800a8
+			public const int notification_main_column = 2131230888;
 			
-			// aapt resource value: 0x7f0800a4
-			public const int notification_main_column_container = 2131230884;
+			// aapt resource value: 0x7f0800a7
+			public const int notification_main_column_container = 2131230887;
+			
+			// aapt resource value: 0x7f08009e
+			public const int nvView = 2131230878;
 			
 			// aapt resource value: 0x7f08004b
 			public const int parallax = 2131230795;
@@ -2663,11 +2678,11 @@ namespace NaiveSocksAndroid
 			// aapt resource value: 0x7f080049
 			public const int right = 2131230793;
 			
-			// aapt resource value: 0x7f0800aa
-			public const int right_icon = 2131230890;
+			// aapt resource value: 0x7f0800ad
+			public const int right_icon = 2131230893;
 			
-			// aapt resource value: 0x7f0800a6
-			public const int right_side = 2131230886;
+			// aapt resource value: 0x7f0800a9
+			public const int right_side = 2131230889;
 			
 			// aapt resource value: 0x7f08000c
 			public const int save_image_matrix = 2131230732;
@@ -2771,8 +2786,8 @@ namespace NaiveSocksAndroid
 			// aapt resource value: 0x7f08004a
 			public const int start = 2131230794;
 			
-			// aapt resource value: 0x7f0800a1
-			public const int status_bar_latest_event_content = 2131230881;
+			// aapt resource value: 0x7f0800a4
+			public const int status_bar_latest_event_content = 2131230884;
 			
 			// aapt resource value: 0x7f080075
 			public const int submenuarrow = 2131230837;
@@ -2804,8 +2819,8 @@ namespace NaiveSocksAndroid
 			// aapt resource value: 0x7f080015
 			public const int textinput_error = 2131230741;
 			
-			// aapt resource value: 0x7f0800a7
-			public const int time = 2131230887;
+			// aapt resource value: 0x7f0800aa
+			public const int time = 2131230890;
 			
 			// aapt resource value: 0x7f08001b
 			public const int title = 2131230747;
@@ -2816,8 +2831,8 @@ namespace NaiveSocksAndroid
 			// aapt resource value: 0x7f08006e
 			public const int title_template = 2131230830;
 			
-			// aapt resource value: 0x7f080099
-			public const int toolbar = 2131230873;
+			// aapt resource value: 0x7f08009b
+			public const int toolbar = 2131230875;
 			
 			// aapt resource value: 0x7f08003d
 			public const int top = 2131230781;
@@ -2825,8 +2840,8 @@ namespace NaiveSocksAndroid
 			// aapt resource value: 0x7f08006d
 			public const int topPanel = 2131230829;
 			
-			// aapt resource value: 0x7f080098
-			public const int topview = 2131230872;
+			// aapt resource value: 0x7f08009a
+			public const int topview = 2131230874;
 			
 			// aapt resource value: 0x7f08008e
 			public const int touch_outside = 2131230862;
@@ -2858,8 +2873,8 @@ namespace NaiveSocksAndroid
 			// aapt resource value: 0x7f080016
 			public const int view_offset_helper = 2131230742;
 			
-			// aapt resource value: 0x7f0800b0
-			public const int visible = 2131230896;
+			// aapt resource value: 0x7f0800b3
+			public const int visible = 2131230899;
 			
 			// aapt resource value: 0x7f08003b
 			public const int withText = 2131230779;
@@ -3047,70 +3062,76 @@ namespace NaiveSocksAndroid
 			public const int design_text_input_password_icon = 2130903080;
 			
 			// aapt resource value: 0x7f030029
-			public const int Main = 2130903081;
+			public const int logs = 2130903081;
 			
 			// aapt resource value: 0x7f03002a
-			public const int notification_action = 2130903082;
+			public const int Main = 2130903082;
 			
 			// aapt resource value: 0x7f03002b
-			public const int notification_action_tombstone = 2130903083;
+			public const int nav_header = 2130903083;
 			
 			// aapt resource value: 0x7f03002c
-			public const int notification_media_action = 2130903084;
+			public const int notification_action = 2130903084;
 			
 			// aapt resource value: 0x7f03002d
-			public const int notification_media_cancel_action = 2130903085;
+			public const int notification_action_tombstone = 2130903085;
 			
 			// aapt resource value: 0x7f03002e
-			public const int notification_template_big_media = 2130903086;
+			public const int notification_media_action = 2130903086;
 			
 			// aapt resource value: 0x7f03002f
-			public const int notification_template_big_media_custom = 2130903087;
+			public const int notification_media_cancel_action = 2130903087;
 			
 			// aapt resource value: 0x7f030030
-			public const int notification_template_big_media_narrow = 2130903088;
+			public const int notification_template_big_media = 2130903088;
 			
 			// aapt resource value: 0x7f030031
-			public const int notification_template_big_media_narrow_custom = 2130903089;
+			public const int notification_template_big_media_custom = 2130903089;
 			
 			// aapt resource value: 0x7f030032
-			public const int notification_template_custom_big = 2130903090;
+			public const int notification_template_big_media_narrow = 2130903090;
 			
 			// aapt resource value: 0x7f030033
-			public const int notification_template_icon_group = 2130903091;
+			public const int notification_template_big_media_narrow_custom = 2130903091;
 			
 			// aapt resource value: 0x7f030034
-			public const int notification_template_lines_media = 2130903092;
+			public const int notification_template_custom_big = 2130903092;
 			
 			// aapt resource value: 0x7f030035
-			public const int notification_template_media = 2130903093;
+			public const int notification_template_icon_group = 2130903093;
 			
 			// aapt resource value: 0x7f030036
-			public const int notification_template_media_custom = 2130903094;
+			public const int notification_template_lines_media = 2130903094;
 			
 			// aapt resource value: 0x7f030037
-			public const int notification_template_part_chronometer = 2130903095;
+			public const int notification_template_media = 2130903095;
 			
 			// aapt resource value: 0x7f030038
-			public const int notification_template_part_time = 2130903096;
+			public const int notification_template_media_custom = 2130903096;
 			
 			// aapt resource value: 0x7f030039
-			public const int select_dialog_item_material = 2130903097;
+			public const int notification_template_part_chronometer = 2130903097;
 			
 			// aapt resource value: 0x7f03003a
-			public const int select_dialog_multichoice_material = 2130903098;
+			public const int notification_template_part_time = 2130903098;
 			
 			// aapt resource value: 0x7f03003b
-			public const int select_dialog_singlechoice_material = 2130903099;
+			public const int select_dialog_item_material = 2130903099;
 			
 			// aapt resource value: 0x7f03003c
-			public const int support_simple_spinner_dropdown_item = 2130903100;
+			public const int select_dialog_multichoice_material = 2130903100;
 			
 			// aapt resource value: 0x7f03003d
-			public const int toolbar = 2130903101;
+			public const int select_dialog_singlechoice_material = 2130903101;
 			
 			// aapt resource value: 0x7f03003e
-			public const int tooltip = 2130903102;
+			public const int support_simple_spinner_dropdown_item = 2130903102;
+			
+			// aapt resource value: 0x7f03003f
+			public const int toolbar = 2130903103;
+			
+			// aapt resource value: 0x7f030040
+			public const int tooltip = 2130903104;
 			
 			static Layout()
 			{
@@ -3126,7 +3147,10 @@ namespace NaiveSocksAndroid
 		{
 			
 			// aapt resource value: 0x7f0e0000
-			public const int menu_control = 2131623936;
+			public const int drawer_view = 2131623936;
+			
+			// aapt resource value: 0x7f0e0001
+			public const int menu_control = 2131623937;
 			
 			static Menu()
 			{
@@ -3245,6 +3269,12 @@ namespace NaiveSocksAndroid
 			
 			// aapt resource value: 0x7f090023
 			public const int character_counter_pattern = 2131296291;
+			
+			// aapt resource value: 0x7f09002b
+			public const int drawer_close = 2131296299;
+			
+			// aapt resource value: 0x7f09002a
+			public const int drawer_open = 2131296298;
 			
 			// aapt resource value: 0x7f090024
 			public const int password_toggle_content_description = 2131296292;
@@ -3786,6 +3816,9 @@ namespace NaiveSocksAndroid
 			
 			// aapt resource value: 0x7f0a016b
 			public const int Base_Widget_Design_TabLayout = 2131362155;
+			
+			// aapt resource value: 0x7f0a018d
+			public const int DrawerArrowStyle = 2131362189;
 			
 			// aapt resource value: 0x7f0a018b
 			public const int LogTextView = 2131362187;

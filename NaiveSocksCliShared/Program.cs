@@ -88,7 +88,7 @@ Usage: {NAME_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FILE]
             }
             if (ar.TryGetValue("-c", out var v)) {
                 specifiedConfigPath = v.FirstParaOrThrow;
-                Logging.info($"configuation file: {configFilePath}");
+                Logging.info($"configuation file: {specifiedConfigPath}");
             }
 
             var controller = new Controller();

@@ -1,4 +1,4 @@
-﻿using Android.App;
+﻿//using Android.App;
 using Android.Widget;
 using Android.OS;
 using System.Threading.Tasks;
@@ -23,31 +23,29 @@ using Android.Support.V4.Content;
 using Android;
 using Android.Support.V4.App;
 using Android.Runtime;
+using System.Text;
+using Android.Support.V4.View;
 
 namespace NaiveSocksAndroid
 {
-    [Activity(
+    [Android.App.Activity(
         Label = "NaiveSocks",
         MainLauncher = true,
         LaunchMode = LaunchMode.SingleTask,
         ConfigurationChanges = ConfigChanges.Orientation | ConfigChanges.ScreenSize)]
     public class MainActivity : AppCompatActivity
     {
-        LinearLayout outputParent;
-        NestedScrollView outputParentScroll;
+        private CoordinatorLayout topView;
+        private NavigationView navigationView;
+        private DrawerLayout drawer;
+        private Intent serviceIntent;
 
-        ContextThemeWrapper logThemeWrapper;
-
-        CoordinatorLayout topView;
-
-        Intent serviceIntent;
-
-        bool isConnected => bgServiceConn?.IsConnected ?? false;
-        BgService service => bgServiceConn?.Value;
-        ServiceConnection<BgService> bgServiceConn;
+        private bool isConnected => bgServiceConn?.IsConnected ?? false;
+        private BgService service => bgServiceConn?.Value;
+        private ServiceConnection<BgService> bgServiceConn;
 
         private Toolbar toolbar;
-        const string TOOLBAR_TITLE = "NaiveSocks";
+        private const string TOOLBAR_TITLE = "NaiveSocks";
 
         //private ServiceConnection<ConfigService> cfgService;
 
@@ -65,15 +63,13 @@ namespace NaiveSocksAndroid
 
             bgServiceConn = new ServiceConnection<BgService>(
                 connected: (ComponentName name, IBinder service) => {
-                    toolbar.Title = TOOLBAR_TITLE + " - running";
+                    //toolbar.Title = TOOLBAR_TITLE + " - running";
                     InvalidateOptionsMenu();
                 },
                 disconnected: (ComponentName name) => {
-                    toolbar.Title = TOOLBAR_TITLE;
+                    //toolbar.Title = TOOLBAR_TITLE;
                     InvalidateOptionsMenu();
                 });
-
-            logThemeWrapper = new ContextThemeWrapper(this, R.Style.LogTextView);
 
             // Set our view from the "main" layout resource
             SetContentView(R.Layout.Main);
@@ -82,14 +78,35 @@ namespace NaiveSocksAndroid
 
             toolbar = FindViewById<Toolbar>(R.Id.toolbar);
             SetSupportActionBar(toolbar);
+            SupportActionBar.SetHomeButtonEnabled(true);
             toolbar.Title = TOOLBAR_TITLE;
 
-            outputParent = this.FindViewById<LinearLayout>(R.Id.logparent);
-            outputParentScroll = this.FindViewById<NestedScrollView>(R.Id.logparentScroll);
+            navigationView = FindViewById<NavigationView>(R.Id.nvView);
+            drawer = FindViewById<DrawerLayout>(R.Id.drawer_layout);
+
+            var drawerToggle = new Android.Support.V7.App.ActionBarDrawerToggle
+                (this, drawer, toolbar, R.String.drawer_open, R.String.drawer_close);
+            drawer.AddDrawerListener(drawerToggle);
+            drawerToggle.SyncState();
+
+            if (navigationView.GetHeaderView(0) is LinearLayout la) {
+                if (la.GetChildAt(0) is TextView tv) {
+                    var sb = new StringBuilder(64);
+                    var pkgInfo = PackageManager.GetPackageInfo(PackageName, 0);
+                    sb.Append(tv.Text).Append(" ").Append(BuildInfo.CurrentVersion);
+                    sb.Append("\n").Append("NaiveSocksAndroid ").Append(pkgInfo.VersionName).Append(" (").Append(pkgInfo.VersionCode).Append(")");
+                    if (BuildInfo.CurrentBuildText != null) {
+                        sb.Append("\n").Append(BuildInfo.CurrentBuildText);
+                    }
+                    tv.Text = sb.ToString();
+                }
+            }
+
+            navigationView.NavigationItemSelected += NavigationView_NavigationItemSelected;
 
             if (ContextCompat.CheckSelfPermission(this, Manifest.Permission.ReadExternalStorage)
                 != Permission.Granted) {
-                putText("requesting storage read/write permissions...");
+                Logging.info("requesting storage read/write permissions...");
                 ActivityCompat.RequestPermissions(this, new[] {
                     Manifest.Permission.ReadExternalStorage,
                     Manifest.Permission.WriteExternalStorage
@@ -97,10 +114,61 @@ namespace NaiveSocksAndroid
             }
         }
 
+        protected override void OnStart()
+        {
+            base.OnStart();
+            this.BindService(serviceIntent, bgServiceConn, Bind.None);
+        }
+
+        protected override void OnStop()
+        {
+            if (bgServiceConn?.IsConnected == true)
+                this.UnbindService(bgServiceConn);
+            GC.Collect(0);
+            base.OnStop();
+        }
+
+        public override void OnBackPressed()
+        {
+            if (drawer.IsDrawerVisible(GravityCompat.Start)) {
+                drawer.CloseDrawers();
+            } else {
+                base.OnBackPressed();
+            }
+        }
+
+        private void NavigationView_NavigationItemSelected(object sender, NavigationView.NavigationItemSelectedEventArgs e)
+        {
+            IMenuItem menuItem = e.MenuItem;
+            if (menuItem.IsChecked) {
+                drawer.CloseDrawers();
+                return;
+            }
+            Fragment frag = null;
+            switch (menuItem.ItemId) {
+            case R.Id.nav_home:
+                frag = new FragmentHome();
+                break;
+            case R.Id.nav_logs:
+                frag = new FragmentLogs();
+                break;
+            }
+            if (frag == null)
+                return;
+            var fm = SupportFragmentManager;
+            fm.BeginTransaction().Replace(R.Id.flContent, frag).Commit();
+
+            menuItem.SetChecked(true);
+            TitleFormatted = menuItem.TitleFormatted;
+            drawer.CloseDrawers();
+        }
+
         public override void OnRequestPermissionsResult(int requestCode, string[] permissions, [GeneratedEnum] Permission[] grantResults)
         {
             for (int i = 0; i < permissions.Length; i++) {
-                putText($"permission {(grantResults[i] == Permission.Granted ? "granted" : "denied")}: {permissions[i]}");
+                bool granted = grantResults[i] == Permission.Granted;
+                Logging.log($"permission {(granted ? "granted" : "denied")}: {permissions[i]}",
+                    level: granted ? Logging.Level.Info : Logging.Level.Warning);
             }
         }
 
@@ -142,9 +210,9 @@ namespace NaiveSocksAndroid
             });
         }
 
-        const string menu_showLogs = "Show logs in notification";
-        const string menu_autostart = "Autostart";
-        const string menu_openConfig = "Open configuation file...";
+        private const string menu_showLogs = "Show logs in notification";
+        private const string menu_autostart = "Autostart";
+        private const string menu_openConfig = "Open configuation file...";
 
         public override bool OnCreateOptionsMenu(IMenu menu)
         {
@@ -171,7 +239,10 @@ namespace NaiveSocksAndroid
         public override bool OnOptionsItemSelected(IMenuItem item)
         {
             var id = item.ItemId;
-            if (id == R.Id.menu_start) {
+            if (id == Android.Resource.Id.Home) {
+                drawer.OpenDrawer(GravityCompat.Start);
+                return true;
+            } else if (id == R.Id.menu_start) {
                 startService();
             } else if (id == R.Id.menu_stop) {
                 stopService();
@@ -222,7 +293,7 @@ namespace NaiveSocksAndroid
             MakeSnackbar($"Autostart is {(enabled ? "enabled" : "disabled")}.", Snackbar.LengthLong).Show();
         }
 
-        void setShowLogs(bool show)
+        private void setShowLogs(bool show)
         {
             AppConfig.Current.ShowLogs = show;
             this.InvalidateOptionsMenu();
@@ -235,70 +306,6 @@ namespace NaiveSocksAndroid
         private Snackbar MakeSnackbar(string text, int duration)
         {
             return Snackbar.Make(topView, text, duration);
-        }
-
-        private void Logging_Logged(Logging.Log log)
-        {
-            outputParent.Post(() => putLog(log, true));
-        }
-
-        private void putLog(Logging.Log log, bool autoScroll)
-        {
-            putText($"[{log.time.ToLongTimeString()} {log.levelStr}] {log.text}", autoScroll, getColorFromLevel(log.level));
-        }
-
-        private Color? getColorFromLevel(Logging.Level level)
-        {
-            switch (level) {
-            case Logging.Level.None:
-            case Logging.Level.Debug:
-                return null;
-            case Logging.Level.Info:
-                return Color.Argb(30, 0, 255, 0);
-            case Logging.Level.Warning:
-                return Color.Argb(30, 255, 255, 0);
-            case Logging.Level.Error:
-            default:
-                return Color.Argb(30, 255, 0, 0);
-            }
-        }
-
-        private void putText(string text, bool autoScroll = true, Android.Graphics.Color? color = null)
-        {
-            var tv = new TextView(logThemeWrapper);
-            tv.Text = text;
-            if (color != null)
-                tv.SetBackgroundColor(color.Value);
-            //autoScroll = autoScroll && !outputParentScroll.CanScrollVertically(0);
-            outputParent.AddView(tv);
-            tv.Dispose();
-            if (autoScroll) {
-                outputParentScroll.Post(() => outputParentScroll.FullScroll((int)FocusSearchDirection.Down));
-            }
-        }
-
-        protected override void OnStart()
-        {
-            base.OnStart();
-            Logging.Logged += Logging_Logged;
-            var logs = Logging.getLogsHistoryArray();
-            if (logs.Length > 0) {
-                for (int i = 0; i < logs.Length; i++) {
-                    putLog(logs[i], false);
-                }
-                putText("========== end of log history ==========", true);
-            }
-            this.BindService(serviceIntent, bgServiceConn, Bind.None);
-        }
-
-        protected override void OnStop()
-        {
-            Logging.Logged -= Logging_Logged;
-            outputParent.RemoveAllViews();
-            if (bgServiceConn?.IsConnected == true)
-                this.UnbindService(bgServiceConn);
-            GC.Collect(0);
-            base.OnStop();
         }
     }
 }

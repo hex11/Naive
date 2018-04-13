@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Android.App;
 using Android.Content;
+using Android.Graphics;
 using Android.OS;
 using Android.Runtime;
 using Android.Support.V4.App;
@@ -82,7 +83,16 @@ namespace NaiveSocksAndroid
             powerManager = (PowerManager)GetSystemService(Context.PowerService);
             notificationManager = (NotificationManager)GetSystemService(Context.NotificationService);
 
-            builder = new NotificationCompat.Builder(this)
+            var chId = "";
+            if (Build.VERSION.SdkInt >= BuildVersionCodes.O) {
+                chId = "nsocks_service";
+                var chan = new NotificationChannel(chId, "NaiveSocks Service", NotificationImportance.None);
+                chan.LightColor = Color.Blue;
+                chan.LockscreenVisibility = NotificationVisibility.Private;
+                notificationManager.CreateNotificationChannel(chan);
+            }
+
+            builder = new NotificationCompat.Builder(this, chId)
                         .SetContentIntent(BuildIntentToShowMainActivity())
                         //.SetContentTitle("NaiveSocks")
                         //.SetSubText("running")
@@ -102,7 +112,7 @@ namespace NaiveSocksAndroid
                 builder.SetContentTitle("NaiveSocks");
             }
 
-            restartBuilder = new NotificationCompat.Builder(this)
+            restartBuilder = new NotificationCompat.Builder(this, chId)
                         .SetContentIntent(BuildServicePendingIntent("start!", 10086))
                         .SetContentTitle("NaiveSocks service is stopped")
                         .SetContentText("touch here to restart")
@@ -249,7 +259,7 @@ namespace NaiveSocksAndroid
         }
 
         bool _needUpdateNotif = false;
-        bool _needRenotify = false;
+        bool _needRenotify = true;
 
         void needUpdateNotif()
         {

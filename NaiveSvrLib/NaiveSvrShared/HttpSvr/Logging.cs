@@ -30,8 +30,14 @@ namespace Naive.HttpSvr
 
         public static Logger RootLogger { get; } = new Logger(null, (c) => _log(c));
 
+        static int lastLogId;
+
+        public static int IncrLogId() => Interlocked.Increment(ref lastLogId);
+        public static int GetLastLogId() => lastLogId;
+
         public struct Log
         {
+            public int id;
             public Level level;
             public DateTime time;
             public long runningTime;
@@ -177,7 +183,7 @@ namespace Naive.HttpSvr
         {
             try {
                 var runningTime = getRuntime();
-                log(new Log() { time = DateTime.Now, runningTime = runningTime, text = text, level = level });
+                log(new Log() { id = IncrLogId(), time = DateTime.Now, runningTime = runningTime, text = text, level = level });
             } catch (Exception) { }
         }
 
@@ -394,6 +400,7 @@ namespace Naive.HttpSvr
             if (isNullLogger)
                 return;
             log(new Logging.Log {
+                id = Logging.IncrLogId(),
                 text = ResultingStamp.IsNullOrEmpty() ? text : "<" + ResultingStamp + ">: " + text,
                 level = level,
                 runningTime = Logging.Runtime,
@@ -526,13 +533,49 @@ namespace Naive.HttpSvr
             }
         }
 
-        public Logging.Log[] GetLogs()
+        public Logging.Log[] GetLogs() => GetLogs(0, Int32.MaxValue);
+
+        public Logging.Log[] GetLogs(int beginId) => GetLogs(beginId, Int32.MaxValue);
+
+        public Logging.Log[] GetLogs(int beginId, int endId)
         {
             lock (logs) {
-                var ret = new Logging.Log[logs.Count];
-                var i = 0;
-                foreach (var item in logs) {
-                    ret[i++] = item.GetLog(this);
+                int count = 0;
+                int index = -1;
+                {
+                    int i = 0;
+                    foreach (var item in logs) {
+                        if (index == -1) {
+                            if (item.id >= beginId) {
+                                index = i;
+                                if (endId == Int32.MaxValue) {
+                                    count = logs.Count - index;
+                                    break;
+                                }
+                            }
+                        } else {
+                            if (item.id > endId) {
+                                count = i - index;
+                                break;
+                            }
+                        }
+                        i++;
+                    }
+                }
+                if (count == 0)
+                    return new Logging.Log[0];
+                var ret = new Logging.Log[count];
+                int retIndex = 0;
+                {
+                    int i = 0;
+                    foreach (var item in logs) {
+                        if (i >= index) {
+                            ret[retIndex++] = item.GetLog(this);
+                            if (retIndex == count)
+                                break;
+                        }
+                        i++;
+                    }
                 }
                 return ret;
             }
@@ -542,6 +585,7 @@ namespace Naive.HttpSvr
         {
             public myLog(Logging.Log log)
             {
+                id = log.id;
                 level = log.level;
                 time = log.time;
                 runningTime = log.runningTime;
@@ -551,6 +595,7 @@ namespace Naive.HttpSvr
 #endif
             }
 
+            public int id;
             public Logging.Level level;
             public DateTime time;
             public long runningTime;
@@ -563,6 +608,7 @@ namespace Naive.HttpSvr
             public Logging.Log GetLog(LogBuffer logBuffer)
             {
                 var l = new Logging.Log {
+                    id = this.id,
                     level = this.level,
                     time = this.time,
                     runningTime = this.runningTime,

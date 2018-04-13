@@ -17,13 +17,17 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NaiveSvrLib", "..\NaiveSvrL
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NaiveSocksCoreAndroid", "NaiveSocksCoreAndroid\NaiveSocksCoreAndroid.csproj", "{96A734C4-93A7-4B3C-B1CC-F74EC533906A}"
 EndProject
+Project("{D954291E-2A0B-460D-934E-DC6B0785DB48}") = "NaiveSocksCliShared", "..\NaiveSocksCliShared\NaiveSocksCliShared.shproj", "{F8975733-0B83-4AF3-BF4E-8BCDAFEE4A70}"
+EndProject
 Global
 	GlobalSection(SharedMSBuildProjectFiles) = preSolution
 		..\NaiveSvrLib\NaiveSvrShared\NaiveSvrShared.projitems*{0b623dfc-5129-419c-bb03-823809f9178d}*SharedItemsImports = 13
+		..\NaiveSocksCliShared\NaiveSocksCliShared.projitems*{96a734c4-93a7-4b3c-b1cc-f74ec533906a}*SharedItemsImports = 4
 		..\NaiveSocks\NaiveSocksShared\NaiveSocksShared.projitems*{96a734c4-93a7-4b3c-b1cc-f74ec533906a}*SharedItemsImports = 4
 		..\NaiveSvrLib\NaiveConsoleShared\NaiveConsoleShared.projitems*{a92bc4fa-7794-4694-a814-74f3ced1cfad}*SharedItemsImports = 13
 		..\NaiveSvrLib\NaiveConsoleShared\NaiveConsoleShared.projitems*{b6fdce48-2582-4cbc-b1ed-4a6952e183d2}*SharedItemsImports = 4
 		..\NaiveSvrLib\NaiveSvrShared\NaiveSvrShared.projitems*{b6fdce48-2582-4cbc-b1ed-4a6952e183d2}*SharedItemsImports = 4
+		..\NaiveSocksCliShared\NaiveSocksCliShared.projitems*{f8975733-0b83-4af3-bf4e-8bcdafee4a70}*SharedItemsImports = 13
 		..\NaiveSocks\NaiveSocksShared\NaiveSocksShared.projitems*{fffcf1f9-7c24-425b-bf68-a12f26abb42d}*SharedItemsImports = 13
 	EndGlobalSection
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -62,6 +66,7 @@ Global
 		{0B623DFC-5129-419C-BB03-823809F9178D} = {F0E6DC3F-2C8F-4D7F-B9C9-EAF98D4C5412}
 		{A92BC4FA-7794-4694-A814-74F3CED1CFAD} = {F0E6DC3F-2C8F-4D7F-B9C9-EAF98D4C5412}
 		{B6FDCE48-2582-4CBC-B1ED-4A6952E183D2} = {F0E6DC3F-2C8F-4D7F-B9C9-EAF98D4C5412}
+		{F8975733-0B83-4AF3-BF4E-8BCDAFEE4A70} = {F0E6DC3F-2C8F-4D7F-B9C9-EAF98D4C5412}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {A8D024E3-5A86-4B9D-81DB-F03EDD5D0E65}

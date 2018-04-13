@@ -1,38 +1,56 @@
 <?xml version="1.0" encoding="utf-8"?>
 <android.support.design.widget.CoordinatorLayout
-        xmlns:android="http://schemas.android.com/apk/res/android"
-        xmlns:app="http://schemas.android.com/apk/res-auto"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:id="@+id/topview"
-        android:fitsSystemWindows="true">
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:id="@+id/topview">
   <LinearLayout
       android:orientation="vertical"
       android:layout_width="match_parent"
       android:layout_height="match_parent">
 
-    <android.support.design.widget.AppBarLayout
-            android:layout_height="wrap_content"
-            android:layout_width="match_parent">
+    <!--<android.support.design.widget.AppBarLayout
+        android:layout_height="wrap_content"
+        android:layout_width="match_parent">
       <include
           android:id="@+id/toolbar"
           layout="@layout/toolbar" />
-    </android.support.design.widget.AppBarLayout>
+    </android.support.design.widget.AppBarLayout>-->
 
-    <android.support.v4.widget.NestedScrollView
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:scrollbars="vertical"
-            app:layout_behavior="@string/appbar_scrolling_view_behavior"
-            android:id="@+id/logparentScroll">
-      <LinearLayout
-          android:orientation="vertical"
+    <android.support.v7.widget.Toolbar
+    android:id="@+id/toolbar"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:minHeight="?attr/actionBarSize"
+    android:background="?attr/colorPrimary"
+    android:theme="@android:style/ThemeOverlay.Material.Dark.ActionBar"
+    android:popupTheme="@android:style/ThemeOverlay.Material.Light"
+        android:fitsSystemWindows="true" />
+
+    <android.support.v4.widget.DrawerLayout
+        android:id="@+id/drawer_layout"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+      <!-- The main content view where fragments are loaded -->
+      <FrameLayout
+          android:id="@+id/flContent"
+          app:layout_behavior="@string/appbar_scrolling_view_behavior"
           android:layout_width="match_parent"
-          android:layout_height="wrap_content"
-          android:padding="2sp"
-          android:id="@+id/logparent" />
-    </android.support.v4.widget.NestedScrollView>
+          android:layout_height="match_parent"
+          android:layout_weight="1"/>
 
+      <!-- The navigation drawer that comes from the left -->
+      <!-- Note that `android:layout_gravity` needs to be set to 'start' -->
+      <android.support.design.widget.NavigationView
+          android:id="@+id/nvView"
+          android:layout_width="wrap_content"
+          android:layout_height="match_parent"
+          android:layout_gravity="start"
+          android:background="@android:color/white"
+          app:menu="@menu/drawer_view"
+          app:headerLayout="@layout/nav_header" />
+    </android.support.v4.widget.DrawerLayout>
   </LinearLayout>
 </android.support.design.widget.CoordinatorLayout>
