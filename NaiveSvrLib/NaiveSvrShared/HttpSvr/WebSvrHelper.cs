@@ -413,29 +413,47 @@ namespace Naive.HttpSvr
 <div id='upload-top' style='margin-top: 20px;'></div>
 <div class='float-bottom'>
 	<form class='item upload-form flexbox' id='upload-file' method='post' action='?upload' enctype='multipart/form-data' onclick='javascript: jumpToUpload()'>
-		<div style='flex: 1;'><input style='flex: 1;' type='file' name='files' multiple></div>
 		<input style='width: 80px;' type='submit' value='Upload'>
+		<div style='flex: 1;'><input style='flex: 1;' type='file' name='files' multiple></div>
 	</form>
 </div>
 <div class='upload-div'>
 	<form class='item upload-form' id='upload-mkdir' method='post' action='?upload' enctype='multipart/form-data'>
 		<div class='input-and-button flexbox'>
-			<input style='font-family: monospace; flex: 1;' type='text' name='dirName' placeholder='directory name'>
 			<input style='width: 80px;' type='submit' value='Mkdir'>
+			<input style='font-family: monospace; flex: 1;' type='text' name='dirName' placeholder='directory_name'>
+		</div>
+	</form>
+	<form class='item upload-form' id='upload-cp' method='post' action='?upload' enctype='multipart/form-data'>
+		<div class='input-and-button flexbox'>
+			<input style='width: 80px;' type='submit' value='Copy'>
+			<input style='font-family: monospace; flex: 1;' type='text' name='cp' placeholder='from_path to_path'>
+		</div>
+	</form>
+	<form class='item upload-form' id='upload-mv' method='post' action='?upload' enctype='multipart/form-data'>
+		<div class='input-and-button flexbox'>
+			<input style='width: 80px;' type='submit' value='Move'>
+			<input style='font-family: monospace; flex: 1;' type='text' name='mv' placeholder='from_path to_path'>
+		</div>
+	</form>
+	<form class='item upload-form' id='upload-del' method='post' action='?upload' enctype='multipart/form-data'>
+		<div class='input-and-button flexbox'>
+			<input style='width: 80px;' type='submit' value='Remove'>
+			<input style='font-family: monospace; flex: 1;' type='text' name='rm' placeholder='(file|empty_dir ...)'>
+		</div>
+	</form>
+	<form class='item upload-form' id='upload-netdl' method='post' action='?upload' enctype='multipart/form-data'>
+		<div class='input-and-button flexbox'>
+			<input style='width: 80px;' type='submit' value='Download'>
+			<input style='font-family: monospace; flex: 1;' type='text' name='netdl' placeholder='file_url_for_remote_downloading [file name]'>
 		</div>
 	</form>
 	<form class='item upload-form' id='upload-text' method='post' action='?upload' enctype='multipart/form-data'>
 		<div class='input-and-button flexbox'>
-			<input style='font-family: monospace; flex: 1;' type='text' name='textFileName' placeholder='text file name'>
-			<input style='width: 80px;' type='submit' value='Upload'>
+			<input style='width: 80px;' type='submit' value='UploadText'>
+			<input style='font-family: monospace; flex: 1;' type='text' name='textFileName' placeholder='text_file_name'>
 		</div>
 		<textarea class='boxsizing' style='display: block; width: 100%; font-family: monospace;' name='textContent' placeholder='text content' rows='6'></textarea>
-	</form>
-	<form class='item upload-form' id='upload-del' method='post' action='?upload' enctype='multipart/form-data'>
-		<div class='input-and-button flexbox'>
-			<input style='font-family: monospace; flex: 1;' type='text' name='delFile' placeholder='file (or empty directory) to be deleted'>
-			<input style='width: 80px;' type='submit' value='Delete'>
-		</div>
 	</form>
 </div>
 {{/can_upload}}
