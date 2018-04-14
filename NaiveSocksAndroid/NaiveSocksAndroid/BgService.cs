@@ -122,7 +122,7 @@ namespace NaiveSocksAndroid
                         .SetPriority((int)NotificationPriority.Min)
                         .SetVisibility(NotificationCompat.VisibilitySecret)
                         .SetShowWhen(false);
-
+            
             StartForeground(MainNotificationId, builder.Build());
 
             Controller = new Controller();
@@ -167,6 +167,8 @@ namespace NaiveSocksAndroid
                     StopSelf();
                 }
             });
+
+            updateNotif(true);
         }
 
         [return: GeneratedEnum]
@@ -258,21 +260,28 @@ namespace NaiveSocksAndroid
                 needUpdateNotif();
         }
 
-        bool _needUpdateNotif = false;
-        bool _needRenotify = true;
-
         void needUpdateNotif()
         {
             if (isScreenOn) {
                 updateNotif();
-            } else {
-                _needUpdateNotif = true;
             }
         }
 
         string lastTitle;
 
-        void updateNotif()
+        void updateNotif(bool force = false)
+        {
+
+            if (isDestroyed)
+                return;
+            lock (builder) {
+                if (updateNotifBuilder() | force) {
+                    notificationManager.Notify(MainNotificationId, builder.Build());
+                }
+            }
+        }
+
+        private bool updateNotifBuilder()
         {
             void SetSingleLineText(string text)
             {
@@ -283,39 +292,33 @@ namespace NaiveSocksAndroid
                 }
             }
 
-            if (isDestroyed)
-                return;
-            lock (builder) {
-                _needUpdateNotif = false;
-                var titleFmt = (notification_show_logs && !isN) ?
-                    "{0}/{1} cxn, {2:N0} KB, {3:N0} pkt - NaiveSocks"
-                    : "{0}/{1} cxn, {2:N0} KB, {3:N0} pkt";
-                var title = string.Format(titleFmt, Controller.RunningConnections, Controller.TotalHandledConnections, MyStream.TotalCopiedBytes / 1024, MyStream.TotalCopiedPackets);
-                if (title != lastTitle) {
-                    _needRenotify = true;
-                    lastTitle = title;
-                    if (notification_show_logs) {
-                        builder.SetContentTitle(title);
-                    } else {
-                        SetSingleLineText(title);
-                    }
-                }
-                if (textLinesChanged) {
-                    textLinesChanged = false;
-                    _needRenotify = true;
-                    SetSingleLineText(textLines.Get(-1));
-                    if (notification_show_logs) {
-                        if (bigText == null)
-                            bigText = new NotificationCompat.BigTextStyle();
-                        bigText.BigText(string.Join("\n", textLines.Where(x => !string.IsNullOrEmpty(x))));
-                        builder.SetStyle(bigText);
-                    }
-                }
-                if (_needRenotify) {
-                    _needRenotify = false;
-                    notificationManager.Notify(MainNotificationId, builder.Build());
+            var needRenotify = false;
+
+            var titleFmt = (notification_show_logs && !isN) ?
+                                "{0}/{1} cxn, {2:N0} KB, {3:N0} pkt - NaiveSocks"
+                                : "{0}/{1} cxn, {2:N0} KB, {3:N0} pkt";
+            var title = string.Format(titleFmt, Controller.RunningConnections, Controller.TotalHandledConnections, MyStream.TotalCopiedBytes / 1024, MyStream.TotalCopiedPackets);
+            if (title != lastTitle) {
+                needRenotify = true;
+                lastTitle = title;
+                if (notification_show_logs) {
+                    builder.SetContentTitle(title);
+                } else {
+                    SetSingleLineText(title);
                 }
             }
+            if (textLinesChanged) {
+                textLinesChanged = false;
+                needRenotify = true;
+                SetSingleLineText(textLines.Get(-1));
+                if (notification_show_logs) {
+                    if (bigText == null)
+                        bigText = new NotificationCompat.BigTextStyle();
+                    bigText.BigText(string.Join("\n", textLines.Where(x => !string.IsNullOrEmpty(x))));
+                    builder.SetStyle(bigText);
+                }
+            }
+            return needRenotify;
         }
 
         public void SetShowLogs(bool show)

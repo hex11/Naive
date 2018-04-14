@@ -51,7 +51,8 @@ namespace NaiveSocks
 
             public static int ThreadCount { get; } = Math.Max(1, Math.Min(4, Environment.ProcessorCount / 2));
 
-            public bool EnableMultiThreading { get; set; } = true;
+            public static bool DefaultEnableMultiThreading { get; set; } = false;
+            public bool EnableMultiThreading { get; set; } = DefaultEnableMultiThreading;
 
             Keys128128 keys;
             QWords128 counter;
@@ -77,8 +78,8 @@ namespace NaiveSocks
                 var bytesGCHandle = GCHandle.Alloc(bs.Bytes, GCHandleType.Pinned);
                 try {
                     var bytes = (byte*)bytesGCHandle.AddrOfPinnedObject();
-                    if (EnableMultiThreading && bs.Len >= 16 * 1024 && ThreadCount > 1) {
-                        UpdateMT(bytes, pos, end);
+                    if (EnableMultiThreading && bs.Len >= 32 * 1024 && ThreadCount > 1) {
+                        UpdateMT(bytes, pos, end, ThreadCount);
                     } else {
                         Update(bytes, pos, end, keyStreamBuf, ref keystreamBufferPos, ref counter, keys);
                     }
@@ -87,7 +88,7 @@ namespace NaiveSocks
                 }
             }
 
-            private void UpdateMT(byte* bytes, int pos, int end)
+            private void UpdateMT(byte* bytes, int pos, int end, int threadCount)
             {
                 // update until end of keystream buffer:
                 if (keystreamBufferPos != KeystreamBufferSize)
@@ -95,10 +96,10 @@ namespace NaiveSocks
                         keyStreamBuf, ref keystreamBufferPos, ref counter, keys);
 
                 int len = end - pos;
-                int lenPerThread = (len / ThreadCount);
+                int lenPerThread = (len / threadCount);
                 lenPerThread -= (lenPerThread % KeystreamBufferSize); // align to keystream buffer size
                 var ctrPerThread = (ulong)lenPerThread / BlockSize;
-                var tasks = new Task[ThreadCount - 1];
+                var tasks = new Task[threadCount - 1];
                 for (int i = 0; i < tasks.Length; i++) {
                     var threadPos = pos;
                     var threadEnd = pos += lenPerThread;

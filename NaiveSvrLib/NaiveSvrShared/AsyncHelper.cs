@@ -26,6 +26,7 @@ namespace Naive.HttpSvr
             return task ?? CompletedTask;
         }
 
+        // returns true if timed out
         public static WrappedAwaiter<Task, Task, bool>.Awaitable WithTimeout(this Task task, int timeout)
         {
             var timeoutTask = Task.Delay(timeout);

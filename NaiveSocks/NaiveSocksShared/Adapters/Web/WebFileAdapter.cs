@@ -3,6 +3,7 @@ using Nett;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Net;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -13,7 +14,7 @@ namespace NaiveSocks
         public string dir { get; set; }
 
         public string allow { get; set; }
-        private bool allow_list, allow_create, allow_edit;
+        private bool allow_list, allow_create, allow_edit, allow_netdl;
 
         public string index { get; set; }
         public string tmpl { get; set; }
@@ -36,12 +37,15 @@ namespace NaiveSocks
                         allow_create = true;
                     } else if (item == "edit") {
                         allow_edit = true;
+                    } else if (item == "netdl") {
+                        allow_netdl = true;
                     } else if (item == "all") {
                         Logger.warning("please use 'ALL' instead of 'all' in allow.");
                     } else if (item == "ALL") {
                         allow_list = true;
                         allow_create = true;
                         allow_edit = true;
+                        allow_netdl = true;
                     } else {
                         Logger.warning($"unknown '{item}' in allow");
                     }
@@ -76,14 +80,14 @@ namespace NaiveSocks
 
         private async Task HandleUpload(HttpConnection pp, string path)
         {
-            string info;
+            string info = null;
             if (!(allow_create | allow_edit)) {
                 info = $"Uploading is not allowed.";
                 goto FAIL;
             }
             var reader = new MultipartFormDataReader(pp);
             int count = 0;
-            string textFileName = null;
+            string saveFileName = null;
             string encoding = "utf-8";
             while (await reader.ReadNextPartHeader()) {
                 if (reader.CurrentPartName == "files") {
@@ -103,12 +107,12 @@ namespace NaiveSocks
                     }
                     Logger.info($"uploaded '{fileName}' by {pp.myStream}.");
                     count++;
-                } else if (reader.CurrentPartName == "textFileName") {
-                    textFileName = await reader.ReadAllTextAsync();
+                } else if (reader.CurrentPartName.Is("textFileName").Or("fileName")) {
+                    saveFileName = await reader.ReadAllTextAsync();
                 } else if (reader.CurrentPartName == "textFileEncoding") {
                     encoding = await reader.ReadAllTextAsync();
                 } else if (reader.CurrentPartName == "textContent") {
-                    if (!TryOpenFile(path, textFileName, out var fs, out info, out var realPath))
+                    if (!TryOpenFile(path, saveFileName, out var fs, out info, out var realPath))
                         goto FAIL;
                     try {
                         using (fs) {
@@ -129,10 +133,10 @@ namespace NaiveSocks
                         File.Delete(realPath);
                         if (e is DisconnectedException)
                             return;
-                        info = $"read/write error on '{textFileName}'";
+                        info = $"read/write error on '{saveFileName}'";
                         goto FAIL;
                     }
-                    Logger.info($"uploaded text '{textFileName}' by {pp.myStream}.");
+                    Logger.info($"uploaded text '{saveFileName}' by {pp.myStream}.");
                     count++;
                 } else if (reader.CurrentPartName == "dirName") {
                     var dirName = await reader.ReadAllTextAsync();
@@ -165,14 +169,102 @@ namespace NaiveSocks
                     }
                     Logger.info($"deleted '{delFile}' by {pp.myStream}.");
                     count++;
+                } else if (reader.CurrentPartName == "netdl") {
+                    if (!allow_netdl) {
+                        info = $"'netdl' is not in allowed list.";
+                        goto FAIL;
+                    }
+                    var unparsed = await reader.ReadAllTextAsync();
+                    var args = Naive.Console.Command.SplitArguments(unparsed);
+                    string url, name;
+                    if (args.Length == 0 || args.Length > 2) {
+                        info = $"wrong count of arguments";
+                        goto FAIL;
+                    }
+                    url = args[0];
+                    if (args.Length == 2) {
+                        name = args[1];
+                    } else {
+                        name = url.Substring(url.LastIndexOf('/'));
+                    }
+                    if (!CheckPathForWriting(path, name, out info, out var realPath))
+                        goto FAIL;
+                    if (!CheckPathForWriting(path, name + ".downloading", out info, out var realDlPath))
+                        goto FAIL;
+                    var t = NaiveUtils.RunAsyncTask(async () => {
+                        using (var webcli = new WebClient()) {
+                            await webcli.DownloadFileTaskAsync(url, realDlPath);
+                        }
+                        MoveOrReplace(realDlPath, realPath);
+                    });
+                    if (await t.WithTimeout(200)) {
+                        info = "downloading task is started.";
+                    } else {
+                        info = "downloaded file.";
+                    }
+                    count++;
+                } else if (reader.CurrentPartName.Is("mv").Or("cp")) {
+                    var unparsed = await reader.ReadAllTextAsync();
+                    var args = Naive.Console.Command.SplitArguments(unparsed);
+                    if (args.Length != 2) {
+                        info = $"wrong count of arguments";
+                        goto FAIL;
+                    }
+                    string from = args[0], to = args[1];
+                    if (!CheckPathForWriting(path, from, out info, out var fromPath))
+                        goto FAIL;
+                    if (!CheckPathForWriting(path, to, out info, out var toPath))
+                        goto FAIL;
+                    if (reader.CurrentPartName == "mv") {
+                        MoveOrReplace(fromPath, toPath);
+                    } else {
+                        File.Copy(fromPath, toPath, true);
+                    }
+                    count++;
+                } else if (reader.CurrentPartName == "rm") {
+                    var unparsed = await reader.ReadAllTextAsync();
+                    var args = Naive.Console.Command.SplitArguments(unparsed);
+                    if (args.Length == 0) {
+                        info = $"no arguments.";
+                        goto FAIL;
+                    }
+                    foreach (var delFile in args) {
+                        if (!CheckPathForWriting(path, delFile, out info, out var realPath, out var r))
+                            goto FAIL;
+                        try {
+                            if (r == WebSvrHelper.PathResult.Directory) {
+                                Directory.Delete(realPath);
+                            } else if (r == WebSvrHelper.PathResult.File) {
+                                File.Delete(realPath);
+                            } else {
+                                info = $"Failed to delete '{delFile}' (not found)";
+                                goto FAIL;
+                            }
+                        } catch (Exception) {
+                            info = $"Failed to delete '{delFile}'";
+                            goto FAIL;
+                        }
+                        Logger.info($"deleted '{delFile}' by {pp.myStream}.");
+                        count++;
+                    }
                 } else {
                     info = $"Unknown part name '{reader.CurrentPartName}'";
                     goto FAIL;
                 }
             }
-            info = $"Finished {count} operation{(count > 1 ? "s" : null)}.";
+            if (info == null || count > 1)
+                info = $"Finished {count} operation{(count > 1 ? "s" : null)}.";
             FAIL:
             await HandleDirList(pp, path, info);
+        }
+
+        private static void MoveOrReplace(string from, string to)
+        {
+            if (File.Exists(to)) {
+                File.Replace(from, to, null);
+            } else {
+                File.Move(from, to);
+            }
         }
 
         private bool TryOpenFile(string basePath, string relPath, out Stream fs, out string failReason, out string realPath)
