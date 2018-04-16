@@ -160,11 +160,8 @@ namespace NaiveSocks
                         if (p.Url_path.Length == 0)
                             p.Url_path = "/";
                         try {
-                            if (r.to.AsAdapterRef != null) {
-                                if (await HandleByAdapter(p, r.to.AsAdapterRef))
-                                    return;
-                            } else if (r.to.AsArray != null) {
-                                if (await HandleByAdapters(p, r.to.AsArray))
+                            foreach (var item in r.to) {
+                                if (await HandleByAdapter(p, item))
                                     return;
                             }
                         } finally {
@@ -214,6 +211,7 @@ namespace NaiveSocks
         private async Task handleHttp(HttpConnection p)
         {
             p.EnableKeepAlive = false;
+
             AddrPort parseUrl(string url, out string path, out bool ishttps)
             {
                 int hostStart = url.IndexOf("://") + 3;
@@ -242,15 +240,19 @@ namespace NaiveSocks
                     return new AddrPort(host, ishttps ? 443 : 80);
                 }
             }
+
             bool isUpgrade(Dictionary<string, string> headers) => headers.ContainsKey("Upgrade")
                         || (headers.ContainsKey("Connection")
                             && headers["Connection"]?.Split(',').Select(x => x.Trim()).Contains("Upgrade") == true);
+
+            string protoStr(bool x) => x ? "https" : "http";
+
             AddrPort dest = parseUrl(p.Url, out var realurl, out var isHttps);
             connnectDest:
             var tcsGetResult = new TaskCompletionSource<ConnectResult>();
             var tcsProcessing = new TaskCompletionSource<VoidType>();
             try {
-                var inc = InConnection.Create(this, dest, dataStream: null, getInfoStr: "(http) remote=" + p.remoteEP);
+                var inc = InConnection.Create(this, dest, dataStream: null, getInfoStr: $"({protoStr(isHttps)}) remote=" + p.remoteEP);
                 inc.Url = p.Url;
                 Controller.Connect(inc, @out.Adapter,
                     (result) => {
@@ -324,7 +326,7 @@ namespace NaiveSocks
 
                     while (true) { // keep-alive loop
                         if (p.inputDataStream != null) {
-                            await MyStream.StreamCopy(p.inputDataStream.ToMyStream(), destStream);
+                            await NaiveUtils.StreamCopyAsync(p.inputDataStream, destCommonStream);
                             if (verbose)
                                 Logger.info($"{p}: copied input data {p.inputDataStream.Length} bytes.");
                         }
@@ -334,11 +336,11 @@ namespace NaiveSocks
                                 await copyingResponse;
                                 await clientStream.Shutdown(SocketShutdown.Send);
                             });
-                            var copingRequese = NaiveUtils.RunAsyncTask(async () => {
+                            var copingRequest = NaiveUtils.RunAsyncTask(async () => {
                                 await MyStream.StreamCopy(clientStream, destStream);
                                 await destStream.Shutdown(SocketShutdown.Send);
                             });
-                            await Task.WhenAll(copyingResponse2, copingRequese);
+                            await Task.WhenAll(copyingResponse2, copingRequest);
                             if (verbose)
                                 Logger.info($"{p} completed: no keep-alive.");
                             break;
@@ -365,10 +367,9 @@ namespace NaiveSocks
                             Logger.info($"{p}: {p.Method} {p.Url}");
                         var newDest = parseUrl(p.Url, out realurl, out var newIsHttps);
                         if (newDest != dest || newIsHttps != isHttps) {
-                            string proto(bool x) => x ? "https" : "http";
                             if (verbose)
                                 Logger.warning($"{p}: dest changed." +
-                                    $" ({proto(isHttps)}){dest} -> ({proto(newIsHttps)}){newDest}");
+                                    $" ({protoStr(isHttps)}){dest} -> ({protoStr(newIsHttps)}){newDest}");
                             await destStream.Shutdown(SocketShutdown.Send);
                             await copyingResponse;
                             dest = newDest;

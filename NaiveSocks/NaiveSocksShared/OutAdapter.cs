@@ -31,6 +31,8 @@ namespace NaiveSocks
         public string Url { get; set; }
         public CancellationToken CancellationToken { get; set; }
 
+        public int CreateTime = WebSocket.CurrentTime;
+
         public ConnectArgument(IAdapter inAdapter)
         {
             InAdapter = inAdapter;

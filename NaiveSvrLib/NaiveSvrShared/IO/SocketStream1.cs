@@ -39,27 +39,33 @@ namespace NaiveSocks
         public bool EnableSmartReadBuffer { get; set; } = true;
         public bool EnableSmartSyncRead { get; set; } = true;
 
+        int socketAvailable;
+
         public override Task<int> ReadAsync(BytesSegment bs)
         {
             // We use an internal buffer, whice is larger, to reduce many recv() syscalls when `bs` is very small.
             // It's important, since there is a hardware bug named 'Meltdown' in Intel CPUs.
             // TESTED: This optimization made ReadAsync 20x faster when bs.Len == 4, 
             //         on Windows 10 x64 16299.192 with a laptop Haswell CPU.
-            var bufRead = TryReadInternalBuffer(ref bs);
+            var bufRead = TryReadInternalBuffer(bs);
             if (bufRead > 0)
                 return NaiveUtils.GetCachedTaskInt(bufRead);
             if (EnableSmartSyncRead | EnableSmartReadBuffer) {
-                var available = Socket.Available;
-                var bufRead2 = TryFillAndReadInternalBuffer(ref bs, available);
-                if (bufRead2 > 0)
+                if (socketAvailable < bs.Len || socketAvailable < SmartReadBufferSize) {
+                    socketAvailable = Socket.Available;
+                }
+                var bufRead2 = TryFillAndReadInternalBuffer(bs);
+                if (bufRead2 > 0) {
                     return NaiveUtils.GetCachedTaskInt(bufRead2);
-                if (EnableSmartSyncRead && available > 0) {
+                }
+                if (EnableSmartSyncRead && socketAvailable > 0) {
                     // if the receive buffer of OS is not empty,
                     // use sync operation to reduce async overhead.
                     Interlocked.Increment(ref ctr.Rsync);
                     var read = Socket.Receive(bs.Bytes, bs.Offset, bs.Len, SocketFlags.None);
                     if (read == 0)
                         throw new Exception("WTF! It should not happen: Socket.Receive() returns 0 when Socket.Available > 0.");
+                    socketAvailable -= read;
                     return NaiveUtils.GetCachedTaskInt(read);
                 }
             }
@@ -70,13 +76,14 @@ namespace NaiveSocks
                 beginMethod: (thisRef, args, callback, state) => thisRef.Socket.BeginReceive(args.Bytes, args.Offset, args.Len, SocketFlags.None, callback, state),
                 endMethod: (thisRef, asyncResult) => {
                     var read = thisRef.Socket.EndReceive(asyncResult);
+                    thisRef.socketAvailable -= read;
                     if (read == 0)
                         thisRef.State |= MyStreamState.RemoteShutdown;
                     return read;
                 });
         }
 
-        private int TryReadInternalBuffer(ref BytesSegment bs)
+        private int TryReadInternalBuffer(BytesSegment bs)
         {
             if (readBuffer.Len > 0) {
                 Interlocked.Increment(ref ctr.Rbuffer);
@@ -90,7 +97,7 @@ namespace NaiveSocks
             return 0;
         }
 
-        private int TryFillAndReadInternalBuffer(ref BytesSegment bs, int socketAvailable)
+        private int TryFillAndReadInternalBuffer(BytesSegment bs)
         {
             var readBufferSize = this.SmartReadBufferSize;
             if (EnableSmartReadBuffer && (socketAvailable > bs.Len & bs.Len < readBufferSize)) {
@@ -99,6 +106,7 @@ namespace NaiveSocks
                     readBuffer.Bytes = new byte[readBufferSize];
                 readBuffer.Offset = 0;
                 var read = Socket.Receive(readBuffer.Bytes, 0, readBufferSize, SocketFlags.None);
+                this.socketAvailable -= read;
                 readBuffer.Len = read;
                 if (read == 0)
                     throw new Exception("WTF! It should not happen: Socket.Receive() returns 0 when Socket.Available > 0.");
@@ -114,7 +122,7 @@ namespace NaiveSocks
 
         public override int Read(BytesSegment bs)
         {
-            var bufRead = TryReadInternalBuffer(ref bs);
+            var bufRead = TryReadInternalBuffer(bs);
             if (bufRead > 0)
                 return bufRead;
             return base.Read(bs);

@@ -512,6 +512,11 @@ namespace Naive.HttpSvr
                 return;
             lock (logs) {
                 if (newBufferSize > bufferSize || (head < bufferSize && tail < head)) {
+                    if (newBufferSize > bufferSize) {
+                        GC.AddMemoryPressure(newBufferSize - bufferSize);
+                    } else {
+                        GC.RemoveMemoryPressure(bufferSize - newBufferSize);
+                    }
                     ResizeBuffer(newBufferSize);
                     bufferSize = newBufferSize;
                 } else {

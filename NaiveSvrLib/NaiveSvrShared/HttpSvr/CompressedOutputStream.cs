@@ -25,6 +25,11 @@ namespace Naive.HttpSvr
 
         public void AutoCompressionType()
         {
+            EnableGzipIfClientSupports();
+        }
+
+        public void EnableGzipIfClientSupports()
+        {
             if (p.GetReqHeaderSplits("Accept-Encoding")?.Contains("gzip") == true) {
                 SetCompressionType(CompressionType.GZip);
             }

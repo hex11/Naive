@@ -6,6 +6,8 @@ using Naive.HttpSvr;
 using System.Text;
 using System.Reflection;
 using System.Linq;
+using System.Collections;
+using System.Collections.Generic;
 
 namespace NaiveSocks
 {
@@ -36,6 +38,50 @@ namespace NaiveSocks
         public object obj;
         public AdapterRef AsAdapterRef => obj as AdapterRef;
         public AdapterRef[] AsArray => obj as AdapterRef[];
+        public bool IsNull => obj == null;
+
+        public Enumerator GetEnumerator()
+        {
+            return new Enumerator(this);
+        }
+
+        public struct Enumerator : IEnumerator<AdapterRef>
+        {
+            internal Enumerator(AdapterRefOrArray soa)
+            {
+                _soa = soa;
+                i = 0;
+                size = soa.AsArray?.Length ?? (soa.AsAdapterRef != null ? 1 : 0);
+                Current = null;
+            }
+
+            private readonly AdapterRefOrArray _soa;
+            int i;
+            int size;
+
+            public AdapterRef Current { get; private set; }
+
+            object IEnumerator.Current => this.Current;
+
+            public void Dispose()
+            {
+            }
+
+            public bool MoveNext()
+            {
+                if (i >= size)
+                    return false;
+                Current = _soa.AsArray != null ? _soa.AsArray[i] : _soa.AsAdapterRef;
+                i++;
+                return true;
+            }
+
+            public void Reset()
+            {
+                i = 0;
+                Current = null;
+            }
+        }
     }
 
     public struct StringOrArray
@@ -44,7 +90,51 @@ namespace NaiveSocks
         public string AsString => obj as string;
         public string[] AsArray => obj as string[];
         public bool IsNull => obj == null;
+
         public bool IsOrContains(string str) => (AsString != null && str == AsString) || AsArray?.Contains(str) == true;
+
+        public Enumerator GetEnumerator()
+        {
+            return new Enumerator(this);
+        }
+
+        public struct Enumerator : IEnumerator<string>
+        {
+            internal Enumerator(StringOrArray soa)
+            {
+                _soa = soa;
+                i = 0;
+                size = soa.AsArray?.Length ?? (soa.AsString != null ? 1 : 0);
+                Current = null;
+            }
+
+            private readonly StringOrArray _soa;
+            int i;
+            int size;
+
+            public string Current { get; private set; }
+
+            object IEnumerator.Current => this.Current;
+
+            public void Dispose()
+            {
+            }
+
+            public bool MoveNext()
+            {
+                if (i >= size)
+                    return false;
+                Current = _soa.AsArray != null ? _soa.AsArray[i] : _soa.AsString;
+                i++;
+                return true;
+            }
+
+            public void Reset()
+            {
+                i = 0;
+                Current = null;
+            }
+        }
     }
 
     public interface ICanReload : IAdapter

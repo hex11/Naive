@@ -69,7 +69,7 @@ namespace NaiveSocks
 
         public string ToString(string addition)
         {
-            return $"{{'{InAdapter?.Name}'{(addition == null ? "" : " ")}{addition} dest={Dest}{(CallbackCalled ? " (connected)" : "")}}}";
+            return $"{{'{InAdapter?.Name}' T={WebSocket.CurrentTime - CreateTime:N0}{(addition == null ? "" : " ")}{addition} dest={Dest}{(CallbackCalled ? " (connected)" : "")}}}";
         }
 
         public delegate Task<IMyStream> ConnectionCallbackDelegate(ConnectResult cr);

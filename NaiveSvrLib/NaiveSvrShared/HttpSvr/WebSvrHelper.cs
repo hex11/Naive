@@ -171,9 +171,17 @@ namespace Naive.HttpSvr
                 return subData;
             }));
             data.Add("files", Directory.EnumerateFiles(path).Select(x => {
-                var name = Path.GetFileName(x);
+                var fi = new FileInfo(x);
+                var name = fi.Name;
                 subData.Dict["url"] = prefix + HttpUtil.UrlEncode(prefix + name);
                 subData.Dict["name"] = HttpUtil.HtmlAttributeEncode(name);
+                long length;
+                try {
+                    length = fi.Length;
+                } catch (Exception) {
+                    length = -1;
+                }
+                subData.Dict["size_n"] = length.ToString("N0");
                 return subData;
             }));
         }
@@ -345,9 +353,10 @@ namespace Naive.HttpSvr
 		/*margin: 4px 0;*/
 		/*border-bottom: solid 1px gray;*/
 		transition: all .3s;
+		position: relative;
 	}
 	.item a {
-		padding: 8px 4px;
+		padding: .5em .25em .8em .25em;
 		text-decoration: none;
 		color: black;
 		word-wrap: break-word;
@@ -365,6 +374,7 @@ namespace Naive.HttpSvr
 		background: orange;
 		position: sticky;
 		top: 0;
+		z-index: 1;
 	}
 	.item a:hover {
 		text-decoration: underline;
@@ -374,6 +384,23 @@ namespace Naive.HttpSvr
 	}
 	.file {
 		background: lightskyblue;
+	}
+	.item-info {
+		position: absolute;
+		right: .25em;
+		bottom: 0;
+		font-family: monospace;
+		font-size: .8em;
+		line-height: 1em;
+		color: #666;
+		pointer-events: none;
+		  -webkit-touch-callout: none; /* iOS Safari */
+		    -webkit-user-select: none; /* Safari */
+		     -khtml-user-select: none; /* Konqueror HTML */
+		       -moz-user-select: none; /* Firefox */
+		        -ms-user-select: none; /* Internet Explorer/Edge */
+		            user-select: none; /* Non-prefixed version, currently
+		                                  supported by Chrome and Opera */
 	}
 	.upload-form {
 		background: lightgray;
@@ -407,8 +434,8 @@ namespace Naive.HttpSvr
 <body>
 {{#info}}<div class='info'>{{info}}</div>{{/}}
 {{#upPath}}<div class='item updir'><a href='{{upPath}}'>(Up Directory)</a></div>{{/}}
-{{#dirs}}<div class='item dir'><a href='{{url}}/'>{{name}}/</a></div>{{/}}
-{{#files}}<div class='item file'><a href='{{url}}'>{{name}}</a></div>{{/}}
+{{#dirs}}<div class='item dir'><a href='{{url}}/'>{{name}}/</a><div class='item-info'>dir</div></div>{{/}}
+{{#files}}<div class='item file'><a href='{{url}}'>{{name}}</a><div class='item-info'>{{#size_n}}{{size_n}} bytes{{/size_n}}{{^size_n}}{{size_n}}file{{/size_n}}</div></div>{{/}}
 {{#can_upload}}
 <div id='upload-top' style='margin-top: 20px;'></div>
 <div class='float-bottom'>
@@ -427,13 +454,13 @@ namespace Naive.HttpSvr
 	<form class='item upload-form' id='upload-cp' method='post' action='?upload' enctype='multipart/form-data'>
 		<div class='input-and-button flexbox'>
 			<input style='width: 80px;' type='submit' value='Copy'>
-			<input style='font-family: monospace; flex: 1;' type='text' name='cp' placeholder='from_path to_path'>
+			<input style='font-family: monospace; flex: 1;' type='text' name='cp' placeholder='(from ...) to'>
 		</div>
 	</form>
 	<form class='item upload-form' id='upload-mv' method='post' action='?upload' enctype='multipart/form-data'>
 		<div class='input-and-button flexbox'>
 			<input style='width: 80px;' type='submit' value='Move'>
-			<input style='font-family: monospace; flex: 1;' type='text' name='mv' placeholder='from_path to_path'>
+			<input style='font-family: monospace; flex: 1;' type='text' name='mv' placeholder='(from ...) to'>
 		</div>
 	</form>
 	<form class='item upload-form' id='upload-del' method='post' action='?upload' enctype='multipart/form-data'>

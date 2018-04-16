@@ -20,9 +20,35 @@ namespace NaiveSocks
         public string tmpl { get; set; }
         public Dictionary<string, string> data { get; set; }
 
+        public StringOrArray gzip_wildcard { get; set; }
+        public bool gzip_listpage { get; set; } = true;
+
         object tmplLock = new object();
         NaiveTemplate.Template _tmpl;
         DateTime _tmplLwt;
+
+        public WebFileAdapter()
+        {
+            hitFile = (p, path) => {
+                foreach (var item in gzip_wildcard) {
+                    if (Wildcard.IsMatch(path, item)) {
+                        p.outputStream.EnableGzipIfClientSupports();
+                        break;
+                    }
+                }
+                return WebSvrHelper.HandleFileAsync(p, path);
+            };
+            hitDir = (HttpConnection p, string path) => {
+                if (p.Method == "POST") {
+                    if (p.ParseUrlQstr()["upload"] != "0") {
+                        return HandleUpload(p, path);
+                    }
+                    return AsyncHelper.CompletedTask;
+                } else {
+                    return HandleDirList(p, path);
+                }
+            };
+        }
 
         public override void SetConfig(TomlTable toml)
         {
@@ -53,39 +79,29 @@ namespace NaiveSocks
             }
         }
 
+        Func<HttpConnection, string, Task> hitFile, hitDir;
+
         public override async Task HandleRequestAsyncImpl(HttpConnection p)
         {
-            Task hitdir(HttpConnection pp, string path)
-            {
-                if (pp.Method == "POST") {
-                    if (pp.ParseUrlQstr()["upload"] != "0") {
-                        return HandleUpload(pp, path);
-                    }
-                    return AsyncHelper.CompletedTask;
-                } else {
-                    return HandleDirList(pp, path);
-                }
-            }
             var realPath = p.Url_path;
             if (index != null && p.Url_path == "/") {
                 p.Url_path = index;
             }
             try {
-                await WebSvrHelper.HandleDirectoryAsync(p, Controller.ProcessFilePath(dir),
-                    WebSvrHelper.HandleFileAsync, allow_list ? hitdir : (Func<HttpConnection, string, Task>)null);
+                await WebSvrHelper.HandleDirectoryAsync(p, Controller.ProcessFilePath(dir), hitFile, allow_list ? hitDir : null);
             } finally {
                 p.Url_path = realPath;
             }
         }
 
-        private async Task HandleUpload(HttpConnection pp, string path)
+        private async Task HandleUpload(HttpConnection p, string path)
         {
             string info = null;
             if (!(allow_create | allow_edit)) {
-                info = $"Uploading is not allowed.";
+                info = $"neither 'create' nor 'edit' is not in the allowed list.";
                 goto FAIL;
             }
-            var reader = new MultipartFormDataReader(pp);
+            var reader = new MultipartFormDataReader(p);
             int count = 0;
             string saveFileName = null;
             string encoding = "utf-8";
@@ -105,7 +121,7 @@ namespace NaiveSocks
                         info = "read/wring error";
                         goto FAIL;
                     }
-                    Logger.info($"uploaded '{fileName}' by {pp.myStream}.");
+                    Logger.info($"uploaded '{fileName}' by {p.myStream}.");
                     count++;
                 } else if (reader.CurrentPartName.Is("textFileName").Or("fileName")) {
                     saveFileName = await reader.ReadAllTextAsync();
@@ -136,7 +152,7 @@ namespace NaiveSocks
                         info = $"read/write error on '{saveFileName}'";
                         goto FAIL;
                     }
-                    Logger.info($"uploaded text '{saveFileName}' by {pp.myStream}.");
+                    Logger.info($"uploaded text '{saveFileName}' by {p.myStream}.");
                     count++;
                 } else if (reader.CurrentPartName == "dirName") {
                     var dirName = await reader.ReadAllTextAsync();
@@ -148,7 +164,7 @@ namespace NaiveSocks
                         info = $"Failed to create directory '{dirName}'";
                         goto FAIL;
                     }
-                    Logger.info($"created dir '{dirName}' by {pp.myStream}.");
+                    Logger.info($"created dir '{dirName}' by {p.myStream}.");
                     count++;
                 } else if (reader.CurrentPartName == "delFile") {
                     var delFile = await reader.ReadAllTextAsync();
@@ -160,25 +176,25 @@ namespace NaiveSocks
                         } else if (r == WebSvrHelper.PathResult.File) {
                             File.Delete(realPath);
                         } else {
-                            info = $"Failed to delete '{delFile}' (not found)";
+                            info = $"Failed to delete '{delFile}' (not found).";
                             goto FAIL;
                         }
                     } catch (Exception) {
                         info = $"Failed to delete '{delFile}'";
                         goto FAIL;
                     }
-                    Logger.info($"deleted '{delFile}' by {pp.myStream}.");
+                    Logger.info($"deleted '{delFile}' by {p.myStream}.");
                     count++;
                 } else if (reader.CurrentPartName == "netdl") {
                     if (!allow_netdl) {
-                        info = $"'netdl' is not in allowed list.";
+                        info = $"'netdl' is not in the allowed list.";
                         goto FAIL;
                     }
                     var unparsed = await reader.ReadAllTextAsync();
                     var args = Naive.Console.Command.SplitArguments(unparsed);
                     string url, name;
                     if (args.Length == 0 || args.Length > 2) {
-                        info = $"wrong count of arguments";
+                        info = $"wrong arguments.";
                         goto FAIL;
                     }
                     url = args[0];
@@ -187,45 +203,68 @@ namespace NaiveSocks
                     } else {
                         name = url.Substring(url.LastIndexOf('/'));
                     }
-                    if (!CheckPathForWriting(path, name, out info, out var realPath))
+                    if (!CheckPathForWriting(path, name, out info, out var realPath, out var r))
                         goto FAIL;
+                    if (r == WebSvrHelper.PathResult.Directory) {
+                        name = Path.Combine(url.Substring(url.LastIndexOf('/')), name);
+                        if (!CheckPathForWriting(path, name, out info, out realPath))
+                            goto FAIL;
+                    }
                     if (!CheckPathForWriting(path, name + ".downloading", out info, out var realDlPath))
                         goto FAIL;
-                    var t = NaiveUtils.RunAsyncTask(async () => {
-                        using (var webcli = new WebClient()) {
-                            await webcli.DownloadFileTaskAsync(url, realDlPath);
+                    try {
+                        var t = NaiveUtils.RunAsyncTask(async () => {
+                            using (var webcli = new WebClient()) {
+                                await webcli.DownloadFileTaskAsync(url, realDlPath);
+                            }
+                            MoveOrReplace(realDlPath, realPath);
+                        });
+                        if (await t.WithTimeout(200)) {
+                            info = "downloading task is started.";
+                        } else {
+                            await t;
+                            info = "downloaded.";
                         }
-                        MoveOrReplace(realDlPath, realPath);
-                    });
-                    if (await t.WithTimeout(200)) {
-                        info = "downloading task is started.";
-                    } else {
-                        info = "downloaded file.";
+                    } catch (Exception e) {
+                        Logger.exception(e, Logging.Level.Warning, $"downloading from '{url}' to '{realDlPath}'");
+                        info = "downloading failed.";
+                        goto FAIL;
                     }
                     count++;
                 } else if (reader.CurrentPartName.Is("mv").Or("cp")) {
                     var unparsed = await reader.ReadAllTextAsync();
                     var args = Naive.Console.Command.SplitArguments(unparsed);
-                    if (args.Length != 2) {
-                        info = $"wrong count of arguments";
+                    if (args.Length < 2) {
+                        info = $"too few arguments";
                         goto FAIL;
                     }
-                    string from = args[0], to = args[1];
-                    if (!CheckPathForWriting(path, from, out info, out var fromPath))
+                    string to = args[args.Length - 1];
+                    if (!CheckPathForWriting(path, to, out info, out var toPath, out var toType))
                         goto FAIL;
-                    if (!CheckPathForWriting(path, to, out info, out var toPath))
+                    bool multipleFrom = args.Length > 2;
+                    if (multipleFrom && toType != WebSvrHelper.PathResult.Directory) {
+                        info = "multiple 'from' when 'to' is not a directory!";
                         goto FAIL;
-                    if (reader.CurrentPartName == "mv") {
-                        MoveOrReplace(fromPath, toPath);
-                    } else {
-                        File.Copy(fromPath, toPath, true);
                     }
-                    count++;
+                    for (int i = 0; i < args.Length - 1; i++) {
+                        string from = args[i];
+                        if (!CheckPathForWriting(path, from, out info, out var fromPath))
+                            goto FAIL;
+                        string toFilePath = toType == WebSvrHelper.PathResult.Directory
+                            ? Path.Combine(toPath, Path.GetFileName(from))
+                            : toPath;
+                        if (reader.CurrentPartName == "mv") {
+                            MoveOrReplace(fromPath, toFilePath);
+                        } else {
+                            File.Copy(fromPath, toFilePath, true);
+                        }
+                        count++;
+                    }
                 } else if (reader.CurrentPartName == "rm") {
                     var unparsed = await reader.ReadAllTextAsync();
                     var args = Naive.Console.Command.SplitArguments(unparsed);
                     if (args.Length == 0) {
-                        info = $"no arguments.";
+                        info = "no arguments.";
                         goto FAIL;
                     }
                     foreach (var delFile in args) {
@@ -244,7 +283,7 @@ namespace NaiveSocks
                             info = $"Failed to delete '{delFile}'";
                             goto FAIL;
                         }
-                        Logger.info($"deleted '{delFile}' by {pp.myStream}.");
+                        Logger.info($"deleted '{delFile}' by {p.myStream}.");
                         count++;
                     }
                 } else {
@@ -255,7 +294,7 @@ namespace NaiveSocks
             if (info == null || count > 1)
                 info = $"Finished {count} operation{(count > 1 ? "s" : null)}.";
             FAIL:
-            await HandleDirList(pp, path, info);
+            await HandleDirList(p, path, info);
         }
 
         private static void MoveOrReplace(string from, string to)
@@ -300,7 +339,11 @@ namespace NaiveSocks
             }
             if ((r == WebSvrHelper.PathResult.File || r == WebSvrHelper.PathResult.Directory)
                 && !allow_edit) {
-                failReason = ($"File '{relPath}' exists and no allow = 'edit'.");
+                failReason = ($"File '{relPath}' exists and 'edit' is not in the allowed list.");
+                return false;
+            }
+            if (r == WebSvrHelper.PathResult.NotFound && !allow_create) {
+                failReason = ($"File '{relPath}' doesn't exist and 'create' is not in the allowed list.");
                 return false;
             }
             return true;
@@ -329,6 +372,8 @@ namespace NaiveSocks
                 dat["info"] = infoText;
             }
             dat["can_upload"] = allow_create | allow_edit;
+            if (gzip_listpage)
+                pp.outputStream.EnableGzipIfClientSupports();
             return WebSvrHelper.WriteDirListPage(pp, path, _tmpl, new NaiveTemplate.TemplaterData(dat));
         }
     }

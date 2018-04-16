@@ -147,8 +147,11 @@ namespace Naive.HttpSvr
                         throw new EndOfStreamException();
                     action(state, buffer, read);
                     size -= read;
-                    if (size <= 0)
+                    if (size <= 0) {
+                        if (size < 0)
+                            throw new Exception("Unexpectedly read over the specified size.");
                         return;
+                    }
                 }
             }
         }
