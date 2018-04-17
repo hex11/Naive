@@ -7,6 +7,10 @@
     <item name="android:fontFamily">monospace</item>
     <item name="android:textSize">10sp</item>
   </style>
+  <style name="ConnTextView" parent="">
+    <item name="android:fontFamily">monospace</item>
+    <item name="android:textSize">12sp</item>
+  </style>
   <style name="MyTheme.Base" parent="Theme.AppCompat.Light.DarkActionBar">
     <!--If you are using revision 22.1 please use just windowNoTitle. Without android:-->
     <item name="windowNoTitle">true</item>

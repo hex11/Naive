@@ -44,6 +44,8 @@ namespace NaiveSocksAndroid
         private BgService service => bgServiceConn?.Value;
         private ServiceConnection<BgService> bgServiceConn;
 
+        public BgService Service => bgServiceConn?.Value;
+
         private Toolbar toolbar;
         private const string TOOLBAR_TITLE = "NaiveSocks";
 
@@ -151,6 +153,9 @@ namespace NaiveSocksAndroid
                 break;
             case R.Id.nav_logs:
                 frag = new FragmentLogs();
+                break;
+            case R.Id.nav_connections:
+                frag = new FragmentConnections(this);
                 break;
             }
             if (frag == null)

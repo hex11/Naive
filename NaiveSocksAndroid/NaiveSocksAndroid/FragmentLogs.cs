@@ -41,8 +41,6 @@ namespace NaiveSocksAndroid
             outputParentScroll = View.FindViewById<NestedScrollView>(R.Id.logparentScroll);
 
             return View;
-
-            //return base.OnCreateView(inflater, container, savedInstanceState);
         }
 
         public override void OnStart()

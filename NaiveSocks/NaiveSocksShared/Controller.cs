@@ -60,6 +60,7 @@ namespace NaiveSocks
         Logging.Level LoggingLevel => CurrentConfig.LoggingLevel;
 
         public List<InConnection> InConnections = new List<InConnection>();
+        public object InConnectionsLock => InConnections;
 
         private int _totalHandledConnections;
         public int TotalHandledConnections => _totalHandledConnections;
@@ -569,13 +570,14 @@ namespace NaiveSocks
 
         private void onConnectionBegin(InConnection inc, IAdapter outAdapter)
         {
-            System.Threading.Interlocked.Increment(ref _totalHandledConnections);
             if (LoggingLevel <= Logging.Level.None)
                 debug($"'{inc.InAdapter.Name}' {inc} -> '{outAdapter.Name}'");
-            lock (InConnections)
-                InConnections.Add(inc);
             try {
-                NewConnection?.Invoke(inc);
+                lock (InConnectionsLock) {
+                    _totalHandledConnections++;
+                    InConnections.Add(inc);
+                    NewConnection?.Invoke(inc);
+                }
             } catch (Exception e) {
                 Logger.exception(e, Logging.Level.Error, "event NewConnection");
             }
@@ -583,8 +585,6 @@ namespace NaiveSocks
 
         private async Task onConnectionEnd(InConnection inc)
         {
-            lock (InConnections)
-                InConnections.Remove(inc);
             if (LoggingLevel <= Logging.Level.None)
                 debug($"{inc} End.");
             if (inc.CallbackCalled == false) {
@@ -593,7 +593,10 @@ namespace NaiveSocks
             if (inc.DataStream != null && inc.DataStream.State != MyStreamState.Closed)
                 await MyStream.CloseWithTimeout(inc.DataStream);
             try {
-                EndConnection?.Invoke(inc);
+                lock (InConnectionsLock) {
+                    InConnections.Remove(inc);
+                    EndConnection?.Invoke(inc);
+                }
             } catch (Exception e) {
                 Logger.exception(e, Logging.Level.Error, "event EndConnection");
             }

@@ -48,7 +48,6 @@
     <Compile Include="IController.cs" />
     <Compile Include="IModule.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="Util.cs" />
   </ItemGroup>
   <ItemGroup />
   <Import Project="..\NaiveSvrShared\NaiveSvrShared.projitems" Label="Shared" />

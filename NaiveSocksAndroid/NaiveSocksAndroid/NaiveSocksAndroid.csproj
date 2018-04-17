@@ -123,6 +123,7 @@
     <Compile Include="BgService.cs" />
     <Compile Include="AppConfig.cs" />
     <Compile Include="CrashHandler.cs" />
+    <Compile Include="FragmentConnections.cs" />
     <Compile Include="FragmentHome.cs" />
     <Compile Include="FragmentLogs.cs" />
     <Compile Include="MainActivity.cs" />
@@ -136,6 +137,9 @@
     <None Include="Properties\AndroidManifest.xml" />
     <None Include="Assets\AboutAssets.txt" />
     <AndroidResource Include="Resources\layout\logs.axml">
+      <SubType>Designer</SubType>
+    </AndroidResource>
+    <AndroidResource Include="Resources\layout\connections.axml">
       <SubType>Designer</SubType>
     </AndroidResource>
   </ItemGroup>
