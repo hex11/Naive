@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Text;
 
 namespace Naive.Console
 {
@@ -13,11 +14,13 @@ namespace Naive.Console
         {
             AddCmdHandler("help", (c) => {
                 if (c.args.Length == 0) {
-                    c.WriteLine("# Available Commands:");
+                    var sb = new StringBuilder(128);
+                    sb.AppendLine("# Available Commands:");
                     foreach (var key in Commands.Keys) {
-                        c.Write(key + " ");
+                        sb.Append(key).Append(" ");
                     }
-                    c.WriteLine("");
+                    sb.AppendLine();
+                    c.Write(sb.ToString());
                 } else {
                     var cmdname = c.args[0];
                     if (Commands.ContainsKey(cmdname) == false) {

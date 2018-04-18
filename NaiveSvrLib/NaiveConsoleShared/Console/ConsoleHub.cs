@@ -32,16 +32,29 @@ namespace Naive.Console
         public ConsoleSession CreateCmdSession()
         {
             var session = new ConsoleSession();
+            StartCmdLoopForSession(session);
+            return session;
+        }
+
+        public ConsoleSession CreateCmdSession(ConsoleClient clientToAttach)
+        {
+            var session = new ConsoleSession();
+            clientToAttach.Attach(session);
+            StartCmdLoopForSession(session);
+            return session;
+        }
+
+        public void StartCmdLoopForSession(ConsoleSession session)
+        {
             StartSafeThread(() => {
                 this.AddConsole(session);
                 this.CommandHub.CmdLoop(session.Console);
                 this.RemoveConsole(session);
                 session.RemoveAllClient();
             }, "CmdSession");
-            return session;
         }
 
-        public void StartSessionSelectLoop(ConsoleClient client)
+        public void SessionSelectLoop(ConsoleClient client)
         {
             var are = new AutoResetEvent(false);
             void check(ConsoleClient c)
@@ -67,7 +80,7 @@ namespace Naive.Console
         private void _sessionSelect(ConsoleClient client, bool autoCreate)
         {
             if (Sessions.Count == 0 && autoCreate) {
-                client.Attach(CreateCmdSession());
+                CreateCmdSession(client);
                 return;
             }
             var tempsession = new ConsoleSession();
@@ -95,7 +108,7 @@ namespace Naive.Console
                     client.Attach(sessions[n]);
                     break;
                 } else if (line == "n") {
-                    client.Attach(CreateCmdSession());
+                    CreateCmdSession(client);
                     break;
                 }
             }

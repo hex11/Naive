@@ -11,6 +11,9 @@ namespace Naive.Console
 
         public event Action<ConsoleClient> SessionChanged;
 
+        public Color32 ForegroundColor32 => Session.Console.ForegroundColor32;
+        public bool ColorEnabled => Session.Console.CustomColorEnabled;
+
         public bool Closed { get; set; } = false;
 
         public virtual void Attach(ConsoleSession session)

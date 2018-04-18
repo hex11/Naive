@@ -171,10 +171,32 @@ namespace NaiveSocks
                         }
                     }
                 } else if (cmd == "show") {
+                    var con = command.Console;
                     foreach (var item in logs) {
-                        command.WriteLine(item.timestamp + item.text);
+                        ConsoleColor color;
+                        switch (item.level) {
+                        default:
+                        case Logging.Level.None:
+                            color = ConsoleColor.Gray;
+                            break;
+                        case Logging.Level.Info:
+                            color = ConsoleColor.White;
+                            break;
+                        case Logging.Level.Warning:
+                            color = ConsoleColor.Yellow;
+                            break;
+                        case Logging.Level.Error:
+                            color = ConsoleColor.Red;
+                            break;
+                        }
+                        con.ForegroundColor = color;
+                        command.Write(item.timestamp);
+                        con.CustomColorEnabled = false;
+                        command.WriteLine(item.text);
                     }
+                    con.ForegroundColor = ConsoleColor.Blue;
                     command.WriteLine($"(total {logs.Length} logs)");
+                    con.ResetColor();
                 } else if (cmd == "test") {
                     var strs = Enumerable.Range(1, 9).Select(x => new string((char)('0' + x), x)).ToArray();
                     for (int i = 0; i < 10_000; i++) {
@@ -189,7 +211,8 @@ namespace NaiveSocks
                 NaiveUtils.GCCollect(command.WriteLine);
             });
             cmdHub.AddCmdHandler(prefix + "test", cmd => {
-                byte[] samplekey = NaiveProtocol.GetRealKeyFromString("testtttt");
+                byte[] sampleKey(int bytesCount) => NaiveProtocol.GetRealKeyFromString("testtttt", bytesCount);
+                byte[] sampleIV(int bytesCount, byte b = 0x80) => Enumerable.Range(0, bytesCount).Select(x => b).ToArray();
                 var pcount = Environment.ProcessorCount;
                 var sw = new Stopwatch();
                 var tests = new Dictionary<string, Action> {
@@ -205,7 +228,7 @@ namespace NaiveSocks
                         }
                     },
                     ["encrypt 3 bytes 1024 * 1024 times (ws filter - aes-128-ofb)"] = () => {
-                        var filter = WebSocket.GetAesStreamFilter(true, samplekey);
+                        var filter = WebSocket.GetAesStreamFilter(true, sampleKey(16));
                         for (int i = 0; i < 1024 * 1024; i++) {
                             var buf = new byte[3];
                             var bv = new BytesView(buf);
@@ -213,7 +236,7 @@ namespace NaiveSocks
                         }
                     },
                     ["encrypt 1024 bytes 16 * 1024 times (ws filter - aes-128-ofb)"] = () => {
-                        var filter = WebSocket.GetAesStreamFilter(true, samplekey);
+                        var filter = WebSocket.GetAesStreamFilter(true, sampleKey(16));
                         for (int i = 0; i < 32 * 1024; i++) {
                             var buf = new byte[1024];
                             var bv = new BytesView(buf);
@@ -221,7 +244,7 @@ namespace NaiveSocks
                         }
                     },
                     ["encrypt 32 KiB 512 times (ws filter - aes-128-ofb)"] = () => {
-                        var filter = WebSocket.GetAesStreamFilter(true, samplekey);
+                        var filter = WebSocket.GetAesStreamFilter(true, sampleKey(16));
                         for (int i = 0; i < 512; i++) {
                             var buf = new byte[32 * 1024];
                             var bv = new BytesView(buf);
@@ -233,9 +256,9 @@ namespace NaiveSocks
                         provider.Mode = CipherMode.ECB;
                         provider.Padding = PaddingMode.None;
                         provider.KeySize = 128;
-                        provider.Key = samplekey;
+                        provider.Key = sampleKey(16);
                         var ch = new CtrEncryptor(provider.CreateEncryptor());
-                        ch.IV = new byte[] { 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80 };
+                        ch.IV = sampleIV(16);
                         var buf = new byte[128 * 1024];
                         var bv = new BytesSegment(buf);
                         for (int i = 0; i < 128; i++) {
@@ -247,9 +270,9 @@ namespace NaiveSocks
                         provider.Mode = CipherMode.ECB;
                         provider.Padding = PaddingMode.None;
                         provider.KeySize = 128;
-                        provider.Key = samplekey;
+                        provider.Key = sampleKey(16);
                         var ch = new CfbEncryptor(provider.CreateEncryptor(), true);
-                        ch.IV = new byte[] { 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80 };
+                        ch.IV = sampleIV(16);
                         var buf = new byte[128 * 1024];
                         var bv = new BytesSegment(buf);
                         for (int i = 0; i < 128; i++) {
@@ -257,8 +280,8 @@ namespace NaiveSocks
                         }
                     },
                     ["encrypt 128 KiB 128 times (chacha20-ietf)"] = () => {
-                        var ch = new ChaCha20IetfEncryptor(NaiveUtils.ConcatBytes(samplekey, samplekey));
-                        ch.IV = new byte[] { 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80 };
+                        var ch = new ChaCha20IetfEncryptor(sampleKey(32));
+                        ch.IV = sampleIV(12);
                         var buf = new byte[128 * 1024];
                         var bv = new BytesSegment(buf);
                         for (int i = 0; i < 128; i++) {
@@ -266,23 +289,23 @@ namespace NaiveSocks
                         }
                     },
                     ["encrypt 128 KiB 128 times ('speck0' (speck-128/128-ctr) without multi-threading)"] = () => {
-                        Speck0Test(samplekey, 128 * 1024, 128, false);
+                        Speck0Test(sampleKey(16), 128 * 1024, 128, false);
                     },
                     ["encrypt 128 KiB 128 times ('speck0' (speck-128/128-ctr))"] = () => {
-                        Speck0Test(samplekey, 128 * 1024, 128, true);
+                        Speck0Test(sampleKey(16), 128 * 1024, 128, true);
                     },
                     ["encrypt 16 KiB 1024 times ('speck0' (speck-128/128-ctr) without multi-threading)"] = () => {
-                        Speck0Test(samplekey, 16 * 1024, 1024, false);
+                        Speck0Test(sampleKey(16), 16 * 1024, 1024, false);
                     },
                     ["encrypt 16 KiB 1024 times ('speck0' (speck-128/128-ctr))"] = () => {
-                        Speck0Test(samplekey, 16 * 1024, 1024, true);
+                        Speck0Test(sampleKey(16), 16 * 1024, 1024, true);
                     },
                     ["encrypt 3 B 1024 * 1024 times ('speck0' (speck-128/128-ctr))"] = () => {
-                        Speck0Test(samplekey, 3, 1024 * 1024, true);
+                        Speck0Test(sampleKey(16), 3, 1024 * 1024, true);
                     },
                     ["encrypt 128 KiB 128 times ('speck064' (speck-64/128-ctr))"] = () => {
-                        var ch = new Speck.Ctr64128(samplekey);
-                        ch.IV = new byte[] { 80, 80, 80, 80, 80, 80, 80, 80 };
+                        var ch = new Speck.Ctr64128(sampleKey(16));
+                        ch.IV = sampleIV(8);
                         var buf = new byte[128 * 1024];
                         var bv = new BytesSegment(buf);
                         for (int i = 0; i < 128; i++) {
@@ -439,11 +462,17 @@ namespace NaiveSocks
                             socket.Close();
                         }
                         listener.Stop();
-                    }
+                    },
+                    ["get DateTime.Now 1024 * 1024 times"] = () => {
+                        for (int i = 0; i < 1024 * 1024; i++) {
+                            var now = DateTime.Now;
+                        }
+                    },
                 };
                 void runTest(string name, Action action)
                 {
-                    cmd.Write($"{name}...GC...");
+                    cmd.Console.Write(name, Color32.FromConsoleColor(ConsoleColor.Cyan));
+                    cmd.Write("...GC...");
                     sw.Restart();
                     GC.Collect();
                     try {
@@ -458,7 +487,9 @@ namespace NaiveSocks
                     sw.Restart();
                     action();
                     sw.Stop();
-                    cmd.WriteLine($"\tresult: {sw.ElapsedMilliseconds} ms, or {sw.ElapsedTicks} ticks");
+                    cmd.Console.Write("\tresult: ");
+                    cmd.Console.Write($"{sw.ElapsedMilliseconds:N0} ms", Color32.FromConsoleColor(ConsoleColor.Green));
+                    cmd.Console.WriteLine($", or {sw.ElapsedTicks:N0} ticks");
                 }
                 void runAll()
                 {

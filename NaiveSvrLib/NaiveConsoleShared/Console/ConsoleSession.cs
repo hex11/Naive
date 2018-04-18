@@ -79,10 +79,10 @@ namespace Naive.Console
             }
         }
 
-        private void foreachClient(Action<ConsoleClient> action)
+        private void foreachClient<TState>(TState state, Action<TState, ConsoleClient> action)
         {
             foreach (var item in _bindedClients) {
-                action(item);
+                action(state, item);
             }
         }
 
@@ -106,8 +106,8 @@ namespace Naive.Console
             public override void Write(string text)
             {
                 _session.appendHistory(text);
-                _session.foreachClient((r) => {
-                    r.Write(text);
+                _session.foreachClient(text, (txt, r) => {
+                    r.Write(txt);
                 });
             }
 
@@ -115,10 +115,9 @@ namespace Naive.Console
             {
                 _session.appendHistory(text);
                 _session.appendHistory("\r\n");
-                _session.foreachClient((r) => {
-                    r.WriteLine(text);
-                }
-                );
+                _session.foreachClient(text, (txt, r) => {
+                    r.WriteLine(txt);
+                });
             }
         }
 

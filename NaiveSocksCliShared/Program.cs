@@ -39,12 +39,12 @@ namespace NaiveSocks
                     "";
 #endif
 
-        private static string verstionText
-            => "v" + BuildInfo.Version
+        private static string NameWithVertionText
+            => NAME + " v" + BuildInfo.Version
                     + (BuildInfo.CurrentBuildText.IsNullOrEmpty() ? null : " " + BuildInfo.CurrentBuildText)
                     + (__magic_is_packed ? " (single file)" : "");
 
-        private static string cmdHelpText => $@"{NAME} {verstionText}
+        private static string cmdHelpText => $@"{NameWithVertionText}
 
 Usage: {NAME_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FILE]
         [--no-cli] [--no-log-stdout] [--log-file FILE] [--log-stdout-no-time]";
@@ -72,7 +72,7 @@ Usage: {NAME_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FILE]
                 return;
             }
             if (ar.ContainsKey("-V")) {
-                Console.WriteLine(NAME + " " + verstionText);
+                Console.WriteLine(NameWithVertionText);
                 return;
             }
             if (ar.ContainsKey("--no-log-stdout")) {
@@ -136,7 +136,7 @@ Usage: {NAME_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FILE]
                     }
                 }
             };
-            Logging.info($"{NAME} {verstionText}");
+            Logging.info(NameWithVertionText);
             if (specifiedConfigPath != null) {
                 Commands.loadController(controller, specifiedConfigPath);
             } else {
@@ -148,6 +148,7 @@ Usage: {NAME_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FILE]
             cmdHub.Prompt = $"{NAME}>";
             Commands.AddCommands(cmdHub, controller, null);
             cmdHub.AddCmdHandler("newbie", (cmd) => Commands.NewbieWizard(cmd, controller, specifiedConfigPath ?? configFilePath));
+            cmdHub.AddCmdHandler("ver", (cmd) => cmd.WriteLine(NameWithVertionText));
             if (Environment.OSVersion.Platform == PlatformID.Win32NT)
                 cmdHub.AddCmdHandler("openfolder", (cmd) => Process.Start("explorer", "."));
 #if NS_WINFORM
@@ -156,12 +157,25 @@ Usage: {NAME_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FILE]
                 Application.Run(form);
             });
 #endif
-            if (ar.ContainsKey("--no-cli")) {
-                while (true)
-                    Thread.Sleep(int.MaxValue);
-            } else {
+            if (!ar.ContainsKey("--no-cli")) {
+                var stdio = CmdConsole.StdIO;
+                stdio.Write("(Press [Enter] to start interactive interface)\n", Color32.FromConsoleColor(ConsoleColor.Green));
+                //var readTime = DateTime.Now;
+                var line = stdio.ReadLine();
+                if (line == null) {
+                    Logging.warning("read an EOF from stdin");
+                    //if (DateTime.Now - readTime < TimeSpan.FromMilliseconds(50)) {
+                    //    Logging.warning("...in 50 ms. keep running without interactive interface.");
+                    //    goto WAIT;
+                    //}
+                    Logging.warning("...exiting...");
+                }
                 cmdHub.CmdLoop(CmdConsole.StdIO);
+                return;
             }
+            WAIT:
+            while (true)
+                Thread.Sleep(int.MaxValue);
         }
 
         private static void initLogFile(string logFile)
