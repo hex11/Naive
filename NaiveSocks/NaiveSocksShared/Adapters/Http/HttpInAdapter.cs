@@ -119,7 +119,7 @@ namespace NaiveSocks
                 var dest = AddrPort.Parse(p.Url);
                 var stream = p.SwitchProtocol();
                 var mystream = getStream(p);
-                string str = "(tunnel) remote=" + p.remoteEP;
+                string str = "(tunnel) " + p.epPair.ToString();
                 var inc = InConnection.Create(this, dest, async (r) => {
                     if (r.Ok) {
                         await mystream.WriteAsync(ConnectedResponse);
@@ -252,7 +252,7 @@ namespace NaiveSocks
             var tcsGetResult = new TaskCompletionSource<ConnectResult>();
             var tcsProcessing = new TaskCompletionSource<VoidType>();
             try {
-                var inc = InConnection.Create(this, dest, dataStream: null, getInfoStr: $"({protoStr(isHttps)}) remote=" + p.remoteEP);
+                var inc = InConnection.Create(this, dest, dataStream: null, getInfoStr: $"({protoStr(isHttps)}) " + p.epPair.ToString());
                 inc.Url = p.Url;
                 Controller.Connect(inc, @out.Adapter,
                     (result) => {
@@ -299,7 +299,7 @@ namespace NaiveSocks
                                 continue;
                             }
                             if (kv.Key.StartsWith("Proxy", StringComparison.OrdinalIgnoreCase)) {
-                                Logger.warning($"Unknown 'Proxy' header ({kv.Key}: {kv.Value})  ");
+                                Logger.warning($"Unknown 'Proxy*' header ({kv.Key}: {kv.Value})");
                                 continue;
                             }
                             newHeaders[kv.Key] = value;

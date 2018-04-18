@@ -125,6 +125,22 @@ namespace NaiveSocks
         }
     }
 
+    public struct BytesCounter
+    {
+        public long Packets, Bytes;
+
+        public void Add(long bytes)
+        {
+            Interlocked.Increment(ref Packets);
+            Interlocked.Add(ref Bytes, bytes);
+        }
+    }
+
+    public interface IHaveBytesCounter
+    {
+        BytesCounter BytesCounter { get; }
+    }
+
     public abstract class MyStream : /*Stream,*/ IMyStream
     {
         public virtual MyStreamState State { get; protected set; }
@@ -184,15 +200,15 @@ namespace NaiveSocks
 
         public Stream ToStream() => ToStream(this);
 
-        private static long totalCopiedPackets, totalCopiedBytes;
+        private static BytesCounter globalBytesCouter;
 
-        public static long TotalCopiedPackets => totalCopiedPackets;
-        public static long TotalCopiedBytes => totalCopiedBytes;
+        public static BytesCounter TotalCopied => globalBytesCouter;
+        public static long TotalCopiedPackets => globalBytesCouter.Packets;
+        public static long TotalCopiedBytes => globalBytesCouter.Bytes;
 
         private static void Copied(long bytes)
         {
-            Interlocked.Increment(ref totalCopiedPackets);
-            Interlocked.Add(ref totalCopiedBytes, bytes);
+            globalBytesCouter.Add(bytes);
         }
 
         public static async Task Relay(IMyStream left, IMyStream right, Task whenCanReadFromLeft = null)
@@ -228,7 +244,6 @@ namespace NaiveSocks
                     if (anotherTask.IsFaulted) {
                         Logging.exception(anotherTask.Exception.InnerException, Logging.Level.Warning, $"half closed waiting exception. {stringFromTask(anotherTask)}");
                     }
-                    //Logging.info($"half closing time: {sw.ElapsedMilliseconds} ms. ({stringFromTask(anotherTask)})");
                 }
             } catch (Exception e) {
                 Logging.exception(e, Logging.Level.Error, $"Relay task ({left.SafeToStr()} <-> {right.SafeToStr()})");
@@ -249,15 +264,11 @@ namespace NaiveSocks
                 timeout = 10 * 1000;
             if (stream.State.IsClosed)
                 return NaiveUtils.CompletedTask;
-            return NaiveUtils.RunAsyncTask(async () => {
+            return Task.Run(async () => {
                 try {
-                    await Task.Yield();
-                    Stopwatch sw = Stopwatch.StartNew();
                     var closeTask = stream.Close();
                     if (await closeTask.WithTimeout(timeout)) {
                         Logging.warning($"stream closing timed out ({timeout} ms). ({stream})");
-                    } else {
-                        //Logging.info($"stream closing took {sw.ElapsedMilliseconds} ms. ({stream})");
                     }
                     await closeTask.CAF();
                 } catch (Exception e) {

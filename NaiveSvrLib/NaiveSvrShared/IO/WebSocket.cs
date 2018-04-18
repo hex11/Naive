@@ -140,6 +140,7 @@ namespace Naive.HttpSvr
             if (timeAcc * 1000 == manageInterval) {
                 SetTimeTask(false);
                 incrTimeByManageTask = true;
+                CheckManageTask();
             } else {
                 if (incrTimeByManageTask) {
                     incrTimeByManageTask = false;
@@ -154,35 +155,35 @@ namespace Naive.HttpSvr
         public int CreateTime = CurrentTime;
         public int LatestActiveTime = CurrentTime;
 
-        static int _manageTaskCurrentInterval;
+        static object _manageLock = new object();
 
-        static Timer _manageTimer = new Timer(_ => {
-            //Logging.debug("websocket management task");
-            if (incrTimeByManageTask)
-                CurrentTime += _timeAcc;
-            CheckManagedWebsocket();
-            RunAdditionalTasks();
-            var interval = _manageTaskCurrentInterval;
-            var newInterval = _manageInterval;
-            if (ManagedWebSockets.Count == 0 && AdditionalManagementTasks.Count == 0
-                    && Interlocked.CompareExchange(ref _manageTaskCurrentInterval, 0, interval) == interval) {
-                _manageTimer.Change(Timeout.Infinite, Timeout.Infinite);
-                Logging.debug("websocket management task stopped.");
-            } else if (interval != newInterval) {
-                if (Interlocked.CompareExchange(ref _manageTaskCurrentInterval, newInterval, interval) == interval) {
-                    _manageTimer.Change(newInterval, newInterval);
+        static Thread _manageThread;
+
+        static void ManageThread(object obj)
+        {
+            while (true) {
+                var interval = _manageInterval;
+                var incrTime = incrTimeByManageTask ? _timeAcc : 0;
+                Thread.Sleep(interval);
+                if (incrTime > 0) {
+                    CurrentTime += incrTime;
                 }
+
+                CheckManagedWebsocket();
+                RunAdditionalTasks();
             }
-        });
+        }
 
         private static void CheckManageTask()
         {
             var interval = _manageInterval;
-            if (Interlocked.CompareExchange(ref _manageTaskCurrentInterval, interval, 0) == 0) {
-                Logging.debug("websocket management task started.");
-                _manageTaskCurrentInterval = interval;
-                _manageTimer.Change(interval, interval);
-            }
+            if (_manageThread == null)
+                lock (_manageLock)
+                    if (_manageThread == null) {
+                        Logging.debug("websocket management thread started.");
+                        _manageThread = new Thread(ManageThread);
+                        _manageThread.Start();
+                    }
         }
 
         private static void RunAdditionalTasks()
