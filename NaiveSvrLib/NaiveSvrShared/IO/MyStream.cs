@@ -125,7 +125,7 @@ namespace NaiveSocks
         }
     }
 
-    public struct BytesCounter
+    public struct BytesCounterValue
     {
         public long Packets, Bytes;
 
@@ -134,11 +134,74 @@ namespace NaiveSocks
             Interlocked.Increment(ref Packets);
             Interlocked.Add(ref Bytes, bytes);
         }
+
+        public override string ToString()
+        {
+            return $"{Packets:N0}({Bytes:N0})";
+        }
+
+        public static BytesCounterValue operator +(BytesCounterValue v1, BytesCounterValue v2)
+        {
+            return new BytesCounterValue {
+                Packets = v1.Packets + v2.Packets,
+                Bytes = v1.Bytes + v2.Bytes
+            };
+        }
     }
 
-    public interface IHaveBytesCounter
+    public struct BytesCountersRW
     {
-        BytesCounter BytesCounter { get; }
+        public BytesCounter R, W;
+
+        public BytesCounterValue TotalValue => R.Value + W.Value;
+
+        public BytesCountersRW(BytesCountersRW nextRW)
+        {
+            R = new BytesCounter(nextRW.R);
+            W = new BytesCounter(nextRW.W);
+        }
+
+        public override string ToString()
+        {
+            return $"R={R} W={W}";
+        }
+    }
+
+    public class BytesCounter
+    {
+        public BytesCounterValue Value;
+
+        public BytesCounter Next;
+
+        public BytesCounter()
+        {
+        }
+
+        public BytesCounter(BytesCounter next)
+        {
+            this.Next = next;
+        }
+
+        public void Add(long bytes)
+        {
+            Value.Add(bytes);
+            if (Next?.AddWithTTL(bytes, 64) == false) {
+                Logging.logWithStackTrace("BytesCounter.Add(): Recursion limit exceeded!", Logging.Level.Error);
+            }
+        }
+
+        private bool AddWithTTL(long bytes, int ttl)
+        {
+            Value.Add(bytes);
+            if (--ttl <= 0)
+                return false;
+            return Next?.AddWithTTL(bytes, ttl) ?? true;
+        }
+
+        public override string ToString()
+        {
+            return Value.ToString();
+        }
     }
 
     public abstract class MyStream : /*Stream,*/ IMyStream
@@ -200,58 +263,19 @@ namespace NaiveSocks
 
         public Stream ToStream() => ToStream(this);
 
-        private static BytesCounter globalBytesCouter;
+        private static readonly BytesCounter globalBytesCouter = new BytesCounter();
 
-        public static BytesCounter TotalCopied => globalBytesCouter;
-        public static long TotalCopiedPackets => globalBytesCouter.Packets;
-        public static long TotalCopiedBytes => globalBytesCouter.Bytes;
+        public static BytesCounter GlobalBytesCounter => globalBytesCouter;
 
-        private static void Copied(long bytes)
+        public static BytesCounterValue TotalCopied => globalBytesCouter.Value;
+        public static long TotalCopiedPackets => TotalCopied.Packets;
+        public static long TotalCopiedBytes => TotalCopied.Bytes;
+
+        public static Task Relay(IMyStream left, IMyStream right, Task whenCanReadFromLeft = null)
         {
-            globalBytesCouter.Add(bytes);
-        }
-
-        public static async Task Relay(IMyStream left, IMyStream right, Task whenCanReadFromLeft = null)
-        {
-            int halfCloseTimeout = (10 * 1000) + rd.Next(-1000, 1000);
-            const int forceCloseTimeout = 10 * 1000;
-            try {
-                var readFromRight = StreamCopy(right, left);
-                if (whenCanReadFromLeft != null) {
-                    try {
-                        await whenCanReadFromLeft.CAF();
-                    } catch (Exception e) {
-                        throw new Exception("waiting for reading from left", e);
-                    }
-                }
-                var readFromLeft = StreamCopy(left, right);
-                var tasks = new Task[] { readFromRight, readFromLeft };
-                string stringFromTask(Task t) => t == readFromRight ? $"{right} -> {left}" : $"{left} -> {right}";
-
-                // waiting for half closing.
-                var compeletedTask = await Task.WhenAny(tasks).CAF();
-                if (compeletedTask.IsFaulted) {
-                    var exception = compeletedTask.Exception.InnerException;
-                    Logging.exception(exception, Logging.Level.Warning, $"stream copying exception, force closing. ({stringFromTask(compeletedTask)})");
-                    return;
-                }
-
-                var anotherTask = compeletedTask == readFromRight ? readFromLeft : readFromRight;
-                // waiting for full closing with timeout.
-                if (await anotherTask.WithTimeout(halfCloseTimeout)) {
-                    Logging.warning($"keeping half closed for {halfCloseTimeout} ms, force closing. ({stringFromTask(anotherTask)})");
-                } else {
-                    if (anotherTask.IsFaulted) {
-                        Logging.exception(anotherTask.Exception.InnerException, Logging.Level.Warning, $"half closed waiting exception. {stringFromTask(anotherTask)}");
-                    }
-                }
-            } catch (Exception e) {
-                Logging.exception(e, Logging.Level.Error, $"Relay task ({left.SafeToStr()} <-> {right.SafeToStr()})");
-            } finally {
-                var t1 = CloseWithTimeout(left, forceCloseTimeout);
-                var t2 = CloseWithTimeout(right, forceCloseTimeout);
-                await t1; await t2;
-            }
+            return new TwoWayCopier(left, right) { WhenCanReadFromLeft = whenCanReadFromLeft }
+                .SetCounters(globalBytesCouter)
+                .Run();
         }
 
         public static Task CloseWithTimeout(IMyStream stream, int timeout = -2)
@@ -279,7 +303,7 @@ namespace NaiveSocks
 
         public Task WriteTo(IMyStream stream) => StreamCopy(this, stream);
 
-        private const int defaultBufferSize = 32 * 1024;
+        private const int defaultBufferSize = 64 * 1024;
         private static WeakObjectPool<byte[]> bufPool = new WeakObjectPool<byte[]>(() => new byte[defaultBufferSize]) { MaxCount = 48 };
 
         public static int BufferPoolMaxCount
@@ -294,57 +318,9 @@ namespace NaiveSocks
 
         public static Task StreamCopy(IMyStream streamfrom, IMyStream streamto) => StreamCopy(streamfrom, streamto, -1);
         public static Task StreamCopy(IMyStream streamfrom, IMyStream streamto, int bs) => StreamCopy(streamfrom, streamto, bs, false);
-        public static async Task StreamCopy(IMyStream streamfrom, IMyStream streamto, int bs, bool dontShutdown)
+        public static Task StreamCopy(IMyStream streamfrom, IMyStream streamto, int bs, bool dontShutdown)
         {
-            IMsgStream msgStream = (streamfrom as MsgStreamToMyStream)?.MsgStream;
-            if (bs == -1) bs = defaultBufferSize;
-            WeakObjectPool<byte[]>.Handle bufhandle = null;
-            Naive.HttpSvr.BytesSegment buf;
-
-            if (msgStream == null) {
-                if (bs == defaultBufferSize) {
-                    bufhandle = bufPool.Get();
-                    buf = new BytesSegment(bufhandle.Value);
-                } else {
-                    buf = new BytesSegment(new byte[bs]);
-                }
-            } else {
-                buf = new BytesSegment();
-            }
-            try {
-                while (true) {
-                    int read;
-                    if (msgStream == null) {
-                        read = await streamfrom.ReadAsync(buf).CAF();
-                    } else {
-                        // no buffer preallocated for IMsgStream
-                        var msg = await msgStream.RecvMsg(null).CAF();
-                        if (msg.IsEOF) {
-                            read = 0;
-                        } else {
-                            read = msg.Data.tlen;
-                            if (msg.Data.nextNode == null) {
-                                buf = new BytesSegment(msg.Data);
-                            } else {
-                                buf = msg.Data.GetBytes();
-                            }
-                        }
-                    }
-                    //debug($"READ {read}: {streamfrom} -> {streamto}");
-                    if (read == 0) {
-                        debug($"SHUTDOWN: {streamfrom} -> {streamto}");
-                        if (!dontShutdown && !streamto.State.HasShutdown)
-                            await streamto.Shutdown(SocketShutdown.Send).CAF();
-                        break;
-                    }
-                    await streamto.WriteAsync(new BytesSegment(buf.Bytes, buf.Offset, read)).CAF();
-                    Copied(read);
-                    //await streamto.FlushAsync();
-                }
-            } finally {
-                debug($"CLOSE: {streamfrom} -> {streamto}");
-                bufhandle?.Dispose();
-            }
+            return new Copier(streamfrom, streamto).Copy(bs, !dontShutdown);
         }
 
         private static void debug(string str)
@@ -404,6 +380,165 @@ namespace NaiveSocks
             public virtual void Write(BytesSegment bs) => BaseStream.Write(bs);
 
             public virtual int Read(BytesSegment bs) => BaseStream.Read(bs);
+        }
+
+        public class TwoWayCopier
+        {
+            public TwoWayCopier(IMyStream left, IMyStream right)
+            {
+                Left = left;
+                Right = right;
+                CopierFromLeft = new Copier(left, right);
+                CopierFromRight = new Copier(right, left);
+            }
+
+            public IMyStream Left { get; }
+            public IMyStream Right { get; }
+
+            public Task WhenCanReadFromLeft { get; set; }
+
+            public Copier CopierFromLeft { get; }
+            public Copier CopierFromRight { get; }
+
+            public TwoWayCopier SetCounters(BytesCounter counter)
+            {
+                CopierFromLeft.CounterW = counter;
+                CopierFromRight.CounterW = counter;
+                return this;
+            }
+
+            public TwoWayCopier SetCounters(BytesCountersRW left, BytesCountersRW right)
+            {
+                CopierFromLeft.CounterR = left.R;
+                CopierFromRight.CounterW = left.W;
+                CopierFromRight.CounterR = right.R;
+                CopierFromLeft.CounterW = right.W;
+                return this;
+            }
+
+            public async Task Run()
+            {
+                var left = Left;
+                var right = Right;
+                int halfCloseTimeout = (10 * 1000) + NaiveUtils.Random.Next(-1000, 1000);
+                const int forceCloseTimeout = 10 * 1000;
+                try {
+                    var readFromRight = CopierFromRight.CopyAndShutdown();
+                    var whenCanReadFromLeft = this.WhenCanReadFromLeft;
+                    if (whenCanReadFromLeft != null) {
+                        try {
+                            await whenCanReadFromLeft.CAF();
+                        } catch (Exception e) {
+                            throw new Exception("awaiting WhenCanReadFromLeft", e);
+                        }
+                    }
+                    var readFromLeft = CopierFromLeft.CopyAndShutdown();
+                    var tasks = new Task[] { readFromRight, readFromLeft };
+                    string stringFromTask(Task t) => t == readFromRight ? $"{right} -> {left}" : $"{left} -> {right}";
+
+                    // waiting for half closing.
+                    var compeletedTask = await Task.WhenAny(tasks).CAF();
+                    if (compeletedTask.IsFaulted) {
+                        var exception = compeletedTask.Exception.InnerException;
+                        Logging.exception(exception, Logging.Level.Warning, $"stream copying exception, force closing. ({stringFromTask(compeletedTask)})");
+                        return;
+                    }
+
+                    var anotherTask = compeletedTask == readFromRight ? readFromLeft : readFromRight;
+                    // waiting for full closing with timeout.
+                    if (await anotherTask.WithTimeout(halfCloseTimeout)) {
+                        Logging.warning($"keeping half closed for {halfCloseTimeout} ms, force closing. ({stringFromTask(anotherTask)})");
+                    } else {
+                        if (anotherTask.IsFaulted) {
+                            Logging.exception(anotherTask.Exception.InnerException, Logging.Level.Warning, $"half closed waiting exception. {stringFromTask(anotherTask)}");
+                        }
+                    }
+                } catch (Exception e) {
+                    Logging.exception(e, Logging.Level.Error, $"Relay task ({left.SafeToStr()} <-> {right.SafeToStr()})");
+                } finally {
+                    var t1 = MyStream.CloseWithTimeout(left, forceCloseTimeout);
+                    var t2 = MyStream.CloseWithTimeout(right, forceCloseTimeout);
+                    await t1; await t2;
+                }
+            }
+        }
+
+        public class Copier
+        {
+            public Copier(IMyStream from, IMyStream to)
+            {
+                From = from;
+                To = to;
+            }
+
+            public IMyStream From { get; }
+            public IMyStream To { get; }
+
+            public BytesCounter CounterR { get; set; }
+            public BytesCounter CounterW { get; set; }
+
+            public Task Copy() => Copy(-1, false);
+            public Task CopyAndShutdown() => Copy(-1, true);
+
+            public async Task Copy(int bs, bool shutdown)
+            {
+                IMsgStream msgStream = (From as MsgStreamToMyStream)?.MsgStream;
+                if (bs == -1) bs = defaultBufferSize;
+                WeakObjectPool<byte[]>.Handle bufhandle = null;
+                Naive.HttpSvr.BytesSegment buf;
+
+                if (msgStream == null) {
+                    if (bs == defaultBufferSize) {
+                        bufhandle = bufPool.Get();
+                        buf = new BytesSegment(bufhandle.Value);
+                    } else {
+                        buf = new BytesSegment(new byte[bs]);
+                    }
+                } else {
+                    buf = new BytesSegment();
+                }
+                try {
+                    while (true) {
+                        int read;
+                        if (msgStream == null) {
+                            read = await From.ReadAsync(buf).CAF();
+                        } else {
+                            // no buffer preallocated for IMsgStream
+                            var msg = await msgStream.RecvMsg(null).CAF();
+                            if (msg.IsEOF) {
+                                read = 0;
+                            } else {
+                                read = msg.Data.tlen;
+                                if (msg.Data.nextNode == null) {
+                                    buf = new BytesSegment(msg.Data);
+                                } else {
+                                    buf = msg.Data.GetBytes();
+                                }
+                            }
+                        }
+                        if (read == 0) {
+                            debug($"SHUTDOWN: {From} -> {To}");
+                            if (shutdown && !To.State.HasShutdown)
+                                await To.Shutdown(SocketShutdown.Send).CAF();
+                            break;
+                        }
+                        CounterR?.Add(read);
+                        await To.WriteAsync(new BytesSegment(buf.Bytes, buf.Offset, read)).CAF();
+                        CounterW?.Add(read);
+                        //await streamto.FlushAsync();
+                    }
+                } finally {
+                    debug($"CLOSE: {From} -> {To}");
+                    bufhandle?.Dispose();
+                }
+            }
+
+            private static void debug(string str)
+            {
+                Logging.debug(str);
+            }
+
+            public override string ToString() => $"{{Copier {From} -> {To}}}";
         }
     }
 

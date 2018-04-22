@@ -91,7 +91,7 @@ namespace NaiveSocks
                 throw;
             }
             if (connectResult.Ok) {
-                await connection.RelayWith(connectResult.Stream, connectResult.WhenCanRead);
+                await connection.RelayWith(this, connectResult.Stream, connectResult.WhenCanRead);
             }
         }
 

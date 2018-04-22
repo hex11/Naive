@@ -96,7 +96,11 @@ namespace NaiveSocks
             cmdHub.AddCmdHandler(prefix + "c", command => {
                 var arr = controller.InConnections.ToArray();
                 foreach (var item in arr) {
-                    command.WriteLine(item.ToString());
+                    if (item.CallbackCalled) {
+                        command.WriteLine(item.ToString());
+                    } else {
+                        command.Console.Write(item + "\n", ConsoleColor.Yellow);
+                    }
                 }
                 command.WriteLine($"# {arr.Length} connections");
             });
@@ -133,6 +137,7 @@ namespace NaiveSocks
                 command.WriteLine($"               {SocketStream1.GlobalCounters.StringWrite}.");
             });
             cmdHub.AddCmdHandler(prefix + "config", c => {
+                var con = c.Console;
                 var cfg = controller.CurrentConfig;
                 c.WriteLine("# Current configuration:");
                 c.WriteLine();
@@ -144,12 +149,28 @@ namespace NaiveSocks
                 c.WriteLine();
                 c.WriteLine($"  ## InAdapters ({cfg.InAdapters.Count}):");
                 foreach (var item in cfg.InAdapters) {
-                    c.WriteLine($"    - '{item.Name}': {item.ToString(false)} -> {item.@out?.ToString() ?? "(No OutAdapter)"}");
+                    var str = $"    - '{item.Name}': {item.ToString(false)} -> {item.@out?.ToString() ?? "(No OutAdapter)"}";
+                    var rw = item.BytesCountersRW;
+                    if (rw.TotalValue.Packets == 0) {
+                        con.WriteLine(str);
+                    } else {
+                        con.Write(str);
+                        con.Write(" R=" + rw.R, ConsoleColor.Green);
+                        con.Write(" W=" + rw.W + "\n", ConsoleColor.Yellow);
+                    }
                 }
                 c.WriteLine();
                 c.WriteLine($"  ## OutAdapters ({cfg.OutAdapters.Count}):");
                 foreach (var item in cfg.OutAdapters) {
-                    c.WriteLine($"    - '{item.Name}': {item.ToString(false)}");
+                    var str = $"    - '{item.Name}': {item.ToString(false)}";
+                    var rw = item.BytesCountersRW;
+                    if (rw.TotalValue.Packets == 0) {
+                        con.WriteLine(str);
+                    } else {
+                        con.Write(str);
+                        con.Write(" R=" + rw.R, ConsoleColor.Green);
+                        con.Write(" W=" + rw.W + "\n", ConsoleColor.Yellow);
+                    }
                 }
             });
             cmdHub.AddCmdHandler(prefix + "logs", command => {

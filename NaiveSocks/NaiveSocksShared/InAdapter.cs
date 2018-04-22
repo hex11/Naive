@@ -15,6 +15,7 @@ namespace NaiveSocks
     {
         string Name { get; }
         Controller Controller { get; }
+        Adapter GetAdapter();
     }
 
     public class AdapterRef
@@ -150,8 +151,15 @@ namespace NaiveSocks
     {
         public string Name { get; set; }
 
+        public Adapter GetAdapter() => this;
+
         public Controller Controller { get; private set; }
         public Logger Logger { get; } = new Logger();
+
+        public BytesCountersRW BytesCountersRW { get; } = new BytesCountersRW {
+            R = new BytesCounter(),
+            W = new BytesCounter(MyStream.GlobalBytesCounter)
+        };
 
         public string flags { get; set; }
         protected virtual bool AutoFlags => true;
@@ -267,7 +275,6 @@ namespace NaiveSocks
 
         protected virtual void GetDetail(GetDetailContext ctx)
         {
-
         }
 
         protected struct GetDetailContext

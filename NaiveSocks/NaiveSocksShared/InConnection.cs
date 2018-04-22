@@ -9,6 +9,8 @@ namespace NaiveSocks
     {
         protected InConnection(IAdapter inAdapter) : base(inAdapter)
         {
+            var adap = inAdapter.GetAdapter();
+            BytesCountersRW = new BytesCountersRW(adap.BytesCountersRW);
         }
         //public ConnectionResult Result;
 
@@ -19,6 +21,8 @@ namespace NaiveSocks
 
         public AdapterRef Redirected { get; set; }
         public bool IsRedirected => Redirected != null;
+
+        public BytesCountersRW BytesCountersRW;
 
         public void RedirectTo(AdapterRef redirectedName)
         {
@@ -50,14 +54,16 @@ namespace NaiveSocks
             return OnConnectionResult(result);
         }
 
-        public async Task RelayWith(IMyStream stream, Task waitForReadFromStream = null)
+        public async Task RelayWith(IAdapter outAdapter, IMyStream stream, Task waitForReadFromStream = null)
         {
             if (!CallbackCalled) {
                 await SetConnectResult(ConnectResults.Conneceted, null);
             } else if (!ConnectResult.Ok) {
                 throw new InvalidOperationException("ConnectResult has been already set to Failed.");
             }
-            await MyStream.Relay(stream, DataStream, waitForReadFromStream);
+            var copier = new MyStream.TwoWayCopier(stream, DataStream) { WhenCanReadFromLeft = waitForReadFromStream };
+            copier.SetCounters(outAdapter.GetAdapter().BytesCountersRW, this.BytesCountersRW);
+            await copier.Run();
         }
 
         public virtual string GetInfoStr() => null;
@@ -69,7 +75,7 @@ namespace NaiveSocks
 
         public string ToString(string addition)
         {
-            return $"{{'{InAdapter?.Name}' T={WebSocket.CurrentTime - CreateTime:N0}{(addition == null ? "" : " ")}{addition} dest={Dest}{(CallbackCalled ? " (connected)" : "")}}}";
+            return $"{{'{InAdapter?.Name}' T={WebSocket.CurrentTime - CreateTime:N0}{(addition == null ? "" : " ")}{addition} {BytesCountersRW.ToString()} dest={Dest}{((ConnectResult?.Ok == true) ? " (OK)" : "")}}}";
         }
 
         public delegate Task<IMyStream> ConnectionCallbackDelegate(ConnectResult cr);

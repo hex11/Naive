@@ -211,6 +211,7 @@ namespace NaiveSocks
         private async Task handleHttp(HttpConnection p)
         {
             p.EnableKeepAlive = false;
+            BytesCountersRW.R.Add(p.RawRequest.Length);
 
             AddrPort parseUrl(string url, out string path, out bool ishttps)
             {
@@ -245,7 +246,7 @@ namespace NaiveSocks
                         || (headers.ContainsKey("Connection")
                             && headers["Connection"]?.Split(',').Select(x => x.Trim()).Contains("Upgrade") == true);
 
-            string protoStr(bool x) => x ? "https" : "http";
+            string protoStr(bool x) => x ? "strange-https" : "http";
 
             AddrPort dest = parseUrl(p.Url, out var realurl, out var isHttps);
             connnectDest:
@@ -320,13 +321,19 @@ namespace NaiveSocks
 
                     var copyingResponse = NaiveUtils.RunAsyncTask(async () => {
                         await whenCanReadResponse;
-                        await MyStream.StreamCopy(destStream, clientStream, 32 * 1024, true);
+                        await new MyStream.Copier(destStream, clientStream) {
+                            // TODO: CounterR
+                            CounterW = this.BytesCountersRW.W
+                        }.Copy();
                         // TODO: check response boundary
                     });
 
                     while (true) { // keep-alive loop
                         if (p.inputDataStream != null) {
-                            await NaiveUtils.StreamCopyAsync(p.inputDataStream, destCommonStream);
+                            await new MyStream.Copier(p.inputDataStream.ToMyStream(), destStream) {
+                                CounterW = MyStream.GlobalBytesCounter, // TODO
+                                CounterR = this.BytesCountersRW.R
+                            }.Copy();
                             if (verbose)
                                 Logger.info($"{p}: copied input data {p.inputDataStream.Length} bytes.");
                         }
@@ -337,8 +344,10 @@ namespace NaiveSocks
                                 await clientStream.Shutdown(SocketShutdown.Send);
                             });
                             var copingRequest = NaiveUtils.RunAsyncTask(async () => {
-                                await MyStream.StreamCopy(clientStream, destStream);
-                                await destStream.Shutdown(SocketShutdown.Send);
+                                await new MyStream.Copier(clientStream, destStream) {
+                                    CounterW = MyStream.GlobalBytesCounter, // TODO
+                                    CounterR = this.BytesCountersRW.R
+                                }.CopyAndShutdown();
                             });
                             await Task.WhenAll(copyingResponse2, copingRequest);
                             if (verbose)
@@ -363,6 +372,7 @@ namespace NaiveSocks
                                 Logger.warning($"{p}: receiving request error {se.SocketErrorCode}");
                             return;
                         }
+                        BytesCountersRW.R.Add(p.RawRequest.Length);
                         if (verbose)
                             Logger.info($"{p}: {p.Method} {p.Url}");
                         var newDest = parseUrl(p.Url, out realurl, out var newIsHttps);

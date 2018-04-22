@@ -169,6 +169,7 @@ Usage: {NAME_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FILE]
                     //    goto WAIT;
                     //}
                     Logging.warning("...exiting...");
+                    return;
                 }
                 cmdHub.CmdLoop(CmdConsole.StdIO);
                 return;

@@ -20,7 +20,6 @@ namespace Naive.HttpSvr
 
         public static bool HistroyEnabled = true;
         public static uint HistroyMax = 50;
-        //private static LinkedList<Log> logsHistory = new LinkedList<Log>();
 
         static LogBuffer logBuffer = new LogBuffer(32 * 1024);
 
@@ -71,13 +70,6 @@ namespace Naive.HttpSvr
         private static void _log(Log log)
         {
             if (HistroyEnabled) {
-                //lock (lockLogsHistory) {
-                //    if (HistroyMax > 0)
-                //        logsHistory.AddLast(log);
-                //    while (logsHistory.Count > HistroyMax) {
-                //        logsHistory.RemoveFirst();
-                //    }
-                //}
                 logBuffer.Add(log);
             }
             if (WriteLogToConsole)
@@ -189,7 +181,11 @@ namespace Naive.HttpSvr
 
         public static void logWithStackTrace(string text, Level level)
         {
-            log(text + "\nStackTrace:\n" + new StackTrace(1), level);
+            var sb = new StringBuilder(128);
+            sb.AppendLine(text);
+            GetStackTraceString(new StackTrace(1), sb);
+            sb.AppendLine();
+            log(sb.ToString(), level);
         }
 
         [Conditional("DEBUG")]
@@ -250,6 +246,16 @@ namespace Naive.HttpSvr
         public static void getStackTraceString(Exception ex, StringBuilder sb)
         {
             var st = ex.StackTrace;
+            GetStackTraceString(st, sb);
+        }
+
+        public static void GetStackTraceString(StackTrace st, StringBuilder sb)
+        {
+            GetStackTraceString(st.ToString(), sb);
+        }
+
+        private static void GetStackTraceString(string st, StringBuilder sb)
+        {
             if (st == null) {
                 sb.Append("(No StackTrace)");
                 return;

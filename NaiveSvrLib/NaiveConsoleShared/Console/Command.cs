@@ -290,6 +290,11 @@ namespace Naive.Console
             _foregroundColor32 = default(Color32);
         }
 
+        public void Write(string text, ConsoleColor conColor)
+        {
+            Write(text, Color32.FromConsoleColor(conColor));
+        }
+
         public void Write(string text, Color32 color)
         {
             // save color state:

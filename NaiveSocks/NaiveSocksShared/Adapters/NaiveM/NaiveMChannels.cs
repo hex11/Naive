@@ -230,7 +230,7 @@ namespace NaiveSocks
         {
             var r = await Connect(inConnection);
             if (r.Ok) {
-                await inConnection.RelayWith(r.Stream, r.WhenCanRead);
+                await inConnection.RelayWith((IAdapter)OutAdapter ?? InAdapter, r.Stream, r.WhenCanRead);
             } else {
                 await inConnection.SetConnectResult(r);
             }
