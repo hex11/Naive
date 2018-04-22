@@ -2609,14 +2609,14 @@ namespace NaiveSocksAndroid
 			// aapt resource value: 0x7f0800a7
 			public const int media_actions = 2131230887;
 			
-			// aapt resource value: 0x7f0800bc
-			public const int menu_reload = 2131230908;
-			
-			// aapt resource value: 0x7f0800ba
-			public const int menu_start = 2131230906;
+			// aapt resource value: 0x7f0800bd
+			public const int menu_reload = 2131230909;
 			
 			// aapt resource value: 0x7f0800bb
-			public const int menu_stop = 2131230907;
+			public const int menu_start = 2131230907;
+			
+			// aapt resource value: 0x7f0800bc
+			public const int menu_stop = 2131230908;
 			
 			// aapt resource value: 0x7f0800b4
 			public const int message = 2131230900;
@@ -2629,6 +2629,9 @@ namespace NaiveSocksAndroid
 			
 			// aapt resource value: 0x7f080026
 			public const int multiply = 2131230758;
+			
+			// aapt resource value: 0x7f0800ba
+			public const int nav_adapters = 2131230906;
 			
 			// aapt resource value: 0x7f0800b9
 			public const int nav_connections = 2131230905;

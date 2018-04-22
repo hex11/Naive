@@ -10,5 +10,8 @@
     <item
         android:id="@+id/nav_connections"
         android:title="Connections" />
+    <item
+        android:id="@+id/nav_adapters"
+        android:title="Adapters" />
   </group>
 </menu>

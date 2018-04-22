@@ -123,6 +123,7 @@
     <Compile Include="BgService.cs" />
     <Compile Include="AppConfig.cs" />
     <Compile Include="CrashHandler.cs" />
+    <Compile Include="FragmentAdapters.cs" />
     <Compile Include="FragmentConnections.cs" />
     <Compile Include="FragmentHome.cs" />
     <Compile Include="FragmentLogs.cs" />

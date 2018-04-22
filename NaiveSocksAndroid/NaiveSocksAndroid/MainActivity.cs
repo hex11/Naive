@@ -157,6 +157,9 @@ namespace NaiveSocksAndroid
             case R.Id.nav_connections:
                 frag = new FragmentConnections(this);
                 break;
+            case R.Id.nav_adapters:
+                frag = new FragmentAdapters(this);
+                break;
             }
             if (frag == null)
                 return;
