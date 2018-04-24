@@ -32,7 +32,7 @@ namespace NaiveSocksAndroid
         Label = "NaiveSocks",
         MainLauncher = true,
         LaunchMode = LaunchMode.SingleTask,
-        ConfigurationChanges = ConfigChanges.Orientation | ConfigChanges.ScreenSize)]
+        ConfigurationChanges = ConfigChanges.Orientation | ConfigChanges.ScreenSize | ConfigChanges.ScreenLayout)]
     public class MainActivity : AppCompatActivity
     {
         private CoordinatorLayout topView;

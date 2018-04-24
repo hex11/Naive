@@ -41,7 +41,7 @@ namespace NaiveSocks
                 var dataStream = getEncryptionStream(baseResult.Stream);
                 var bytes = dest.ToSocks5Bytes();
                 await dataStream.WriteAsync(bytes);
-                return new ConnectResult(ConnectResults.Conneceted, dataStream);
+                return CreateConnectResultWithStream(dataStream);
             } catch (Exception) {
                 MyStream.CloseWithTimeout(baseResult.Stream);
                 throw;

@@ -96,7 +96,7 @@ namespace NaiveSocks
             cmdHub.AddCmdHandler(prefix + "c", command => {
                 var arr = controller.InConnections.ToArray();
                 foreach (var item in arr) {
-                    if (item.CallbackCalled) {
+                    if (item.IsHandled) {
                         command.WriteLine(item.ToString());
                     } else {
                         command.Console.Write(item + "\n", ConsoleColor.Yellow);

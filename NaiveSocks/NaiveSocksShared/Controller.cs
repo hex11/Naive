@@ -492,7 +492,7 @@ namespace NaiveSocks
                 int redirectCount = 0;
                 while (true) {
                     await outAdapter.HandleConnection(inc).CAF();
-                    if (inc.CallbackCalled || !inc.IsRedirected) {
+                    if (inc.IsHandled || !inc.IsRedirected) {
                         break;
                     }
                     if (++redirectCount >= 10) {
@@ -517,54 +517,53 @@ namespace NaiveSocks
             }
         }
 
-        public virtual async Task Connect(InConnection inc, IAdapter outAdapter, Func<ConnectResult, Task> callback)
+        public virtual async Task Connect(InConnection fakeInConn, IAdapter outAdapter, Func<ConnectResult, Task> callback)
         {
-            if (inc == null)
-                throw new ArgumentNullException(nameof(inc));
+            if (fakeInConn == null)
+                throw new ArgumentNullException(nameof(fakeInConn));
 
             try {
                 if (outAdapter == null) {
-                    warning($"'{inc.InAdapter.Name}' {inc} -> (no out adapter)");
+                    warning($"'{fakeInConn.InAdapter.Name}' {fakeInConn} -> (no out adapter)");
                     return;
                 }
-                onConnectionBegin(inc, outAdapter);
+                onConnectionBegin(fakeInConn, outAdapter);
                 int redirectCount = 0;
                 while (true) {
                     AdapterRef redirected;
                     ConnectResult r;
                     if (outAdapter is IConnectionProvider cp) {
-                        r = await cp.Connect(inc).CAF();
+                        r = await cp.Connect(fakeInConn).CAF();
                     } else if (outAdapter is IConnectionHandler ch) {
-                        r = await OutAdapter2.Connect(ch.HandleConnection, inc).CAF();
+                        r = await OutAdapter2.Connect(ch, fakeInConn).CAF();
                     } else {
                         error($"{outAdapter} implement neither IConnectionProvider nor IConnectionHandler.");
                         return;
                     }
                     if (!r.IsRedirected) {
-                        await inc.SetConnectResult(r);
+                        await fakeInConn.HandleAndGetStream(r);
                         await callback(r);
                         return;
                     }
                     redirected = r.Redirected;
                     if (++redirectCount >= 10) {
-                        error($"'{inc.InAdapter.Name}' {inc} too many redirects, last redirect: {outAdapter.Name}");
+                        error($"'{fakeInConn.InAdapter.Name}' {fakeInConn} too many redirects, last redirect: {outAdapter.Name}");
                         return;
                     }
                     var nextAdapter = redirected.Adapter;
                     if (nextAdapter == null) {
-                        warning($"'{inc.InAdapter.Name}' {inc} was redirected by '{outAdapter.Name}'" +
+                        warning($"'{fakeInConn.InAdapter.Name}' {fakeInConn} was redirected by '{outAdapter.Name}'" +
                                 $" to '{redirected}' which can not be found.");
                         return;
                     }
                     outAdapter = nextAdapter;
                     if (LoggingLevel <= Logging.Level.None)
-                        debug($"'{inc.InAdapter.Name}' {inc} was redirected to '{redirected}'");
-                    inc.Redirected = null;
+                        debug($"'{fakeInConn.InAdapter.Name}' {fakeInConn} was redirected to '{redirected}'");
                 }
             } catch (Exception e) {
-                await onConnectionException(inc, e).CAF();
+                await onConnectionException(fakeInConn, e).CAF();
             } finally {
-                await onConnectionEnd(inc).CAF();
+                await onConnectionEnd(fakeInConn).CAF();
             }
         }
 
@@ -587,11 +586,12 @@ namespace NaiveSocks
         {
             if (LoggingLevel <= Logging.Level.None)
                 debug($"{inc} End.");
-            if (inc.CallbackCalled == false) {
-                await inc.SetConnectResult(ConnectResults.Failed, new IPEndPoint(0, 0));
+            if (inc.IsHandled == false) {
+                await inc.HandleAndGetStream(new ConnectResult(null, ConnectResultEnum.Failed));
             }
-            if (inc.DataStream != null && inc.DataStream.State != MyStreamState.Closed)
-                await MyStream.CloseWithTimeout(inc.DataStream);
+            var dataStream = inc.DataStream;
+            if (dataStream != null && dataStream.State != MyStreamState.Closed)
+                await MyStream.CloseWithTimeout(dataStream);
             try {
                 lock (InConnectionsLock) {
                     InConnections.Remove(inc);
@@ -605,8 +605,8 @@ namespace NaiveSocks
         private async Task onConnectionException(InConnection inc, Exception e)
         {
             Logger.exception(e, Logging.Level.Error, $"Handling {inc}");
-            if (inc.CallbackCalled == false) {
-                await inc.SetConnectResult(new ConnectResult(ConnectResults.Failed) {
+            if (inc.IsHandled == false) {
+                await inc.HandleAndGetStream(new ConnectResult(null, ConnectResultEnum.Failed) {
                     FailedReason = $"exception: {e.GetType()}: {e.Message}"
                 });
             }

@@ -37,9 +37,9 @@ namespace NaiveSocks
         {
             try {
                 var socket = await NaiveUtils.ConnectTcpAsync(dest, timeoutSeconds * 1000);
-                return new ConnectResult(MyStream.FromSocket(socket));
+                return new ConnectResult(adapter, MyStream.FromSocket(socket));
             } catch (Exception e) {
-                return new ConnectResult(ConnectResults.Failed) {
+                return new ConnectResult(adapter, ConnectResultEnum.Failed) {
                     FailedReason = e.Message,
                     Exception = e
                 };

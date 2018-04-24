@@ -44,6 +44,7 @@ namespace NaiveSocksAndroid
     public class BgService : Service
     {
         static bool isN = Build.VERSION.SdkInt >= BuildVersionCodes.N;
+        static bool isO = Build.VERSION.SdkInt >= BuildVersionCodes.O;
 
         public Controller Controller { get; private set; }
 
@@ -84,10 +85,9 @@ namespace NaiveSocksAndroid
             notificationManager = (NotificationManager)GetSystemService(Context.NotificationService);
 
             var chId = "";
-            if (Build.VERSION.SdkInt >= BuildVersionCodes.O) {
+            if (isO) {
                 chId = "nsocks_service";
-                var chan = new NotificationChannel(chId, "NaiveSocks Service", NotificationImportance.None);
-                chan.LightColor = Color.Blue;
+                var chan = new NotificationChannel(chId, "NaiveSocks Service", NotificationImportance.Min);
                 chan.LockscreenVisibility = NotificationVisibility.Private;
                 notificationManager.CreateNotificationChannel(chan);
             }
@@ -104,10 +104,12 @@ namespace NaiveSocksAndroid
                         .AddAction(BuildServiceAction(Actions.GC_0, "GC(gen0)", Android.Resource.Drawable.StarOff, 5))
                         .SetSmallIcon(Resource.Drawable.N)
                         .SetColor(unchecked((int)0xFF2196F3))
-                        .SetPriority((int)NotificationPriority.Min)
-                        .SetVisibility(NotificationCompat.VisibilitySecret)
                         //.SetShowWhen(false)
                         .SetOngoing(true);
+            if (!isO) {
+                builder.SetPriority((int)NotificationPriority.Min)
+                    .SetVisibility(NotificationCompat.VisibilitySecret);
+            }
             if (!isN) {
                 builder.SetContentTitle("NaiveSocks");
             }
@@ -122,7 +124,7 @@ namespace NaiveSocksAndroid
                         .SetPriority((int)NotificationPriority.Min)
                         .SetVisibility(NotificationCompat.VisibilitySecret)
                         .SetShowWhen(false);
-            
+
             StartForeground(MainNotificationId, builder.Build());
 
             Controller = new Controller();
@@ -152,6 +154,7 @@ namespace NaiveSocksAndroid
                 Logging.info("starting controller...");
                 try {
                     Controller.ConfigTomlLoaded += (t) => {
+                        CrashHandler.CrashLogFile = Controller.ProcessFilePath("UnhandledException.txt");
                         if (t.TryGetValue<Config>("android", out var config)) {
                             currentConfig = config;
                             onScreen(isScreenOn);
@@ -281,31 +284,39 @@ namespace NaiveSocksAndroid
             }
         }
 
+        System.Diagnostics.Process currentProcess = System.Diagnostics.Process.GetCurrentProcess();
+        long lastRuntime = 0;
+        long lastCpuTime = 0;
+
         private bool updateNotifBuilder()
         {
             void SetSingleLineText(string text)
             {
-                if (isN) {
-                    builder.SetSubText(text);
-                } else {
-                    builder.SetContentText(text);
-                }
+                //if (isN) {
+                //    builder.SetSubText(text);
+                //} else {
+                builder.SetContentText(text);
+                //}
             }
 
             var needRenotify = false;
 
-            var titleFmt = (notification_show_logs && !isN) ?
-                                "{0}/{1} cxn, {2:N0} KB, {3:N0} pkt - NaiveSocks"
-                                : "{0}/{1} cxn, {2:N0} KB, {3:N0} pkt";
-            var title = string.Format(titleFmt, Controller.RunningConnections, Controller.TotalHandledConnections, MyStream.TotalCopiedBytes / 1024, MyStream.TotalCopiedPackets);
+            var curRuntime = (DateTime.Now - currentProcess.StartTime).Ticks;
+            var curCpuTime = currentProcess.TotalProcessorTime.Ticks;
+            var load = (float)(curCpuTime - lastCpuTime) / (curRuntime - lastRuntime);
+            lastRuntime = curRuntime;
+            lastCpuTime = curCpuTime;
+
+            var titleFmt = "{0}/{1} cxn, {2:N0} KB, {3:N0} pkt, load: {4:N2}";
+            var title = string.Format(titleFmt, Controller.RunningConnections, Controller.TotalHandledConnections, MyStream.TotalCopiedBytes / 1024, MyStream.TotalCopiedPackets, load);
             if (title != lastTitle) {
                 needRenotify = true;
                 lastTitle = title;
-                if (notification_show_logs) {
-                    builder.SetContentTitle(title);
-                } else {
-                    SetSingleLineText(title);
-                }
+                //if (notification_show_logs) {
+                builder.SetContentTitle(title);
+                //} else {
+                //    SetSingleLineText(title);
+                //}
             }
             if (textLinesChanged) {
                 textLinesChanged = false;

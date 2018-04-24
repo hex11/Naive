@@ -19,8 +19,8 @@ namespace NaiveSocks
 
         public override async Task HandleConnection(InConnection connection)
         {
-            await connection.SetConnectResult(ConnectResults.Conneceted);
-            HttpConnection httpConnection = CreateHttpConnectionFromMyStream(connection.DataStream, HttpSvr);
+            var stream = await connection.HandleAndGetStream(this);
+            HttpConnection httpConnection = CreateHttpConnectionFromMyStream(stream, HttpSvr);
             await httpConnection.Process();
         }
 

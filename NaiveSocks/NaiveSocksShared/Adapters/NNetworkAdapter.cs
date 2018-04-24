@@ -78,8 +78,8 @@ namespace NaiveSocks
             if (host.EndsWith(domain) && (host == domain || host[host.Length - domain.Length - 1] == '.')) {
                 if (host == domain) {
                     if (connection.Dest.Port == 80) {
-                        await connection.SetConnectResult(ConnectResults.Conneceted);
-                        var httpConnection = CreateHttpConnectionFromMyStream(connection.DataStream, HttpSvr);
+                        var stream = await connection.HandleAndGetStream(this);
+                        var httpConnection = CreateHttpConnectionFromMyStream(stream, HttpSvr);
                         httpConnection.SetTag("connection", connection);
                         await httpConnection.Process();
                     }
@@ -93,13 +93,13 @@ namespace NaiveSocks
                         await cli.HandleConnection(connection);
                     } else if (if_notfound == null) {
                         if (connection.Dest.Port == 80) {
-                            await connection.SetConnectResult(ConnectResults.Conneceted);
-                            var httpConnection = CreateHttpConnectionFromMyStream(connection.DataStream, HttpSvr);
+                            var stream = await connection.HandleAndGetStream(this);
+                            var httpConnection = CreateHttpConnectionFromMyStream(stream, HttpSvr);
                             httpConnection.SetTag("name", name);
                             httpConnection.SetTag("connection", connection);
                             await httpConnection.Process();
                         } else {
-                            await connection.SetConnectResult(new ConnectResult(ConnectResults.Failed) {
+                            await connection.HandleAndGetStream(new ConnectResult(this, ConnectResultEnum.Failed) {
                                 FailedReason = "no such client"
                             });
                         }

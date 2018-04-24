@@ -30,7 +30,7 @@ namespace NaiveSocks
                     this.Dest.Port = s.TargetPort;
                     this.DataStream = s.Stream;
                     if (adapter.fastopen)
-                        await OnConnectionResult(new ConnectResult(ConnectResults.Conneceted)).CAF();
+                        await OnConnectionResult(new ConnectResult(null, ConnectResultEnum.Conneceted)).CAF();
                     NaiveUtils.RunAsyncTask(async () => {
                         using (tcp) {
                             await _adapter.Controller.HandleInConnection(this);
@@ -46,11 +46,11 @@ namespace NaiveSocks
 
             protected override async Task OnConnectionResult(ConnectResult result)
             {
-                if (socks5svr == null)
-                    return;
-                var tmp = socks5svr;
-                socks5svr = null;
-                await tmp.WriteConnectionResult(new IPEndPoint(0, Dest.Port), (result.Ok) ? Socks5Server.Rep.succeeded : Socks5Server.Rep.Connection_refused);
+                if (socks5svr != null) {
+                    var tmp = socks5svr;
+                    socks5svr = null;
+                    await tmp.WriteConnectionResult(new IPEndPoint(0, Dest.Port), (result.Ok) ? Socks5Server.Rep.succeeded : Socks5Server.Rep.Connection_refused);
+                }
             }
 
             public override string GetInfoStr() => _eppair.ToString();

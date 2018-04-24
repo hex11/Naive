@@ -95,8 +95,8 @@ namespace NaiveSocks
 
         public async Task HandleConnection(InConnection connection)
         {
-            await connection.SetConnectResult(ConnectResults.Conneceted);
-            var httpConn = WebBaseAdapter.CreateHttpConnectionFromMyStream(connection.DataStream, httpServer);
+            var stream = await connection.HandleAndGetStream(this);
+            var httpConn = WebBaseAdapter.CreateHttpConnectionFromMyStream(stream, httpServer);
             await httpConn.Process();
         }
 
@@ -227,14 +227,16 @@ namespace NaiveSocks
                 default:
                     throw new Exception($"unknown scheme '{scheme}'");
                 }
+                string host;
                 int realUrlStart = url.IndexOf('/', hostStart);
                 if (realUrlStart == -1) {
                     // such url: http://example.com
-                    realUrlStart = 7;
-                    url += "/";
+                    host = url.Substring(hostStart);
+                    path = "/";
+                } else {
+                    host = url.Substring(hostStart, realUrlStart - hostStart);
+                    path = url.Substring(realUrlStart);
                 }
-                var host = url.Substring(hostStart, realUrlStart - hostStart);
-                path = url.Substring(realUrlStart);
                 if (host.Contains(":") && !host.Contains("[")) {
                     return AddrPort.Parse(host);
                 } else {
@@ -264,7 +266,12 @@ namespace NaiveSocks
                 if (!r.Ok) {
                     throw new Exception($"ConnectResult: {r.Result} ({r.FailedReason})");
                 }
+                var thisCounterRW = inc.BytesCountersRW;
                 var destStream = r.Stream;
+                var destCounterRW = r.Adapter?.GetAdapter().BytesCountersRW ?? new BytesCountersRW() {
+                    R = null,
+                    W = MyStream.GlobalWriteCounter
+                };
                 TlsStream tlsStream = null;
                 if (isHttps) {
                     destStream = tlsStream = new TlsStream(destStream);
@@ -322,17 +329,18 @@ namespace NaiveSocks
                     var copyingResponse = NaiveUtils.RunAsyncTask(async () => {
                         await whenCanReadResponse;
                         await new MyStream.Copier(destStream, clientStream) {
-                            // TODO: CounterR
-                            CounterW = this.BytesCountersRW.W
+                            CounterR = destCounterRW.R,
+                            CounterW = thisCounterRW.W
                         }.Copy();
+                        // NO need...
                         // TODO: check response boundary
                     });
 
                     while (true) { // keep-alive loop
                         if (p.inputDataStream != null) {
                             await new MyStream.Copier(p.inputDataStream.ToMyStream(), destStream) {
-                                CounterW = MyStream.GlobalBytesCounter, // TODO
-                                CounterR = this.BytesCountersRW.R
+                                CounterW = destCounterRW.W,
+                                CounterR = thisCounterRW.R
                             }.Copy();
                             if (verbose)
                                 Logger.info($"{p}: copied input data {p.inputDataStream.Length} bytes.");
@@ -345,8 +353,8 @@ namespace NaiveSocks
                             });
                             var copingRequest = NaiveUtils.RunAsyncTask(async () => {
                                 await new MyStream.Copier(clientStream, destStream) {
-                                    CounterW = MyStream.GlobalBytesCounter, // TODO
-                                    CounterR = this.BytesCountersRW.R
+                                    CounterW = destCounterRW.W,
+                                    CounterR = thisCounterRW.R
                                 }.CopyAndShutdown();
                             });
                             await Task.WhenAll(copyingResponse2, copingRequest);

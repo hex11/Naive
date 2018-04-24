@@ -12,12 +12,11 @@ namespace NaiveSocks
             var adap = inAdapter.GetAdapter();
             BytesCountersRW = new BytesCountersRW(adap.BytesCountersRW);
         }
-        //public ConnectionResult Result;
 
         public virtual IMyStream DataStream { get; set; }
 
         public ConnectResult ConnectResult { get; private set; }
-        public bool CallbackCalled => ConnectResult != null;
+        public bool IsHandled => ConnectResult != null;
 
         public AdapterRef Redirected { get; set; }
         public bool IsRedirected => Redirected != null;
@@ -29,39 +28,33 @@ namespace NaiveSocks
             Redirected = redirectedName;
         }
 
-        protected virtual Task OnConnectionResult(ConnectResult result)
-        {
-            return NaiveUtils.CompletedTask;
-        }
+        protected abstract Task OnConnectionResult(ConnectResult result);
 
-        public Task SetConnectResult(ConnectResults result)
+        public async Task<IMyStream> HandleAndGetStream(ConnectResult result)
         {
-            return SetConnectResult(new ConnectResult(result));
-        }
-
-        public Task SetConnectResult(ConnectResults result, IPEndPoint destEP)
-        {
-            return SetConnectResult(new ConnectResult(result, destEP));
-        }
-
-        public Task SetConnectResult(ConnectResult result)
-        {
-            if (CallbackCalled)
-                throw new InvalidOperationException("ConnectResult has been already set.");
+            if (IsHandled)
+                throw new InvalidOperationException("the Connection has been already handled.");
             ConnectResult = result;
             if (result.destEP == null)
                 result.destEP = new IPEndPoint(0, 0);
-            return OnConnectionResult(result);
+            await OnConnectionResult(result);
+            return DataStream;
         }
 
-        public async Task RelayWith(IAdapter outAdapter, IMyStream stream, Task waitForReadFromStream = null)
+        public Task<IMyStream> HandleAndGetStream(IAdapter adapter)
         {
-            if (!CallbackCalled) {
-                await SetConnectResult(ConnectResults.Conneceted, null);
-            } else if (!ConnectResult.Ok) {
-                throw new InvalidOperationException("ConnectResult has been already set to Failed.");
-            }
-            var copier = new MyStream.TwoWayCopier(stream, DataStream) { WhenCanReadFromLeft = waitForReadFromStream };
+            return HandleAndGetStream(new ConnectResult(adapter, ConnectResultEnum.Conneceted));
+        }
+
+        public Task HandleFailed(IAdapter adapter)
+        {
+            return HandleAndGetStream(new ConnectResult(adapter, ConnectResultEnum.Failed));
+        }
+
+        public async Task HandleAndPutStream(IAdapter outAdapter, IMyStream stream, Task waitForReadFromStream = null)
+        {
+            var thisStream = await HandleAndGetStream(outAdapter);
+            var copier = new MyStream.TwoWayCopier(stream, thisStream) { WhenCanReadFromLeft = waitForReadFromStream };
             copier.SetCounters(outAdapter.GetAdapter().BytesCountersRW, this.BytesCountersRW);
             await copier.Run();
         }
@@ -111,7 +104,7 @@ namespace NaiveSocks
         }
     }
 
-    public enum ConnectResults
+    public enum ConnectResultEnum
     {
         Conneceted,
         Failed,
@@ -119,26 +112,29 @@ namespace NaiveSocks
 
     public class ConnectResult
     {
-        public ConnectResult(ConnectResults result)
+        public ConnectResult(IAdapter adapter, ConnectResultEnum result)
         {
+            Adapter = adapter;
             Result = result;
         }
 
-        public ConnectResult(ConnectResults result, IPEndPoint destEP) : this(result)
+        public ConnectResult(IAdapter adapter, ConnectResultEnum result, IPEndPoint destEP) : this(adapter, result)
         {
             this.destEP = destEP;
         }
 
-        public ConnectResult(ConnectResults result, IMyStream destStream) : this(result)
+        public ConnectResult(IAdapter adapter, ConnectResultEnum result, IMyStream destStream) : this(adapter, result)
         {
             Stream = destStream;
         }
 
-        public ConnectResult(IMyStream destStream) : this(ConnectResults.Conneceted, destStream)
+        public ConnectResult(IAdapter adapter, IMyStream destStream) : this(adapter, ConnectResultEnum.Conneceted, destStream)
         {
         }
 
-        public ConnectResults Result;
+        public IAdapter Adapter { get; }
+
+        public ConnectResultEnum Result;
         public IPEndPoint destEP;
         public string FailedReason;
         public Exception Exception;
@@ -146,21 +142,21 @@ namespace NaiveSocks
         public IMyStream Stream;
         public Task WhenCanRead = NaiveUtils.CompletedTask;
 
-        public bool Ok => Result == ConnectResults.Conneceted;
+        public bool Ok => Result == ConnectResultEnum.Conneceted;
 
         public AdapterRef Redirected;
         public bool IsRedirected => Redirected != null;
 
         public void ThrowIfFailed()
         {
-            if (Result != ConnectResults.Conneceted) {
+            if (Result != ConnectResultEnum.Conneceted) {
                 throw Exception ?? new Exception("connect result: failed: " + FailedReason);
             }
         }
 
-        public static ConnectResult RedirectTo(AdapterRef redirectTo)
+        public static ConnectResult RedirectTo(IAdapter adapter, AdapterRef redirectTo)
         {
-            return new ConnectResult(ConnectResults.Failed) { Redirected = redirectTo };
+            return new ConnectResult(adapter, ConnectResultEnum.Failed) { Redirected = redirectTo };
         }
     }
 }

@@ -172,7 +172,7 @@ namespace NaiveSocks
                     goto RETRY;
                 throw;
             }
-            await connection.RelayWith(this, s.AsMyStream);
+            await connection.HandleAndPutStream(this, s.AsMyStream);
             TryPut(conn).Forget();
         }
     }

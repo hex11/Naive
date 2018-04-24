@@ -15,8 +15,9 @@ namespace NaiveSocksAndroid
 
         private static void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
         {
+            Directory.CreateDirectory(Path.GetDirectoryName(CrashLogFile));
             using (var sw = File.CreateText(CrashLogFile)) {
-                sw.Write(e.ToString());
+                sw.Write(e.ExceptionObject.ToString());
             }
         }
 
@@ -28,7 +29,8 @@ namespace NaiveSocksAndroid
         {
             if (inited == false)
                 throw new Exception("!!! inited == false !!!");
-            CrashLogFile = Path.Combine(Android.OS.Environment.ExternalStorageDirectory.AbsolutePath, "NaiveUnhandledException.txt");
+            string sdcard = Android.OS.Environment.ExternalStorageDirectory.AbsolutePath;
+            CrashLogFile = Path.Combine(sdcard, "NaiveUnhandledException.txt");
         }
     }
 }

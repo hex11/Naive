@@ -56,12 +56,12 @@ namespace NaiveSocks
                 var result = await ProtectedConnect(arg);
                 if (!result.IsRedirected && !result.Ok && if_failed != null) {
                     Logging.error(ToString() + $": {arg} failed ({result.FailedReason}), redirecting to {if_failed}.");
-                    return ConnectResult.RedirectTo(if_failed);
+                    return ConnectResult.RedirectTo(this, if_failed);
                 }
                 return result;
             } catch (Exception ex) when (if_failed != null) {
                 Logging.exception(ex, Logging.Level.Error, ToString() + $": {arg} failed, redirecting to {if_failed}.");
-                return ConnectResult.RedirectTo(if_failed);
+                return ConnectResult.RedirectTo(this, if_failed);
             } catch (Exception) {
                 throw;
             }
@@ -84,18 +84,18 @@ namespace NaiveSocks
                 return;
             }
             try {
-                await connection.SetConnectResult(connectResult);
-            } catch (Exception) {
+                if (connectResult.Ok) {
+                    await connection.HandleAndPutStream(this, connectResult.Stream, connectResult.WhenCanRead);
+                } else {
+                    await connection.HandleAndGetStream(connectResult);
+                }
+            } finally {
                 if (connectResult.Ok)
                     MyStream.CloseWithTimeout(connectResult.Stream);
-                throw;
-            }
-            if (connectResult.Ok) {
-                await connection.RelayWith(this, connectResult.Stream, connectResult.WhenCanRead);
             }
         }
 
-        public static Task<ConnectResult> Connect(Func<InConnection, Task> handleConnection, ConnectArgument arg)
+        public static Task<ConnectResult> Connect(IConnectionHandler handler, ConnectArgument arg)
         {
             var tcs = new TaskCompletionSource<ConnectResult>();
             var newinc = InConnection.Create(arg.InAdapter, arg.Dest, async (r) => {
@@ -112,13 +112,13 @@ namespace NaiveSocks
             newinc.Url = arg.Url;
             NaiveUtils.RunAsyncTask(async () => {
                 try {
-                    await handleConnection(newinc).CAF();
+                    await handler.HandleConnection(newinc).CAF();
                 } catch (Exception e) {
                     tcs.SetException(e);
                     return;
                 }
                 if (newinc.IsRedirected && tcs.Task.IsCompleted == false) {
-                    tcs.SetResult(ConnectResult.RedirectTo(newinc.Redirected));
+                    tcs.SetResult(ConnectResult.RedirectTo(handler, newinc.Redirected));
                 } else {
                     tcs.SetException(new Exception("handleConnection() did nothing."));
                 }
@@ -133,7 +133,7 @@ namespace NaiveSocks
 
         public override async Task HandleConnection(InConnection connection)
         {
-            await connection.SetConnectResult(GetConnectResult());
+            await connection.HandleAndGetStream(GetConnectResult());
         }
 
         public Task<ConnectResult> Connect(ConnectArgument arg)
@@ -143,7 +143,7 @@ namespace NaiveSocks
 
         private ConnectResult GetConnectResult()
         {
-            return new ConnectResult(ConnectResults.Failed) { FailedReason = reason };
+            return new ConnectResult(this, ConnectResultEnum.Failed) { FailedReason = reason };
         }
 
         public Task HandleRequestAsync(HttpConnection p)

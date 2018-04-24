@@ -158,7 +158,7 @@ namespace NaiveSocks
 
         public BytesCountersRW BytesCountersRW { get; } = new BytesCountersRW {
             R = new BytesCounter(),
-            W = new BytesCounter(MyStream.GlobalBytesCounter)
+            W = new BytesCounter(MyStream.GlobalWriteCounter)
         };
 
         public string flags { get; set; }
@@ -295,6 +295,16 @@ namespace NaiveSocks
             {
                 StringBuilder.Append(' ').Append(tag);
             }
+        }
+
+        public ConnectResult CreateConnectResultWithStream(IMyStream stream)
+        {
+            return new ConnectResult(this, stream);
+        }
+
+        public ConnectResult CreateConnectResultWithFailed()
+        {
+            return new ConnectResult(this, ConnectResultEnum.Failed);
         }
     }
 

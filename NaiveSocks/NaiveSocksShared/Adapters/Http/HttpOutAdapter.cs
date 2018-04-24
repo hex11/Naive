@@ -37,7 +37,7 @@ namespace NaiveSocks
                 if (response.StatusCode != "200") {
                     throw new Exception($"remote server response '{response.StatusCode} {response.ReasonPhrase}'");
                 }
-                return new ConnectResult(ConnectResults.Conneceted, dataStream);
+                return CreateConnectResultWithStream(dataStream);
             } catch (Exception) {
                 MyStream.CloseWithTimeout(baseResult.Stream);
                 throw;

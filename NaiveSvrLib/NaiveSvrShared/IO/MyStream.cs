@@ -263,18 +263,18 @@ namespace NaiveSocks
 
         public Stream ToStream() => ToStream(this);
 
-        private static readonly BytesCounter globalBytesCouter = new BytesCounter();
+        private static readonly BytesCounter globalWriteCouter = new BytesCounter();
 
-        public static BytesCounter GlobalBytesCounter => globalBytesCouter;
+        public static BytesCounter GlobalWriteCounter => globalWriteCouter;
 
-        public static BytesCounterValue TotalCopied => globalBytesCouter.Value;
+        public static BytesCounterValue TotalCopied => globalWriteCouter.Value;
         public static long TotalCopiedPackets => TotalCopied.Packets;
         public static long TotalCopiedBytes => TotalCopied.Bytes;
 
         public static Task Relay(IMyStream left, IMyStream right, Task whenCanReadFromLeft = null)
         {
             return new TwoWayCopier(left, right) { WhenCanReadFromLeft = whenCanReadFromLeft }
-                .SetCounters(globalBytesCouter)
+                .SetCounters(globalWriteCouter)
                 .Run();
         }
 

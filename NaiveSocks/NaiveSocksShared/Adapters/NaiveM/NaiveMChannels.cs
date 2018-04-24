@@ -230,9 +230,9 @@ namespace NaiveSocks
         {
             var r = await Connect(inConnection);
             if (r.Ok) {
-                await inConnection.RelayWith((IAdapter)OutAdapter ?? InAdapter, r.Stream, r.WhenCanRead);
+                await inConnection.HandleAndPutStream((IAdapter)OutAdapter ?? InAdapter, r.Stream, r.WhenCanRead);
             } else {
-                await inConnection.SetConnectResult(r);
+                await inConnection.HandleAndGetStream(r);
             }
         }
 
@@ -264,10 +264,10 @@ namespace NaiveSocks
                     var reply = await readReplyTask.CAF();
                     if (reply.status != 0) {
                         result.Channel.Dispose();
-                        return new ConnectResult(ConnectResults.Failed);
+                        return new ConnectResult((IAdapter)OutAdapter ?? InAdapter, ConnectResultEnum.Failed);
                     }
                 }
-                return new ConnectResult(ConnectResults.Conneceted, new MsgStreamToMyStream(result.Channel)) { WhenCanRead = readReplyTask };
+                return new ConnectResult((IAdapter)OutAdapter ?? InAdapter, ConnectResultEnum.Conneceted, new MsgStreamToMyStream(result.Channel)) { WhenCanRead = readReplyTask };
             } catch (Exception) {
                 result.Dispose();
                 throw;
@@ -524,7 +524,7 @@ namespace NaiveSocks
                     Channel.DataFilter.ApplyFilterFromFilterCreator(LZ4pn.LZ4Filter.GetFilter);
                 await Channel.SendMsg(new Msg(new BytesView(response.ToBytes()))).CAF();
                 if (result.Ok) {
-                    this.DataStream = new MsgStreamToMyStream(Channel);
+                    DataStream = new MsgStreamToMyStream(Channel);
                 } else {
                     Channel.Close(new CloseOpt(CloseType.Close)).Forget();
                 }

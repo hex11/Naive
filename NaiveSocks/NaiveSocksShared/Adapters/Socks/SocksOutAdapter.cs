@@ -15,7 +15,7 @@ namespace NaiveSocks
             var dest = arg.Dest;
             var stream = await Socks5Client.Connect(server.Host, server.Port,
                 dest.Host, dest.Port, username, password);
-            return new ConnectResult(ConnectResults.Conneceted, stream);
+            return CreateConnectResultWithStream(stream);
         }
 
         public override void SetConfig(TomlTable toml)
