@@ -89,14 +89,15 @@ namespace NaiveSocksAndroid
 
         void AddAdapter(NaiveSocks.Adapter ada)
         {
-            var tv = new TextView(themeWrapper) { Text = ada.ToString() };
-            connParent.AddView(tv);
-            tv.Dispose();
+            using (var tv = new TextView(themeWrapper) { Text = ada.ToString() }) {
+                connParent.AddView(tv);
+            }
             var rw = ada.BytesCountersRW;
-            var rwstr = rw.TotalValue.Packets > 0 ? rw.ToString() : "(N/A)";
-            tv = new TextView(themeWrapper) { Text = rwstr, Gravity = GravityFlags.End };
-            connParent.AddView(tv);
-            tv.Dispose();
+            var rwstr = rw.TotalValue.Packets > 0 ? rw.ToString() : "---";
+            using (var tv = new TextView(themeWrapper) { Text = rwstr, Gravity = GravityFlags.End }) {
+                tv.SetBackgroundColor(Color.Argb(30, 128, 128, 128));
+                connParent.AddView(tv);
+            }
         }
     }
 }

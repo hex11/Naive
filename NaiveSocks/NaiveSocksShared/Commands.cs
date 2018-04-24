@@ -9,8 +9,7 @@ using Naive.HttpSvr;
 using System.Security.Cryptography;
 using System.Threading;
 using System.Net;
-
-//using FSF.HttpSvr;
+using System.Text;
 
 namespace NaiveSocks
 {
@@ -94,10 +93,18 @@ namespace NaiveSocks
         public static void AddCommands(CommandHub cmdHub, Controller controller, string prefix)
         {
             cmdHub.AddCmdHandler(prefix + "c", command => {
+                var con = command.Console;
                 var arr = controller.InConnections.ToArray();
+                var sb = new StringBuilder(64);
                 foreach (var item in arr) {
                     if (item.IsHandled) {
-                        command.WriteLine(item.ToString());
+                        sb.Clear();
+                        item.ToString(sb, InConnection.ToStringFlags.Default & ~InConnection.ToStringFlags.Bytes & ~InConnection.ToStringFlags.AdditionFields);
+                        command.Write(sb.ToString());
+                        var rw = item.BytesCountersRW;
+                        con.Write("\n R=" + rw.R, ConsoleColor.Green);
+                        con.Write(" W=" + rw.W + " ", ConsoleColor.Yellow);
+                        con.Write(item.GetInfoStr() + "\n", ConsoleColor.DarkGray);
                     } else {
                         command.Console.Write(item + "\n", ConsoleColor.Yellow);
                     }

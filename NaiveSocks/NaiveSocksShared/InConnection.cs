@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Net;
+using System.Text;
 using System.Threading.Tasks;
 using Naive.HttpSvr;
 
@@ -63,12 +64,38 @@ namespace NaiveSocks
 
         public override string ToString()
         {
-            return ToString(GetInfoStr());
+            var sb = new StringBuilder(64);
+            ToString(sb, ToStringFlags.Default);
+            return sb.ToString();
         }
 
-        public string ToString(string addition)
+        [Flags]
+        public enum ToStringFlags
         {
-            return $"{{'{InAdapter?.Name}' T={WebSocket.CurrentTime - CreateTime:N0}{(addition == null ? "" : " ")}{addition} {BytesCountersRW.ToString()} dest={Dest}{((ConnectResult?.Ok == true) ? " (OK)" : "")}}}";
+            None = 0,
+            AdditionFields = 1,
+            Time = 2,
+            Bytes = 4,
+            All = AdditionFields | Time | Bytes,
+            Default = All
+        }
+
+        public void ToString(StringBuilder sb, ToStringFlags flags)
+        {
+            sb.Append("{{'").Append(InAdapter?.Name).Append("'");
+            if ((flags & ToStringFlags.Time) != 0)
+                sb.Append(' ').Append("T=").AppendFormat((WebSocket.CurrentTime - CreateTime).ToString("N0"));
+            if ((flags & ToStringFlags.Bytes) != 0 && BytesCountersRW.TotalValue.Packets > 0)
+                sb.Append(' ').Append(BytesCountersRW.ToString());
+            var addition = ((flags & ToStringFlags.AdditionFields) != 0) ? GetInfoStr() : null;
+            if (addition != null)
+                sb.Append(' ').Append(addition);
+            sb.Append(' ').Append("dest=").Append(Dest);
+            if (ConnectResult?.Result == ConnectResultEnum.Conneceted)
+                sb.Append(' ').Append("(OK)");
+            else if (ConnectResult?.Result == ConnectResultEnum.Failed)
+                sb.Append(' ').Append("(FAIL)");
+            sb.Append("}}");
         }
 
         public delegate Task<IMyStream> ConnectionCallbackDelegate(ConnectResult cr);

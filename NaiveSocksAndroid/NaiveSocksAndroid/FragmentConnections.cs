@@ -80,21 +80,35 @@ namespace NaiveSocksAndroid
             connParent.RemoveAllViews();
             var controller = mainActivity.Service?.Controller;
             if (controller != null) {
+                var sb = new StringBuilder(64);
                 lock (controller.InConnectionsLock) {
                     foreach (var item in controller.InConnections) {
-                        AddConn(item);
+                        AddConn(item, sb);
                     }
                 }
             }
         }
 
-        void AddConn(InConnection conn)
+        void AddConn(InConnection conn, StringBuilder sbCache = null)
         {
-            var tv = new TextView(themeWrapper) { Text = conn.ToString() };
-            if (conn.ConnectResult?.Ok == true)
-                tv.SetBackgroundColor(Color.Argb(30, 0, 255, 0));
-            connParent.AddView(tv);
-            tv.Dispose();
+            sbCache?.Clear();
+            var sb = sbCache ?? new StringBuilder(64);
+
+            conn.ToString(sb, InConnection.ToStringFlags.None);
+            sb.AppendLine();
+            sb.Append(conn.GetInfoStr());
+            using (var tv = new TextView(themeWrapper) { Text = sb.ToString() }) {
+                if (conn.ConnectResult?.Ok == true)
+                    tv.SetBackgroundColor(Color.Argb(30, 0, 255, 0));
+                connParent.AddView(tv);
+            }
+
+            sb.Clear();
+            sb.Append(conn.BytesCountersRW.ToString()).Append(" T=").Append(WebSocket.CurrentTime - conn.CreateTime);
+            using (var tv = new TextView(themeWrapper) { Text = sb.ToString(), Gravity = GravityFlags.End }) {
+                tv.SetBackgroundColor(Color.Argb(30, 128, 128, 128));
+                connParent.AddView(tv);
+            }
         }
     }
 }
