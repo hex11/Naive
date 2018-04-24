@@ -192,9 +192,23 @@ namespace Naive.HttpSvr
 
         public static async Task<byte[]> ReadBytesUntil(Stream stream, byte[] pattern, byte[] buffer = null, int maxLength = 32 * 1024, bool withPattern = true)
         {
+            var ms = new MemoryStream(128);
+            await ReadBytesUntil(stream, ms, pattern, buffer, maxLength);
+            if (!withPattern) {
+                ms.SetLength(ms.Length - pattern.Length);
+            }
+            return ms.ToArray();
+        }
+
+        public static Task<int> ReadBytesUntil(Stream stream, MemoryStream ms, byte[] pattern, byte[] buffer = null, int maxLength = 32 * 1024)
+        {
+            return ReadBytesUntil<MemoryStream>(stream, ms, (m, b) => m.WriteByte(b), pattern, buffer, maxLength);
+        }
+
+        public static async Task<int> ReadBytesUntil<TState>(Stream stream, TState state, Action<TState, byte> putByte, byte[] pattern, byte[] buffer = null, int maxLength = 32 * 1024)
+        {
             // Notice: this implementation may not work properly when the pattern is not "\r\n" or "\r\n\r\n"
             // TODO: use KMP search algorithm
-            var ms = new MemoryStream(128);
             int pos = 0;
             int read = 0;
             int curMatchingPos = 0;
@@ -203,6 +217,7 @@ namespace Naive.HttpSvr
                 buffer = new byte[patternLength];
             else if (buffer.Length < patternLength)
                 throw new ArgumentException("buffer.Length < pattern.Length");
+            var len = 0;
             while (true) {
                 Debug.Assert(pos <= read);
                 if (pos >= read) {
@@ -213,7 +228,8 @@ namespace Naive.HttpSvr
                     }
                 }
                 var ch = buffer[pos++];
-                ms.WriteByte(ch);
+                putByte(state, ch);
+                len++;
                 if (ch == pattern[curMatchingPos]) {
                     curMatchingPos++;
                     if (curMatchingPos == patternLength) {
@@ -222,20 +238,21 @@ namespace Naive.HttpSvr
                 } else {
                     curMatchingPos = 0;
                 }
-                if (ms.Length >= maxLength) {
-                    throw new Exception($"input line is too long (>{maxLength}).");
+                if (len >= maxLength) {
+                    throw new Exception($"exceeded maxLength ({maxLength}).");
                 }
             }
-            if (!withPattern) {
-                ms.SetLength(ms.Length - patternLength);
-            }
-            return ms.ToArray();
+            return len;
         }
 
         public static async Task<string> ReadStringUntil(Stream stream, byte[] pattern, byte[] buffer = null, int maxLength = 32 * 1024, bool withPattern = true)
         {
-            var bytes = await ReadBytesUntil(stream, pattern, buffer, maxLength, withPattern);
-            return UTF8Encoding.GetString(bytes);
+            var ms = new MemoryStream();
+            var len = await ReadBytesUntil(stream, ms, pattern, buffer, maxLength);
+            var bytes = ms.GetBuffer();
+            if (!withPattern)
+                len -= pattern.Length;
+            return UTF8Encoding.GetString(bytes, 0, len);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

@@ -85,6 +85,7 @@ namespace Naive.HttpSvr
         public bool IsHttp1_1 { get; private set; }
 
         public string RawRequest { get; private set; }
+        public int RawRequestBytesLength { get; private set; }
 
         public string Host;
 
@@ -267,7 +268,7 @@ namespace Naive.HttpSvr
             clearStatus(); // to make them be collected faster
             rawRequestPos = 0;
             try {
-                RawRequest = await readRequest().CAF();
+                await readRequest().CAF();
             } catch (Exception) {
                 return false;
             }
@@ -409,9 +410,13 @@ namespace Naive.HttpSvr
             return RawRequest.Substring(startPos, endOfLinePos - startPos);
         }
 
-        private Task<string> readRequest()
+        private async Task readRequest()
         {
-            return NaiveUtils.ReadStringUntil(realInputStream, NaiveUtils.DoubleCRLFBytes, readlineBytes, MaxInputLineLength);
+            var ms = new MemoryStream();
+            var len = await NaiveUtils.ReadBytesUntil(realInputStream, ms, NaiveUtils.DoubleCRLFBytes, readlineBytes, MaxInputLineLength);
+            var bytes = ms.GetBuffer();
+            RawRequestBytesLength = len;
+            RawRequest = NaiveUtils.UTF8Encoding.GetString(bytes, 0, len);
         }
 
         private void ThrowIfHeadersEnded(string methodName)

@@ -211,7 +211,6 @@ namespace NaiveSocks
         private async Task handleHttp(HttpConnection p)
         {
             p.EnableKeepAlive = false;
-            BytesCountersRW.R.Add(p.RawRequest.Length);
 
             AddrPort parseUrl(string url, out string path, out bool ishttps)
             {
@@ -267,6 +266,7 @@ namespace NaiveSocks
                     throw new Exception($"ConnectResult: {r.Result} ({r.FailedReason})");
                 }
                 var thisCounterRW = inc.BytesCountersRW;
+                thisCounterRW.R.Add(p.RawRequestBytesLength);
                 var destStream = r.Stream;
                 var destCounterRW = r.Adapter?.GetAdapter().BytesCountersRW ?? new BytesCountersRW() {
                     R = null,
@@ -380,7 +380,6 @@ namespace NaiveSocks
                                 Logger.warning($"{p}: receiving request error {se.SocketErrorCode}");
                             return;
                         }
-                        BytesCountersRW.R.Add(p.RawRequest.Length);
                         if (verbose)
                             Logger.info($"{p}: {p.Method} {p.Url}");
                         var newDest = parseUrl(p.Url, out realurl, out var newIsHttps);
@@ -394,6 +393,7 @@ namespace NaiveSocks
                             isHttps = newIsHttps;
                             goto connnectDest; // It works!
                         }
+                        thisCounterRW.R.Add(p.RawRequestBytesLength);
                         ProcessHeaders();
                         await WriteRequest(destStream);
                     }
