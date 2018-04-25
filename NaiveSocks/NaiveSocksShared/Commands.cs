@@ -99,8 +99,11 @@ namespace NaiveSocks
                 foreach (var item in arr) {
                     if (item.IsHandled) {
                         sb.Clear();
-                        item.ToString(sb, InConnection.ToStringFlags.Default & ~InConnection.ToStringFlags.Bytes & ~InConnection.ToStringFlags.AdditionFields);
+                        item.ToString(sb, InConnection.ToStringFlags.Default & ~InConnection.ToStringFlags.Bytes & ~InConnection.ToStringFlags.AdditionFields & ~InConnection.ToStringFlags.OutAdapter);
                         command.Write(sb.ToString());
+                        if (item.ConnectResult?.Adapter != null) {
+                            con.Write(" -> '" + item.ConnectResult.Adapter.Name + "'", ConsoleColor.Cyan);
+                        }
                         var rw = item.BytesCountersRW;
                         con.Write("\n R=" + rw.R, ConsoleColor.Green);
                         con.Write(" W=" + rw.W + " ", ConsoleColor.Yellow);
@@ -109,7 +112,7 @@ namespace NaiveSocks
                         command.Console.Write(item + "\n", ConsoleColor.Yellow);
                     }
                 }
-                command.WriteLine($"# {arr.Length} connections");
+                command.WriteLine($"({arr.Length} connections)");
             });
             cmdHub.AddCmdHandler(prefix + "wsc", (cmd) => {
                 cmd.WriteLine($"# managed websocket connections ({WebSocket.ManagedWebSockets.Count}): ");
@@ -154,8 +157,12 @@ namespace NaiveSocks
                 }
                 c.WriteLine("  Logging Level: " + cfg.LoggingLevel);
                 c.WriteLine();
-                c.WriteLine($"  ## InAdapters ({cfg.InAdapters.Count}):");
-                foreach (var item in cfg.InAdapters) {
+                var inadas = cfg.InAdapters.ToArray();
+                Array.Sort(inadas, (a, b) => {
+                    return -a.BytesCountersRW.TotalValue.Bytes.CompareTo(b.BytesCountersRW.TotalValue.Bytes);
+                });
+                c.WriteLine($"  ## InAdapters ({inadas.Length}):");
+                foreach (var item in inadas) {
                     var str = $"    - '{item.Name}': {item.ToString(false)} -> {item.@out?.ToString() ?? "(No OutAdapter)"}";
                     var rw = item.BytesCountersRW;
                     if (rw.TotalValue.Packets == 0) {
@@ -167,8 +174,12 @@ namespace NaiveSocks
                     }
                 }
                 c.WriteLine();
-                c.WriteLine($"  ## OutAdapters ({cfg.OutAdapters.Count}):");
-                foreach (var item in cfg.OutAdapters) {
+                var outadas = cfg.OutAdapters.ToArray();
+                Array.Sort(outadas, (a, b) => {
+                    return -a.BytesCountersRW.TotalValue.Bytes.CompareTo(b.BytesCountersRW.TotalValue.Bytes);
+                });
+                c.WriteLine($"  ## OutAdapters ({outadas.Length}):");
+                foreach (var item in outadas) {
                     var str = $"    - '{item.Name}': {item.ToString(false)}";
                     var rw = item.BytesCountersRW;
                     if (rw.TotalValue.Packets == 0) {

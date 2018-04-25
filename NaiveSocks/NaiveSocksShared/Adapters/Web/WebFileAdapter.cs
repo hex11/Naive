@@ -23,6 +23,12 @@ namespace NaiveSocks
         public StringOrArray gzip_wildcard { get; set; }
         public bool gzip_listpage { get; set; } = true;
 
+        protected override void GetDetail(GetDetailContext ctx)
+        {
+            base.GetDetail(ctx);
+            ctx.AddField("dir", dir);
+        }
+
         object tmplLock = new object();
         NaiveTemplate.Template _tmpl;
         DateTime _tmplLwt;

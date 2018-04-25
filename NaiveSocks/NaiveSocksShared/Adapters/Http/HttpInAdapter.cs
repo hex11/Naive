@@ -282,7 +282,7 @@ namespace NaiveSocks
                 try {
                     var sb = new StringBuilder(p.RawRequest.Length);
                     var newHeaders = new Dictionary<string, string>(p.RequestHeaders.Count);
-                    Task WriteRequest(IMyStream stream)
+                    Task WriteRequest()
                     {
                         sb.Clear();
                         var tw = new StringWriter(sb);
@@ -291,7 +291,9 @@ namespace NaiveSocks
                             Path = realurl,
                             Headers = newHeaders
                         });
-                        return stream.WriteAsync(NaiveUtils.GetUTF8Bytes(tw.ToString()));
+                        var bytes = NaiveUtils.GetUTF8Bytes(tw.ToString());
+                        destCounterRW.W.Add(bytes.Length);
+                        return destStream.WriteAsync(bytes);
                     }
 
                     bool keepAlive = true;
@@ -318,7 +320,7 @@ namespace NaiveSocks
                     }
 
                     ProcessHeaders();
-                    await WriteRequest(destStream);
+                    await WriteRequest();
                     p.SwitchProtocol();
                     var clientStream = getStream(p);
                     if (keepAlive == false) {
@@ -395,7 +397,7 @@ namespace NaiveSocks
                         }
                         thisCounterRW.R.Add(p.RawRequestBytesLength);
                         ProcessHeaders();
-                        await WriteRequest(destStream);
+                        await WriteRequest();
                     }
                 } finally {
                     MyStream.CloseWithTimeout(destStream).Forget();

@@ -76,13 +76,16 @@ namespace NaiveSocks
             AdditionFields = 1,
             Time = 2,
             Bytes = 4,
-            All = AdditionFields | Time | Bytes,
+            OutAdapter = 8,
+            All = AdditionFields | Time | Bytes | OutAdapter,
             Default = All
         }
 
         public void ToString(StringBuilder sb, ToStringFlags flags)
         {
-            sb.Append("{{'").Append(InAdapter?.Name).Append("'");
+            sb.Append("{'").Append(InAdapter?.Name).Append("'");
+            if (ConnectResult?.Adapter != null && (flags & ToStringFlags.OutAdapter) != 0)
+                sb.Append("->'").Append(ConnectResult.Adapter.Name).Append('\'');
             if ((flags & ToStringFlags.Time) != 0)
                 sb.Append(' ').Append("T=").AppendFormat((WebSocket.CurrentTime - CreateTime).ToString("N0"));
             if ((flags & ToStringFlags.Bytes) != 0 && BytesCountersRW.TotalValue.Packets > 0)
@@ -91,11 +94,15 @@ namespace NaiveSocks
             if (addition != null)
                 sb.Append(' ').Append(addition);
             sb.Append(' ').Append("dest=").Append(Dest);
-            if (ConnectResult?.Result == ConnectResultEnum.Conneceted)
-                sb.Append(' ').Append("(OK)");
-            else if (ConnectResult?.Result == ConnectResultEnum.Failed)
-                sb.Append(' ').Append("(FAIL)");
-            sb.Append("}}");
+            if (ConnectResult != null) {
+                if (ConnectResult.Result == ConnectResultEnum.Conneceted)
+                    sb.Append(' ').Append("(OK)");
+                else if (ConnectResult.Result == ConnectResultEnum.Failed)
+                    sb.Append(' ').Append("(FAIL)");
+                else if (ConnectResult.IsRedirected)
+                    sb.Append(' ').Append("(REDIR->'").Append(ConnectResult.Redirected.Adapter?.Name).Append("')");
+            }
+            sb.Append('}');
         }
 
         public delegate Task<IMyStream> ConnectionCallbackDelegate(ConnectResult cr);
