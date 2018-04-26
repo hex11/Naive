@@ -191,20 +191,18 @@ namespace NaiveSocks
             }
         }
 
-        public bool TryParseTime(string str, out decimal seconds)
+        public bool TryParseTime(string str, out TimeSpan timeSpan)
         {
-            seconds = 0;
-            if (decimal.TryParse(str, out seconds))
-                return true;
+            if (double.TryParse(str, out var seconds))
+                goto OK;
 
             var sb = new StringBuilder(3);
             for (int i = 0; i < str.Length; i++) {
-                if (char.IsDigit(str[i]) || (str[i] == '-' || str[i] == '+' || str[i] == '.'))
+                if (char.IsDigit(str[i]) || (str[i] == '-' || str[i] == '+' || str[i] == '.')) {
                     sb.Append(str[i]);
-                else {
-                    decimal num;
-                    if (!decimal.TryParse(sb.ToString(), out num))
-                        return false;
+                } else {
+                    if (!double.TryParse(sb.ToString(), out var num))
+                        goto FAIL;
 
                     sb.Clear();
                     switch (str[i]) {
@@ -221,28 +219,33 @@ namespace NaiveSocks
                         seconds += num * 60 * 60 * 24;
                         break;
                     default:
-                        return false;
+                        goto FAIL;
                     }
                 }
             }
+
+            OK:
+            timeSpan = TimeSpan.FromSeconds(seconds);
             return true;
+
+            FAIL:
+            timeSpan = TimeSpan.Zero;
+            return false;
         }
 
         private void UpdateAbpFile(Rule rule, Action load, bool ignoreMaxage = false)
         {
             var abpfile = rule.abpfile;
-            var filepath = rule.abpfile == null ? null : Controller.ProcessFilePath(abpfile);
-            var maxage = TimeSpan.Zero;
-            if (TryParseTime(rule.abpuri_maxage, out var sec))
-                maxage = TimeSpan.FromSeconds((double)sec);
+            var filepath = Controller.ProcessFilePath(abpfile); // returns null if abpfile is null
+            var fi = filepath == null ? null : new FileInfo(filepath);
+            TryParseTime(rule.abpuri_maxage, out var maxage); // maxage is zero if failed
             var uristr = rule.abpuri;
             var uri = new Uri(uristr);
             var tag = abpfile ?? uristr;
-            var haveOldFile = filepath != null && File.Exists(filepath);
-            var fi = new FileInfo(filepath);
+            var haveOldFile = fi?.Exists ?? false;
             var lastWriteTime = haveOldFile ? fi.LastWriteTime : DateTime.MinValue;
             DateTime nextRun;
-            if (!ignoreMaxage && haveOldFile && DateTime.Now - lastWriteTime < maxage) {
+            if ((!ignoreMaxage || maxage != TimeSpan.Zero) && haveOldFile && DateTime.Now - lastWriteTime < maxage) {
                 Logger.info($"'{abpfile}' no need to update (abpuri_maxage='{rule.abpuri_maxage}')");
                 nextRun = lastWriteTime + maxage;
             } else {
