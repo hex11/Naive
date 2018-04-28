@@ -56,11 +56,10 @@ namespace NaiveTemplate
                     } else {
                         writer.Write(v);
                     }
-                } else if (node.Type == Template.NodeType.SectionBegin
-                            | node.Type == Template.NodeType.SectionBeginInverted) {
+                } else if (node.IsSectionBegin) {
                     var v = GetVal(data, node.Str);
                     var isFalse = v == null || (v is bool b && b == false);
-                    bool isInversed = node.Type == Template.NodeType.SectionBeginInverted;
+                    bool isInversed = node.Type == Template.NodeType.SectionBeginInverse;
                     if (isFalse ^ isInversed) {
                         SkipSection(template, ref i);
                     } else {
@@ -124,11 +123,10 @@ namespace NaiveTemplate
                     } else {
                         await writer.WriteAsync(v?.ToString());
                     }
-                } else if (node.Type == Template.NodeType.SectionBegin
-                            | node.Type == Template.NodeType.SectionBeginInverted) {
+                } else if (node.IsSectionBegin) {
                     var v = GetVal(data, node.Str);
                     var isFalse = v == null || (v is bool b && b == false);
-                    bool isInversed = node.Type == Template.NodeType.SectionBeginInverted;
+                    bool isInversed = node.Type == Template.NodeType.SectionBeginInverse;
                     if (isFalse ^ isInversed) {
                         SkipSection(template, ref i);
                     } else {
@@ -171,9 +169,9 @@ namespace NaiveTemplate
             int unclosed = 1;
             while (unclosed > 0) {
                 var n = template.nodes[i++];
-                if (n.Type == Template.NodeType.SectionBegin)
+                if (n.IsSectionBegin)
                     unclosed++;
-                else if (n.Type == Template.NodeType.SectionEnd)
+                else if (n.IsSectionEnd)
                     unclosed--;
             }
         }
@@ -277,7 +275,7 @@ namespace NaiveTemplate
                     } else if (tokens.TryExpectAndConsume(TokenType.TagBegin)) {
                         if (tokens.TryExpect(TokenType.Hash) || tokens.TryExpect(TokenType.Caret)) {
                             var nodeType = tokens.Consume().Type == TokenType.Hash
-                                ? NodeType.SectionBegin : NodeType.SectionBeginInverted;
+                                ? NodeType.SectionBeginNormal : NodeType.SectionBeginInverse;
                             var tag = tokens.ExpectAndConsume(TokenType.Identifier);
                             var tagStr = tag.Str;
                             tokens.ExpectAndConsume(TokenType.TagEnd);
@@ -351,14 +349,21 @@ namespace NaiveTemplate
         {
             public NodeType Type;
             public string Str;
+
+            public bool IsSectionBegin => Type == NodeType.SectionBeginNormal
+                                        | Type == NodeType.SectionBeginInverse;
+
+            public bool IsSectionEnd => Type == NodeType.SectionEnd;
+
+            public override string ToString() => Type + " " + Str;
         }
 
         public enum NodeType
         {
             Text,
             VarTag,
-            SectionBegin,
-            SectionBeginInverted,
+            SectionBeginNormal,
+            SectionBeginInverse,
             SectionEnd
         }
 
