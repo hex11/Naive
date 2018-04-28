@@ -66,6 +66,8 @@ namespace NaiveSocksAndroid
             public int manage_interval_screen_off { get; set; } = 20;
             public int manage_interval_screen_on { get; set; } = 2;
             public int notif_update_interval { get; set; } = 2;
+
+            public string title_format { get; set; } = "{0}/{1} cxn, {2:N0} KB, {3:N0} pkt, load: {4:N2}";
         }
 
         bool notification_show_logs = true;
@@ -307,8 +309,7 @@ namespace NaiveSocksAndroid
             lastRuntime = curRuntime;
             lastCpuTime = curCpuTime;
 
-            var titleFmt = "{0}/{1} cxn, {2:N0} KB, {3:N0} pkt, load: {4:N2}";
-            var title = string.Format(titleFmt, Controller.RunningConnections, Controller.TotalHandledConnections, MyStream.TotalCopiedBytes / 1024, MyStream.TotalCopiedPackets, load);
+            var title = string.Format(currentConfig.title_format ?? "", Controller.RunningConnections, Controller.TotalHandledConnections, MyStream.TotalCopiedBytes / 1024, MyStream.TotalCopiedPackets, load);
             if (title != lastTitle) {
                 needRenotify = true;
                 lastTitle = title;
