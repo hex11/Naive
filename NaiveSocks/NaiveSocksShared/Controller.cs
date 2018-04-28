@@ -241,18 +241,15 @@ namespace NaiveSocks
                         .ConfigureType<StringOrArray>(type => type
                             .WithConversionFor<TomlString>(convert => convert
                                 .FromToml(tmlString => {
-                                    var a = new StringOrArray { obj = tmlString.Get<string>() };
-                                    return a;
+                                    return new StringOrArray { obj = tmlString.Get<string>() };
                                 }))
                             .WithConversionFor<TomlTable>(convert => convert
                                 .FromToml(tmlTable => {
-                                    var a = new StringOrArray { obj = tmlTable.Get<string>() };
-                                    return a;
+                                    return new StringOrArray { obj = tmlTable.Get<string>() };
                                 }))
                             .WithConversionFor<TomlArray>(convert => convert
-                                .FromToml(tmlTable => {
-                                    var a = new StringOrArray { obj = tmlTable.Get<string[]>() };
-                                    return a;
+                                .FromToml(tmlArray => {
+                                    return new StringOrArray { obj = tmlArray.Get<string[]>() };
                                 })))
                     );
                 tomlTable = Toml.ReadString(toml, tomlSettings);

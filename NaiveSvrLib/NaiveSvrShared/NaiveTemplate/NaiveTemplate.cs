@@ -229,6 +229,8 @@ namespace NaiveTemplate
 
         public void Add(string key, Func<TextWriter, Task> asyncWriter) => add(key, asyncWriter);
 
+        public void Add(string key, Func<string, object> func) => add(key, func);
+
         public object GetValue(string key)
         {
             try {

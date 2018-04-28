@@ -163,6 +163,7 @@ namespace Naive.HttpSvr
                 if (slashIndex >= 0)
                     prefix = p.RealPathEscaped.Substring(slashIndex + 1) + "/";
             }
+
             var subData = new TemplaterData();
             data.Add("dirs", Directory.EnumerateDirectories(path).Select(x => {
                 var name = Path.GetFileName(x);
@@ -173,7 +174,7 @@ namespace Naive.HttpSvr
             data.Add("files", Directory.EnumerateFiles(path).Select(x => {
                 var fi = new FileInfo(x);
                 var name = fi.Name;
-                subData.Dict["url"] = prefix + HttpUtil.UrlEncode(prefix + name);
+                subData.Dict["url"] = prefix + HttpUtil.UrlEncode(name);
                 subData.Dict["name"] = HttpUtil.HtmlAttributeEncode(name);
                 long length;
                 try {
