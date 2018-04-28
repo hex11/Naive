@@ -285,7 +285,7 @@ namespace NaiveSocks
                 }
                 ch = CreateRemoteChannel(chid);
             }
-            data.Sub(cur);
+            data.SubSelf(cur);
             ch.RsvMsgReceived(msg);
         }
 
@@ -359,7 +359,7 @@ namespace NaiveSocks
             {
                 var cur = 0;
                 int id = getChId(m, bv, ref cur);
-                bv.Sub(cur);
+                bv.SubSelf(cur);
                 return new Frame { Id = id, Data = bv };
             }
 

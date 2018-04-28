@@ -76,7 +76,7 @@ namespace LZ4pn
                     var cur = 0;
                     var firstByte = x[cur++];
                     if (firstByte == 0x00) {
-                        x.Sub(1);
+                        x.SubSelf(1);
                         return;
                     }
                     int outputLength;

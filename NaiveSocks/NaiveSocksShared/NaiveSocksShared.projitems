@@ -22,7 +22,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)Compression\LZ4\LZ4Codec.Unsafe64.Dirty.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Compression\LZ4\LZ4Codec.Unsafe64HC.Dirty.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Compression\LZ4\LZ4Filter.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Encryption\Poly1305.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Encryption\Speck.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)InverseMuxStream.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Encryption\Chacha20.cs" />

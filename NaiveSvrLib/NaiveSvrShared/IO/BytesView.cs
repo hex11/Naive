@@ -52,7 +52,7 @@ namespace Naive.HttpSvr
             return new BytesView(bytes, offset, len) { nextNode = nextNode };
         }
 
-        public void Sub(int startIndex)
+        public void SubSelf(int startIndex)
         {
             // TODO
             if (len < startIndex)

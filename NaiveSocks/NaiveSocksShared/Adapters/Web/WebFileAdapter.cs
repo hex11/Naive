@@ -121,10 +121,11 @@ namespace NaiveSocks
                             await NaiveUtils.StreamCopyAsync(reader, fs);
                         }
                     } catch (Exception e) {
+                        Logger.exception(e, Logging.Level.Warning, $"uploading '{fileName}' by {p.myStream}.");
                         File.Delete(realPath);
                         if (e is DisconnectedException)
                             return;
-                        info = "read/wring error";
+                        info = "IO error.";
                         goto FAIL;
                     }
                     Logger.info($"uploaded '{fileName}' by {p.myStream}.");

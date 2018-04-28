@@ -394,7 +394,7 @@ namespace Naive.HttpSvr
                     } else {
                         int iVLength = iVEncryptor.IVLength;
                         iVEncryptor.IV = bv.GetBytes(0, iVLength, true);
-                        bv.Sub(iVLength);
+                        bv.SubSelf(iVLength);
                     }
                 }
                 foreach (var item in bv) {

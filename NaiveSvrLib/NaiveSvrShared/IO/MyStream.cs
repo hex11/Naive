@@ -793,11 +793,13 @@ namespace NaiveSocks
                 if (curnode.len > 0) {
                     var size = Math.Min(bs.Len, curnode.len);
                     Buffer.BlockCopy(curnode.bytes, curnode.offset, bs.Bytes, bs.Offset + pos, size);
-                    curnode.Sub(size);
+                    curnode.SubSelf(size);
                     pos += size;
                 }
             } while (pos < bs.Len && (curnode = curnode.nextNode) != null);
-            if (curnode.tlen > 0) {
+            if (curnode == null || curnode.tlen == 0) {
+                latestMsg = null;
+            } else {
                 latestMsg = curnode;
             }
             return pos;
