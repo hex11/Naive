@@ -5,7 +5,7 @@ function STEP {
 	echo "=> $*"
 }
 
-buildrids=("linux-x64/tar.gz" "win-x86/zip" "win-x64/zip")
+buildrids=("linux-x64/tar.gz" "android/zip" "win-x86/zip" "win-x64/zip")
 
 dotnetdir=.
 
