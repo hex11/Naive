@@ -192,9 +192,9 @@ namespace NaiveSocks
                 }
             });
             cmdHub.AddCmdHandler(prefix + "logs", command => {
-                var logs = Logging.getLogsHistoryArray();
                 var cmd = command.ArgOrNull(0);
                 if (cmd == "dump") {
+                    var logs = Logging.getLogsHistoryArray();
                     var path = command.ArgOrNull(1);
                     if (path == null) {
                         command.WriteLine("missing path.");
@@ -210,32 +210,15 @@ namespace NaiveSocks
                         }
                     }
                 } else if (cmd == "show") {
-                    var con = command.Console;
-                    foreach (var item in logs) {
-                        ConsoleColor color;
-                        switch (item.level) {
-                        default:
-                        case Logging.Level.None:
-                            color = ConsoleColor.Gray;
-                            break;
-                        case Logging.Level.Info:
-                            color = ConsoleColor.White;
-                            break;
-                        case Logging.Level.Warning:
-                            color = ConsoleColor.Yellow;
-                            break;
-                        case Logging.Level.Error:
-                            color = ConsoleColor.Red;
-                            break;
-                        }
-                        con.ForegroundColor = color;
-                        command.Write(item.timestamp);
-                        con.CustomColorEnabled = false;
-                        command.WriteLine(item.text);
+                    Logging.Log[] logs;
+                    if (command.ArgOrNull(1) == null) {
+                        logs = Logging.getLogsHistoryArray();
+                    } else {
+                        var count = int.Parse(command.ArgOrNull(1));
+                        logs = new Logging.Log[count];
+                        Logging.getLogsHistory(new ArraySegment<Logging.Log>(logs));
                     }
-                    con.ForegroundColor = ConsoleColor.Blue;
-                    command.WriteLine($"(total {logs.Length} logs)");
-                    con.ResetColor();
+                    PrintLogs(command.Console, logs);
                 } else if (cmd == "test") {
                     var strs = Enumerable.Range(1, 9).Select(x => new string((char)('0' + x), x)).ToArray();
                     for (int i = 0; i < 10_000; i++) {
@@ -602,6 +585,40 @@ namespace NaiveSocks
                     cmd.WriteLine($"waiting timed out.");
                 }
             }, "Usage: mping [start|stop]");
+        }
+
+        private static void PrintLogs(CmdConsole con, Logging.Log[] logs)
+        {
+            foreach (var item in logs) {
+                PrintLog(con, item);
+            }
+            con.ForegroundColor = ConsoleColor.Blue;
+            con.WriteLine($"({logs.Length} logs)");
+            con.ResetColor();
+        }
+
+        private static void PrintLog(CmdConsole con, Logging.Log item)
+        {
+            ConsoleColor color;
+            switch (item.level) {
+            default:
+            case Logging.Level.None:
+                color = ConsoleColor.Gray;
+                break;
+            case Logging.Level.Info:
+                color = ConsoleColor.White;
+                break;
+            case Logging.Level.Warning:
+                color = ConsoleColor.Yellow;
+                break;
+            case Logging.Level.Error:
+                color = ConsoleColor.Red;
+                break;
+            }
+            con.ForegroundColor = color;
+            con.Write(item.timestamp);
+            con.CustomColorEnabled = false;
+            con.WriteLine(item.text);
         }
 
         private static void TestSocketWrite(Stopwatch sw, IPEndPoint ep, int bufSize, int count)

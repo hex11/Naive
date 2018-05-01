@@ -166,6 +166,11 @@ namespace Naive.HttpSvr
             return logBuffer.GetLogs();
         }
 
+        public static int getLogsHistory(ArraySegment<Log> arrSeg)
+        {
+            return logBuffer.GetLastLogs(arrSeg);
+        }
+
         public static void log(string text)
         {
             log(text, Level.None);
@@ -472,7 +477,6 @@ namespace Naive.HttpSvr
         int bufferSize;
         int head, tail;
 
-        int remaining => (tail > head) ? tail - head - 1 : bufferSize - head + tail;
         int remainingSeq => (tail > head) ? tail - head - 1 : bufferSize - head;
 
         public void Add(Logging.Log log)
@@ -589,6 +593,25 @@ namespace Naive.HttpSvr
                     }
                 }
                 return ret;
+            }
+        }
+
+        public int GetLastLogs(ArraySegment<Logging.Log> arrseg)
+        {
+            lock (logs) {
+                var array = arrseg.Array;
+                int arrayIndex = arrseg.Offset;
+                var count = arrseg.Count;
+                count = Math.Min(logs.Count, count);
+                int i = 0;
+                int begin = logs.Count - count;
+                foreach (var item in logs) {
+                    if (i >= begin) {
+                        array[arrayIndex++] = item.GetLog(this);
+                    }
+                    i++;
+                }
+                return count;
             }
         }
 
