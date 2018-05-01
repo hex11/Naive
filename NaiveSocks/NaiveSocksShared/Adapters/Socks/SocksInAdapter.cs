@@ -1,13 +1,44 @@
-﻿using System.Net;
+﻿using System.Linq;
+using System.Net;
 using System.Net.Sockets;
 using System.Threading.Tasks;
 using Naive.HttpSvr;
+using Nett;
 
 namespace NaiveSocks
 {
     public class SocksInAdapter : InAdapterWithListener
     {
-        public bool fastopen { get; set; } = false;
+        public bool fastreply { get; set; } = false;
+
+        public User[] users { get; set; }
+
+        public struct User
+        {
+            public string name { get; set; }
+            public string passwd { get; set; }
+            public AdapterRef @out { get; set; }
+        }
+
+        bool _allowNoAuth;
+        AdapterRef _noAuthOut;
+
+        public override void SetConfig(TomlTable toml)
+        {
+            base.SetConfig(toml);
+            _noAuthOut = @out;
+            if (users == null) {
+                _allowNoAuth = true;
+            } else {
+                foreach (var x in users) {
+                    if (x.name.IsNullOrEmpty() && x.passwd.IsNullOrEmpty()) {
+                        _allowNoAuth = true;
+                        _noAuthOut = x.@out ?? @out;
+                        break;
+                    }
+                }
+            }
+        }
 
         public override void OnNewConnection(TcpClient client)
         {
@@ -25,15 +56,36 @@ namespace NaiveSocks
                 _eppair = EPPair.FromSocket(tcp.Client);
                 _adapter = adapter;
                 socks5svr = new Socks5Server(tcp);
+
+                Socks5Server.Methods methods = Socks5Server.Methods.None;
+                if (adapter._allowNoAuth)
+                    methods |= Socks5Server.Methods.NoAuth;
+                if (adapter.users != null)
+                    methods |= Socks5Server.Methods.UsernamePassword;
+                socks5svr.AcceptMethods = methods;
+
+                var outRef = adapter._noAuthOut;
+
+                socks5svr.Auth = (s) => {
+                    if (s.Username.IsNullOrEmpty() && s.Password.IsNullOrEmpty() && adapter._allowNoAuth)
+                        return true;
+                    foreach (var x in adapter.users) {
+                        if ((x.name ?? "") == s.Username && (x.passwd ?? "") == s.Password) {
+                            outRef = x.@out ?? adapter.@out;
+                            return true;
+                        }
+                    }
+                    return false;
+                };
                 socks5svr.RequestingToConnect = async (s) => {
                     this.Dest.Host = s.TargetAddr;
                     this.Dest.Port = s.TargetPort;
                     this.DataStream = s.Stream;
-                    if (adapter.fastopen)
+                    if (adapter.fastreply)
                         await OnConnectionResult(new ConnectResult(null, ConnectResultEnum.Conneceted)).CAF();
                     NaiveUtils.RunAsyncTask(async () => {
                         using (tcp) {
-                            await _adapter.Controller.HandleInConnection(this);
+                            await _adapter.Controller.HandleInConnection(this, outRef);
                         }
                     }).Forget();
                 };
@@ -41,7 +93,15 @@ namespace NaiveSocks
 
             public async Task Start()
             {
-                await socks5svr.ProcessAsync();
+                bool fail = false;
+                try {
+                    if (!await socks5svr.ProcessAsync()) {
+                        MyStream.CloseWithTimeout(socks5svr.Stream).Forget();
+                    }
+                } catch (System.Exception) {
+                    MyStream.CloseWithTimeout(socks5svr.Stream).Forget();
+                    throw;
+                }
             }
 
             protected override async Task OnConnectionResult(ConnectResult result)

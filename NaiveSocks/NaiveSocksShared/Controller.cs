@@ -478,6 +478,17 @@ namespace NaiveSocks
             return HandleInConnection(inc, selectedAdapter);
         }
 
+        public virtual Task HandleInConnection(InConnection inc, AdapterRef outAdapterRef)
+        {
+            if (outAdapterRef == null)
+                throw new ArgumentNullException(nameof(outAdapterRef));
+            IConnectionHandler adapter = outAdapterRef.Adapter as IConnectionHandler;
+            if (adapter == null)
+                if (LoggingLevel <= Logging.Level.Warning)
+                    warning($"out adapter ({outAdapterRef}) not found");
+            return HandleInConnection(inc, adapter);
+        }
+
         public virtual async Task HandleInConnection(InConnection inc, IConnectionHandler outAdapter)
         {
             try {

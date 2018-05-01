@@ -14,11 +14,25 @@ namespace NaiveSocks
         public byte[] buf;
 
         public Func<Socks5Server, Task> RequestingToConnect;
+        public Func<Socks5Server, bool> Auth;
 
         public string TargetAddr { get; private set; }
         public int TargetPort { get; private set; }
 
+        public string Username { get; private set; }
+        public string Password { get; private set; }
+
         public Socks5Status Status { get; private set; } = Socks5Status.OpenningHandshake;
+
+        public Methods AcceptMethods { get; set; } = Methods.NoAuth;
+
+        [Flags]
+        public enum Methods
+        {
+            None,
+            NoAuth = 1,
+            UsernamePassword = 2
+        }
 
         public enum Socks5Status
         {
@@ -35,30 +49,64 @@ namespace NaiveSocks
             Stream = MyStream.FromSocket(socket.Client);
         }
 
-        public async Task ProcessAsync()
+        public async Task<bool> ProcessAsync()
         {
             buf = new byte[256];
             var read = await Stream.ReadAsync(buf, 0, buf.Length);
-            if (read >= 3) {
-                var version = buf[0];
-                var nmethod = buf[1];
-                checkVersion(version);
-                if (nmethod == 0)
-                    throw getException("nmethod is zero");
-                byte succeedMethod = 0xff; // NO ACCEPTABLE METHODS
-                for (int i = 0; i < nmethod; i++) {
-                    var method = buf[2 + i];
-                    if (method == 0) { // NO AUTHENTICATION REQUIRED
-                        succeedMethod = 0;
-                        break;
-                    }
-                }
-                await WriteMethodSelectionMessage(succeedMethod);
-                if (succeedMethod == 0xff)
-                    return;
-                //Console.WriteLine($"(socks5) {Client.Client.RemoteEndPoint} handshake.");
-                await processRequests();
+            if (read < 3)
+                return false;
+
+            var version = buf[0];
+            var nmethod = buf[1];
+            checkVersion(version);
+            if (nmethod == 0)
+                throw getException("nmethod is zero");
+            var correctLen = 2 + nmethod;
+            if (read > correctLen)
+                throw getException("unexpected packet length");
+            while (read < correctLen) {
+                var r = await Stream.ReadAsync(buf, read, correctLen - read);
+                if (r == 0)
+                    throw getException("unexpected EOF");
+                read += r;
             }
+            byte succeedMethod = 0xff; // NO ACCEPTABLE METHODS
+            for (int i = 0; i < nmethod; i++) {
+                var method = buf[2 + i];
+                if (method == 0 && succeedMethod != 2 && (AcceptMethods & Methods.NoAuth) != 0) { // NO AUTHENTICATION REQUIRED
+                    succeedMethod = 0;
+                } else if (method == 2 && (AcceptMethods & Methods.UsernamePassword) != 0) { // USERNAME/PASSWORD
+                    succeedMethod = 2;
+                }
+            }
+            await WriteMethodSelectionMessage(succeedMethod);
+            if (succeedMethod == 0xff)
+                return false;
+            if (succeedMethod == 2) {
+                // https://tools.ietf.org/html/rfc1929
+                await Stream.ReadAllAsync(buf, 2);
+                var ver = buf[0];
+                var ulen = buf[1];
+
+                await Stream.ReadAllAsync(buf, ulen);
+                Username = Encoding.ASCII.GetString(buf, 0, ulen);
+
+                await Stream.ReadAllAsync(buf, 1);
+                var plen = buf[0];
+
+                await Stream.ReadAllAsync(buf, plen);
+                Password = Encoding.ASCII.GetString(buf, 0, plen);
+
+                var ok = Auth?.Invoke(this) ?? false;
+                buf[0] = 1;
+                buf[1] = (byte)(ok ? 0 : 1);
+                await Stream.WriteAsync(buf, 0, 2);
+                if (!ok)
+                    return false;
+            }
+            //Console.WriteLine($"(socks5) {Client.Client.RemoteEndPoint} handshake.");
+            await processRequests();
+            return true;
         }
 
         private void checkVersion(byte version)
@@ -99,7 +147,7 @@ namespace NaiveSocks
                 TargetPort = b[0] << 8;
                 TargetPort |= b[1];
                 Status = Socks5Status.ProcessingRequest;
-                await Naive.HttpSvr.NaiveUtils.RunAsyncTask(() => RequestingToConnect?.Invoke(this));
+                await RequestingToConnect?.Invoke(this).NoNRE();
             } else {
                 await WriteReply(Rep.Command_not_supported);
             }
