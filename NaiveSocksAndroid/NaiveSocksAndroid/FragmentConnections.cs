@@ -105,6 +105,9 @@ namespace NaiveSocksAndroid
 
             sb.Clear();
             sb.Append(conn.BytesCountersRW.ToString()).Append(" T=").Append(WebSocket.CurrentTime - conn.CreateTime);
+            var adap = conn.ConnectResult?.Adapter;
+            if (adap != null)
+                sb.Append(" -> '").Append(adap.Name).Append("'");
             using (var tv = new TextView(themeWrapper) { Text = sb.ToString(), Gravity = GravityFlags.End }) {
                 tv.SetBackgroundColor(Color.Argb(30, 128, 128, 128));
                 connParent.AddView(tv);
