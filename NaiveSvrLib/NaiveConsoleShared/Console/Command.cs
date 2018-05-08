@@ -36,13 +36,15 @@ namespace Naive.Console
         }
 
         private const string defaultPrompt = "Select: ";
+
         public string Select(string title, IDictionary<string, string> selections, string prompt = defaultPrompt, bool loopUntilSelect = true)
         {
             do {
                 if (title != null)
-                    WriteLine(title);
+                    Console.Write(title + "\n", ConsoleColor.Cyan);
                 foreach (var item in selections) {
-                    WriteLine($"    {item.Key}: {item.Value}");
+                    Console.Write($"    {item.Key + ")",3} ", ConsoleColor.White);
+                    Console.WriteLine(item.Value);
                 }
                 var line = ReadLine(prompt);
                 if (line == null)
@@ -55,7 +57,7 @@ namespace Naive.Console
             return null;
         }
 
-        public string Select(string title, IList<string> selections, string prompt = defaultPrompt, bool loopUntilSelect = true)
+        public int Select(string title, IList<string> selections, string prompt = defaultPrompt, bool loopUntilSelect = true)
         {
             var dict = new Dictionary<string, string>();
             int i = 0;
@@ -64,25 +66,39 @@ namespace Naive.Console
             }
             var key = Select(title, dict, prompt, loopUntilSelect);
             if (key == null)
+                return -1;
+            return int.Parse(key) - 1;
+        }
+
+        public string SelectString(string title, IList<string> selections, string prompt = defaultPrompt, bool loopUntilSelect = true)
+        {
+            var index = Select(title, selections, prompt, loopUntilSelect);
+            if (index < 0)
                 return null;
-            return selections[int.Parse(key) - 1];
+            return selections[index];
         }
 
         public T Select<T>(string title, IDictionary<string, T> selections, string prompt = defaultPrompt, bool loopUntilSelect = true)
         {
             var dict = new Dictionary<string, string>();
-            var key = Select(title, (from x in selections select x.Key).ToList(), prompt, loopUntilSelect);
+            var key = SelectString(title, (from x in selections select x.Key).ToList(), prompt, loopUntilSelect);
             if (key == null)
                 return default(T);
             return selections[key];
         }
 
-        public bool YesOrNo(string prompt, bool Default)
+        public bool YesOrNo(string prompt, bool? Default)
         {
             while (true) {
-                var line = ReadLine(prompt + (Default ? " (Y/n): " : " (y/N): "))?.Trim();
-                if (line == null || line?.Length == 0)
-                    return Default;
+                var line = ReadLine(prompt + (Default == null ? " (y/n): " : Default.Value ? " (Y/n): " : " (y/N): "))?.Trim();
+                if (line == null)
+                    throw new Exception();
+                if (line.Length == 0) {
+                    if (Default != null)
+                        return Default.Value;
+                    else
+                        continue;
+                }
                 bool? v = "yes".StartsWith(line, StringComparison.OrdinalIgnoreCase) ? true :
                         "no".StartsWith(line, StringComparison.OrdinalIgnoreCase) ? false :
                         (bool?)null;
