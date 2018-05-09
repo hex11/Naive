@@ -116,8 +116,9 @@ namespace NaiveSocks
             });
             cmdHub.AddCmdHandler(prefix + "wsc", (cmd) => {
                 cmd.WriteLine($"# managed websocket connections ({WebSocket.ManagedWebSockets.Count}): ");
+                var curTime = WebSocket.CurrentTime;
                 foreach (var item in WebSocket.ManagedWebSockets.ToArray()) {
-                    cmd.WriteLine($"{item} LatestActive/StartTime={item.LatestActiveTime - WebSocket.CurrentTime}/{item.CreateTime - WebSocket.CurrentTime}");
+                    cmd.WriteLine($"{item} LatestActive/StartTime={item.LatestActiveTime - curTime}/{item.CreateTime - curTime}");
                 }
             });
             cmdHub.AddCmdHandler(prefix + "reload", command => {
@@ -249,7 +250,7 @@ namespace NaiveSocks
                                 item.Run(cmd.Console);
                         }
                     } else {
-                        tests[index].Run(cmd.Console);
+                        tests[index - 1].Run(cmd.Console);
                     }
                     cmd.WriteLine("");
                 }

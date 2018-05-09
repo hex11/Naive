@@ -14,11 +14,6 @@ namespace Naive.HttpSvr
 {
     public class WebSocket : FilterBase, IDisposable, IMsgStream, IMsgStreamStringSupport
     {
-        static WebSocket()
-        {
-            SetTimeTask(true);
-        }
-
         public WebSocket(Stream BaseStream, bool isClient)
         {
             this.BaseStream = BaseStream;
@@ -84,7 +79,7 @@ namespace Naive.HttpSvr
         }
 
         private static readonly Action<WebSocket> _activated = socket => {
-            socket.LatestActiveTime = CurrentTime;
+            socket.LatestActiveTime = CurrentTimeRough;
         };
 
         public AsyncEvent<WebSocketMsg> ReceivedAsync = new AsyncEvent<WebSocketMsg>();
@@ -95,20 +90,6 @@ namespace Naive.HttpSvr
         public event Action<WebSocket> Closed;
         public event Action<WebSocket> Activated;
         public States ConnectionState = States.Opening;
-
-        static Timer _timeTaskTimer = new Timer(_ => {
-            CurrentTime += _timeAcc;
-        });
-
-        private static void SetTimeTask(bool run)
-        {
-            var timer = _timeTaskTimer;
-            if (run) {
-                timer.Change(_timeAcc * 1000, _timeAcc * 1000);
-            } else {
-                timer.Change(Timeout.Infinite, Timeout.Infinite);
-            }
-        }
 
         private static int _timeAcc = 1;
         public static int TimeAcc
@@ -137,40 +118,78 @@ namespace Naive.HttpSvr
             _timeAcc = timeAcc;
             _manageInterval = manageInterval;
 
-            if (timeAcc * 1000 == manageInterval) {
-                SetTimeTask(false);
-                incrTimeByManageTask = true;
-                CheckManageTask();
-            } else {
-                if (incrTimeByManageTask) {
-                    incrTimeByManageTask = false;
-                    SetTimeTask(true);
+            CheckManageTask();
+        }
+
+        private static int _RoughTime = 0;
+
+        private static bool _dontCalcTime = false;
+
+        public static int CurrentTime
+        {
+            get {
+                if (_dontCalcTime) {
+                    return _RoughTime;
+                } else {
+                    var calcTime = CalcCurrentTime();
+                    _RoughTime = calcTime;
+                    return calcTime;
                 }
             }
         }
 
-        static bool incrTimeByManageTask = false;
+        public static int CurrentTimeRough => _RoughTime;
 
-        public static int CurrentTime { get; private set; } = 0;
+        static long _totalMsUntilLastTicks = 0;
+
+        static int _lastTicks = Environment.TickCount;
+
+        static readonly object _lastTicksLock = new object();
+
+        private static int CalcCurrentTime()
+        {
+            var curTicks = Environment.TickCount;
+            var laTicks = _lastTicks;
+            
+            if (curTicks >= laTicks) {
+                var delta = curTicks - laTicks;
+                return (int)((_totalMsUntilLastTicks + delta) / 1000);
+            } else {
+                lock (_lastTicksLock) {
+                    var delta = (int.MaxValue - laTicks) + (curTicks - int.MinValue) + 1;
+                    _lastTicks = curTicks;
+                    _totalMsUntilLastTicks += delta;
+                    return (int)(_totalMsUntilLastTicks / 1000);
+                }
+            }
+        }
+
         public int CreateTime = CurrentTime;
         public int LatestActiveTime = CurrentTime;
 
-        static object _manageLock = new object();
+        static readonly object _manageLock = new object();
 
         static Thread _manageThread;
+
+        static readonly AutoResetEvent _manageIntervalShrinked = new AutoResetEvent(false);
 
         static void ManageThread(object obj)
         {
             while (true) {
                 var interval = _manageInterval;
-                var incrTime = incrTimeByManageTask ? _timeAcc : 0;
-                Thread.Sleep(interval);
-                if (incrTime > 0) {
-                    CurrentTime += incrTime;
+                if (_manageIntervalShrinked.WaitOne(interval)) {
+                    Thread.Sleep(_manageInterval);
                 }
 
-                CheckManagedWebsocket();
-                RunAdditionalTasks();
+                _RoughTime = CalcCurrentTime();
+                _dontCalcTime = true;
+
+                try {
+                    CheckManagedWebsocket();
+                    RunAdditionalTasks();
+                } finally {
+                    _dontCalcTime = false;
+                }
             }
         }
 

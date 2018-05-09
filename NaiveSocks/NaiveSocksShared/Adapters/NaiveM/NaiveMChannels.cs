@@ -596,7 +596,7 @@ namespace NaiveSocks
                 asStream = BaseStream.ToStream();
             ReRecv:
             var lengthStr = await NaiveUtils.ReadStringUntil(asStream, NaiveUtils.CRLFBytes, maxLength: 32, withPattern: false);
-            latestRecv = WebSocket.CurrentTime;
+            latestRecv = WebSocket.CurrentTimeRough;
             if (lengthStr == "01") {
                 await NaiveUtils.ReadBytesUntil(asStream, NaiveUtils.CRLFBytes, maxLength: 32, withPattern: false);
                 goto ReRecv;
@@ -653,7 +653,7 @@ namespace NaiveSocks
         private Task _SendMsg(Msg msg)
         {
             //Logging.debug("send: " + msg.Data.tlen);
-            latestSend = WebSocket.CurrentTime;
+            latestSend = WebSocket.CurrentTimeRough;
             OnWrite(msg.Data);
             var tlen = msg.Data.tlen;
             var chunkHeader = getChunkSizeBytes(tlen);
@@ -693,8 +693,8 @@ namespace NaiveSocks
             return Encoding.UTF8.GetBytes(chunkSize);
         }
 
-        int latestSend = WebSocket.CurrentTime;
-        int latestRecv = WebSocket.CurrentTime;
+        int latestSend = WebSocket.CurrentTimeRough;
+        int latestRecv = WebSocket.CurrentTimeRough;
 
         public void AddManagedTask(bool isSending, int timeout)
         {
@@ -725,7 +725,7 @@ namespace NaiveSocks
                         if (tmp != null)
                             await tmp;
                         await BaseStream.WriteAsync(NaiveUtils.GetUTF8Bytes("01\r\n" + (char)NaiveUtils.Random.Next('A', 'z') + "\r\n"));
-                        latestSend = WebSocket.CurrentTime;
+                        latestSend = WebSocket.CurrentTimeRough;
                     } catch (Exception) {
                         if (State != MsgStreamStatus.Close)
                             await Close(CloseOpt.Close);

@@ -148,8 +148,9 @@ namespace NaiveSocks
               .AppendLine($"<body style='margin: 0 auto; max-width: 100ch; padding: 8px;'>" +
                             $"<h1 style='text-align: center'>NNetwork '{domain}'</h1>");
             sb.AppendLine("<h2>Connected Clients</h2><pre style='overflow: auto;'>");
+            var curTime = WebSocket.CurrentTime;
             foreach (var item in clients) {
-                sb.AppendLine($"{string.Join("\t", item.names)}\tCreateTime: {item.CreateTime - WebSocket.CurrentTime}");
+                sb.AppendLine($"{string.Join("\t", item.names)}\tCreateTime: {item.CreateTime - curTime}");
             }
             sb.AppendLine()
               .AppendLine("</pre><h2>Request Info</h2><pre style='overflow: auto;'>")
