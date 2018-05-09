@@ -114,6 +114,8 @@ namespace NaiveSocksAndroid
                     Manifest.Permission.WriteExternalStorage
                 }, 1);
             }
+
+            drawer.OpenDrawer(GravityCompat.Start);
         }
 
         protected override void OnStart()
@@ -126,7 +128,7 @@ namespace NaiveSocksAndroid
         {
             if (bgServiceConn?.IsConnected == true)
                 this.UnbindService(bgServiceConn);
-            GC.Collect(0);
+            Task.Delay(100).ContinueWith((t) => GC.Collect(0));
             base.OnStop();
         }
 
