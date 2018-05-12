@@ -419,7 +419,7 @@ namespace NaiveSocks
                     return;
                 pingTaskVersion++;
                 if (value) {
-                    pingTask = _PingTask((t) => Logger?.info($"{BaseChannels.ToString()}: {t}"), CancellationToken.None, pingTaskVersion);
+                    pingTask = _PingTask((t) => Logger?.info($"{BaseChannels}: {t}"), CancellationToken.None, pingTaskVersion);
                 } else {
                     pingTask = null;
                 }

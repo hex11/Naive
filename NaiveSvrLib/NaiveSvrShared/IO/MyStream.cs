@@ -584,66 +584,6 @@ namespace NaiveSocks
         }
     }
 
-    public abstract class SocketStream : MyStream, IMyStreamSync, IMyStreamBeginEnd
-    {
-        protected SocketStream(Socket socket)
-        {
-            this.Socket = socket;
-            this.EPPair = EPPair.FromSocket(socket);
-        }
-
-        public EPPair EPPair { get; }
-        public Socket Socket { get; }
-
-        public override string ToString() => $"{{Socket {State} {EPPair.ToString()}}}";
-
-        public override Task Close()
-        {
-            Logging.debug($"{this}: close");
-            this.State = MyStreamState.Closed;
-            Socket.Close();
-            return NaiveUtils.CompletedTask;
-        }
-
-        public override Task Shutdown(SocketShutdown direction)
-        {
-            Logging.debug($"{this}: local shutdown");
-            this.State |= MyStreamState.LocalShutdown;
-            Socket.Shutdown(direction);
-            return NaiveUtils.CompletedTask;
-        }
-
-        public virtual void Write(BytesSegment bs)
-        {
-            Socket.Send(bs.Bytes, bs.Offset, bs.Len, SocketFlags.None);
-        }
-
-        public virtual int Read(BytesSegment bs)
-        {
-            return Socket.Receive(bs.Bytes, bs.Offset, bs.Len, SocketFlags.None);
-        }
-
-        public IAsyncResult BeginWrite(byte[] buffer, int offset, int count, AsyncCallback callback, object state)
-        {
-            return Socket.BeginSend(buffer, offset, count, SocketFlags.None, callback, state);
-        }
-
-        public void EndWrite(IAsyncResult asyncResult)
-        {
-            Socket.EndSend(asyncResult);
-        }
-
-        public IAsyncResult BeginRead(byte[] buffer, int offset, int count, AsyncCallback callback, object state)
-        {
-            return Socket.BeginReceive(buffer, offset, count, SocketFlags.None, callback, state);
-        }
-
-        public int EndRead(IAsyncResult asyncResult)
-        {
-            return Socket.EndReceive(asyncResult);
-        }
-    }
-
     public class StreamFromMyStream : Stream, IHaveBaseStream
     {
         public StreamFromMyStream(IMyStream baseStream)

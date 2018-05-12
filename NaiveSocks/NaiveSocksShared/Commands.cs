@@ -23,7 +23,7 @@ namespace NaiveSocks
 
         public static void NewbieWizard(Command cmd, Controller c, string configFilePath)
         {
-            cmd.WriteLine($"** Naive Setup Wizard **\n");
+            cmd.Console.Write($"** Naive Setup Wizard **\n\n", ConsoleColor.White);
             var template = cmd.Select("This is:", new Dictionary<string, Func<string>> {
                 ["Client"] = () => {
                     var server = cmd.ReadLine("Server addr:port (e.g., baidu.com:80): ");
@@ -141,7 +141,9 @@ namespace NaiveSocks
                 command.WriteLine($"WorkingSet: {proc.WorkingSet64.ToString("N0")}");
                 command.WriteLine($"PrivateMemory: {proc.PrivateMemorySize64.ToString("N0")}");
                 command.WriteLine($"CPUTime: {proc.TotalProcessorTime.TotalMilliseconds.ToString("N0")} ms");
-                command.WriteLine($"Threads: {proc.Threads.Count}");
+                ThreadPool.GetMinThreads(out var workersMin, out var portsMin);
+                ThreadPool.GetMaxThreads(out var workersMax, out var portsMax);
+                command.WriteLine($"Threads: {proc.Threads.Count} (workers: {workersMin}-{workersMax}, ports: {portsMin}-{portsMax})");
                 command.WriteLine($"Connections: {controller.RunningConnections:N0} running, {controller.TotalHandledConnections} handled");
                 command.WriteLine($"MyStream Copied: {MyStream.TotalCopiedPackets:N0} packets, {MyStream.TotalCopiedBytes:N0} bytes");
                 command.WriteLine($"SocketStream1: {SocketStream1.GlobalCounters.StringRead};");
@@ -305,6 +307,10 @@ namespace NaiveSocks
                     cmd.WriteLine($"waiting timed out.");
                 }
             }, "Usage: mping [start|stop]");
+            cmdHub.AddCmdHandler(prefix + "settp", cmd => {
+                ThreadPool.SetMinThreads(cmd.ArgOrNull(0).ToInt(), cmd.ArgOrNull(1).ToInt());
+                ThreadPool.SetMaxThreads(cmd.ArgOrNull(2).ToInt(), cmd.ArgOrNull(3).ToInt());
+            }, "workerMin portMin workerMax portMax");
         }
 
         static byte[] sampleKey(int bytesCount) => NaiveProtocol.GetRealKeyFromString("testtttt", bytesCount);
@@ -530,11 +536,11 @@ namespace NaiveSocks
                 }).RunSync();
                 listener.Stop();
             }),
-            new TestItem("localhost socket sync", (ctx) => {
-                var ep = new IPEndPoint(IPAddress.Loopback, NaiveUtils.Random.Next(20000, 60000));
+            new TestItem("localhost socket 1 sync", (ctx) => {
+                var ep = new IPEndPoint(IPAddress.Loopback, NaiveUtils.Random.Next(50000, 60000));
                 var listener = new Listener(ep) { LogInfo = false };
                 listener.Accepted += (x) => {
-                    var stream = new SocketStream2(x.Client);
+                    var stream = new SocketStream1(x.Client);
                     var buf = new byte[32 * 1024];
                     while (stream.Read(buf) > 0) {
                     }
@@ -543,7 +549,7 @@ namespace NaiveSocks
                 listener.Run().Forget();
                 {
                     var socket = NaiveUtils.ConnectTcpAsync(AddrPort.Parse(ep.ToString()), 5000).RunSync();
-                    var stream = new SocketStream2(socket);
+                    var stream = new SocketStream1(socket);
                     ctx.sw.Restart();
                     var buf = new byte[32 * 1024];
                     for (int i = 0; i < 1024; i++) {
@@ -566,7 +572,8 @@ namespace NaiveSocks
                 PrintLog(con, item);
             }
             con.ForegroundColor = ConsoleColor.Blue;
-            con.WriteLine($"({logs.Length} logs)");
+            con.WriteLine(
+                "({logs.Length} logs)");
             con.ResetColor();
         }
 

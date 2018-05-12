@@ -1,6 +1,7 @@
 ﻿using Android.Content;
 using System;
 using System.IO;
+using System.Threading;
 
 namespace NaiveSocksAndroid
 {
@@ -31,6 +32,8 @@ namespace NaiveSocksAndroid
                 throw new Exception("!!! inited == false !!!");
             string sdcard = Android.OS.Environment.ExternalStorageDirectory.AbsolutePath;
             CrashLogFile = Path.Combine(sdcard, "NaiveUnhandledException.txt");
+            ThreadPool.SetMinThreads(1, 1);
+            ThreadPool.SetMaxThreads(1024, 2);
         }
     }
 }

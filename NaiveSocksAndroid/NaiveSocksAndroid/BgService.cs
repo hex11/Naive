@@ -63,11 +63,13 @@ namespace NaiveSocksAndroid
 
         class Config
         {
-            public int manage_interval_screen_off { get; set; } = 20;
-            public int manage_interval_screen_on { get; set; } = 2;
+            public int manage_interval_screen_off { get; set; } = 30;
+            public int manage_interval_screen_on { get; set; } = 5;
             public int notif_update_interval { get; set; } = 2;
 
-            public string title_format { get; set; } = "{0}/{1} cxn, {2:N0} KB, {3:N0} pkt, load: {4:N2}";
+            public bool socket_underlying { get; set; } = false;
+
+            public string title_format { get; set; } = "[{0}/{1}] {2:N0} KB, {3:N0} pkt, {4:N2} CPUs";
         }
 
         bool notification_show_logs = true;
@@ -99,7 +101,6 @@ namespace NaiveSocksAndroid
                         //.SetContentTitle("NaiveSocks")
                         //.SetSubText("running")
                         //.SetStyle(bigText)
-                        //.AddAction(BuildServiceAction(Actions.COL_NOTIF, "Collapse", Android.Resource.Drawable.StarOff, 4))
                         .AddAction(BuildServiceAction(Actions.STOP, "Stop", Android.Resource.Drawable.StarOff, 1))
                         .AddAction(BuildServiceAction(Actions.RELOAD, "Reload", Android.Resource.Drawable.StarOff, 2))
                         .AddAction(BuildServiceAction(Actions.GC, "GC", Android.Resource.Drawable.StarOff, 3))
@@ -108,10 +109,10 @@ namespace NaiveSocksAndroid
                         .SetColor(unchecked((int)0xFF2196F3))
                         //.SetShowWhen(false)
                         .SetOngoing(true);
-            if (!isO) {
-                builder.SetPriority((int)NotificationPriority.Min)
-                    .SetVisibility(NotificationCompat.VisibilitySecret);
-            }
+
+            builder.SetPriority((int)NotificationPriority.Min)
+                .SetVisibility(NotificationCompat.VisibilitySecret);
+
             if (!isN) {
                 builder.SetContentTitle("NaiveSocks");
             }
@@ -145,10 +146,7 @@ namespace NaiveSocksAndroid
 
             //BindService(new Intent(this, typeof(ConfigService)), cfgService = new ServiceConnection<ConfigService>(), Bind.AutoCreate);
 
-            notification_show_logs = AppConfig.Current.ShowLogs;
-
-            notification_show_logs ^= true; // to force update
-            SetShowLogs(!notification_show_logs);
+            SetShowLogs(AppConfig.Current.ShowLogs, true);
 
             Logging.Logged += Logging_Logged;
 
@@ -159,6 +157,7 @@ namespace NaiveSocksAndroid
                         CrashHandler.CrashLogFile = Controller.ProcessFilePath("UnhandledException.txt");
                         if (t.TryGetValue<Config>("android", out var config)) {
                             currentConfig = config;
+                            SocketStream.EnableUnderlyingCalls = config.socket_underlying;
                             onScreen(isScreenOn);
                         }
                     };
@@ -200,12 +199,6 @@ namespace NaiveSocksAndroid
                     var before = GC.GetTotalMemory(false);
                     GC.Collect(intent.Action == Actions.GC ? GC.MaxGeneration : 0);
                     putLine($"GC Done. {before:N0} -> {GC.GetTotalMemory(false):N0}");
-                    break;
-                case Actions.COL_NOTIF:
-                    lock (builder) {
-                        StopForeground(true);
-                        StartForeground(MainNotificationId, builder.Build());
-                    }
                     break;
                 }
             }
@@ -333,9 +326,9 @@ namespace NaiveSocksAndroid
             return needRenotify;
         }
 
-        public void SetShowLogs(bool show)
+        public void SetShowLogs(bool show, bool forceUpdate = false)
         {
-            if (show == notification_show_logs)
+            if (!forceUpdate && show == notification_show_logs)
                 return;
             AppConfig.Current.ShowLogs = show;
             lock (builder) {
@@ -344,7 +337,11 @@ namespace NaiveSocksAndroid
                     textLines = new string[3];
                 } else {
                     textLines = new string[1];
-                    builder.SetStyle(null);
+                    if (bigText != null) {
+                        bigText = null;
+                        builder.SetStyle(null);
+
+                    }
                     builder.SetContentTitle((Java.Lang.ICharSequence)null);
                 }
                 updateNotif();

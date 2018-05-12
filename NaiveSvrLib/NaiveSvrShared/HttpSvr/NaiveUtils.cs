@@ -794,7 +794,14 @@ namespace Naive.HttpSvr
             if (value >= TaskCache.CachedIntMin && value <= TaskCache.CachedIntMax) {
                 return TaskCache.cachedTaskInt[value - TaskCache.CachedIntMin];
             }
-            return Task.FromResult(value);
+            if (TaskCache.lastUnhitValue == value && TaskCache.lastUnhitTask.TryGetTarget(out var cachedTask)) {
+                if (cachedTask.Result == value) // for race condition
+                    return cachedTask;
+            }
+            var newTask = Task.FromResult(value);
+            TaskCache.lastUnhitValue = value;
+            TaskCache.lastUnhitTask.SetTarget(newTask);
+            return newTask;
         }
 
         static class TaskCache
@@ -810,6 +817,9 @@ namespace Naive.HttpSvr
             public const int CachedIntMin = -1;
             public const int CachedIntMax = 64;
             public static Task<int>[] cachedTaskInt;
+
+            public static int lastUnhitValue = 256;
+            public static WeakReference<Task<int>> lastUnhitTask = new WeakReference<Task<int>>(Task.FromResult(256));
         }
     }
 
@@ -980,14 +990,14 @@ namespace Naive.HttpSvr
             if (uri.Contains(' ')) {
                 throw new Exception("spaces in uri are not allowed");
             }
-            output.Write($"{method} {uri} HTTP/1.1\r\n");
+            output.Write(method + " " + uri + " HTTP/1.1\r\n");
             if (headers.TryGetValue("Host", out var host)) { // 'Host' first
-                output.Write($"Host: {host}\r\n");
+                output.Write("Host: " + host + "\r\n");
             }
             foreach (var item in headers) {
                 if (item.Key == "Host")
                     continue;
-                output.Write($"{item.Key}: {item.Value}\r\n");
+                output.Write(item.Key + ": " + item.Value + "\r\n");
             }
             output.Write("\r\n");
         }

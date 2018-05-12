@@ -60,8 +60,6 @@ Usage: {NAME_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FILE]
 
             LogFileWriter logWriter = null;
 
-            //ThreadPool.SetMaxThreads(Environment.ProcessorCount, Environment.ProcessorCount);
-
             var argumentParser = new ArgumentParser();
             argumentParser.AddArg(ParasPara.OnePara, "-c", "--config");
             argumentParser.AddArg(ParasPara.NoPara, "-h", "--help");
