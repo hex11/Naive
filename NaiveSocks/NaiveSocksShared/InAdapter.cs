@@ -288,7 +288,7 @@ namespace NaiveSocks
 
             public void AddField<T>(string name, T value)
             {
-                StringBuilder.Append(' ').Append(name).Append('=').Append(value.ToString());
+                StringBuilder.Append(' ').Append(name).Append('=').Append(value?.ToString());
             }
 
             public void AddTag(string tag)
@@ -328,6 +328,11 @@ namespace NaiveSocks
 
         public override void Start()
         {
+            base.Start();
+            if(listen == null) {
+                Logger.warning("No 'listen'!");
+                return;
+            }
             listener = new Listener(listen);
             listener.Accepted += OnNewConnection;
             listener.Run().Forget();
