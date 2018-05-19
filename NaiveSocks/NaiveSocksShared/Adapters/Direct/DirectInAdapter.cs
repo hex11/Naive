@@ -4,6 +4,7 @@ using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Text;
 using Naive.HttpSvr;
+using Nett;
 
 namespace NaiveSocks
 {
@@ -12,6 +13,13 @@ namespace NaiveSocks
         public AddrPort dest { get; set; }
 
         public bool tproxy { get; set; }
+
+        public override void SetConfig(TomlTable toml)
+        {
+            base.SetConfig(toml);
+            if (tproxy && Environment.OSVersion.Platform != PlatformID.Unix)
+                throw new Exception("'tproxy' is only available on Unix.");
+        }
 
         protected override void GetDetail(GetDetailContext ctx)
         {
@@ -37,7 +45,7 @@ namespace NaiveSocks
             Controller.HandleInConnection(InConnection.Create(this, dest, dataStream, epPair.ToString()));
         }
 
-        unsafe static class Unsafe
+        private unsafe static class Unsafe
         {
             public const int SOL_IP = 0;
 

@@ -104,7 +104,7 @@ namespace NaiveSocks
         {
             string info = null;
             if (!(allow_create | allow_edit)) {
-                info = $"neither 'create' nor 'edit' is not in the allowed list.";
+                info = "neither 'create' nor 'edit' is in the allowed list.";
                 goto FAIL;
             }
             var reader = new MultipartFormDataReader(p);

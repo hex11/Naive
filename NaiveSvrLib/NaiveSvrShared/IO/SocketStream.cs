@@ -32,7 +32,7 @@ namespace NaiveSocks
 
         public EPPair EPPair { get; }
 
-        public override string ToString() => $"{{Socket {State} {EPPair.ToString()}}}";
+        public override string ToString() => $"{{Socket {State.ToString()} {EPPair.ToString()}}}";
 
         public override Task Close()
         {
@@ -66,7 +66,7 @@ namespace NaiveSocks
             if (r == 0)
                 State |= MyStreamState.RemoteShutdown;
             if (r < 0)
-                throw new Exception($"socket read() returned a unexpected value: {r} (underlyingcalls={EnableUnderlyingCalls}, platform={osPlatform})");
+                throw new Exception($"socket read() returned a unexpected value: {r} (underlyingcalls={EnableUnderlyingCalls}, {(underlyingReadImpl == null ? "no" : "have")} impl, platform={osPlatform})");
             return r;
         }
 
@@ -94,7 +94,7 @@ namespace NaiveSocks
 
         static void InitUnderlyingRead()
         {
-            if (EnableUnderlyingCalls && osPlatform == PlatformID.Unix) {
+            if (osPlatform == PlatformID.Unix) {
                 underlyingReadImpl = (s, bs) => {
                     bs.CheckAsParameter();
                     unsafe {
@@ -104,7 +104,7 @@ namespace NaiveSocks
                         }
                     }
                 };
-            } else if (EnableUnderlyingCalls && osPlatform == PlatformID.Win32NT) {
+            } else if (osPlatform == PlatformID.Win32NT) {
                 underlyingReadImpl = (s, bs) => {
                     bs.CheckAsParameter();
                     int r;
