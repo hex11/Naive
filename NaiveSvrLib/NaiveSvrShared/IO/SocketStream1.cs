@@ -52,7 +52,8 @@ namespace NaiveSocks
             if (bufRead > 0) {
                 if (EnableSmartSyncRead && bs.Len - bufRead > 0 && socketAvailable > 0) {
                     bs.SubSelf(bufRead);
-                    // And continue reading from socket...
+                    int read = ReadSync_SocketHaveAvailableData(bs);
+                    return NaiveUtils.GetCachedTaskInt(bufRead + read);
                 } else {
                     return NaiveUtils.GetCachedTaskInt(bufRead);
                 }
@@ -70,10 +71,7 @@ namespace NaiveSocks
                     // If the receive buffer of OS is not empty,
                     // use sync operation to reduce async overhead.
                     // This optimization made ReadAsync 12x faster.
-                    Interlocked.Increment(ref ctr.Rsync);
-                    var read = ReadSocketSync(bs);
-                    if (read == 0)
-                        throw new Exception("WTF! It should not happen: Socket.Receive() returns 0 when Socket.Available > 0.");
+                    int read = ReadSync_SocketHaveAvailableData(bs);
                     return NaiveUtils.GetCachedTaskInt(read);
                 }
             }
@@ -90,6 +88,15 @@ namespace NaiveSocks
                         thisRef.State |= MyStreamState.RemoteShutdown;
                     return read;
                 });
+        }
+
+        private int ReadSync_SocketHaveAvailableData(BytesSegment bs)
+        {
+            Interlocked.Increment(ref ctr.Rsync);
+            var read = ReadSocketSync(bs);
+            if (read == 0)
+                throw new Exception("WTF! It should not happen: Socket.Receive() returns 0 when Socket.Available > 0.");
+            return read;
         }
 
         private int TryReadInternalBuffer(BytesSegment bs)
