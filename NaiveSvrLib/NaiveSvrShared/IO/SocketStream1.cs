@@ -33,10 +33,11 @@ namespace NaiveSocks
             return ctr.StringRead + ", " + ctr.StringWrite;
         }
 
-        public int ReadaheadBufferSize { get; set; } = 4096;
+        public static int DefaultReadaheadBufferSize { get; set; } = 4096;
+        public int ReadaheadBufferSize { get; set; } = DefaultReadaheadBufferSize;
         BytesSegment readaheadBuffer;
 
-        public bool EnableSmartReadBuffer { get; set; } = true;
+        public bool EnableReadaheadBuffer { get; set; } = true;
         public bool EnableSmartSyncRead { get; set; } = true;
 
         int socketAvailable;
@@ -48,9 +49,15 @@ namespace NaiveSocks
             // TESTED: This optimization made ReadAsync 20x faster when bs.Len == 4, 
             //         on Windows 10 x64 16299.192 with a laptop Haswell CPU.
             var bufRead = TryReadInternalBuffer(bs);
-            if (bufRead > 0)
-                return NaiveUtils.GetCachedTaskInt(bufRead);
-            if (EnableSmartSyncRead | EnableSmartReadBuffer) {
+            if (bufRead > 0) {
+                if (EnableSmartSyncRead && bs.Len - bufRead > 0 && socketAvailable > 0) {
+                    bs.SubSelf(bufRead);
+                    // And continue reading from socket...
+                } else {
+                    return NaiveUtils.GetCachedTaskInt(bufRead);
+                }
+            }
+            if (EnableSmartSyncRead | EnableReadaheadBuffer) {
                 if (socketAvailable < bs.Len || socketAvailable < ReadaheadBufferSize) {
                     // Get the Available value from socket when needed.
                     socketAvailable = Socket.Available;
@@ -102,7 +109,7 @@ namespace NaiveSocks
         private int TryFillAndReadInternalBuffer(BytesSegment bs)
         {
             var readBufferSize = this.ReadaheadBufferSize;
-            if (EnableSmartReadBuffer && (socketAvailable > bs.Len & bs.Len < readBufferSize)) {
+            if (EnableReadaheadBuffer && (socketAvailable > bs.Len & bs.Len < readBufferSize)) {
                 Interlocked.Increment(ref ctr.Rsync);
                 if (readaheadBuffer.Bytes == null || readaheadBuffer.Bytes.Length < readBufferSize)
                     readaheadBuffer.Bytes = new byte[readBufferSize];

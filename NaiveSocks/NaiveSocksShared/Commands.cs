@@ -487,7 +487,7 @@ namespace NaiveSocks
                 var listener = new Listener(ep) { LogInfo = false };
                 listener.Accepted += (x) => NaiveUtils.RunAsyncTask(async () => {
                     var stream = new SocketStream1(x.Client);
-                    stream.EnableSmartReadBuffer = false;
+                    stream.EnableReadaheadBuffer = false;
                     var buf = new byte[4];
                     while (await stream.ReadAsync(buf) > 0) {
                     }
@@ -502,7 +502,7 @@ namespace NaiveSocks
                 var listener = new Listener(ep) { LogInfo = false };
                 listener.Accepted += (x) => NaiveUtils.RunAsyncTask(async () => {
                     var stream = new SocketStream1(x.Client);
-                    stream.EnableSmartReadBuffer = false;
+                    stream.EnableReadaheadBuffer = false;
                     stream.EnableSmartSyncRead = false;
                     var buf = new byte[4];
                     while (await stream.ReadAsync(buf) > 0) {
