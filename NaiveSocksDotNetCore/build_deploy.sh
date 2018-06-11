@@ -19,12 +19,12 @@ dotnet publish -c Release -o bin/publish/bin
 
 cat > "bin/publish/run.sh" << 'EOF'
 #!/bin/sh
-"$(dirname $0)/bin/NaiveSocksDotNetCore" $*
+dotnet "$(dirname $0)/bin/NaiveSocksDotNetCore.dll" $*
 EOF
 chmod +x "bin/publish/run.sh"
 
 cat > "bin/publish/run.bat" << 'EOF'
-@"%~dp0bin\NaiveSocksDotNetCore.exe" %*
+@dotnet "%~dp0bin/NaiveSocksDotNetCore.dll" %*
 EOF
 
 for x in "${buildrids[@]}"; do
