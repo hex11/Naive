@@ -96,7 +96,7 @@ namespace NaiveSocksAndroid
                 notificationManager.CreateNotificationChannel(chan);
             }
 
-            builder = new NotificationCompat.Builder(this, chId)
+            builder = new NotificationCompat.Builder(this)
                         .SetContentIntent(BuildIntentToShowMainActivity())
                         //.SetContentTitle("NaiveSocks")
                         //.SetSubText("running")
@@ -107,17 +107,20 @@ namespace NaiveSocksAndroid
                         .AddAction(BuildServiceAction(Actions.GC_0, "GC(gen0)", Android.Resource.Drawable.StarOff, 5))
                         .SetSmallIcon(Resource.Drawable.N)
                         .SetColor(unchecked((int)0xFF2196F3))
+                        .SetChannelId(chId)
                         //.SetShowWhen(false)
                         .SetOngoing(true);
 
-            builder.SetPriority((int)NotificationPriority.Min)
-                .SetVisibility(NotificationCompat.VisibilitySecret);
+            if (!isO) {
+                builder.SetPriority((int)NotificationPriority.Min)
+                    .SetVisibility(NotificationCompat.VisibilitySecret);
+            }
 
             if (!isN) {
                 builder.SetContentTitle("NaiveSocks");
             }
 
-            restartBuilder = new NotificationCompat.Builder(this, chId)
+            restartBuilder = new NotificationCompat.Builder(this)
                         .SetContentIntent(BuildServicePendingIntent("start!", 10086))
                         .SetContentTitle("NaiveSocks service is stopped")
                         .SetContentText("touch here to restart")
@@ -126,6 +129,7 @@ namespace NaiveSocksAndroid
                         .SetAutoCancel(true)
                         .SetPriority((int)NotificationPriority.Min)
                         .SetVisibility(NotificationCompat.VisibilitySecret)
+                        .SetChannelId(chId)
                         .SetShowWhen(false);
 
             StartForeground(MainNotificationId, builder.Build());

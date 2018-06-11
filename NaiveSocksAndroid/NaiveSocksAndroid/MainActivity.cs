@@ -182,9 +182,9 @@ namespace NaiveSocksAndroid
             }
         }
 
-        private void startService()
+        private Task startService()
         {
-            Task.Run(() => {
+            return Task.Run(() => {
                 if (!isConnected) {
                     Logging.info("starting/binding service...");
                     StartService(serviceIntent);
@@ -195,9 +195,9 @@ namespace NaiveSocksAndroid
             });
         }
 
-        private void stopService()
+        private Task stopService()
         {
-            Task.Run(() => {
+            return Task.Run(() => {
                 Logging.info("requesting to stop service.");
                 if (!StopService(serviceIntent)) {
                     Logging.info("cannot stop service: service is not connected.");
@@ -223,16 +223,26 @@ namespace NaiveSocksAndroid
         private const string menu_showLogs = "Show logs in notification";
         private const string menu_autostart = "Autostart";
         private const string menu_openConfig = "Open configuation file...";
+        private const string menu_restart = "Restart";
+        private const string menu_kill = "Kill!";
 
         public override bool OnCreateOptionsMenu(IMenu menu)
         {
             MenuInflater.Inflate(R.Menu.menu_control, menu);
+
             if (isConnected) {
                 menu.FindItem(R.Id.menu_start).SetVisible(false);
             } else {
                 menu.FindItem(R.Id.menu_stop).SetVisible(false);
                 menu.FindItem(R.Id.menu_reload).SetVisible(false);
             }
+
+            var subMenu = menu.AddSubMenu("Restart/Kill");
+            subMenu.Add(menu_restart)
+                .SetShowAsActionFlags(ShowAsAction.Never);
+            subMenu.Add(menu_kill)
+                .SetShowAsActionFlags(ShowAsAction.Never);
+
             menu.Add(menu_showLogs)
                 .SetCheckable(true)
                 .SetChecked(AppConfig.Current.ShowLogs)
@@ -243,6 +253,7 @@ namespace NaiveSocksAndroid
                 .SetShowAsActionFlags(ShowAsAction.Never);
             menu.Add(menu_openConfig)
                 .SetShowAsActionFlags(ShowAsAction.Never);
+
             return true;
         }
 
@@ -286,6 +297,17 @@ namespace NaiveSocksAndroid
                         } catch (ActivityNotFoundException) {
                             MakeSnackbar("No activity to handle", Snackbar.LengthLong).Show();
                         }
+                    }
+                } else if (title == menu_restart) {
+                    NaiveUtils.RunAsyncTask(async () => {
+                        await stopService();
+                        await startService();
+                    });
+                } else if (title == menu_kill) {
+                    try {
+                        System.Diagnostics.Process.GetCurrentProcess().Kill();
+                    } catch (Exception e) {
+                        Logging.exception(e, Logging.Level.Error, "Failed to kill myself!");
                     }
                 }
             }
