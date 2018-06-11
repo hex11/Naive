@@ -762,7 +762,7 @@ namespace NaiveSocks
 
         public override string ToString()
         {
-            return $"{{{MsgStream} as MyStream}}";
+            return $"{{{MsgStream}}}";
         }
     }
 

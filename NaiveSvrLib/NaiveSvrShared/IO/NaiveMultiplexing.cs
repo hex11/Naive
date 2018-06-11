@@ -809,10 +809,13 @@ namespace NaiveSocks
         long write = 0, read = 0;
         int writec = 0, readc = 0;
 
+        public BytesCounterValue CounterR => new BytesCounterValue { Bytes = read, Packets = readc };
+        public BytesCounterValue CounterW => new BytesCounterValue { Bytes = write, Packets = writec };
+
         public override string ToString()
         {
             var chname = Id == NaiveMultiplexing.ReservedId ? "Rsv" : Id.ToString();
-            return $"{{#{Parent?.Id}ch{chname} R/W={read:N0}/{write:N0}({readc}/{writec}) {State}}}";
+            return $"{{#{Parent?.Id}ch{chname} R/W={CounterR}/{CounterW} {State}}}";
         }
 
         public void Dispose()
@@ -828,7 +831,7 @@ namespace NaiveSocks
 
         public int Count => queue.Count;
 
-        private object _lock => this;
+        private object _lock => queue;
 
         public bool Enqueue(T obj)
         {
