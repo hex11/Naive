@@ -19,11 +19,16 @@ namespace NaiveSocks
 
         public static string[] GetConfigFilePaths()
         {
+            string userDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            string userAppData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
             string[] paths = {
                 ".",
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config"+ Path.DirectorySeparatorChar + "nsocks"),
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                Path.Combine(userDir, ".config", "nsocks"),
+                Path.Combine(userDir, ".config"),
+                Path.Combine(userAppData, "nsocks"),
+                userAppData,
+                Path.Combine(userDir, "nsocks"),
+                userDir,
             };
             for (int i = 0; i < paths.Length; i++) {
                 paths[i] = Path.Combine(paths[i], configFilePath);
