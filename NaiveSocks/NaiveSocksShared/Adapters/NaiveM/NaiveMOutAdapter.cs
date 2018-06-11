@@ -127,7 +127,7 @@ namespace NaiveSocks
                     break;
                 case "https":
                 case "wss":
-                    tls_only = true;
+                    tls = true;
                     break;
                 default:
                     throw new Exception($"Unknown URI scheme '{parsedUri.Scheme}'");
@@ -146,7 +146,7 @@ namespace NaiveSocks
         }
 
         static readonly string[] UAs = new[] {
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:57.0) Gecko/20100101 Firefox/57.0",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:60.0) Gecko/20100101 Firefox/60.0",
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/61.0.3163.100 Safari/537.36",
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/62.0.3165.0 Safari/537.36",
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/63.0.3239.84 Safari/537.36"
