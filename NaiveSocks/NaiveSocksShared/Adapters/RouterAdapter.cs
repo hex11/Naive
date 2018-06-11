@@ -149,20 +149,22 @@ namespace NaiveSocks
             } else {
                 try {
                     Func<InConnection, bool> currentAbpFilter = null;
-                    void load()
+
+                    void load(Rule rule2, string abpString)
                     {
                         Stopwatch sw = Stopwatch.StartNew();
                         try {
-                            var abpString = rule.abp;
+                            abpString = abpString ?? rule2.abp;
                             if (abpString == null) {
-                                var realPath = Controller.ProcessFilePath(rule.abpfile);
+                                var realPath = Controller.ProcessFilePath(rule2.abpfile);
                                 if (!File.Exists(realPath)) {
                                     Logger.warning($"abp file '{realPath}' does not exist.");
                                     currentAbpFilter = null;
+                                    return;
                                 }
                                 abpString = File.ReadAllText(realPath, Encoding.UTF8);
                             }
-                            if (rule.base64) {
+                            if (rule2.base64) {
                                 abpString = Encoding.UTF8.GetString(Convert.FromBase64String(abpString));
                             }
                             var isreloading = currentAbpFilter != null;
@@ -170,14 +172,15 @@ namespace NaiveSocks
                             abpProcessor.Parse(abpString);
                             currentAbpFilter = abpProcessor.Check;
                             Logg?.info($"{(isreloading ? "re" : null)}loaded abp filter" +
-                                $" {(rule.abpfile == null ? "(inline/network)" : rule.abpfile.Quoted())}" +
+                                $" {(rule2.abpfile == null ? "(inline/network)" : rule2.abpfile.Quoted())}" +
                                 $" {abpProcessor.RulesCount} rules in {sw.ElapsedMilliseconds} ms");
                         } catch (Exception e) {
                             Logger.exception(e, Logging.Level.Error, "loading abp filter");
                         }
                     }
+
                     if (rule.abpfile != null || rule.abp != null)
-                        load();
+                        load(rule, null);
                     if (rule.abpuri != null) {
                         UpdateAbpFile(rule, load);
                     }
@@ -233,7 +236,7 @@ namespace NaiveSocks
             return false;
         }
 
-        private void UpdateAbpFile(Rule rule, Action load, bool ignoreMaxage = false)
+        private void UpdateAbpFile(Rule rule, Action<Rule, string> load, bool ignoreMaxage = false)
         {
             var abpfile = rule.abpfile;
             var filepath = Controller.ProcessFilePath(abpfile); // returns null if abpfile is null
@@ -270,10 +273,11 @@ namespace NaiveSocks
                             resp = r;
                         }
                         if (resp.StatusCode == HttpStatusCode.OK) {
+                            string abpString = null;
                             if (filepath != null) {
                                 await SaveResponseToFile(filepath, resp);
                             } else {
-                                rule.abp = await resp.GetResponseStream().ReadAllTextAsync();
+                                abpString = await resp.GetResponseStream().ReadAllTextAsync();
                             }
                             if (haveOldFile)
                                 Logger.info($"'{tag}' is updated.");
@@ -282,7 +286,7 @@ namespace NaiveSocks
                             if (resp.GetResponseHeader("Last-Modified").IsNullOrEmpty() == false) {
                                 fi.LastWriteTime = resp.LastModified;
                             }
-                            load();
+                            load(rule, abpString);
                         } else if (resp.StatusCode == HttpStatusCode.NotModified) {
                             Logger.info($"'{tag}' remote file haven't been modified.");
                         } else {
