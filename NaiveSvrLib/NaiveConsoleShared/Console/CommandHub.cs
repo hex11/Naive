@@ -36,6 +36,9 @@ namespace Naive.Console
                     }
                 }
             }, "Usage: help [COMMAND_NAME]");
+            AddCmdHandler("echo", (c) => {
+                c.WriteLine(c.arg);
+            });
         }
 
         public void AddCmdHandler(string name, CommandHandler handler)
@@ -78,24 +81,37 @@ namespace Naive.Console
             if (handler != null) {
                 con.RunCommand(cmd, handler);
             } else {
-                cmd.statusCode = int.MinValue;
-                con.WriteLine($"Command '{cmd.name}' Not Found");
+                cmd.statusCode = -1;
+                con.Write($"Command '{cmd.name}' Not Found\n", ConsoleColor.Red);
             }
         }
 
         public void CmdLoop(CmdConsole con)
         {
+            int lastStatusCode = 0;
             con.WriteLine("Welcome!");
             while (true) {
-                var cmd = con.ReadLine(Prompt);
-                if (cmd != null) {
-                    if (cmd?.Length == 0)
+                string cmdline;
+                if (lastStatusCode != 0) {
+                    con.PromptColor32 = Color32.FromConsoleColor(ConsoleColor.Red);
+                    cmdline = con.ReadLine("(" + lastStatusCode + ")" + Prompt);
+                    con.PromptColor32 = Color32.FromConsoleColor(ConsoleColor.Green);
+                } else {
+                    cmdline = con.ReadLine(Prompt);
+                }
+
+                if (cmdline != null) {
+                    if (cmdline?.Length == 0) {
+                        lastStatusCode = 0;
                         continue;
-                    if (cmd == "exit") {
+                    }
+                    if (cmdline == "exit") {
                         con.WriteLine("exiting command loop.");
                         break;
                     }
-                    HandleCommand(con, Command.FromString(cmd));
+                    var cmd = Command.FromString(cmdline);
+                    HandleCommand(con, cmd);
+                    lastStatusCode = cmd.statusCode;
                     con.WriteLine("");
                 } else {
                     con.WriteLine("EOF, exiting command loop.");

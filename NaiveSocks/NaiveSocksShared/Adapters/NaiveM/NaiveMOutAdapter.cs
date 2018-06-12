@@ -288,6 +288,14 @@ namespace NaiveSocks
             return await ncs.nms.DnsQuery(name);
         }
 
+        public async Task SpeedTest(Action<string> log)
+        {
+            var ncs = GetPoolItem();
+            await ncs.ConnectIfNot();
+            log("Selected session: " + ncs.nms.BaseChannels);
+            await ncs.nms.SpeedTest(log);
+        }
+
         internal class PoolItem
         {
             private NaiveMOutAdapter adapter;

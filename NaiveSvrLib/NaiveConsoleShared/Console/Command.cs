@@ -339,8 +339,8 @@ namespace Naive.Console
             try {
                 handler(cmd);
             } catch (Exception e) {
-                cmd.statusCode = int.MinValue + 1;
-                WriteLine("cmd '" + cmd.fullcmd + "' exception:");
+                cmd.statusCode = -2;
+                Write("cmd '" + cmd.fullcmd + "' exception:\n", ConsoleColor.Red);
                 WriteLine(e.ToString());
             }
         }
