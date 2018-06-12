@@ -289,15 +289,14 @@ namespace NaiveSocks
             ch.RsvMsgReceived(msg);
         }
 
-        public async Task SendMsg(Channel ch, Msg msg)
+        public Task SendMsg(Channel ch, Msg msg)
         {
             ThrowIfClosed();
             Task task = null;
             lock (_sendLock) {
                 var frame = new Frame(ch.Id, msg.Data).pack(this);
-                task = BaseStream.SendMsg(frame);
+                return BaseStream.SendMsg(frame);
             }
-            await task.CAF();
         }
 
         private async Task SendParentOpcode(ParentOpcode opcode)
@@ -640,11 +639,15 @@ namespace NaiveSocks
                 await tmp.Task.CAF();
                 debug("resumed send", msg.Data?.tlen);
             }
-            ThrowIfShutdownOrClosed();
-            write += msg.Data?.tlen ?? 0;
-            writec++;
             _dataFilter?.OnWrite(msg.Data);
-            await Parent.SendMsg(this, msg).CAF();
+            Task task;
+            lock (_syncroot) {
+                ThrowIfShutdownOrClosed();
+                write += msg.Data?.tlen ?? 0;
+                writec++;
+                task = Parent.SendMsg(this, msg);
+            }
+            await task.CAF();
         }
 
         internal Task SendRsvOpcode(Opcode opcode)
@@ -797,13 +800,13 @@ namespace NaiveSocks
         private void debug<T>(string str, T obj)
         {
             if (Debug)
-                Logging.debug($"{this} {str}: {obj}");
+                Logging.log($"{this} {str}: {obj}", Logging.Level.Debug);
         }
 
         private void debug<T1, T2>(string str, T1 obj1, T2 obj2)
         {
             if (Debug)
-                Logging.debug($"{this} {str}: {obj1}, {obj2}");
+                Logging.log($"{this} {str}: {obj1}, {obj2}", Logging.Level.Debug);
         }
 
         long write = 0, read = 0;
