@@ -16,6 +16,7 @@ using R = NaiveSocksAndroid.Resource;
 using Naive.HttpSvr;
 using NaiveSocks;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace NaiveSocksAndroid
 {
@@ -100,6 +101,7 @@ namespace NaiveSocksAndroid
             using (var tv = new TextView(themeWrapper) { Text = sb.ToString() }) {
                 if (conn.ConnectResult?.Ok == true)
                     tv.SetBackgroundColor(Color.Argb(30, 0, 255, 0));
+                tv.SetOnLongClickListener(new ClickListener(conn));
                 connParent.AddView(tv);
             }
 
@@ -111,6 +113,32 @@ namespace NaiveSocksAndroid
             using (var tv = new TextView(themeWrapper) { Text = sb.ToString(), Gravity = GravityFlags.End }) {
                 tv.SetBackgroundColor(Color.Argb(30, 128, 128, 128));
                 connParent.AddView(tv);
+            }
+        }
+
+        class ClickListener : Java.Lang.Object, View.IOnLongClickListener
+        {
+            public ClickListener(InConnection connection)
+            {
+                Connection = connection;
+            }
+
+            public InConnection Connection { get; }
+
+            public bool OnLongClick(View v)
+            {
+                Task.Run(() => {
+                    Logging.info("Closing " + Connection + " (Android GUI).");
+                    var stream = Connection.DataStream;
+                    if (stream == null)
+                        stream = Connection.ConnectResult.Stream;
+                    if (stream == null) {
+                        Logging.warning("Can not get the stream.");
+                    } else {
+                        MyStream.CloseWithTimeout(stream);
+                    }
+                });
+                return true;
             }
         }
     }
