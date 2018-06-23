@@ -593,8 +593,7 @@ namespace NaiveSocks
                 PrintLog(con, item);
             }
             con.ForegroundColor = ConsoleColor.Blue;
-            con.WriteLine(
-                "({logs.Length} logs)");
+            con.WriteLine($"({logs.Length} logs)");
             con.ResetColor();
         }
 

@@ -424,6 +424,11 @@ namespace Naive.HttpSvr
         {
             log(text, Logging.Level.Debug);
         }
+        
+        public void debugForce(string text)
+        {
+            log(text, Logging.Level.Debug);
+        }
 
         public void info(string text)
         {

@@ -26,6 +26,8 @@ namespace NaiveSocks
 
             public Dictionary<string, string> Aliases = new Dictionary<string, string>();
 
+            public string[] DebugFlags;
+
             public Logging.Level LoggingLevel;
 
             public string FilePath;
@@ -174,11 +176,18 @@ namespace NaiveSocks
 
         public void LoadConfig(ConfigFile configFile)
         {
-            CurrentConfig = LoadConfig(configFile, null) ?? CurrentConfig;
-            ConfigTomlLoaded?.Invoke(CurrentConfig.TomlTable);
+            SetCurrentConfig(LoadConfig(configFile, null) ?? CurrentConfig);
             Logger.info($"configuration loaded. {InAdapters.Count} InAdapters, {OutAdapters.Count} OutAdapters.");
             if (CurrentConfig.FailedCount > 0)
                 Logger.warning($"And {CurrentConfig.FailedCount} ERRORs");
+        }
+
+        private void SetCurrentConfig(LoadedConfig loadedConfig)
+        {
+            CurrentConfig = loadedConfig;
+            MyStream.TwoWayCopier.DefaultUseLoggerAsVerboseLogger = IsDebugFlagEnabled("copier_v");
+            Channel.Debug = IsDebugFlagEnabled("mux_v");
+            ConfigTomlLoaded?.Invoke(loadedConfig.TomlTable);
         }
 
         private LoadedConfig LoadConfig(ConfigFile cf, LoadedConfig newcfg)
@@ -258,10 +267,14 @@ namespace NaiveSocks
                 Logger.exception(e, Logging.Level.Error, "TOML Error");
                 return null;
             }
+
             ConfigTomlLoading?.Invoke(tomlTable);
+
             newcfg.TomlTable = tomlTable;
             newcfg.LoggingLevel = t.log_level;
             newcfg.Aliases = t.aliases;
+            newcfg.DebugFlags = t?.debug?.flags ?? new string[0];
+
             int failedCount = 0;
             if (t.@in != null)
                 foreach (var item in t.@in) {
@@ -386,8 +399,7 @@ namespace NaiveSocks
             warning("stopping old adapters...");
             this.Stop(CurrentConfig, oldNewCanReload);
             warning("starting new adapters...");
-            CurrentConfig = newCfg;
-            ConfigTomlLoaded?.Invoke(newCfg.TomlTable);
+            SetCurrentConfig(newCfg);
             this.Start(oldNewCanReload);
         }
 
@@ -453,6 +465,11 @@ namespace NaiveSocks
         public void Reset()
         {
             CurrentConfig = new LoadedConfig();
+        }
+
+        public bool IsDebugFlagEnabled(string flag)
+        {
+            return CurrentConfig.DebugFlags.Contains(flag);
         }
 
         public virtual Task HandleInConnection(InConnection inConnection)
@@ -678,9 +695,16 @@ namespace NaiveSocks
 
         public string dir { get; set; }
 
+        public DebugSection debug { get; set; }
+
         public Dictionary<string, string> aliases { get; set; }
 
         public Dictionary<string, TomlTable> @in { get; set; }
         public Dictionary<string, TomlTable> @out { get; set; }
+
+        public class DebugSection
+        {
+            public string[] flags { get; set; }
+        }
     }
 }

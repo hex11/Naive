@@ -55,7 +55,10 @@ namespace NaiveSocks
         public async Task HandleAndPutStream(IAdapter outAdapter, IMyStream stream, Task waitForReadFromStream = null)
         {
             var thisStream = await HandleAndGetStream(outAdapter);
-            var copier = new MyStream.TwoWayCopier(stream, thisStream) { WhenCanReadFromLeft = waitForReadFromStream };
+            var copier = new MyStream.TwoWayCopier(stream, thisStream) {
+                WhenCanReadFromLeft = waitForReadFromStream,
+                Logger = new Logger("->" + outAdapter.Name, InAdapter.GetAdapter().Logger)
+            };
             copier.SetCounters(outAdapter.GetAdapter().BytesCountersRW, this.BytesCountersRW);
             await copier.Run();
         }

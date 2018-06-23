@@ -72,16 +72,16 @@ namespace NaiveSocks
         public override string ToString()
         {
             switch (state) {
-            case OPEN:
-                return "OPEN";
-            case LOCAL_SHUTDOWN:
-                return "LOCAL_SHUTDOWN";
-            case REMOTE_SHUTDOWN:
-                return "REMOTE_SHUTDOWN";
-            case CLOSED:
-                return "CLOSED";
-            default:
-                return $"!!UNKNOWN({state})!!";
+                case OPEN:
+                    return "OPEN";
+                case LOCAL_SHUTDOWN:
+                    return "LOCAL_SHUTDOWN";
+                case REMOTE_SHUTDOWN:
+                    return "REMOTE_SHUTDOWN";
+                case CLOSED:
+                    return "CLOSED";
+                default:
+                    return $"!!UNKNOWN({state})!!";
             }
         }
 
@@ -384,12 +384,30 @@ namespace NaiveSocks
 
         public class TwoWayCopier
         {
+            public static Logger DefaultLogger = Logging.RootLogger;
+            public static Logger DefaultVerboseLogger = null;
+
+            private static bool _defaultUseLoggerAsVerboseLogger;
+
+            public static bool DefaultUseLoggerAsVerboseLogger
+            {
+                get { return _defaultUseLoggerAsVerboseLogger; }
+                set {
+                    _defaultUseLoggerAsVerboseLogger = value;
+                    Copier.DefaultUseLoggerAsVerboseLogger = value;
+                }
+            }
+
+            private Logger _verboseLogger;
+            private Logger _logger;
+
             public TwoWayCopier(IMyStream left, IMyStream right)
             {
                 Left = left;
                 Right = right;
                 CopierFromLeft = new Copier(left, right);
                 CopierFromRight = new Copier(right, left);
+                Logger = DefaultLogger;
             }
 
             public IMyStream Left { get; }
@@ -399,6 +417,24 @@ namespace NaiveSocks
 
             public Copier CopierFromLeft { get; }
             public Copier CopierFromRight { get; }
+
+            public Logger Logger
+            {
+                get { return _logger; }
+                set {
+                    _logger = value;
+                    CopierFromRight.Logger = CopierFromLeft.Logger = value;
+                }
+            }
+
+            public Logger VerboseLogger
+            {
+                get { return _verboseLogger ?? (DefaultUseLoggerAsVerboseLogger ? Logger : null); }
+                set {
+                    _verboseLogger = value;
+                    CopierFromRight.VerboseLogger = CopierFromLeft.VerboseLogger = value;
+                }
+            }
 
             public TwoWayCopier SetCounters(BytesCounter counter)
             {
@@ -440,21 +476,21 @@ namespace NaiveSocks
                     var compeletedTask = await Task.WhenAny(tasks).CAF();
                     if (compeletedTask.IsFaulted) {
                         var exception = compeletedTask.Exception.InnerException;
-                        Logging.exception(exception, Logging.Level.Warning, $"stream copying exception, force closing. ({stringFromTask(compeletedTask)})");
+                        Logger?.exception(exception, Logging.Level.Warning, $"stream copying exception, force closing. ({stringFromTask(compeletedTask)})");
                         return;
                     }
 
                     var anotherTask = compeletedTask == readFromRight ? readFromLeft : readFromRight;
                     // waiting for full closing with timeout.
                     if (await anotherTask.WithTimeout(halfCloseTimeout)) {
-                        Logging.warning($"keeping half closed for {halfCloseTimeout} ms, force closing. ({stringFromTask(anotherTask)})");
+                        Logger?.warning($"keeping half closed for {halfCloseTimeout} ms, force closing. ({stringFromTask(anotherTask)})");
                     } else {
                         if (anotherTask.IsFaulted) {
-                            Logging.exception(anotherTask.Exception.InnerException, Logging.Level.Warning, $"half closed waiting exception. {stringFromTask(anotherTask)}");
+                            Logger?.exception(anotherTask.Exception.InnerException, Logging.Level.Warning, $"half closed waiting exception. {stringFromTask(anotherTask)}");
                         }
                     }
                 } catch (Exception e) {
-                    Logging.exception(e, Logging.Level.Error, $"Relay task ({left.SafeToStr()} <-> {right.SafeToStr()})");
+                    Logger?.exception(e, Logging.Level.Error, $"Relay task ({left.SafeToStr()} <-> {right.SafeToStr()})");
                 } finally {
                     var t1 = MyStream.CloseWithTimeout(left, forceCloseTimeout);
                     var t2 = MyStream.CloseWithTimeout(right, forceCloseTimeout);
@@ -465,6 +501,10 @@ namespace NaiveSocks
 
         public class Copier
         {
+            public static bool DefaultUseLoggerAsVerboseLogger = false;
+
+            private Logger _verboseLogger;
+
             public Copier(IMyStream from, IMyStream to)
             {
                 From = from;
@@ -476,6 +516,13 @@ namespace NaiveSocks
 
             public BytesCounter CounterR { get; set; }
             public BytesCounter CounterW { get; set; }
+
+            public Logger Logger { get; set; }
+            public Logger VerboseLogger
+            {
+                get { return _verboseLogger ?? (DefaultUseLoggerAsVerboseLogger ? Logger : null); }
+                set { _verboseLogger = value; }
+            }
 
             public Task Copy() => Copy(-1, false);
             public Task CopyAndShutdown() => Copy(-1, true);
@@ -517,7 +564,7 @@ namespace NaiveSocks
                             }
                         }
                         if (read == 0) {
-                            debug($"SHUTDOWN: {From} -> {To}");
+                            VerboseLogger?.debugForce($"SHUTDOWN: {From} -> {To}");
                             if (shutdown && !To.State.HasShutdown)
                                 await To.Shutdown(SocketShutdown.Send).CAF();
                             break;
@@ -525,17 +572,11 @@ namespace NaiveSocks
                         CounterR?.Add(read);
                         await To.WriteAsync(new BytesSegment(buf.Bytes, buf.Offset, read)).CAF();
                         CounterW?.Add(read);
-                        //await streamto.FlushAsync();
                     }
                 } finally {
-                    debug($"CLOSE: {From} -> {To}");
+                    VerboseLogger?.debugForce($"CLOSE: {From} -> {To}");
                     bufhandle?.Dispose();
                 }
-            }
-
-            private static void debug(string str)
-            {
-                Logging.debug(str);
             }
 
             public override string ToString() => $"{{Copier {From} -> {To}}}";
