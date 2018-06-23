@@ -13,11 +13,11 @@ namespace NaiveSocks
 
         public Func<ReceivedRequest, Task> Requested;
 
-        public Converter<TRequest, Msg> RequestMsgConverter;
-        public Converter<Msg, TRequest> MsgRequestConverter;
+        public static Converter<TRequest, Msg> RequestMsgConverter;
+        public static Converter<Msg, TRequest> MsgRequestConverter;
 
-        public Converter<TReply, Msg> ReplyMsgConverter;
-        public Converter<Msg, TReply> MsgReplyConverter;
+        public static Converter<TReply, Msg> ReplyMsgConverter;
+        public static Converter<Msg, TReply> MsgReplyConverter;
 
         public RrChannels(IMsgStream msgStream) : this(new NaiveMultiplexing(msgStream))
         {

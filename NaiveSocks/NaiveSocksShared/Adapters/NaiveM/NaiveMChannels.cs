@@ -32,12 +32,16 @@ namespace NaiveSocks
 
         List<WeakReference<INetwork>> joinedNetworks = new List<WeakReference<INetwork>>();
 
-        public NaiveMChannels(NaiveMultiplexing channels) : base(channels)
+        static NaiveMChannels()
         {
             MsgRequestConverter = x => NaiveProtocol.Request.Parse(x.Data.GetBytes());
             RequestMsgConverter = x => x.ToBytes();
             MsgReplyConverter = x => NaiveProtocol.Reply.Parse(x.Data.GetBytes());
             ReplyMsgConverter = x => x.ToBytes();
+        }
+
+        public NaiveMChannels(NaiveMultiplexing channels) : base(channels)
+        {
         }
 
         public class ConnectingSettings
