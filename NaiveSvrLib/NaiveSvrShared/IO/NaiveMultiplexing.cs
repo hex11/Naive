@@ -292,7 +292,6 @@ namespace NaiveSocks
         public Task SendMsg(Channel ch, Msg msg)
         {
             ThrowIfClosed();
-            Task task = null;
             lock (_sendLock) {
                 var frame = new Frame(ch.Id, msg.Data).pack(this);
                 return BaseStream.SendMsg(frame);
@@ -318,7 +317,7 @@ namespace NaiveSocks
                 int cur = 0;
                 Frame.writeChId(this, bv, ch.Id, ref cur);
                 bv[cur++] = opcode;
-                task = SendMsg(ch, bv);
+                task = SendMsg(ReservedChannel, bv);
             }
             await task.CAF();
         }
@@ -330,7 +329,7 @@ namespace NaiveSocks
 
         public override string ToString()
         {
-            return $"{{chs#{Id}{(Closed ? " closed" : "")}}}";
+            return $"{{chs#{Id}{(Closed ? " closed" : "")} count={TotalLocalChannels}+{TotalRemoteChannels}}}";
         }
 
         enum ParentOpcode

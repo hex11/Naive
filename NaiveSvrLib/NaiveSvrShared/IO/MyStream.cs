@@ -560,10 +560,10 @@ namespace NaiveSocks
                         lastMsg.TryRecycle();
                     }
                 } finally {
-                    VerboseLogger?.debugForce($"CLOSE: {From} -> {To}");
-                    if (buf.Bytes != null) {
-                        BufferPool.GlobalPut(buf.Bytes);
-                    }
+                    VerboseLogger?.debugForce($"STOPPED: {From} -> {To}");
+                    //if (buf.Bytes != null) {
+                    //    BufferPool.GlobalPut(buf.Bytes);
+                    //}
                 }
             }
 
