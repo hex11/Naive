@@ -199,6 +199,11 @@ namespace Naive.HttpSvr
             log(text, Level.Debug);
         }
 
+        public static void debugForce(string text)
+        {
+            log(text, Level.Debug);
+        }
+
         public static void info(string text)
         {
             log(text, Level.Info);

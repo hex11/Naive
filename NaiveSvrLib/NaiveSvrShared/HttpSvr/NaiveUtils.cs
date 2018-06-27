@@ -779,6 +779,7 @@ namespace Naive.HttpSvr
             string getMemStat() => $"Total Memory: {GC.GetTotalMemory(false).ToString("N0")}. ";
             onLog($"GC...  {getMemStat()}");
             try {
+                BufferPool.GlobalPool?.Clear();
                 if (dotNet46_GC_Collect != null)
                     dotNet46_GC_Collect(GC.MaxGeneration, GCCollectionMode.Forced, true, true);
                 else

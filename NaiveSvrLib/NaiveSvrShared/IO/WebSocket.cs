@@ -55,16 +55,16 @@ namespace Naive.HttpSvr
         public async Task Close(CloseOpt opt)
         {
             switch (opt.CloseType) {
-            case CloseType.Close:
-                State = MsgStreamStatus.Close;
-                Close();
-                break;
-            case CloseType.Shutdown:
-                State = MsgStreamStatus.Shutdown;
-                await SendBytesAsync(null, 0, 0).CAF();
-                break;
-            default:
-                throw new ArgumentOutOfRangeException();
+                case CloseType.Close:
+                    State = MsgStreamStatus.Close;
+                    Close();
+                    break;
+                case CloseType.Shutdown:
+                    State = MsgStreamStatus.Shutdown;
+                    await SendBytesAsync(null, 0, 0).CAF();
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException();
             }
         }
 
@@ -150,7 +150,7 @@ namespace Naive.HttpSvr
         {
             var curTicks = Environment.TickCount;
             var laTicks = _lastTicks;
-            
+
             if (curTicks >= laTicks) {
                 var delta = curTicks - laTicks;
                 return (int)((_totalMsUntilLastTicks + delta) / 1000);
@@ -547,7 +547,13 @@ namespace Naive.HttpSvr
                 if (mask) {
                     await _readAsync(4).CAF();
                 }
-                var payload = optionalBuffer ?? new byte[payloadlen];
+                byte[] payload;
+                if (optionalBuffer != null) {
+                    payload = optionalBuffer;
+                } else {
+                    payload = BufferPool.GlobalGet(payloadlen);
+                    offset = 0;
+                }
                 bv.Set(payload, offset, payloadlen);
                 if (payloadlen > 0) {
                     await WebSocket._readAsync(stream, payload, offset, payloadlen).CAF();
@@ -571,24 +577,24 @@ namespace Naive.HttpSvr
                 if (wf.opcode != 0x8)
                     Activated?.Invoke(this);
                 switch (wf.opcode) {
-                case 0x8: // close
-                    try {
-                        ConnectionState = States.Closing;
-                        SendMsg(0x8, null, 0, 0);
-                    } catch (Exception) { }
-                    break;
-                case 0x9: // ping
-                    Logging.debug($"ping received on {this}");
-                    PingReceived?.Invoke(this);
-                    var b = bv.GetBytes();
-                    await SendMsgAsync(0xA, b, 0, b.Length).CAF();
-                    break;
-                case 0xA: // pong
-                    Logging.debug($"pong received on {this}");
-                    PongReceived?.Invoke(this);
-                    break;
-                default:
-                    return wf;
+                    case 0x8: // close
+                        try {
+                            ConnectionState = States.Closing;
+                            SendMsg(0x8, null, 0, 0);
+                        } catch (Exception) { }
+                        break;
+                    case 0x9: // ping
+                        Logging.debug($"ping received on {this}");
+                        PingReceived?.Invoke(this);
+                        var b = bv.GetBytes();
+                        await SendMsgAsync(0xA, b, 0, b.Length).CAF();
+                        break;
+                    case 0xA: // pong
+                        Logging.debug($"pong received on {this}");
+                        PongReceived?.Invoke(this);
+                        break;
+                    default:
+                        return wf;
                 }
             }
         }
@@ -607,20 +613,20 @@ namespace Naive.HttpSvr
                 opcode = msg.opcode;
             }
             switch (opcode) {
-            case 0x1: // string msg
-                msg.data = msg.data as string + Encoding.UTF8.GetString(buf, 0, len);
-                break;
-            case 0x2: // bytes msg
-                if (msg.data == null) {
-                    msg.data = wf.bv;
-                } else {
-                    (msg.data as BytesView).lastNode.nextNode = wf.bv;
-                }
-                if (fin)
-                    msg.data = (msg.data as BytesView).GetBytes();
-                break;
-            default:
-                return;
+                case 0x1: // string msg
+                    msg.data = msg.data as string + Encoding.UTF8.GetString(buf, 0, len);
+                    break;
+                case 0x2: // bytes msg
+                    if (msg.data == null) {
+                        msg.data = wf.bv;
+                    } else {
+                        (msg.data as BytesView).lastNode.nextNode = wf.bv;
+                    }
+                    if (fin)
+                        msg.data = (msg.data as BytesView).GetBytes();
+                    break;
+                default:
+                    return;
             }
             if (fin) {
                 _unfin = null;
@@ -644,20 +650,20 @@ namespace Naive.HttpSvr
                 opcode = msg.opcode;
             }
             switch (opcode) {
-            case 0x1: // string msg
-                msg.data = msg.data as string + Encoding.UTF8.GetString(buf, 0, len);
-                break;
-            case 0x2: // bytes msg
-                if (msg.data == null) {
-                    msg.data = wf.bv;
-                } else {
-                    (msg.data as BytesView).lastNode.nextNode = wf.bv;
-                }
-                if (fin)
-                    msg.data = (msg.data as BytesView).GetBytes();
-                break;
-            default:
-                return;
+                case 0x1: // string msg
+                    msg.data = msg.data as string + Encoding.UTF8.GetString(buf, 0, len);
+                    break;
+                case 0x2: // bytes msg
+                    if (msg.data == null) {
+                        msg.data = wf.bv;
+                    } else {
+                        (msg.data as BytesView).lastNode.nextNode = wf.bv;
+                    }
+                    if (fin)
+                        msg.data = (msg.data as BytesView).GetBytes();
+                    break;
+                default:
+                    return;
             }
             if (fin) {
                 _unfin = null;

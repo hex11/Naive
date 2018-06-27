@@ -373,7 +373,11 @@ namespace NaiveSocks
                         await ch.SendMsg(buf).CAF();
                     }
                 } else if (cmd == "upload") {
-                    while ((await ch.RecvMsg(null).CAF()).IsEOF == false) {
+                    while (true) {
+                        var msg = await ch.RecvMsg(null).CAF();
+                        msg.TryRecycle();
+                        if (msg.IsEOF)
+                            break;
                     }
                     return;
                 } else if (cmd == "ping") {
@@ -416,6 +420,7 @@ namespace NaiveSocks
                             sw.Restart();
                             continue;
                         }
+                        msg.TryRecycle();
                         if (msg.IsEOF)
                             break;
                         downloadedBytes += msg.Data.tlen;

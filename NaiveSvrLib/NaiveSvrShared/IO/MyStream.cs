@@ -303,19 +303,6 @@ namespace NaiveSocks
 
         public Task WriteTo(IMyStream stream) => StreamCopy(this, stream);
 
-        private const int defaultBufferSize = 64 * 1024;
-        private static WeakObjectPool<byte[]> bufPool = new WeakObjectPool<byte[]>(() => new byte[defaultBufferSize]) { MaxCount = 48 };
-
-        public static int BufferPoolMaxCount
-        {
-            get {
-                return bufPool.MaxCount;
-            }
-            set {
-                bufPool.MaxCount = value;
-            }
-        }
-
         public static Task StreamCopy(IMyStream streamfrom, IMyStream streamto) => StreamCopy(streamfrom, streamto, -1);
         public static Task StreamCopy(IMyStream streamfrom, IMyStream streamto, int bs) => StreamCopy(streamfrom, streamto, bs, false);
         public static Task StreamCopy(IMyStream streamfrom, IMyStream streamto, int bs, bool dontShutdown)
@@ -503,6 +490,8 @@ namespace NaiveSocks
         {
             public static bool DefaultUseLoggerAsVerboseLogger = false;
 
+            private const int defaultBufferSize = 64 * 1024;
+
             private Logger _verboseLogger;
 
             public Copier(IMyStream from, IMyStream to)
@@ -531,16 +520,11 @@ namespace NaiveSocks
             {
                 IMsgStream msgStream = (From as MsgStreamToMyStream)?.MsgStream;
                 if (bs == -1) bs = defaultBufferSize;
-                WeakObjectPool<byte[]>.Handle bufhandle = null;
                 Naive.HttpSvr.BytesSegment buf;
+                Msg lastMsg = new Msg();
 
                 if (msgStream == null) {
-                    if (bs == defaultBufferSize) {
-                        bufhandle = bufPool.Get();
-                        buf = new BytesSegment(bufhandle.Value);
-                    } else {
-                        buf = new BytesSegment(new byte[bs]);
-                    }
+                    buf = BufferPool.GlobalGet(bs);
                 } else {
                     buf = new BytesSegment();
                 }
@@ -552,6 +536,7 @@ namespace NaiveSocks
                         } else {
                             // no buffer preallocated for IMsgStream
                             var msg = await msgStream.RecvMsg(null).CAF();
+                            lastMsg = msg;
                             if (msg.IsEOF) {
                                 read = 0;
                             } else {
@@ -572,10 +557,13 @@ namespace NaiveSocks
                         CounterR?.Add(read);
                         await To.WriteAsync(new BytesSegment(buf.Bytes, buf.Offset, read)).CAF();
                         CounterW?.Add(read);
+                        lastMsg.TryRecycle();
                     }
                 } finally {
                     VerboseLogger?.debugForce($"CLOSE: {From} -> {To}");
-                    bufhandle?.Dispose();
+                    if (buf.Bytes != null) {
+                        BufferPool.GlobalPut(buf.Bytes);
+                    }
                 }
             }
 

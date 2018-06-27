@@ -36,6 +36,15 @@ namespace Naive.HttpSvr
 
         public static implicit operator Msg(byte[] bytes) => new Msg(bytes);
 
+        public void TryRecycle()
+        {
+            if (Data == null)
+                return;
+            if (Data.nextNode != null)
+                Logging.warning("lastMsg.nextNode != null");
+            BufferPool.GlobalPut(Data.bytes);
+        }
+
         public string GetString()
         {
             var msg = this;
