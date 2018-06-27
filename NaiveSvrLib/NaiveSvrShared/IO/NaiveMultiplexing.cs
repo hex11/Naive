@@ -299,30 +299,28 @@ namespace NaiveSocks
             }
         }
 
-        private async Task SendParentOpcode(ParentOpcode opcode)
+        private Task SendParentOpcode(ParentOpcode opcode)
+        {
+            return SendOpcode(ReservedChannel, (byte)opcode);
+        }
+
+        internal Task SendOpcode(Channel ch, Channel.Opcode opcode)
+        {
+            return SendOpcode(ch, (byte)opcode);
+        }
+
+        internal async Task SendOpcode(Channel ch, byte opcode)
         {
             BytesView bv = null;
             Task task = null;
             lock (_sendLock) {
                 bv = (BytesView)new byte[Frame.getSendChIdLen(this) + 1];
                 int cur = 0;
-                Frame.writeChId(this, bv, ReservedId, ref cur);
-                bv[cur++] = (byte)opcode;
-                task = SendMsg(ReservedChannel, bv);
+                Frame.writeChId(this, bv, ch.Id, ref cur);
+                bv[cur++] = opcode;
+                task = SendMsg(ch, bv);
             }
             await task.CAF();
-        }
-
-        internal async Task SendOpcode(Channel ch, Channel.Opcode opcode)
-        {
-            BytesView bv = null;
-            lock (_sendLock) {
-                bv = (BytesView)new byte[Frame.getSendChIdLen(this) + 1];
-                int cur = 0;
-                Frame.writeChId(this, bv, ch.Id, ref cur);
-                bv[cur++] = (byte)opcode;
-            }
-            await SendMsg(ReservedChannel, bv).CAF();
         }
 
         internal void Remove(Channel ch)
@@ -633,6 +631,7 @@ namespace NaiveSocks
 
         public async Task SendMsg(Msg msg)
         {
+            ThrowIfShutdownOrClosed();
             var tmp = blockSendTcs;
             if (tmp != null) {
                 debug("pausing send", msg.Data?.tlen);
@@ -710,24 +709,34 @@ namespace NaiveSocks
         public void Shutdown()
         {
             lock (_syncroot) {
-                ThrowIfShutdownOrClosed();
-                if (State == StateEnum.Open) {
-                    SendRsvOpcodeThenChangeState(Opcode.EOF, StateEnum.EOFSent);
-                } else { // EOFReceived
-                    EnterClosing(true);
-                }
+                Shutdown_NoLock();
+            }
+        }
+
+        private void Shutdown_NoLock()
+        {
+            ThrowIfShutdownOrClosed();
+            if (State == StateEnum.Open) {
+                SendRsvOpcodeThenChangeState(Opcode.EOF, StateEnum.EOFSent);
+            } else { // EOFReceived
+                EnterClosing(true);
             }
         }
 
         public void Close()
         {
             lock (_syncroot) {
-                if (State == StateEnum.EOFReceived) {
-                    Shutdown();
-                } else {
-                    ThrowIfClosingOrClosed();
-                    EnterClosing(false);
-                }
+                Close_NoLock();
+            }
+        }
+
+        private void Close_NoLock()
+        {
+            if (State == StateEnum.EOFReceived) {
+                Shutdown_NoLock();
+            } else {
+                ThrowIfClosingOrClosed();
+                EnterClosing(false);
             }
         }
 
@@ -735,7 +744,7 @@ namespace NaiveSocks
         {
             lock (_syncroot) {
                 if (!IsClosingOrClosed)
-                    Close();
+                    Close_NoLock();
             }
         }
 
