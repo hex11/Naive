@@ -397,25 +397,30 @@ namespace NaiveSocks
 
                     log("PING TEST...");
                     const int pingCount = 3;
+                    long pingSum = 0;
                     for (int i = 0; i < pingCount; i++) {
                         sw.Restart();
                         await ch.SendString("ping");
                         if ((await ch.RecvString()) != "pong")
                             throw new Exception("Unexpected reply. Expected 'pong'.");
-                        log($"Ping {i + 1}/{pingCount}: {sw.ElapsedMilliseconds:N0} ms");
+                        var ping = sw.ElapsedMilliseconds;
+                        pingSum += ping;
+                        log($" Ping {i + 1}/{pingCount}: {ping:N0} ms");
                     }
+                    long pingAvg = pingSum / pingCount;
 
-                    int toKiBps(int deltaBytes, int deltaMs) => deltaBytes / 1024 * 1000 / deltaMs;
-                    float toMbps(int deltaBytes, int deltaMs) => (float)deltaBytes * 8 / (1024 * 1024) * 1000 / deltaMs;
+                    long toKiBps(long deltaBytes, long deltaMs) => deltaBytes / 1024 * 1000 / deltaMs;
+                    float toMbps(long deltaBytes, long deltaMs) => (float)deltaBytes * 8 / (1024 * 1024) * 1000 / deltaMs;
 
-                    log("DOWNLOADING TEST...");
+                    log("DOWNLOAD TEST...");
                     await ch.SendString("download");
-                    int downloadedBytes = -1;
-                    int lastReportBytes = 0;
+                    long downloadedBytes = -1;
+                    long lastReportBytes = 0;
                     long lastReportMs = 0;
                     while (true) {
                         var msg = await ch.RecvMsg(null);
                         if (downloadedBytes == -1) {
+                            log(" Started download.");
                             downloadedBytes = 0;
                             sw.Restart();
                             continue;
@@ -424,22 +429,26 @@ namespace NaiveSocks
                         if (msg.IsEOF)
                             break;
                         downloadedBytes += msg.Data.tlen;
-                        if (sw.ElapsedMilliseconds - lastReportMs > 1000) {
+                        if (sw.ElapsedMilliseconds - lastReportMs >= 1000) {
                             var deltaBytes = downloadedBytes - lastReportBytes;
                             lastReportBytes = downloadedBytes;
                             var curMs = sw.ElapsedMilliseconds;
                             var deltaMs = curMs - lastReportMs;
+                            log($" {lastReportMs:N0} ms - {curMs:N0} ms speed: {toKiBps(deltaBytes, (int)deltaMs):N0} KiB/s, {toMbps(deltaBytes, (int)deltaMs):N2} Mbps");
                             lastReportMs = curMs;
-                            log($"Current speed: {toKiBps(deltaBytes, (int)deltaMs):N0} KiB/s, {toMbps(deltaBytes, (int)deltaMs):N2} Mbps");
                         }
-                        if (sw.ElapsedMilliseconds > 10000) {
+                        if (sw.ElapsedMilliseconds >= 10000) {
                             ch.CloseIfOpen();
                             break;
                         }
                     }
                     var totalMs = sw.ElapsedMilliseconds;
-                    log($"Done. Downloaded {downloadedBytes / 1024:N0} KiB in {totalMs:N0} ms." +
-                        $" Avg speed: {toKiBps(downloadedBytes, (int)totalMs):N0} KiB/s, {toMbps(downloadedBytes, (int)totalMs):N2} Mbps.");
+                    var avgKiBps = toKiBps(downloadedBytes, totalMs);
+                    log($" Done. Downloaded {downloadedBytes / 1024:N0} KiB in {totalMs:N0} ms." +
+                        $" Avg speed: {avgKiBps:N0} KiB/s, {toMbps(downloadedBytes, totalMs):N2} Mbps.");
+
+                    var avgMiBps = avgKiBps / 1024.0;
+                    log($"SUMMARY:\n Ping: {pingAvg} ms\n Download: {avgMiBps:N2} MiB/s");
                 } else {
                     throw new Exception("unknown response from remote");
                 }
