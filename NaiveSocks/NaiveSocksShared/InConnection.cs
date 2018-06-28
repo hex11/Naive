@@ -22,7 +22,27 @@ namespace NaiveSocks
         public AdapterRef Redirected { get; set; }
         public bool IsRedirected => Redirected != null;
 
+        public bool IsStoppingRequested { get; private set; }
+        public bool IsFinished { get; internal set; }
+
+        static IncrNumberGenerator idGenerator = new IncrNumberGenerator();
+        public int Id { get; } = idGenerator.Get();
+
         public BytesCountersRW BytesCountersRW;
+
+        public void Stop()
+        {
+            IsStoppingRequested = true;
+            var stream = DataStream;
+            if (stream == null)
+                stream = ConnectResult.Stream;
+            if (stream == null) {
+                Controller.Logger.warning(this + ": Can not get the stream, failed to stop.");
+            } else {
+                Controller.Logger.info("Closing stream " + stream + " to stop connection " + this);
+                MyStream.CloseWithTimeout(stream);
+            }
+        }
 
         public void RedirectTo(AdapterRef redirectedName)
         {
@@ -80,13 +100,17 @@ namespace NaiveSocks
             Time = 2,
             Bytes = 4,
             OutAdapter = 8,
-            All = AdditionFields | Time | Bytes | OutAdapter,
+            Id = 16,
+            All = AdditionFields | Time | Bytes | OutAdapter | Id,
             Default = All
         }
 
         public void ToString(StringBuilder sb, ToStringFlags flags)
         {
-            sb.Append("{'").Append(InAdapter?.Name).Append("'");
+            sb.Append('{');
+            if ((flags & ToStringFlags.Id) != 0)
+                sb.Append("cxn#").Append(Id).Append(' ');
+            sb.Append('\'').Append(InAdapter?.Name);
             var outAdapter = ConnectResult?.Adapter;
             if (outAdapter != null && (flags & ToStringFlags.OutAdapter) != 0)
                 sb.Append("->'").Append(outAdapter.Name).Append('\'');
@@ -106,6 +130,10 @@ namespace NaiveSocks
                 else if (ConnectResult.IsRedirected)
                     sb.Append(' ').Append("(REDIR->'").Append(ConnectResult.Redirected.Adapter?.Name).Append("')");
             }
+            if (IsStoppingRequested)
+                sb.Append(' ').Append("(STOPPING)");
+            if (IsFinished)
+                sb.Append(' ').Append("(END)");
             sb.Append('}');
         }
 

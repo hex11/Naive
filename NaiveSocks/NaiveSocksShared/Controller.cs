@@ -609,6 +609,7 @@ namespace NaiveSocks
 
         private async Task onConnectionEnd(InConnection inc)
         {
+            inc.IsFinished = true;
             if (LoggingLevel <= Logging.Level.None)
                 debug($"{inc} End.");
             if (inc.IsHandled == false) {

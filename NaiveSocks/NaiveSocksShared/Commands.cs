@@ -95,26 +95,58 @@ namespace NaiveSocks
         {
             cmdHub.AddCmdHandler(prefix + "c", command => {
                 var con = command.Console;
-                var arr = controller.InConnections.ToArray();
-                var sb = new StringBuilder(64);
-                foreach (var item in arr) {
-                    if (item.IsHandled) {
-                        sb.Clear();
-                        item.ToString(sb, InConnection.ToStringFlags.Default & ~InConnection.ToStringFlags.Bytes & ~InConnection.ToStringFlags.AdditionFields & ~InConnection.ToStringFlags.OutAdapter);
-                        command.Write(sb.ToString());
-                        if (item.ConnectResult?.Adapter != null) {
-                            con.Write(" -> '" + item.ConnectResult.Adapter.Name + "'", ConsoleColor.Cyan);
+                string action = command.ArgOrNull(0);
+                if (action == null || action == "list") {
+                    var arr = controller.InConnections.ToArray();
+                    var sb = new StringBuilder(64);
+                    foreach (var item in arr) {
+                        if (item.IsHandled) {
+                            sb.Clear();
+                            item.ToString(sb, InConnection.ToStringFlags.Default & ~InConnection.ToStringFlags.Bytes & ~InConnection.ToStringFlags.AdditionFields & ~InConnection.ToStringFlags.OutAdapter);
+                            command.Write(sb.ToString());
+                            if (item.ConnectResult?.Adapter != null) {
+                                con.Write(" -> '" + item.ConnectResult.Adapter.Name + "'", ConsoleColor.Cyan);
+                            }
+                            var rw = item.BytesCountersRW;
+                            con.Write("\n R=" + rw.R, ConsoleColor.Green);
+                            con.Write(" W=" + rw.W + " ", ConsoleColor.Yellow);
+                            con.Write(item.GetInfoStr() + "\n", ConsoleColor.DarkGray);
+                        } else {
+                            command.Console.Write(item + "\n", ConsoleColor.Yellow);
                         }
-                        var rw = item.BytesCountersRW;
-                        con.Write("\n R=" + rw.R, ConsoleColor.Green);
-                        con.Write(" W=" + rw.W + " ", ConsoleColor.Yellow);
-                        con.Write(item.GetInfoStr() + "\n", ConsoleColor.DarkGray);
-                    } else {
-                        command.Console.Write(item + "\n", ConsoleColor.Yellow);
+                    }
+                    command.WriteLine($"({arr.Length} connections)");
+                } else if (action == "stop") {
+                    for (int i = 1; i < command.args.Length; i++) {
+                        var id = Int32.Parse(command.args[i]);
+                        InConnection conneciton = null;
+                        lock (controller.InConnectionsLock) {
+                            foreach (var item in controller.InConnections) {
+                                if (item.Id == id) {
+                                    conneciton = item;
+                                    break;
+                                }
+                            }
+                        }
+                        if (conneciton == null) {
+                            con.WriteLine("connection #" + id + " not found");
+                            command.statusCode = 1;
+                        } else {
+                            con.WriteLine("stopping connection #" + id);
+                            conneciton.Stop();
+                        }
+                    }
+                } else if (action == "stopall") {
+                    InConnection[] arr;
+                    lock (controller.InConnectionsLock) {
+                        arr = controller.InConnections.ToArray();
+                    }
+                    con.WriteLine("stopping all connections, IDs: " + string.Join(", ", arr.Select(x => x.Id.ToString())));
+                    foreach (var item in arr) {
+                        item.Stop();
                     }
                 }
-                command.WriteLine($"({arr.Length} connections)");
-            });
+            }, "[list|(stop ID1 ID2 IDn...)|stopall]");
             cmdHub.AddCmdHandler(prefix + "wsc", (cmd) => {
                 cmd.WriteLine($"# managed websocket connections ({WebSocket.ManagedWebSockets.Count}): ");
                 var curTime = WebSocket.CurrentTime;
@@ -286,19 +318,19 @@ namespace NaiveSocks
                 var keep = true;
                 var pingEnabled = false;
                 switch (cmd.ArgOrNull(0)) {
-                case "start":
-                    pingEnabled = true;
-                    break;
-                case "stop":
-                    pingEnabled = false;
-                    break;
-                case null:
-                    keep = false;
-                    break;
-                default:
-                    cmd.WriteLine($"wrong argument '{cmd.ArgOrNull(0)}'");
-                    cmd.statusCode = 1;
-                    return;
+                    case "start":
+                        pingEnabled = true;
+                        break;
+                    case "stop":
+                        pingEnabled = false;
+                        break;
+                    case null:
+                        keep = false;
+                        break;
+                    default:
+                        cmd.WriteLine($"wrong argument '{cmd.ArgOrNull(0)}'");
+                        cmd.statusCode = 1;
+                        return;
                 }
                 if (keep) {
                     cmd.WriteLine(pingEnabled ? "start ping" : "stop ping");
@@ -601,19 +633,19 @@ namespace NaiveSocks
         {
             ConsoleColor color;
             switch (item.level) {
-            default:
-            case Logging.Level.None:
-                color = ConsoleColor.Gray;
-                break;
-            case Logging.Level.Info:
-                color = ConsoleColor.White;
-                break;
-            case Logging.Level.Warning:
-                color = ConsoleColor.Yellow;
-                break;
-            case Logging.Level.Error:
-                color = ConsoleColor.Red;
-                break;
+                default:
+                case Logging.Level.None:
+                    color = ConsoleColor.Gray;
+                    break;
+                case Logging.Level.Info:
+                    color = ConsoleColor.White;
+                    break;
+                case Logging.Level.Warning:
+                    color = ConsoleColor.Yellow;
+                    break;
+                case Logging.Level.Error:
+                    color = ConsoleColor.Red;
+                    break;
             }
             con.ForegroundColor = color;
             con.Write(item.timestamp);
