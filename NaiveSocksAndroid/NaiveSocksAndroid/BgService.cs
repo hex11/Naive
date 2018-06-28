@@ -88,15 +88,14 @@ namespace NaiveSocksAndroid
             powerManager = (PowerManager)GetSystemService(Context.PowerService);
             notificationManager = (NotificationManager)GetSystemService(Context.NotificationService);
 
-            var chId = "";
+            var chId = "nsocks_service";
             if (isO) {
-                chId = "nsocks_service";
-                var chan = new NotificationChannel(chId, "NaiveSocks Service", NotificationImportance.Min);
+                var chan = new NotificationChannel(chId, "NaiveSocks Service", NotificationImportance.Low);
                 chan.LockscreenVisibility = NotificationVisibility.Private;
                 notificationManager.CreateNotificationChannel(chan);
             }
 
-            builder = new NotificationCompat.Builder(this)
+            builder = new NotificationCompat.Builder(this, chId)
                         .SetContentIntent(BuildIntentToShowMainActivity())
                         //.SetContentTitle("NaiveSocks")
                         //.SetSubText("running")
@@ -107,7 +106,6 @@ namespace NaiveSocksAndroid
                         .AddAction(BuildServiceAction(Actions.GC_0, "GC(gen0)", Android.Resource.Drawable.StarOff, 5))
                         .SetSmallIcon(Resource.Drawable.N)
                         .SetColor(unchecked((int)0xFF2196F3))
-                        .SetChannelId(chId)
                         //.SetShowWhen(false)
                         .SetOngoing(true);
 
@@ -120,7 +118,7 @@ namespace NaiveSocksAndroid
                 builder.SetContentTitle("NaiveSocks");
             }
 
-            restartBuilder = new NotificationCompat.Builder(this)
+            restartBuilder = new NotificationCompat.Builder(this, chId)
                         .SetContentIntent(BuildServicePendingIntent("start!", 10086))
                         .SetContentTitle("NaiveSocks service is stopped")
                         .SetContentText("touch here to restart")
@@ -129,7 +127,6 @@ namespace NaiveSocksAndroid
                         .SetAutoCancel(true)
                         .SetPriority((int)NotificationPriority.Min)
                         .SetVisibility(NotificationCompat.VisibilitySecret)
-                        .SetChannelId(chId)
                         .SetShowWhen(false);
 
             StartForeground(MainNotificationId, builder.Build());
@@ -184,26 +181,26 @@ namespace NaiveSocksAndroid
         {
             if (intent != null) {
                 switch (intent.Action) {
-                case Actions.STOP:
-                    StopForeground(true);
-                    this.StopSelf();
-                    notificationManager.Notify(MainNotificationId, restartBuilder.Build());
-                    break;
-                case Actions.RELOAD:
-                    try {
-                        Controller.Reload();
-                        putLine("controller reloaded");
-                    } catch (Exception e) {
-                        ShowToast("reloading error: " + e.Message);
-                        putLine("reloading error: " + e.ToString());
-                    }
-                    break;
-                case Actions.GC:
-                case Actions.GC_0:
-                    var before = GC.GetTotalMemory(false);
-                    GC.Collect(intent.Action == Actions.GC ? GC.MaxGeneration : 0);
-                    putLine($"GC Done. {before:N0} -> {GC.GetTotalMemory(false):N0}");
-                    break;
+                    case Actions.STOP:
+                        StopForeground(true);
+                        this.StopSelf();
+                        notificationManager.Notify(MainNotificationId, restartBuilder.Build());
+                        break;
+                    case Actions.RELOAD:
+                        try {
+                            Controller.Reload();
+                            putLine("controller reloaded");
+                        } catch (Exception e) {
+                            ShowToast("reloading error: " + e.Message);
+                            putLine("reloading error: " + e.ToString());
+                        }
+                        break;
+                    case Actions.GC:
+                    case Actions.GC_0:
+                        var before = GC.GetTotalMemory(false);
+                        GC.Collect(intent.Action == Actions.GC ? GC.MaxGeneration : 0);
+                        putLine($"GC Done. {before:N0} -> {GC.GetTotalMemory(false):N0}");
+                        break;
                 }
             }
             return StartCommandResult.Sticky;
@@ -390,18 +387,18 @@ namespace NaiveSocksAndroid
         private static LogPriority GetPri(Logging.Log log)
         {
             switch (log.level) {
-            case Logging.Level.None:
-                return LogPriority.Verbose;
-            case Logging.Level.Debug:
-                return LogPriority.Debug;
-            case Logging.Level.Info:
-                return LogPriority.Info;
-            case Logging.Level.Warning:
-                return LogPriority.Warn;
-            case Logging.Level.Error:
-                return LogPriority.Error;
-            default:
-                return LogPriority.Info;
+                case Logging.Level.None:
+                    return LogPriority.Verbose;
+                case Logging.Level.Debug:
+                    return LogPriority.Debug;
+                case Logging.Level.Info:
+                    return LogPriority.Info;
+                case Logging.Level.Warning:
+                    return LogPriority.Warn;
+                case Logging.Level.Error:
+                    return LogPriority.Error;
+                default:
+                    return LogPriority.Info;
             }
         }
 

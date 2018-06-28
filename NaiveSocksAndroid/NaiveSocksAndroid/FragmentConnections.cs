@@ -17,14 +17,17 @@ using Naive.HttpSvr;
 using NaiveSocks;
 using System.Threading;
 using System.Threading.Tasks;
+using Android.Content;
 
 namespace NaiveSocksAndroid
 {
     public class FragmentConnections : Fragment
     {
         LinearLayout connParent;
+        List<ItemView> displayingViews = new List<ItemView>();
         private MainActivity mainActivity;
         private ContextThemeWrapper themeWrapper;
+
 
         public FragmentConnections(MainActivity mainActivity)
         {
@@ -73,70 +76,127 @@ namespace NaiveSocksAndroid
         {
             base.OnPause();
             timer.Change(-1, -1);
-            connParent.RemoveAllViews();
+            Clear();
         }
 
         void Refresh()
         {
-            connParent.RemoveAllViews();
             var controller = mainActivity.Service?.Controller;
             if (controller != null) {
-                var sb = new StringBuilder(64);
                 lock (controller.InConnectionsLock) {
-                    foreach (var item in controller.InConnections) {
-                        AddConn(item, sb);
+                    var conns = controller.InConnections;
+
+                    for (int i = displayingViews.Count - 1; i >= 0; i--) {
+                        ItemView view = displayingViews[i];
+                        bool found = false;
+                        foreach (var item in conns) {
+                            if (object.ReferenceEquals(view.Connection, item)) {
+                                found = true;
+                                break;
+                            }
+                        }
+                        if (!found) {
+                            if (view.pendingRemoving) {
+                                displayingViews.RemoveAt(i);
+                                connParent.RemoveViewAt(i);
+                            } else {
+                                view.pendingRemoving = true;
+                            }
+                        }
+                    }
+
+                    foreach (var item in conns) {
+                        bool found = false;
+                        foreach (var view in displayingViews) {
+                            if (object.ReferenceEquals(view.Connection, item)) {
+                                found = true;
+                                break;
+                            }
+                        }
+                        if (!found) {
+                            var newView = new ItemView(themeWrapper) { Connection = item };
+                            displayingViews.Add(newView);
+                            connParent.AddView(newView);
+                        }
+                    }
+
+                    var sb = new StringBuilder(64);
+                    foreach (var view in displayingViews) {
+                        view.Update(sb);
                     }
                 }
+            } else {
+                Clear();
             }
         }
 
-        void AddConn(InConnection conn, StringBuilder sbCache = null)
+        private void Clear()
         {
-            sbCache?.Clear();
-            var sb = sbCache ?? new StringBuilder(64);
-
-            conn.ToString(sb, InConnection.ToStringFlags.None);
-            sb.AppendLine();
-            sb.Append(conn.GetInfoStr());
-            using (var tv = new TextView(themeWrapper) { Text = sb.ToString() }) {
-                if (conn.ConnectResult?.Ok == true)
-                    tv.SetBackgroundColor(Color.Argb(30, 0, 255, 0));
-                tv.SetOnLongClickListener(new ClickListener(conn));
-                connParent.AddView(tv);
-            }
-
-            sb.Clear();
-            sb.Append(conn.BytesCountersRW.ToString()).Append(" T=").Append(WebSocket.CurrentTime - conn.CreateTime);
-            var adap = conn.ConnectResult?.Adapter;
-            if (adap != null)
-                sb.Append(" -> '").Append(adap.Name).Append("'");
-            using (var tv = new TextView(themeWrapper) { Text = sb.ToString(), Gravity = GravityFlags.End }) {
-                tv.SetBackgroundColor(Color.Argb(30, 128, 128, 128));
-                connParent.AddView(tv);
-            }
+            connParent.RemoveAllViews();
+            displayingViews.Clear();
         }
 
-        class ClickListener : Java.Lang.Object, View.IOnLongClickListener
+        class ItemView : LinearLayout, View.IOnLongClickListener
         {
-            public ClickListener(InConnection connection)
+            public ItemView(Context context) : base(context)
             {
-                Connection = connection;
+                this.Orientation = Orientation.Vertical;
+
+                tv1 = new TextView(context);
+                tv2 = new TextView(context);
+
+                tv2.Gravity = GravityFlags.End;
+                tv2.SetBackgroundColor(Color.Argb(30, 128, 128, 128));
+
+                this.AddView(tv1);
+                this.AddView(tv2);
+
+                this.SetOnLongClickListener(this);
             }
 
-            public InConnection Connection { get; }
+            readonly TextView tv1, tv2;
+            public InConnection Connection { get; set; }
+            public bool pendingRemoving = false;
+
+            bool stopping = false;
+
+            public void Update(StringBuilder sb)
+            {
+                var conn = Connection;
+                if (conn == null) {
+                    tv1.Text = null;
+                    this.SetBackgroundColor(Color.Argb(0, 0, 255, 0));
+                    tv2.Text = null;
+                    return;
+                }
+
+                if (conn.ConnectResult?.Ok == true)
+                    this.SetBackgroundColor(Color.Argb(conn.IsFinished ? 15 : 30, 0, 255, 0));
+                else
+                    this.SetBackgroundColor(Color.Argb(conn.IsFinished ? 15 : 30, 255, 255, 0));
+
+                sb.Clear();
+                conn.ToString(sb, InConnection.ToStringFlags.None);
+                sb.AppendLine();
+                sb.Append(conn.GetInfoStr());
+                tv1.Text = sb.ToString();
+
+                sb.Clear();
+                sb.Append(conn.BytesCountersRW.ToString()).Append(" T=").Append(WebSocket.CurrentTime - conn.CreateTime);
+                var adap = conn.ConnectResult?.Adapter;
+                if (adap != null)
+                    sb.Append(" -> '").Append(adap.Name).Append("'");
+                tv2.Text = sb.ToString();
+            }
 
             public bool OnLongClick(View v)
             {
+                stopping = true;
                 Task.Run(() => {
-                    Logging.info("Closing " + Connection + " (Android GUI).");
-                    var stream = Connection.DataStream;
-                    if (stream == null)
-                        stream = Connection.ConnectResult.Stream;
-                    if (stream == null) {
-                        Logging.warning("Can not get the stream.");
-                    } else {
-                        MyStream.CloseWithTimeout(stream);
-                    }
+                    Connection?.Stop();
+                    this.Post(() => {
+                        Update(new StringBuilder(64));
+                    });
                 });
                 return true;
             }
