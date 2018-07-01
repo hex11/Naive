@@ -37,6 +37,11 @@ namespace NaiveSocks
         int Read(BytesSegment bs);
     }
 
+    public interface IMyStreamReadFull : IMyStream
+    {
+        Task ReadFullAsync(BytesSegment bs);
+    }
+
     public interface IMyStreamBeginEnd : IMyStream
     {
         IAsyncResult BeginWrite(byte[] buffer, int offset, int count, AsyncCallback callback, object state);
@@ -72,16 +77,16 @@ namespace NaiveSocks
         public override string ToString()
         {
             switch (state) {
-                case OPEN:
-                    return "OPEN";
-                case LOCAL_SHUTDOWN:
-                    return "LOCAL_SHUTDOWN";
-                case REMOTE_SHUTDOWN:
-                    return "REMOTE_SHUTDOWN";
-                case CLOSED:
-                    return "CLOSED";
-                default:
-                    return $"!!UNKNOWN({state})!!";
+            case OPEN:
+                return "OPEN";
+            case LOCAL_SHUTDOWN:
+                return "LOCAL_SHUTDOWN";
+            case REMOTE_SHUTDOWN:
+                return "REMOTE_SHUTDOWN";
+            case CLOSED:
+                return "CLOSED";
+            default:
+                return $"!!UNKNOWN({state})!!";
             }
         }
 
@@ -595,6 +600,40 @@ namespace NaiveSocks
         public static Task<int> ReadAsync(this IMyStream myStream, byte[] buf, int offset, int count)
         {
             return myStream.ReadAsync(new BytesSegment(buf, offset, count));
+        }
+
+        public static void Write(this IMyStream myStream, byte[] buf, int offset, int count)
+        {
+            if (myStream is IMyStreamSync sync)
+                sync.Write(new BytesSegment(buf, offset, count));
+            else
+                myStream.WriteAsync(buf, offset, count).RunSync();
+        }
+
+        public static int Read(this IMyStream myStream, byte[] buf, int offset, int count)
+        {
+            if (myStream is IMyStreamSync sync)
+                return sync.Read(new BytesSegment(buf, offset, count));
+            else
+                return myStream.ReadAsync(buf, offset, count).RunSync();
+        }
+
+        public static Task ReadFullAsync(this IMyStream myStream, BytesSegment bs)
+        {
+            if (myStream is IMyStreamReadFull sync)
+                return sync.ReadFullAsync(bs);
+            else
+                return ReadFullImpl(myStream, bs);
+        }
+
+        public static async Task ReadFullImpl(IMyStream myStream, BytesSegment bs)
+        {
+            while (bs.Len > 0) {
+                var read = await myStream.ReadAsync(bs).CAF();
+                if (read == 0)
+                    throw new DisconnectedException("unexpected EOF");
+                bs.SubSelf(read);
+            }
         }
 
         public static Task RelayWith(this IMyStream stream1, IMyStream stream2)

@@ -18,7 +18,12 @@ namespace Naive.HttpSvr
 
         public EPPair epPair;
 
-        public WebSocketClient(Stream baseStream, string path) : base(baseStream, true)
+        public WebSocketClient(Stream baseStream, string path) : base(baseStream.ToMyStream(), true)
+        {
+            Path = path;
+        }
+
+        public WebSocketClient(MyStream baseStream, string path) : base(baseStream, true)
         {
             Path = path;
         }
@@ -82,8 +87,9 @@ namespace Naive.HttpSvr
         public void Start() => Start(true);
         public void Start(bool enterRecvLoop)
         {
-            var sw = new StreamWriter(BaseStream, Encoding.ASCII);
-            var sr = new StreamReader(BaseStream, Encoding.ASCII);
+            var stream = this.BaseStream.ToStream();
+            var sw = new StreamWriter(stream, Encoding.ASCII);
+            var sr = new StreamReader(stream, Encoding.ASCII);
             var wskey = WebSocket.GenerateSecWebSocketKey();
             var headers = new Dictionary<string, string> {
                 ["Upgrade"] = "websocket",
@@ -95,7 +101,7 @@ namespace Naive.HttpSvr
                 headers.Add("Host", Host);
             HttpClient.WriteHttpRequestHeader(sw, "GET", Path, headers);
             sw.Flush();
-            BaseStream.Flush();
+            stream.Flush();
             var response = HttpClient.ReadHttpResponseHeader(sr);
             var statusCode = response.StatusCode.Split(' ')[0];
             if (statusCode == "101"
@@ -132,7 +138,7 @@ namespace Naive.HttpSvr
             var strw = new StringWriter(new StringBuilder(1024));
             HttpClient.WriteHttpRequestHeader(strw, "GET", Path, headers);
             await BaseStream.WriteAsync(NaiveUtils.GetUTF8Bytes(strw.ToString()));
-            var responseString = await NaiveUtils.ReadStringUntil(BaseStream, NaiveUtils.DoubleCRLFBytes);
+            var responseString = await NaiveUtils.ReadStringUntil(BaseStream.ToStream(), NaiveUtils.DoubleCRLFBytes);
             HttpResponse response;
             try {
                 response = HttpClient.ReadHttpResponseHeader(new StringReader(responseString));

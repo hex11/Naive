@@ -10,7 +10,7 @@ using System.Reflection;
 
 namespace NaiveSocks
 {
-    public class SocketStream1 : SocketStream, IMyStreamMultiBuffer
+    public class SocketStream1 : SocketStream, IMyStreamMultiBuffer, IMyStreamReadFull
     {
         public SocketStream1(Socket socket) : base(socket)
         {
@@ -33,6 +33,9 @@ namespace NaiveSocks
             return ctr.StringRead + ", " + ctr.StringWrite;
         }
 
+        const int readaheadScoreMax = 3;
+        int readaheadScore = readaheadScoreMax;
+
         public static int DefaultReadaheadBufferSize { get; set; } = 4096;
         public int ReadaheadBufferSize { get; set; } = DefaultReadaheadBufferSize;
         BytesSegment readaheadBuffer;
@@ -41,6 +44,15 @@ namespace NaiveSocks
         public bool EnableSmartSyncRead { get; set; } = true;
 
         int socketAvailable;
+
+        public Task ReadFullAsync(BytesSegment bs)
+        {
+            int bytesCanSyncRead = readaheadBuffer.Len + socketAvailable;
+            if (bytesCanSyncRead >= bs.Len)
+                return ReadAsync(bs);
+            else
+                return MyStreamExt.ReadFullImpl(this, bs);
+        }
 
         public override Task<int> ReadAsync(BytesSegment bs)
         {
@@ -117,11 +129,18 @@ namespace NaiveSocks
         {
             var readBufferSize = this.ReadaheadBufferSize;
             if (EnableReadaheadBuffer && (socketAvailable > bs.Len & bs.Len < readBufferSize)) {
-                Interlocked.Increment(ref ctr.Rsync);
-                if (readaheadBuffer.Bytes == null || readaheadBuffer.Bytes.Length < readBufferSize)
+                if (readaheadScore > 0)
+                    readaheadScore--;
+                if (readaheadBuffer.Bytes == null) {
+                    if (readaheadScore > 0)
+                        return 0;
                     readaheadBuffer.Bytes = new byte[readBufferSize];
+                } else if (readaheadBuffer.Bytes.Length < readBufferSize) {
+                    readaheadBuffer.Bytes = new byte[readBufferSize];
+                }
+                Interlocked.Increment(ref ctr.Rsync);
                 readaheadBuffer.Offset = 0;
-                readaheadBuffer.Len = readBufferSize;
+                readaheadBuffer.Len = ReadaheadBufferSize;
                 var read = ReadSocketSync(readaheadBuffer);
                 readaheadBuffer.Len = read;
                 if (read == 0)
@@ -130,10 +149,15 @@ namespace NaiveSocks
                 readaheadBuffer.CopyTo(bs, read);
                 readaheadBuffer.SubSelf(read);
                 return read;
+            } else {
+                if (readaheadScore < readaheadScoreMax) {
+                    if (++readaheadScore == readaheadScoreMax) {
+                        // There are many large reading opearations, so the internal buffer can be released now.
+                        readaheadBuffer.Bytes = null;
+                    }
+                }
+                return 0;
             }
-            // There is a large reading opearation, so the internal buffer can be released now.
-            readaheadBuffer.Bytes = null;
-            return 0;
         }
 
         public override int Read(BytesSegment bs)

@@ -36,7 +36,7 @@ namespace NaiveSocks
         {
             try {
                 SocketStream socketStream = MyStream.FromSocket(client.Client);
-                var ws = new WebSocket(socketStream.ToStream(), false, true);
+                var ws = new WebSocket(socketStream, false, true);
                 if (timeout > 0)
                     ws.AddToManaged(timeout / 2, timeout);
                 using (ws) {

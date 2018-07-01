@@ -1,4 +1,5 @@
-﻿using System;
+﻿using NaiveSocks;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
@@ -19,11 +20,11 @@ namespace Naive.HttpSvr
     public class WebSocketServer : WebSocket
     {
         private readonly HttpConnection p;
-        private Stream stream => BaseStream;
+        private IMyStream stream => BaseStream;
         private EPPair epPair;
 
 
-        public WebSocketServer(HttpConnection p) : base(p.baseStream, false)
+        public WebSocketServer(HttpConnection p) : base(p.myStream, false)
         {
             this.p = p;
             this.epPair = new EPPair(p.localEP, p.remoteEP);
@@ -64,7 +65,7 @@ namespace Naive.HttpSvr
                 p.keepAlive = false;
                 p.EndResponse();
 
-                BaseStream = p.SwitchProtocol();
+                p.SwitchProtocol();
                 ConnectionState = States.Open;
                 if (enterRecvLoop)
                     recvLoop();
@@ -99,7 +100,7 @@ namespace Naive.HttpSvr
                 p.keepAlive = false;
                 await p.EndResponseAsync().CAF();
 
-                BaseStream = p.SwitchProtocol();
+                p.SwitchProtocol();
                 ConnectionState = States.Open;
                 if (enterRecvLoop)
                     await recvLoopAsync().CAF();

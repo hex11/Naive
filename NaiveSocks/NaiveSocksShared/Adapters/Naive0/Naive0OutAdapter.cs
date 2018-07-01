@@ -98,7 +98,7 @@ namespace NaiveSocks
             try {
                 var r = await ConnectHelper.Connect(this, server, timeout);
                 r.ThrowIfFailed();
-                var ws = new WebSocket(r.Stream.ToStream(), true);
+                var ws = new WebSocket(r.Stream, true);
                 if (timeout > 0)
                     ws.AddToManaged(timeout / 2, timeout);
                 var conn = new Connection(ws, enc) { PerSessionIV = per_session_iv };

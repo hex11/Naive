@@ -126,6 +126,20 @@ namespace Naive.HttpSvr
             if (Bytes.Length < Offset + Len)
                 throw new ArgumentException("Bytes.Length < Offset + Len");
         }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void CheckAsParameter_AllowNull()
+        {
+            if (Bytes == null) {
+                if (Offset != 0 | Len != 0)
+                    throw new ArgumentOutOfRangeException("Both Offset and Len should be 0 when Bytes is null");
+            } else {
+                if (Offset < 0 | Len < 0)
+                    throw new ArgumentOutOfRangeException("Offset and Len cannot be less than zero");
+                if (Bytes.Length < Offset + Len)
+                    throw new ArgumentException("Bytes.Length < Offset + Len");
+            }
+        }
     }
 
     public static class BytesSegmentExt

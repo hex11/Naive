@@ -14,7 +14,7 @@ namespace Naive.HttpSvr
 {
     public class WebSocket : FilterBase, IDisposable, IMsgStream, IMsgStreamStringSupport
     {
-        public WebSocket(Stream BaseStream, bool isClient)
+        public WebSocket(IMyStream BaseStream, bool isClient)
         {
             this.BaseStream = BaseStream;
             IsClient = isClient;
@@ -22,7 +22,7 @@ namespace Naive.HttpSvr
             Activated += _activated;
         }
 
-        public WebSocket(Stream BaseStream, bool isClient, bool isOpen) : this(BaseStream, isClient)
+        public WebSocket(IMyStream BaseStream, bool isClient, bool isOpen) : this(BaseStream, isClient)
         {
             if (isOpen) {
                 ConnectionState = States.Open;
@@ -41,30 +41,24 @@ namespace Naive.HttpSvr
             return SendBytesAsync(msg.Data);
         }
 
-        public async Task<Msg> RecvMsg(BytesView buf)
+        public Task<Msg> RecvMsg(BytesView buf)
         {
-            if (buf != null) {
-                var r = await ReadAsync(buf.bytes, buf.offset).CAF();
-                return new Msg(r.bv);
-            } else {
-                var r = await ReadAsync().CAF();
-                return new Msg(r.bv);
-            }
+            return CreateReadTask(new BytesSegment(buf?.bytes, buf?.offset ?? 0, buf?.len ?? 0), VoidType.Void, (s, x) => new Msg(x.bv), null);
         }
 
         public async Task Close(CloseOpt opt)
         {
             switch (opt.CloseType) {
-                case CloseType.Close:
-                    State = MsgStreamStatus.Close;
-                    Close();
-                    break;
-                case CloseType.Shutdown:
-                    State = MsgStreamStatus.Shutdown;
-                    await SendBytesAsync(null, 0, 0).CAF();
-                    break;
-                default:
-                    throw new ArgumentOutOfRangeException();
+            case CloseType.Close:
+                State = MsgStreamStatus.Close;
+                Close();
+                break;
+            case CloseType.Shutdown:
+                State = MsgStreamStatus.Shutdown;
+                await SendBytesAsync(null, 0, 0).CAF();
+                break;
+            default:
+                throw new ArgumentOutOfRangeException();
             }
         }
 
@@ -325,7 +319,7 @@ namespace Naive.HttpSvr
             Closed
         }
 
-        public Stream BaseStream { get; protected set; }
+        public IMyStream BaseStream { get; protected set; }
         public bool IsClient { get; }
 
         public int MaxMessageLength = 1 * 1024 * 1024; // 1 MiB
@@ -415,32 +409,21 @@ namespace Naive.HttpSvr
             } while (!fin);
         }
 
-        public async Task<Frame> ReadAsync()
+        public Task<FrameValue> ReadAsync()
         {
-            if (ConnectionState == States.Closed) {
-                throw new DisconnectedException("read on closed connection");
-            }
-            try {
-                return await _readAsync().CAF();
-            } catch (Exception) {
-                throwIfTimeout();
-                Close();
-                throw;
-            }
+            return ReadAsync(null, 0);
         }
 
-        public async Task<Frame> ReadAsync(byte[] buf, int offset)
+        public Task<FrameValue> ReadAsync(byte[] buf, int offset)
         {
             if (ConnectionState == States.Closed) {
                 throw new DisconnectedException("read on closed connection");
             }
-            try {
-                return await _readAsync(buf, offset).CAF();
-            } catch (Exception) {
+            return CreateReadTask(new BytesSegment() { Bytes = buf }.Sub(offset), VoidType.Void, returnAsIs, (s, e) => {
                 throwIfTimeout();
                 Close();
-                throw;
-            }
+                throw e;
+            });
         }
 
         public void Read(out int opcode, out byte[] payload, out bool fin)
@@ -457,7 +440,7 @@ namespace Naive.HttpSvr
             len = result.len;
         }
 
-        public Frame _read()
+        public FrameValue _read()
         {
             if (ConnectionState == States.Closed) {
                 throw new DisconnectedException("read on closed connection");
@@ -471,7 +454,7 @@ namespace Naive.HttpSvr
             }
         }
 
-        public class Frame
+        public struct FrameValue
         {
             public int opcode;
             public byte[] payload;
@@ -489,119 +472,152 @@ namespace Naive.HttpSvr
 
         private readonly byte[] _read_buf = new byte[8];
 
-        private Task<Frame> _readAsync()
+        private Task<FrameValue> _readAsync()
         {
             return _readAsync(null, 0);
         }
 
-        Task<Frame> _prereadTask;
+        Task<FrameValue> _prereadTask;
 
         public void StartPrereadForControlFrame()
         {
             if (_prereadTask != null)
                 throw new InvalidOperationException("_prereadTask != null");
-            _prereadTask = __readAsync(null, 0);
+            _prereadTask = __readAsync(new BytesSegment(), VoidType.Void, returnAsIs, null, true);
         }
 
-        private Task<Frame> _readAsync(byte[] optionalBuffer, int offset)
+        private Task<FrameValue> _readAsync(byte[] optionalBuffer, int offset)
         {
             var tmp = _prereadTask;
             if (tmp != null) {
                 _prereadTask = null;
                 return tmp;
             }
-            return __readAsync(optionalBuffer, offset);
+            return CreateReadTask(new BytesSegment() { Bytes = optionalBuffer }.Sub(offset), VoidType.Void, returnAsIs, null);
         }
 
-        private async Task<Frame> __readAsync(byte[] optionalBuffer, int offset)
+        private Task<TRet> CreateReadTask<TState, TRet>(BytesSegment optionalBuffer, TState state, Func<TState, FrameValue, TRet> retWrapper, Func<TState, Exception, TRet> errWrapper)
         {
-            Frame wf = new Frame();
-            BytesView bv = new BytesView();
-            while (true) {
+            return __readAsync(optionalBuffer, state, retWrapper, errWrapper, false);
+        }
+
+        static readonly Func<VoidType, FrameValue, FrameValue> returnAsIs = (s, x) => x;
+
+        private async Task<TRet> __readAsync<TState, TRet>(BytesSegment optionalBuffer, TState state,
+                                        Func<TState, FrameValue, TRet> retWrapper, Func<TState, Exception, TRet> errWrapper, bool isPrereadTask)
+        {
+            try {
+                optionalBuffer.CheckAsParameter_AllowNull();
+                var wf = new FrameValue();
+                BytesView bv = new BytesView();
+
+                if (!isPrereadTask && _prereadTask != null) {
+                    var tmp = _prereadTask;
+                    _prereadTask = null;
+                    wf = await tmp;
+                    goto HANDLE_MSG;
+                }
+
+                REREAD:
+
                 var stream = BaseStream;
                 var buf = _read_buf;
 
-                await _readAsync(2).CAF();
+                await _readBaseAsync(2).CAF();
                 wf.fin = (buf[0] & 0x80) > 0;
                 wf.opcode = (buf[0] & 0x0F);
                 var mask = (buf[1] & 0x80) > 0;
                 var payloadlen = (int)(buf[1] & 0x7F);
                 if (payloadlen == 126) {
-                    await _readAsync(2).CAF();
+                    await _readBaseAsync(2).CAF();
                     payloadlen = (int)buf[0] << 8 | buf[1];
                 } else if (payloadlen == 127) {
-                    await _readAsync(8).CAF();
+                    await _readBaseAsync(8).CAF();
                     ulong longlen = 0;
                     int cur = 0;
                     for (int i = 8 - 1; i >= 0; i--)
                         longlen |= (ulong)buf[cur++] << (i * 8);
                     if (longlen > int.MaxValue)
-                        throw new NotImplementedException($"payload is larget than Int32.MaxValue ({longlen} > {int.MaxValue})");
+                        throw new NotImplementedException($"payload is large than Int32.MaxValue ({longlen} > {int.MaxValue})");
                     payloadlen = (int)longlen;
                 }
                 if (payloadlen > MaxMessageLength)
                     throw new Exception($"message length limit exceeded ({payloadlen} > {MaxMessageLength})");
-                if (optionalBuffer != null && payloadlen > optionalBuffer.Length - offset)
-                    throw new Exception($"payload is larger than buffer ({payloadlen} > {optionalBuffer.Length - offset})");
+                if (optionalBuffer.Bytes != null && payloadlen > optionalBuffer.Len)
+                    throw new Exception($"payload is larger than buffer ({payloadlen} > {optionalBuffer.Len})");
                 var maskkey = buf;
                 if (mask) {
-                    await _readAsync(4).CAF();
+                    await _readBaseAsync(4).CAF();
                 }
                 byte[] payload;
-                if (optionalBuffer != null) {
-                    payload = optionalBuffer;
+                int payloadOffset;
+                if (optionalBuffer.Bytes != null) {
+                    payload = optionalBuffer.Bytes;
+                    payloadOffset = optionalBuffer.Offset;
                 } else {
                     payload = BufferPool.GlobalGet(payloadlen);
-                    offset = 0;
+                    payloadOffset = 0;
                 }
-                bv.Set(payload, offset, payloadlen);
+                bv.Set(payload, payloadOffset, payloadlen);
                 if (payloadlen > 0) {
-                    await WebSocket._readAsync(stream, payload, offset, payloadlen).CAF();
+                    await WebSocket._readBaseAsync(stream, payload, payloadOffset, payloadlen).CAF();
                     if (mask) {
                         for (int i = 0; i < payloadlen; i++) {
-                            payload[offset + i] ^= maskkey[i % 4];
+                            payload[payloadOffset + i] ^= maskkey[i % 4];
                         }
                     }
                     if (ReadFilter != null) {
                         var oldlen = bv.len;
                         OnRead(bv);
-                        if (optionalBuffer != null && bv.bytes != optionalBuffer) {
-                            bv.bytes.CopyTo(optionalBuffer, offset);
+                        if (optionalBuffer.Bytes != null && bv.bytes != optionalBuffer.Bytes) {
+                            if (bv.nextNode != null) {
+                                throw new NotImplementedException("bv.nextNode != null");
+                            }
+                            bv.bytes.CopyTo(optionalBuffer.Bytes, payloadOffset);
                         }
                     }
                 }
+
                 wf.payload = bv.bytes;
                 wf.offset = bv.offset;
                 wf.len = bv.tlen;
                 wf.bv = bv;
+
+                HANDLE_MSG:
+
                 if (wf.opcode != 0x8)
                     Activated?.Invoke(this);
                 switch (wf.opcode) {
-                    case 0x8: // close
-                        try {
-                            ConnectionState = States.Closing;
-                            SendMsg(0x8, null, 0, 0);
-                        } catch (Exception) { }
-                        break;
-                    case 0x9: // ping
-                        Logging.debug($"ping received on {this}");
-                        PingReceived?.Invoke(this);
-                        var b = bv.GetBytes();
-                        await SendMsgAsync(0xA, b, 0, b.Length).CAF();
-                        break;
-                    case 0xA: // pong
-                        Logging.debug($"pong received on {this}");
-                        PongReceived?.Invoke(this);
-                        break;
-                    default:
-                        return wf;
+                case 0x8: // close
+                    try {
+                        ConnectionState = States.Closing;
+                        SendMsg(0x8, null, 0, 0);
+                    } catch (Exception) { }
+                    break;
+                case 0x9: // ping
+                    Logging.debug($"ping received on {this}");
+                    PingReceived?.Invoke(this);
+                    var b = bv.GetBytes();
+                    await SendMsgAsync(0xA, b, 0, b.Length).CAF();
+                    break;
+                case 0xA: // pong
+                    Logging.debug($"pong received on {this}");
+                    PongReceived?.Invoke(this);
+                    break;
+                default:
+                    return retWrapper(state, wf);
                 }
+
+                goto REREAD;
+
+            } catch (Exception e) when (errWrapper != null) {
+                return errWrapper(state, e);
             }
         }
 
         private WebSocketMsg _unfin;
-        private void processFrame(Frame wf) => processFrame(wf, wf.fin, wf.opcode, wf.payload, wf.len);
-        private void processFrame(Frame wf, bool fin, int opcode, byte[] buf, int len)
+        private void processFrame(FrameValue wf) => processFrame(wf, wf.fin, wf.opcode, wf.payload, wf.len);
+        private void processFrame(FrameValue wf, bool fin, int opcode, byte[] buf, int len)
         {
             WebSocketMsg msg;
             if (_unfin == null) {
@@ -613,20 +629,20 @@ namespace Naive.HttpSvr
                 opcode = msg.opcode;
             }
             switch (opcode) {
-                case 0x1: // string msg
-                    msg.data = msg.data as string + Encoding.UTF8.GetString(buf, 0, len);
-                    break;
-                case 0x2: // bytes msg
-                    if (msg.data == null) {
-                        msg.data = wf.bv;
-                    } else {
-                        (msg.data as BytesView).lastNode.nextNode = wf.bv;
-                    }
-                    if (fin)
-                        msg.data = (msg.data as BytesView).GetBytes();
-                    break;
-                default:
-                    return;
+            case 0x1: // string msg
+                msg.data = msg.data as string + Encoding.UTF8.GetString(buf, 0, len);
+                break;
+            case 0x2: // bytes msg
+                if (msg.data == null) {
+                    msg.data = wf.bv;
+                } else {
+                    (msg.data as BytesView).lastNode.nextNode = wf.bv;
+                }
+                if (fin)
+                    msg.data = (msg.data as BytesView).GetBytes();
+                break;
+            default:
+                return;
             }
             if (fin) {
                 _unfin = null;
@@ -637,8 +653,8 @@ namespace Naive.HttpSvr
             }
         }
 
-        private Task processFrameAsync(Frame wf) => processFrameAsync(wf, wf.fin, wf.opcode, wf.payload, wf.len);
-        private async Task processFrameAsync(Frame wf, bool fin, int opcode, byte[] buf, int len)
+        private Task processFrameAsync(FrameValue wf) => processFrameAsync(wf, wf.fin, wf.opcode, wf.payload, wf.len);
+        private async Task processFrameAsync(FrameValue wf, bool fin, int opcode, byte[] buf, int len)
         {
             WebSocketMsg msg;
             if (_unfin == null) {
@@ -650,20 +666,20 @@ namespace Naive.HttpSvr
                 opcode = msg.opcode;
             }
             switch (opcode) {
-                case 0x1: // string msg
-                    msg.data = msg.data as string + Encoding.UTF8.GetString(buf, 0, len);
-                    break;
-                case 0x2: // bytes msg
-                    if (msg.data == null) {
-                        msg.data = wf.bv;
-                    } else {
-                        (msg.data as BytesView).lastNode.nextNode = wf.bv;
-                    }
-                    if (fin)
-                        msg.data = (msg.data as BytesView).GetBytes();
-                    break;
-                default:
-                    return;
+            case 0x1: // string msg
+                msg.data = msg.data as string + Encoding.UTF8.GetString(buf, 0, len);
+                break;
+            case 0x2: // bytes msg
+                if (msg.data == null) {
+                    msg.data = wf.bv;
+                } else {
+                    (msg.data as BytesView).lastNode.nextNode = wf.bv;
+                }
+                if (fin)
+                    msg.data = (msg.data as BytesView).GetBytes();
+                break;
+            default:
+                return;
             }
             if (fin) {
                 _unfin = null;
@@ -674,37 +690,16 @@ namespace Naive.HttpSvr
             }
         }
 
-        Task _readAsync(int count) => _readAsync(BaseStream, _read_buf, count);
+        Task _readBaseAsync(int count) => _readBaseAsync(BaseStream, _read_buf, count);
 
-        private static async Task _readAsync(Stream stream, byte[] buf, int count)
+        private static Task _readBaseAsync(IMyStream stream, byte[] buf, int count)
         {
-            int offset = 0;
-            while (count > 0) {
-                int read;
-                try {
-                    count -= read = await stream.ReadAsync(buf, offset, count);
-                    offset += read;
-                } catch (IOException e) when (e.InnerException is SocketException se) {
-                    throw new DisconnectedException($"SocketErrorCode: {se.SocketErrorCode}");
-                }
-                if (read == 0)
-                    throw new DisconnectedException("unexpected EOF");
-            }
+            return stream.ReadFullAsync(new BytesSegment(buf, 0, count));
         }
 
-        private static async Task _readAsync(Stream stream, byte[] buf, int offset, int count)
+        private static Task _readBaseAsync(IMyStream stream, byte[] buf, int offset, int count)
         {
-            while (count > 0) {
-                int read;
-                try {
-                    count -= read = await stream.ReadAsync(buf, offset, count);
-                    offset += read;
-                } catch (IOException e) when (e.InnerException is SocketException se) {
-                    throw new DisconnectedException($"SocketErrorCode: {se.SocketErrorCode}");
-                }
-                if (read == 0)
-                    throw new DisconnectedException("unexpected EOF");
-            }
+            return stream.ReadFullAsync(new BytesSegment(buf, offset, count));
         }
 
         private byte[] concatBytes(byte[] a, byte[] b)
@@ -857,7 +852,7 @@ namespace Naive.HttpSvr
                 var isMasked = IsClient;
                 buildFrameHeader(opcode, bv.tlen, fin, sendMsgBuf, ref bufcur, isMasked);
                 var stream = BaseStream;
-                if (!isMasked && stream is StreamFromMyStream ms && ms.BaseStream is IMyStreamMultiBuffer msmb) {
+                if (!isMasked && BaseStream is IMyStreamMultiBuffer msmb) {
                     // if base stream supports writing multiple buffers,
                     // we can reduce copying overhead.
                     await msmb.WriteMultipleAsync(new BytesView(sendMsgBuf, 0, bufcur) { nextNode = bv });
@@ -1006,7 +1001,7 @@ namespace Naive.HttpSvr
 
         public virtual void Dispose()
         {
-            BaseStream?.Dispose();
+            BaseStream?.Close();
         }
 
         public async Task StartVerify(bool recvFirst)
