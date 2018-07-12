@@ -753,13 +753,14 @@ namespace Naive.HttpSvr
             SendMsg(0x1, bytes, 0, bytes.Length);
         }
 
-        public Task SendStringAsync(string str)
+        public async Task SendStringAsync(string str)
         {
             if (str == null)
                 throw new ArgumentNullException(nameof(str));
 
-            byte[] bytes = UTF8Encoding.GetBytes(str);
-            return SendMsgAsync(0x1, bytes, 0, bytes.Length);
+            var buf = NaiveUtils.GetUTF8Bytes_AllocFromPool(str);
+            await SendMsgAsync(0x1, buf.Bytes, 0, buf.Len);
+            BufferPool.GlobalPut(buf.Bytes);
         }
 
         public void BeginSendString(string str)

@@ -82,7 +82,11 @@ namespace Naive.HttpSvr
         {
             if (ms is IMsgStreamStringSupport isss)
                 return isss.SendString(str);
-            return ms.SendMsg(NaiveUtils.UTF8Encoding.GetBytes(str));
+            return NaiveUtils.RunAsyncTask(async () => {
+                var buf = NaiveUtils.GetUTF8Bytes_AllocFromPool(str);
+                await ms.SendMsg(new BytesView(buf.Bytes, 0, buf.Len));
+                BufferPool.GlobalPut(buf.Bytes);
+            });
         }
 
         public static async Task<string> RecvString(this IMsgStream ms)

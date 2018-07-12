@@ -34,8 +34,17 @@ namespace Naive.HttpSvr
                 return _random.Value;
             }
         }
-
         public static byte[] GetUTF8Bytes(string str) => UTF8Encoding.GetBytes(str);
+
+        public static BytesSegment GetUTF8Bytes_AllocFromPool(string str)
+        {
+            var strByteCount = UTF8Encoding.GetByteCount(str);
+            var bytes = BufferPool.GlobalGet(strByteCount);
+            var written = UTF8Encoding.GetBytes(str, 0, str.Length, bytes, 0);
+            if (strByteCount != written)
+                throw new Exception("should not happend: strByteCount != written");
+            return new BytesSegment(bytes, 0, strByteCount);
+        }
 
         public static readonly byte[] DoubleCRLFBytes = new byte[] { 13, 10, 13, 10 };
 
@@ -997,6 +1006,32 @@ namespace Naive.HttpSvr
             }
             foreach (var item in headers) {
                 if (item.Key == "Host")
+                    continue;
+                output.Write(item.Key + ": " + item.Value + "\r\n");
+            }
+            output.Write("\r\n");
+        }
+
+        public static void WriteHttpRequestHeader(
+            TextWriter output,
+            string method,
+            string uri,
+            IList<HttpHeader> headers)
+        {
+            if (uri.Contains(' ')) {
+                throw new Exception("spaces in uri are not allowed");
+            }
+            output.Write(method + " " + uri + " HTTP/1.1\r\n");
+
+            // 'Host' first
+            foreach (var item in headers) {
+                if (string.Equals(item.Key, "Host", StringComparison.OrdinalIgnoreCase)) {
+                    output.Write("Host: " + item.Value + "\r\n");
+                }
+            }
+
+            foreach (var item in headers) {
+                if (string.Equals(item.Key, "Host", StringComparison.OrdinalIgnoreCase))
                     continue;
                 output.Write(item.Key + ": " + item.Value + "\r\n");
             }

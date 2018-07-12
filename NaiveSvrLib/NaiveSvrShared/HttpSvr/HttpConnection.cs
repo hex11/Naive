@@ -306,6 +306,7 @@ namespace Naive.HttpSvr
         }
 
         private static readonly char[] headerSeparator = new[] { ':' };
+        private static readonly char[] headerValueTrimStart = new[] { ' ' };
         private bool parseHeader(string headerLine)
         {
             if (headerLine?.Length == 0)
@@ -315,8 +316,8 @@ namespace Naive.HttpSvr
                 throw new Exception($"Bad header line: \"{headerLine}\"");
             }
             var key = splits[0];
-            var value = splits[1].TrimStart(' ');
-            RequestHeaders[key] = value;
+            var value = splits[1].TrimStart(headerValueTrimStart);
+            RequestHeaders.Add(new HttpHeader(key, value)); // allow duplicated keys
             return true;
         }
 

@@ -243,8 +243,8 @@ namespace NaiveSocks
                 }
             }
 
-            bool isUpgrade(Dictionary<string, string> headers) => headers.ContainsKey("Upgrade")
-                        || (headers.ContainsKey("Connection")
+            bool isUpgrade(HttpHeaderCollection headers) => headers["Upgrade"] != null
+                        || (headers["Connection"] != null
                             && headers["Connection"]?.Split(',').Select(x => x.Trim()).Contains("Upgrade") == true);
 
             string protoStr(bool x) => x ? "strange-https" : "http";
@@ -281,28 +281,31 @@ namespace NaiveSocks
                 var destCommonStream = MyStream.ToStream(destStream);
                 try {
                     var sb = new StringBuilder(p.RawRequest.Length);
-                    var newHeaders = new Dictionary<string, string>(p.RequestHeaders.Count);
-                    Task WriteRequest()
+                    var newHeaders = new HttpHeaderCollection(p.RequestHeaders.Count);
+                    async Task WriteRequest()
                     {
                         sb.Clear();
                         var tw = new StringWriter(sb);
-                        HttpClient.WriteHttpRequestHeader(tw, new HttpRequest {
-                            Method = p.Method,
-                            Path = realurl,
-                            Headers = newHeaders
-                        });
-                        var bytes = NaiveUtils.GetUTF8Bytes(tw.ToString());
-                        destCounterRW.W.Add(bytes.Length);
-                        return destStream.WriteAsync(bytes);
+                        HttpClient.WriteHttpRequestHeader(tw,
+                            p.Method,
+                            realurl,
+                            newHeaders
+                        );
+                        var buf = NaiveUtils.GetUTF8Bytes_AllocFromPool(tw.ToString());
+                        destCounterRW.W.Add(buf.Len);
+                        await destStream.WriteAsync(buf);
+                        BufferPool.GlobalPut(buf.Bytes);
                     }
 
                     bool keepAlive = true;
                     void ProcessHeaders()
                     {
+                        newHeaders.Clear();
+                        string connection_value = null;
                         foreach (var kv in p.RequestHeaders) {
                             var value = kv.Value;
                             if (string.Equals(kv.Key, "Proxy-Connection", StringComparison.OrdinalIgnoreCase)) {
-                                newHeaders["Connection"] = value;
+                                connection_value = value; // set after the loop to avoid duplicated Connection headers
                                 if (value == "close" || value == "Close" /* <- IE */ )
                                     //       ^ Browsers excpet IE
                                     keepAlive = false;
@@ -312,7 +315,10 @@ namespace NaiveSocks
                                 Logger.warning($"Unknown 'Proxy*' header ({kv.Key}: {kv.Value})");
                                 continue;
                             }
-                            newHeaders[kv.Key] = value;
+                            newHeaders.Add(new HttpHeader(kv.Key, value));
+                        }
+                        if (connection_value != null) {
+                            newHeaders["Connection"] = connection_value;
                         }
                         if (isUpgrade(newHeaders)) {
                             keepAlive = false;
