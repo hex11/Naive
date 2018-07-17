@@ -115,7 +115,19 @@ namespace NaiveSocksAndroid
                 }, 1);
             }
 
+            //if (savedInstanceState == null || !savedInstanceState.ContainsKey("curFragment")) {
             drawer.OpenDrawer(GravityCompat.Start);
+            //} else {
+            //    ReplaceFragment(SupportFragmentManager.GetFragment(savedInstanceState, "curFragment"));
+            //}
+
+        }
+
+        protected override void OnSaveInstanceState(Bundle outState)
+        {
+            base.OnSaveInstanceState(outState);
+            if (curFrag != null)
+                SupportFragmentManager.PutFragment(outState, "curFragment", curFrag);
         }
 
         protected override void OnStart()
@@ -141,6 +153,8 @@ namespace NaiveSocksAndroid
             }
         }
 
+        Fragment curFrag = null;
+
         private void NavigationView_NavigationItemSelected(object sender, NavigationView.NavigationItemSelectedEventArgs e)
         {
             IMenuItem menuItem = e.MenuItem;
@@ -165,12 +179,18 @@ namespace NaiveSocksAndroid
             }
             if (frag == null)
                 return;
-            var fm = SupportFragmentManager;
-            fm.BeginTransaction().Replace(R.Id.flContent, frag).Commit();
+            ReplaceFragment(frag);
 
             menuItem.SetChecked(true);
             TitleFormatted = menuItem.TitleFormatted;
             drawer.CloseDrawers();
+        }
+
+        private void ReplaceFragment(Fragment frag)
+        {
+            var fm = SupportFragmentManager;
+            fm.BeginTransaction().Replace(R.Id.flContent, frag).Commit();
+            curFrag = frag;
         }
 
         public override void OnRequestPermissionsResult(int requestCode, string[] permissions, [GeneratedEnum] Permission[] grantResults)

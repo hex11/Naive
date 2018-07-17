@@ -110,7 +110,7 @@ namespace NaiveSocks
             sb.Append('{');
             if ((flags & ToStringFlags.Id) != 0)
                 sb.Append("cxn#").Append(Id).Append(' ');
-            sb.Append('\'').Append(InAdapter?.Name);
+            sb.Append('\'').Append(InAdapter?.Name).Append('\'');
             var outAdapter = ConnectResult?.Adapter;
             if (outAdapter != null && (flags & ToStringFlags.OutAdapter) != 0)
                 sb.Append("->'").Append(outAdapter.Name).Append('\'');

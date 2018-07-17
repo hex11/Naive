@@ -27,12 +27,13 @@ namespace NaiveSocksAndroid
     {
         public override void OnReceive(Context context, Intent intent)
         {
+            CrashHandler.CheckInit();
             AppConfig.Init(Application.Context);
             if (AppConfig.Current.Autostart) {
                 Intent serviceIntent = new Intent(context, typeof(BgService));
                 serviceIntent.SetAction("start!");
                 serviceIntent.PutExtra("isAutostart", true);
-                Application.Context.StartService(serviceIntent);
+                ContextCompat.StartForegroundService(Application.Context, serviceIntent);
             }
         }
     }
@@ -119,9 +120,10 @@ namespace NaiveSocksAndroid
             }
 
             restartBuilder = new NotificationCompat.Builder(this, chId)
-                        .SetContentIntent(BuildServicePendingIntent("start!", 10086))
+                        //.SetContentIntent(BuildServicePendingIntent("start!", 10086))
                         .SetContentTitle("NaiveSocks service is stopped")
-                        .SetContentText("touch here to restart")
+                        //.SetContentText("touch here to restart")
+                        .AddAction(BuildServiceAction(Actions.START, "Start", Android.Resource.Drawable.StarOff, 6))
                         .SetSmallIcon(Resource.Drawable.N)
                         .SetColor(unchecked((int)0xFF2196F3))
                         .SetAutoCancel(true)
@@ -181,26 +183,27 @@ namespace NaiveSocksAndroid
         {
             if (intent != null) {
                 switch (intent.Action) {
-                    case Actions.STOP:
-                        StopForeground(true);
-                        this.StopSelf();
-                        notificationManager.Notify(MainNotificationId, restartBuilder.Build());
-                        break;
-                    case Actions.RELOAD:
-                        try {
-                            Controller.Reload();
-                            putLine("controller reloaded");
-                        } catch (Exception e) {
-                            ShowToast("reloading error: " + e.Message);
-                            putLine("reloading error: " + e.ToString());
-                        }
-                        break;
-                    case Actions.GC:
-                    case Actions.GC_0:
-                        var before = GC.GetTotalMemory(false);
-                        GC.Collect(intent.Action == Actions.GC ? GC.MaxGeneration : 0);
-                        putLine($"GC Done. {before:N0} -> {GC.GetTotalMemory(false):N0}");
-                        break;
+                case Actions.STOP:
+                    StopForeground(false);
+                    this.StopSelf();
+                    notificationManager.Notify(MainNotificationId, restartBuilder.Build());
+                    System.Diagnostics.Process.GetCurrentProcess().Kill();
+                    break;
+                case Actions.RELOAD:
+                    try {
+                        Controller.Reload();
+                        putLine("controller reloaded");
+                    } catch (Exception e) {
+                        ShowToast("reloading error: " + e.Message);
+                        putLine("reloading error: " + e.ToString());
+                    }
+                    break;
+                case Actions.GC:
+                case Actions.GC_0:
+                    var before = GC.GetTotalMemory(false);
+                    GC.Collect(intent.Action == Actions.GC ? GC.MaxGeneration : 0);
+                    putLine($"GC Done. {before:N0} -> {GC.GetTotalMemory(false):N0}");
+                    break;
                 }
             }
             return StartCommandResult.Sticky;
@@ -387,18 +390,18 @@ namespace NaiveSocksAndroid
         private static LogPriority GetPri(Logging.Log log)
         {
             switch (log.level) {
-                case Logging.Level.None:
-                    return LogPriority.Verbose;
-                case Logging.Level.Debug:
-                    return LogPriority.Debug;
-                case Logging.Level.Info:
-                    return LogPriority.Info;
-                case Logging.Level.Warning:
-                    return LogPriority.Warn;
-                case Logging.Level.Error:
-                    return LogPriority.Error;
-                default:
-                    return LogPriority.Info;
+            case Logging.Level.None:
+                return LogPriority.Verbose;
+            case Logging.Level.Debug:
+                return LogPriority.Debug;
+            case Logging.Level.Info:
+                return LogPriority.Info;
+            case Logging.Level.Warning:
+                return LogPriority.Warn;
+            case Logging.Level.Error:
+                return LogPriority.Error;
+            default:
+                return LogPriority.Info;
             }
         }
 

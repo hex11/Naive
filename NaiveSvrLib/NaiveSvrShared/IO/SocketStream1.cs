@@ -140,7 +140,7 @@ namespace NaiveSocks
                 }
                 Interlocked.Increment(ref ctr.Rsync);
                 readaheadBuffer.Offset = 0;
-                readaheadBuffer.Len = ReadaheadBufferSize;
+                readaheadBuffer.Len = readBufferSize;
                 var read = ReadSocketSync(readaheadBuffer);
                 readaheadBuffer.Len = read;
                 if (read == 0)
