@@ -67,13 +67,14 @@ namespace NaiveSocks
             if (curRecv == recvStreams.Length)
                 curRecv = 0;
             var curRecv2 = curRecv++;
-            if (PreReadEnabled) {
+            if (recvTasks != null) {
                 var task = recvTasks[curRecv2];
                 recvTasks[curRecv2] = (!task.IsCompleted)
                     ? NaiveUtils.RunAsyncTask(async () => {
                         await task;
                         return await recvStreams[curRecv2].RecvMsg(null);
                     })
+                    //? task.ContinueWith((t, s) => s.CastTo<IMsgStream>().RecvMsg(null), recvStreams[curRecv2], TaskContinuationOptions.ExecuteSynchronously).Unwrap()
                     : recvStreams[curRecv2].RecvMsg(null);
                 return task;
             } else {
@@ -89,11 +90,6 @@ namespace NaiveSocks
                 curSend = (old + 1) % sendStreams.Length;
             } while (Interlocked.CompareExchange(ref this.curSend, curSend, old) != old);
             return sendStreams[curSend].SendMsg(msg);
-        }
-
-        static int mod(int x, int m)
-        {
-            return (x % m + m) % m;
         }
     }
 }

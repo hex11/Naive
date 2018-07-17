@@ -123,12 +123,12 @@ namespace NaiveSocksAndroid
 
         }
 
-        protected override void OnSaveInstanceState(Bundle outState)
-        {
-            base.OnSaveInstanceState(outState);
-            if (curFrag != null)
-                SupportFragmentManager.PutFragment(outState, "curFragment", curFrag);
-        }
+        //protected override void OnSaveInstanceState(Bundle outState)
+        //{
+        //    base.OnSaveInstanceState(outState);
+        //    if (curFrag != null)
+        //        SupportFragmentManager.PutFragment(outState, "curFragment", curFrag);
+        //}
 
         protected override void OnStart()
         {

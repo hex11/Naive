@@ -151,7 +151,7 @@ namespace NaiveSocks
                     Logging.exception(e, Logging.Level.Error, $"{this} stopped with exception.");
                 }
             } finally {
-                Close(false);
+                Close(true);
             }
         }
 

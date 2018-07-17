@@ -219,6 +219,12 @@ namespace Naive.HttpSvr
             log(text, Level.Error);
         }
 
+        public static void errorAndThrow(string text)
+        {
+            log(text, Level.Error);
+            throw new Exception(text);
+        }
+
         public static void exception(Exception ex, Level level = Level.None, string text = null)
         {
             try {

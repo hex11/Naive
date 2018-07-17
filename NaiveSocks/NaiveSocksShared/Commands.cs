@@ -180,8 +180,8 @@ namespace NaiveSocks
                 command.WriteLine($"Threads: {proc.Threads.Count} (workers: {workersMin}-{workersMax}, ports: {portsMin}-{portsMax})");
                 command.WriteLine($"Connections: {controller.RunningConnections:N0} running, {controller.TotalHandledConnections} handled");
                 command.WriteLine($"MyStream Copied: {MyStream.TotalCopiedPackets:N0} packets, {MyStream.TotalCopiedBytes:N0} bytes");
-                command.WriteLine($"SocketStream1: {SocketStream1.GlobalCounters.StringRead};");
-                command.WriteLine($"               {SocketStream1.GlobalCounters.StringWrite}.");
+                command.WriteLine($"SocketStream: {SocketStream.GlobalCounters.StringRead};");
+                command.WriteLine($"               {SocketStream.GlobalCounters.StringWrite}.");
             });
             cmdHub.AddCmdHandler(prefix + "config", c => {
                 var con = c.Console;
@@ -318,19 +318,19 @@ namespace NaiveSocks
                 var keep = true;
                 var pingEnabled = false;
                 switch (cmd.ArgOrNull(0)) {
-                    case "start":
-                        pingEnabled = true;
-                        break;
-                    case "stop":
-                        pingEnabled = false;
-                        break;
-                    case null:
-                        keep = false;
-                        break;
-                    default:
-                        cmd.WriteLine($"wrong argument '{cmd.ArgOrNull(0)}'");
-                        cmd.statusCode = 1;
-                        return;
+                case "start":
+                    pingEnabled = true;
+                    break;
+                case "stop":
+                    pingEnabled = false;
+                    break;
+                case null:
+                    keep = false;
+                    break;
+                default:
+                    cmd.WriteLine($"wrong argument '{cmd.ArgOrNull(0)}'");
+                    cmd.statusCode = 1;
+                    return;
                 }
                 if (keep) {
                     cmd.WriteLine(pingEnabled ? "start ping" : "stop ping");
@@ -633,19 +633,19 @@ namespace NaiveSocks
         {
             ConsoleColor color;
             switch (item.level) {
-                default:
-                case Logging.Level.None:
-                    color = ConsoleColor.Gray;
-                    break;
-                case Logging.Level.Info:
-                    color = ConsoleColor.White;
-                    break;
-                case Logging.Level.Warning:
-                    color = ConsoleColor.Yellow;
-                    break;
-                case Logging.Level.Error:
-                    color = ConsoleColor.Red;
-                    break;
+            default:
+            case Logging.Level.None:
+                color = ConsoleColor.Gray;
+                break;
+            case Logging.Level.Info:
+                color = ConsoleColor.White;
+                break;
+            case Logging.Level.Warning:
+                color = ConsoleColor.Yellow;
+                break;
+            case Logging.Level.Error:
+                color = ConsoleColor.Red;
+                break;
             }
             con.ForegroundColor = color;
             con.Write(item.timestamp);

@@ -240,10 +240,18 @@ namespace NaiveSocks
 
         public virtual Task FlushAsync() => NaiveUtils.CompletedTask;
 
+        public enum SocketImpl
+        {
+            SocketStream1,
+            SocketStream2
+        }
+
+        public static SocketImpl CurrentSocketImpl = SocketImpl.SocketStream1;
+
         public static SocketStream FromSocket(Socket socket)
         {
-            //if (Environment.OSVersion.Platform == PlatformID.Win32NT)
-            //    return new SocketStream2(socket);
+            if (CurrentSocketImpl == SocketImpl.SocketStream2)
+                return new SocketStream2(socket);
             return new SocketStream1(socket);
         }
 

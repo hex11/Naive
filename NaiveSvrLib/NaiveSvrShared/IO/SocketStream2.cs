@@ -13,26 +13,44 @@ namespace NaiveSocks
     public class SocketStream2 : SocketStream, IMyStreamMultiBuffer
     {
         public SocketStream2(Socket socket) : base(socket)
-        { }
+        {
+            CheckInit(); // check in .ctor only
+        }
 
-        private static readonly ObjectPool<SocketAsyncEventArgs> readArgPool = new ObjectPool<SocketAsyncEventArgs>(
-            createFunc: () => {
-                var arg = new SocketAsyncEventArgs();
-                arg.Completed += ReadCompletedCallback;
-                arg.UserToken = new ReadUserToken();
-                return arg;
-            }) {
-            MaxCount = 48
-        };
+        void CheckInit()
+        {
+            var tmp = nullIfInitialized;
+            if (tmp != null) {
+                lock (tmp) {
+                    if (nullIfInitialized != null) {
+                        nullIfInitialized = null;
+                        readArgPool = new ObjectPool<SocketAsyncEventArgs>(
+                            createFunc: () => {
+                                var arg = new SocketAsyncEventArgs();
+                                arg.Completed += ReadCompletedCallback;
+                                arg.UserToken = new ReadUserToken();
+                                return arg;
+                            }) {
+                                MaxCount = 32
+                            };
+                        writeArgPool = new ObjectPool<SocketAsyncEventArgs>(
+                            createFunc: () => {
+                                var arg = new SocketAsyncEventArgs();
+                                arg.Completed += WriteCompletedCallback;
+                                return arg;
+                            }) {
+                                MaxCount = 16
+                            };
+                    }
+                }
+            }
+        }
 
-        private static readonly ObjectPool<SocketAsyncEventArgs> writeArgPool = new ObjectPool<SocketAsyncEventArgs>(
-            createFunc: () => {
-                var arg = new SocketAsyncEventArgs();
-                arg.Completed += WriteCompletedCallback;
-                return arg;
-            }) {
-            MaxCount = 16
-        };
+        static object nullIfInitialized = new object();
+
+        private static ObjectPool<SocketAsyncEventArgs> readArgPool;
+
+        private static ObjectPool<SocketAsyncEventArgs> writeArgPool;
 
         private class ReadUserToken
         {
@@ -48,7 +66,7 @@ namespace NaiveSocks
         TaskCompletionSource<VoidType> _unusedWriteTcs;
         TaskCompletionSource<int> _unusedReadTcs;
 
-        public override Task<int> ReadAsync(BytesSegment bv)
+        protected override Task<int> ReadAsyncImpl(BytesSegment bs)
         {
             var e = readArgPool.GetValue();
             var userToken = ((ReadUserToken)e.UserToken);
@@ -56,7 +74,7 @@ namespace NaiveSocks
             _unusedReadTcs = null;
             userToken.tcs = tcs;
             var sw = userToken.sw = this;
-            e.SetBuffer(bv.Bytes, bv.Offset, bv.Len);
+            e.SetBuffer(bs.Bytes, bs.Offset, bs.Len);
             try {
                 if (Socket.ReceiveAsync(e)) { // if opearation not completed synchronously
                     return tcs.Task;
@@ -103,6 +121,7 @@ namespace NaiveSocks
             SocketError socketError = e.SocketError;
             recycleReadArgs(e, userToken);
             if (socketError == SocketError.Success) {
+                sw.OnAsyncReadCompleted(bytesTransferred);
                 if (bytesTransferred == 0) {
                     Logging.debug($"{sw}: remote shutdown");
                     sw.State |= MyStreamState.RemoteShutdown;
@@ -132,12 +151,13 @@ namespace NaiveSocks
                 if (cur.len > 0)
                     count++;
             }
-            var bufList = e.BufferList = new ArraySegment<byte>[count];
+            var bufList = new ArraySegment<byte>[count];
             var index = 0;
             foreach (var cur in bv) {
                 if (cur.len > 0)
                     bufList[index++] = new ArraySegment<byte>(cur.bytes, cur.offset, cur.len);
             }
+            e.BufferList = bufList;
             return SendAsync(e);
         }
 
@@ -157,6 +177,7 @@ namespace NaiveSocks
             if (!WriteCompleted(e, out var ex))
                 throw ex;
             _unusedWriteTcs = tcs;
+            Interlocked.Increment(ref ctr.Wsync);
             return NaiveUtils.CompletedTask;
         }
 
@@ -164,10 +185,12 @@ namespace NaiveSocks
         {
             try {
                 var tcs = e.UserToken as TaskCompletionSource<VoidType>;
-                if (WriteCompleted(e, out var ex))
+                if (WriteCompleted(e, out var ex)) {
+                    Interlocked.Increment(ref ctr.Wasync);
                     tcs.SetResult(0);
-                else
+                } else {
                     tcs.SetException(ex);
+                }
             } catch (Exception ex) {
                 Logging.exception(ex, Logging.Level.Error, "WriteCompletedCallback");
                 throw;

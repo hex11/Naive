@@ -9,7 +9,7 @@ namespace Naive.HttpSvr
     public class BufferPool
     {
         public static BufferPool GlobalPool = new BufferPool(
-            maxBuffers: 64,
+            maxBuffers: 32,
             maxTotalSize: 2 * 1024 * 1024,
             maxBufferSize: 128 * 1024);
 

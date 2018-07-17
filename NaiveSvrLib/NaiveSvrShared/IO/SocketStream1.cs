@@ -10,171 +10,25 @@ using System.Reflection;
 
 namespace NaiveSocks
 {
-    public class SocketStream1 : SocketStream, IMyStreamMultiBuffer, IMyStreamReadFull
+    public class SocketStream1 : SocketStream, IMyStreamMultiBuffer
     {
         public SocketStream1(Socket socket) : base(socket)
         {
         }
 
-        static Counters ctr;
-
-        public struct Counters
+        protected override Task<int> ReadAsyncImpl(BytesSegment bs)
         {
-            public int Rasync, Rsync, Rbuffer, Wasync, Wsync;
-
-            public string StringRead => $"Read {Rsync + Rasync + Rbuffer} (async {Rasync}, sync completed {Rsync}, from buffer {Rbuffer})";
-            public string StringWrite => $"Write {Wsync + Wasync} (async {Wasync}, sync completed {Wsync})";
-        }
-
-        public static Counters GlobalCounters => ctr;
-
-        public static string GetCountString()
-        {
-            return ctr.StringRead + ", " + ctr.StringWrite;
-        }
-
-        const int readaheadScoreMax = 3;
-        int readaheadScore = readaheadScoreMax;
-
-        public static int DefaultReadaheadBufferSize { get; set; } = 4096;
-        public int ReadaheadBufferSize { get; set; } = DefaultReadaheadBufferSize;
-        BytesSegment readaheadBuffer;
-
-        public bool EnableReadaheadBuffer { get; set; } = true;
-        public bool EnableSmartSyncRead { get; set; } = true;
-
-        int socketAvailable;
-
-        public Task ReadFullAsync(BytesSegment bs)
-        {
-            int bytesCanSyncRead = readaheadBuffer.Len + socketAvailable;
-            if (bytesCanSyncRead >= bs.Len)
-                return ReadAsync(bs);
-            else
-                return MyStreamExt.ReadFullImpl(this, bs);
-        }
-
-        public override Task<int> ReadAsync(BytesSegment bs)
-        {
-            // We use an internal read-ahead buffer to reduce many read() syscalls when the caller buffer is very small.
-            // It's important, since there is a hardware bug named 'Meltdown' in Intel CPUs.
-            // TESTED: This optimization made ReadAsync 20x faster when bs.Len == 4, 
-            //         on Windows 10 x64 16299.192 with a laptop Haswell CPU.
-            var bufRead = TryReadInternalBuffer(bs);
-            if (bufRead > 0) {
-                if (EnableSmartSyncRead && bs.Len - bufRead > 0 && socketAvailable > 0) {
-                    bs.SubSelf(bufRead);
-                    int read = ReadSync_SocketHaveAvailableData(bs);
-                    return NaiveUtils.GetCachedTaskInt(bufRead + read);
-                } else {
-                    return NaiveUtils.GetCachedTaskInt(bufRead);
-                }
-            }
-            if (EnableSmartSyncRead | EnableReadaheadBuffer) {
-                if (socketAvailable < bs.Len || socketAvailable < ReadaheadBufferSize) {
-                    // Get the Available value from socket when needed.
-                    socketAvailable = Socket.Available;
-                }
-                var bufRead2 = TryFillAndReadInternalBuffer(bs);
-                if (bufRead2 > 0) {
-                    return NaiveUtils.GetCachedTaskInt(bufRead2);
-                }
-                if (EnableSmartSyncRead && socketAvailable > 0) {
-                    // If the receive buffer of OS is not empty,
-                    // use sync operation to reduce async overhead.
-                    // This optimization made ReadAsync 12x faster.
-                    int read = ReadSync_SocketHaveAvailableData(bs);
-                    return NaiveUtils.GetCachedTaskInt(read);
-                }
-            }
-            Interlocked.Increment(ref ctr.Rasync);
             return TaskHelper.FromAsyncTrim(
                 thisRef: this,
                 args: bs,
                 beginMethod: (thisRef, args, callback, state) => thisRef.Socket.BeginReceive(args.Bytes, args.Offset, args.Len, SocketFlags.None, callback, state),
                 endMethod: (thisRef, asyncResult) => {
                     var read = thisRef.Socket.EndReceive(asyncResult);
-                    if (this.socketAvailable > 0)
-                        thisRef.socketAvailable -= read;
+                    thisRef.OnAsyncReadCompleted(read);
                     if (read == 0)
                         thisRef.State |= MyStreamState.RemoteShutdown;
                     return read;
                 });
-        }
-
-        private int ReadSync_SocketHaveAvailableData(BytesSegment bs)
-        {
-            Interlocked.Increment(ref ctr.Rsync);
-            var read = ReadSocketSync(bs);
-            if (read == 0)
-                throw new Exception("WTF! It should not happen: Socket.Receive() returns 0 when Socket.Available > 0.");
-            return read;
-        }
-
-        private int TryReadInternalBuffer(BytesSegment bs)
-        {
-            if (readaheadBuffer.Len > 0) {
-                Interlocked.Increment(ref ctr.Rbuffer);
-                var read = Math.Min(bs.Len, readaheadBuffer.Len);
-                readaheadBuffer.CopyTo(bs, read);
-                readaheadBuffer.SubSelf(read);
-                // We can check if readBuffer is emptied, then release readBuffer here,
-                // but we are not doing that, because there may be more ReadAsync() calls with small buffer later.
-                return read;
-            }
-            return 0;
-        }
-
-        private int TryFillAndReadInternalBuffer(BytesSegment bs)
-        {
-            var readBufferSize = this.ReadaheadBufferSize;
-            if (EnableReadaheadBuffer && (socketAvailable > bs.Len & bs.Len < readBufferSize)) {
-                if (readaheadScore > 0)
-                    readaheadScore--;
-                if (readaheadBuffer.Bytes == null) {
-                    if (readaheadScore > 0)
-                        return 0;
-                    readaheadBuffer.Bytes = new byte[readBufferSize];
-                } else if (readaheadBuffer.Bytes.Length < readBufferSize) {
-                    readaheadBuffer.Bytes = new byte[readBufferSize];
-                }
-                Interlocked.Increment(ref ctr.Rsync);
-                readaheadBuffer.Offset = 0;
-                readaheadBuffer.Len = readBufferSize;
-                var read = ReadSocketSync(readaheadBuffer);
-                readaheadBuffer.Len = read;
-                if (read == 0)
-                    throw new Exception("WTF! It should not happen: Socket.Receive() returns 0 when Socket.Available > 0.");
-                read = Math.Min(read, bs.Len);
-                readaheadBuffer.CopyTo(bs, read);
-                readaheadBuffer.SubSelf(read);
-                return read;
-            } else {
-                if (readaheadScore < readaheadScoreMax) {
-                    if (++readaheadScore == readaheadScoreMax) {
-                        // There are many large reading opearations, so the internal buffer can be released now.
-                        readaheadBuffer.Bytes = null;
-                    }
-                }
-                return 0;
-            }
-        }
-
-        public override int Read(BytesSegment bs)
-        {
-            var bufRead = TryReadInternalBuffer(bs);
-            if (bufRead > 0)
-                return bufRead;
-            return ReadSocketSync(bs);
-        }
-
-        int ReadSocketSync(BytesSegment bs)
-        {
-            int r;
-            r = base.Read(bs);
-            if (this.socketAvailable > 0)
-                this.socketAvailable -= r;
-            return r;
         }
 
         public override Task WriteAsync(BytesSegment bs)
