@@ -555,6 +555,16 @@ namespace Naive.HttpSvr
             return asyncTask();
         }
 
+        public static Task RunAsyncTask<TState>(Func<TState, Task> asyncTask, TState state)
+        {
+            return asyncTask(state);
+        }
+
+        public static Task<T> RunAsyncTask<TState, T>(Func<TState, Task<T>> asyncTask, TState state)
+        {
+            return asyncTask(state);
+        }
+
         public static Task SetTimeout(int timeout, Func<Task> asyncTask) => AsyncHelper.SetTimeout(timeout, asyncTask);
         public static void SetTimeout(int timeout, Action action) => AsyncHelper.SetTimeout(timeout, action);
 

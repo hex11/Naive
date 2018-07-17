@@ -55,6 +55,12 @@ namespace NaiveSocks
             return Task.WhenAll(tasks);
         }
 
+        struct recvArgs
+        {
+            public Task prevTask;
+            public IMsgStream curStream;
+        }
+
         public Task<Msg> RecvMsg(BytesView buf)
         {
             if (PreReadEnabled && recvTasks == null) {
@@ -70,10 +76,10 @@ namespace NaiveSocks
             if (recvTasks != null) {
                 var task = recvTasks[curRecv2];
                 recvTasks[curRecv2] = (!task.IsCompleted)
-                    ? NaiveUtils.RunAsyncTask(async () => {
-                        await task;
-                        return await recvStreams[curRecv2].RecvMsg(null);
-                    })
+                    ? NaiveUtils.RunAsyncTask(async (s) => {
+                        await s.prevTask;
+                        return await s.curStream.RecvMsg(null);
+                    }, new recvArgs { prevTask = task, curStream = recvStreams[curRecv2] })
                     //? task.ContinueWith((t, s) => s.CastTo<IMsgStream>().RecvMsg(null), recvStreams[curRecv2], TaskContinuationOptions.ExecuteSynchronously).Unwrap()
                     : recvStreams[curRecv2].RecvMsg(null);
                 return task;
