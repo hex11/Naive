@@ -150,4 +150,139 @@ namespace Naive.HttpSvr
             action();
         }
     }
+
+    // https://stackoverflow.com/a/40689207
+    public sealed class ReusableAwaiter<T> : INotifyCompletion
+    {
+        private Action _continuation = null;
+        private T _result = default(T);
+        private Exception _exception = null;
+        private SpinLock _lock = new SpinLock(false);
+
+        public static ReusableAwaiter<T> NewCompleted(T result)
+        {
+            return new ReusableAwaiter<T>() { IsCompleted = true, _result = result };
+        }
+
+        public bool IsBeingListening => _continuation != null;
+
+        public bool IsCompleted
+        {
+            get;
+            private set;
+        }
+
+        public T GetResult()
+        {
+            if (!IsCompleted)
+                throw new InvalidOperationException("not completed");
+            if (_exception != null)
+                throw _exception;
+            return _result;
+        }
+
+        public void OnCompleted(Action continuation)
+        {
+            if (_continuation != null)
+                throw new InvalidOperationException("This ReusableAwaiter instance has already been listened");
+            bool lt = false;
+            _lock.Enter(ref lt);
+            if (this.IsCompleted) {
+                _lock.Exit();
+                continuation();
+            } else {
+                _continuation = continuation;
+                _lock.Exit();
+            }
+        }
+
+        /// <summary>
+        /// Attempts to transition the completion state.
+        /// </summary>
+        /// <param name="result"></param>
+        /// <returns></returns>
+        public bool TrySetResult(T result)
+        {
+            bool lt = false;
+            if (!this.IsCompleted) {
+                _lock.Enter(ref lt);
+                if (this.IsCompleted) {
+                    _lock.Exit();
+                    return false;
+                }
+
+                this._result = result;
+                this.IsCompleted = true;
+
+                var c = TryGetContinuation();
+                _lock.Exit();
+                c?.Invoke();
+                return true;
+            }
+            return false;
+        }
+
+        public void SetResult(T result)
+        {
+            if (!TrySetResult(result))
+                throw new InvalidOperationException("failed to SetResult");
+        }
+
+        /// <summary>
+        /// Attempts to transition the exception state.
+        /// </summary>
+        /// <param name="result"></param>
+        /// <returns></returns>
+        public bool TrySetException(Exception exception)
+        {
+            bool lt = false;
+            if (!this.IsCompleted) {
+                _lock.Enter(ref lt);
+                if (this.IsCompleted) {
+                    _lock.Exit();
+                    return false;
+                }
+
+                this._exception = exception;
+                this.IsCompleted = true;
+
+                var c = TryGetContinuation();
+                _lock.Exit();
+                c?.Invoke();
+                return true;
+            }
+            return false;
+        }
+
+        private Action TryGetContinuation()
+        {
+            var tmp = _continuation;
+            if (tmp != null) {
+                _continuation = null;
+                return tmp;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Reset the awaiter to initial status
+        /// </summary>
+        /// <returns></returns>
+        public ReusableAwaiter<T> Reset()
+        {
+            if (_continuation != null) {
+                throw new InvalidOperationException("Cannot reset: this awaiter is being listening. (complete this awaiter before reset)");
+            }
+            this._result = default(T);
+            this._continuation = null;
+            this._exception = null;
+            this.IsCompleted = false;
+            return this;
+        }
+
+        public ReusableAwaiter<T> GetAwaiter()
+        {
+            return this;
+        }
+    }
 }

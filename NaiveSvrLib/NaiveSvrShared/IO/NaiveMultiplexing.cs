@@ -513,7 +513,7 @@ namespace NaiveSocks
 
         private object _syncroot => recvQueue;
 
-        private TaskCompletionSource<VoidType> blockSendTcs;
+        private ReusableAwaiter<VoidType> blockSendAwaiter = ReusableAwaiter<VoidType>.NewCompleted(VoidType.Void);
         private AsyncQueue<Msg> recvQueue = new AsyncQueue<Msg>();
         private StateEnum _state;
 
@@ -550,11 +550,10 @@ namespace NaiveSocks
         private void SetBlockingSend(bool blocking)
         {
             if (blocking) {
-                if (blockSendTcs == null)
-                    blockSendTcs = new TaskCompletionSource<VoidType>();
+                if (blockSendAwaiter.IsCompleted)
+                    blockSendAwaiter.Reset();
             } else {
-                blockSendTcs?.SetResult(0);
-                blockSendTcs = null;
+                blockSendAwaiter.TrySetResult(VoidType.Void);
             }
         }
 
@@ -628,24 +627,35 @@ namespace NaiveSocks
             }
         }
 
-        public async Task SendMsg(Msg msg)
+        public Task SendMsg(Msg msg)
         {
-            ThrowIfShutdownOrClosed();
-            var tmp = blockSendTcs;
-            if (tmp != null) {
-                debug("pausing send", msg.Data?.tlen);
-                await tmp.Task.CAF();
-                debug("resumed send", msg.Data?.tlen);
+            ThrowIfCantSend();
+            if (blockSendAwaiter.IsCompleted == false) {
+                return _SendMsg_Blocking(msg);
+            } else {
+                return _SendMsg(msg);
             }
+        }
+
+        private async Task _SendMsg_Blocking(Msg msg)
+        {
+            debug("pausing send", msg.Data?.tlen);
+            await blockSendAwaiter;
+            debug("resumed send", msg.Data?.tlen);
+            await _SendMsg(msg);
+        }
+
+        private Task _SendMsg(Msg msg)
+        {
             _dataFilter?.OnWrite(msg.Data);
             Task task;
             lock (_syncroot) {
-                ThrowIfShutdownOrClosed();
+                ThrowIfCantSend();
                 write += msg.Data?.tlen ?? 0;
                 writec++;
                 task = Parent.SendMsg(this, msg);
             }
-            await task.CAF();
+            return task;
         }
 
         internal Task SendRsvOpcode(Opcode opcode)
@@ -667,7 +677,7 @@ namespace NaiveSocks
                 ThrowInvalidOperation();
             var noWaiting = true;
             if (!recvQueue.TryDequeue(out var m)) {
-                m = await recvQueue.DequeueAsync(out noWaiting).CAF();
+                m = await recvQueue.DequeueAsync(out noWaiting);
             }
             if (noWaiting) {
                 if (!m.IsEOF)
@@ -688,12 +698,18 @@ namespace NaiveSocks
             return m;
         }
 
-        private void ThrowIfShutdownOrClosed()
+        /// <summary>
+        /// Not throw if Open or EOFReceived
+        /// </summary>
+        private void ThrowIfCantSend()
         {
             if (IsShutdownOrClosed)
                 ThrowInvalidOperation();
         }
 
+        /// <summary>
+        /// Not throw if Open or EOFReceived or EOFSent
+        /// </summary>
         private void ThrowIfClosingOrClosed()
         {
             if (IsClosingOrClosed)
@@ -714,7 +730,7 @@ namespace NaiveSocks
 
         private void Shutdown_NoLock()
         {
-            ThrowIfShutdownOrClosed();
+            ThrowIfCantSend();
             if (State == StateEnum.Open) {
                 SendRsvOpcodeThenChangeState(Opcode.EOF, StateEnum.EOFSent);
             } else { // EOFReceived
@@ -837,54 +853,65 @@ namespace NaiveSocks
 
     public class AsyncQueue<T>
     {
-        private TaskCompletionSource<T> dequeuingTcs;
+        private ReusableAwaiter<T> awaiter = new ReusableAwaiter<T>();
         private Queue<T> queue = new Queue<T>();
+        private bool isWaiting = false;
 
         public int Count => queue.Count;
 
-        private object _lock => queue;
+        private SpinLock _lock = new SpinLock(false);
 
         public bool Enqueue(T obj)
         {
-            lock (_lock) {
-                var tmp = dequeuingTcs;
-                if (tmp != null) {
-                    dequeuingTcs = null;
-                    tmp.SetResult(obj);
-                    return false;
-                }
-                queue.Enqueue(obj);
-                return true;
+            bool lt = false;
+            _lock.Enter(ref lt);
+            if (isWaiting) {
+                isWaiting = false;
+                _lock.Exit();
+                awaiter.SetResult(obj);
+                return false;
             }
+            queue.Enqueue(obj);
+            _lock.Exit();
+            return true;
+
         }
 
-        public Task<T> DequeueAsync(out bool noAwaiting)
+        public ReusableAwaiter<T> DequeueAsync(out bool noAwaiting)
         {
-            lock (_lock) {
-                if (dequeuingTcs != null) {
-                    throw new Exception("another dequeuing task is running");
-                }
-                if (queue.Count > 0) {
-                    noAwaiting = true;
-                    return Task.FromResult(queue.Dequeue());
-                } else {
-                    noAwaiting = false;
-                    dequeuingTcs = new TaskCompletionSource<T>();
-                    return dequeuingTcs.Task;
-                }
+            bool lt = false;
+            _lock.Enter(ref lt);
+            if (isWaiting) {
+                throw new Exception("another dequeuing task is running");
+            }
+            if (queue.Count > 0) {
+                noAwaiting = true;
+                var result = queue.Dequeue();
+                _lock.Exit();
+                awaiter.Reset();
+                awaiter.SetResult(result);
+                return awaiter;
+            } else {
+                noAwaiting = false;
+                isWaiting = true;
+                awaiter.Reset();
+                _lock.Exit();
+                return awaiter;
             }
         }
 
         public bool TryDequeue(out T value)
         {
-            lock (_lock) {
-                if (queue.Count > 0) {
-                    value = queue.Dequeue();
-                    return true;
-                }
-                value = default(T);
-                return false;
+            bool lt = false;
+            _lock.Enter(ref lt);
+            if (queue.Count > 0) {
+                value = queue.Dequeue();
+                _lock.Exit();
+                return true;
             }
+            _lock.Exit();
+            value = default(T);
+            return false;
         }
     }
 }
