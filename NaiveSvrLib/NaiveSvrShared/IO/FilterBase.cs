@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -15,35 +16,61 @@ namespace Naive.HttpSvr
 
     public class FilterBase
     {
-        public Action<BytesView> ReadFilter;
-        public Action<BytesView> WriteFilter;
+        public List<Action<BytesView>> ReadFilters;
+        public List<Action<BytesView>> WriteFilters;
+
+        public bool HaveReadFilter => ReadFilters?.Count > 0;
+        public bool HaveWriteFilter => WriteFilters?.Count > 0;
 
         public void OnRead(BytesView bv)
         {
-            if (bv.tlen > 0)
-                ReadFilter?.Invoke(bv);
+            if (ReadFilters?.Count > 0)
+                lock (ReadFilters)
+                    for (int i = ReadFilters.Count - 1; i >= 0; i--) {
+                        Action<BytesView> item = ReadFilters[i];
+                        item(bv);
+                    }
         }
 
         public void OnWrite(BytesView bv)
         {
-            if (bv.tlen > 0)
-                WriteFilter?.Invoke(bv);
+            if (WriteFilters?.Count > 0)
+                lock (WriteFilters)
+                    foreach (var item in WriteFilters) {
+                        item(bv);
+                    }
         }
 
         public void ClearFilter()
         {
-            WriteFilter = null;
-            ReadFilter = null;
+            WriteFilters = null;
+            ReadFilters = null;
+        }
+
+        public void ClearWriteFilter()
+        {
+            WriteFilters = null;
+        }
+
+        public void ClearReadFilter()
+        {
+            ReadFilters = null;
         }
 
         public void AddWriteFilter(Action<BytesView> f)
         {
-            WriteFilter = CombineFilter(WriteFilter, f);
+            if (f == null)
+                throw new ArgumentNullException(nameof(f));
+            WriteFilters = WriteFilters ?? new List<Action<BytesView>>();
+            WriteFilters.Add(f);
         }
 
         public void AddReadFilter(Action<BytesView> f)
         {
-            ReadFilter = CombineFilter(f, ReadFilter);
+            if (f == null)
+                throw new ArgumentNullException(nameof(f));
+            ReadFilters = ReadFilters ?? new List<Action<BytesView>>();
+            ReadFilters.Add(f);
         }
 
         public void AddFilters(Action<BytesView> fRead, Action<BytesView> fWrite)

@@ -187,7 +187,7 @@ namespace NaiveSocks
                     MState |= MyStreamState.RemoteShutdown;
                     FinReceived = true;
                     if (_conn.PerSessionIV) {
-                        ws.ReadFilter = null;
+                        ws.ClearReadFilter();
                         _conn.ivReceived = false;
                     }
                 }
@@ -196,7 +196,7 @@ namespace NaiveSocks
                 {
                     await ws.SendStringAsync("fin");
                     if (_conn.PerSessionIV) {
-                        ws.WriteFilter = null;
+                        ws.ClearWriteFilter();
                         _conn.ivSent = false;
                     }
                 }

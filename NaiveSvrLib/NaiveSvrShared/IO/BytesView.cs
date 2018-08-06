@@ -47,6 +47,14 @@ namespace Naive.HttpSvr
             this.len = bv.len;
         }
 
+        public void Reset()
+        {
+            this.bytes = null;
+            this.offset = 0;
+            this.len = 0;
+            this.nextNode = null;
+        }
+
         public BytesView Clone()
         {
             return new BytesView(bytes, offset, len) { nextNode = nextNode };

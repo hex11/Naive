@@ -566,7 +566,7 @@ namespace Naive.HttpSvr
                             payload[payloadOffset + i] ^= maskkey[i % 4];
                         }
                     }
-                    if (ReadFilter != null) {
+                    if (HaveReadFilter != null) {
                         var oldlen = bv.len;
                         OnRead(bv);
                         if (optionalBuffer.Bytes != null && bv.bytes != optionalBuffer.Bytes) {
@@ -830,9 +830,9 @@ namespace Naive.HttpSvr
 
         public void BeginSendMsg(byte opcode, byte[] buf, int begin, int len) => SendMsgAsync(opcode, buf, begin, len);
 
-        private static readonly WeakObjectPool<byte[]> _sendMsgBufferPool = new WeakObjectPool<byte[]>(() => new byte[SendBufSizeMax]);
-        private const int SendBufSizeMin = 990;
-        private const int SendBufSizeMax = 1440;
+        private const int SendBufSizeMax = 32 * 1024;
+
+        BytesView _sendMsgBvCache;
 
         private async Task _sendMsgAsync(byte opcode, BytesView buf, bool fin = true)
         {
@@ -845,21 +845,31 @@ namespace Naive.HttpSvr
             if (bv.tlen > 0) {
                 OnWrite(bv);
             }
-            var curSendBufSize = NaiveUtils.Random.Next(SendBufSizeMin, SendBufSizeMax);
-            var len = bv.tlen;
-            using (var handle = _sendMsgBufferPool.Get()) {
-                int bufcur = 0;
-                var sendMsgBuf = handle.Value;
-                var isMasked = IsClient;
-                buildFrameHeader(opcode, bv.tlen, fin, sendMsgBuf, ref bufcur, isMasked);
-                var stream = BaseStream;
-                if (!isMasked && BaseStream is IMyStreamMultiBuffer msmb) {
-                    // if base stream supports writing multiple buffers,
-                    // we can reduce copying overhead.
-                    await msmb.WriteMultipleAsync(new BytesView(sendMsgBuf, 0, bufcur) { nextNode = bv });
-                    return;
-                }
+            var tlen = bv.tlen;
+
+
+            int bufcur = 0;
+            byte[] sendMsgBuf;
+            var isMasked = IsClient;
+            var stream = BaseStream;
+            if (!isMasked && BaseStream is IMyStreamMultiBuffer msmb) {
+                // if base stream supports writing multiple buffers,
+                // we can reduce copying overhead.
+                sendMsgBuf = BufferPool.GlobalGet(calcFrameHeaderSize(tlen, isMasked));
+                buildFrameHeader(opcode, tlen, fin, sendMsgBuf, ref bufcur, isMasked);
+                var sendMsgBv = _sendMsgBvCache ?? new BytesView();
+                _sendMsgBvCache = null;
+                sendMsgBv.Set(sendMsgBuf, 0, bufcur);
+                sendMsgBv.nextNode = bv;
+                await msmb.WriteMultipleAsync(sendMsgBv);
+                sendMsgBv.Reset();
+                _sendMsgBvCache = sendMsgBv;
+                BufferPool.GlobalPut(sendMsgBuf);
+            } else {
+                sendMsgBuf = BufferPool.GlobalGet(Math.Min(calcFrameHeaderSize(tlen, isMasked) + tlen, SendBufSizeMax));
+                buildFrameHeader(opcode, tlen, fin, sendMsgBuf, ref bufcur, isMasked);
                 if (buf != null) {
+                    var curSendBufSize = sendMsgBuf.Length;
                     var curbv = bv;
                     int maskIndex = 0;
                     do {
@@ -872,7 +882,6 @@ namespace Naive.HttpSvr
                                 if (bufcur >= curSendBufSize) {
                                     await stream.WriteAsync(sendMsgBuf, 0, bufcur).CAF();
                                     bufcur = 0;
-                                    curSendBufSize = NaiveUtils.Random.Next(SendBufSizeMin, SendBufSizeMax);
                                 }
                             }
                         } else {
@@ -884,7 +893,6 @@ namespace Naive.HttpSvr
                                 if (bufcur == curSendBufSize) {
                                     await stream.WriteAsync(sendMsgBuf, 0, bufcur).CAF();
                                     bufcur = 0;
-                                    curSendBufSize = NaiveUtils.Random.Next(SendBufSizeMin, SendBufSizeMax);
                                 }
                             }
                         }
@@ -892,6 +900,7 @@ namespace Naive.HttpSvr
                 }
                 if (bufcur > 0)
                     await stream.WriteAsync(sendMsgBuf, 0, bufcur).CAF();
+                BufferPool.GlobalPut(sendMsgBuf);
             }
         }
 
@@ -901,17 +910,17 @@ namespace Naive.HttpSvr
                 throw new ArgumentNullException(nameof(buf));
 
             BytesView bv = new BytesView(buf, begin, len);
-            if (WriteFilter != null && len > 0) {
+            if (HaveWriteFilter && len > 0) {
                 OnWrite(bv);
                 buf = bv.bytes;
                 begin = bv.offset;
                 len = bv.tlen;
             }
-            var curSendBufSize = NaiveUtils.Random.Next(SendBufSizeMin, SendBufSizeMax);
-            using (var handle = _sendMsgBufferPool.Get()) {
+            {
                 int bufcur = 0;
-                var sendMsgBuf = handle.Value;
                 var isMasked = IsClient;
+                var sendMsgBuf = BufferPool.GlobalGet(Math.Min(calcFrameHeaderSize(len, isMasked) + len, SendBufSizeMax));
+                var curSendBufSize = sendMsgBuf.Length;
                 buildFrameHeader(opcode, bv.tlen, fin, sendMsgBuf, ref bufcur, isMasked);
                 var stream = BaseStream;
                 if (buf != null) {
@@ -927,7 +936,6 @@ namespace Naive.HttpSvr
                                 if (bufcur >= curSendBufSize) {
                                     stream.Write(sendMsgBuf, 0, bufcur);
                                     bufcur = 0;
-                                    curSendBufSize = NaiveUtils.Random.Next(SendBufSizeMin, SendBufSizeMax);
                                 }
                             }
                         } else {
@@ -939,7 +947,6 @@ namespace Naive.HttpSvr
                                 if (bufcur == curSendBufSize) {
                                     stream.Write(sendMsgBuf, 0, bufcur);
                                     bufcur = 0;
-                                    curSendBufSize = NaiveUtils.Random.Next(SendBufSizeMin, SendBufSizeMax);
                                 }
                             }
                         }
@@ -947,7 +954,23 @@ namespace Naive.HttpSvr
                 }
                 if (bufcur > 0)
                     stream.Write(sendMsgBuf, 0, bufcur);
+                BufferPool.GlobalPut(sendMsgBuf);
             }
+        }
+
+        private int calcFrameHeaderSize(int len, bool ismasked)
+        {
+            int size;
+            if (len <= 125) {
+                size = 2;
+            } else if (len < 65536) {
+                size = 4;
+            } else {
+                size = 10;
+            }
+            if (ismasked)
+                size += 4;
+            return size;
         }
 
         private void buildFrameHeader(byte opcode, int len, bool fin, byte[] buf, ref int bufIndex, bool ismask)
