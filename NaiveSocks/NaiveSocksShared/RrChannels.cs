@@ -11,6 +11,9 @@ namespace NaiveSocks
     {
         public NaiveMultiplexing BaseChannels;
 
+        public Action<Channel> OnLocalChannelCreated;
+        public Action<Channel> OnRemoteChannelCreated;
+
         public Func<ReceivedRequest, Task> Requested;
 
         public static Converter<TRequest, Msg> RequestMsgConverter;
@@ -44,12 +47,17 @@ namespace NaiveSocks
             async Task tmp()
             {
                 using (ch) {
-                    var req = await ch.RecvMsg(null).CAF();
-                    if (req.IsEOF) // WTF?
-                        return;
-                    var task = Requested?.Invoke(new ReceivedRequest(MsgRequestConverter(req), ch, ReplyMsgConverter));
-                    if (task != null)
-                        await task.CAF();
+                    try {
+                        OnRemoteChannelCreated(ch);
+                        var req = await ch.RecvMsg(null).CAF();
+                        if (req.IsEOF) // WTF?
+                            return;
+                        var task = Requested?.Invoke(new ReceivedRequest(MsgRequestConverter(req), ch, ReplyMsgConverter));
+                        if (task != null)
+                            await task.CAF();
+                    } catch (Exception e) {
+                        Logging.exception(e, Logging.Level.Error, "RrChannels handler");
+                    }
                 }
             }
             tmp().Forget();
@@ -59,6 +67,7 @@ namespace NaiveSocks
         {
             var ch = await BaseChannels.CreateChannel();
             try {
+                OnLocalChannelCreated(ch);
                 var msg = RequestMsgConverter(req);
                 await ch.SendMsg(msg).CAF();
                 return new RequestResult(ch, MsgReplyConverter);
@@ -72,6 +81,7 @@ namespace NaiveSocks
         {
             var ch = await BaseChannels.CreateChannel();
             try {
+                OnLocalChannelCreated(ch);
                 var msg = RequestMsgConverter(req);
                 await ch.SendMsg(msg).CAF();
                 var replyMsg = await ch.RecvMsg(null).ThrowIfEOF().CAF();

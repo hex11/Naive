@@ -26,7 +26,8 @@ namespace NaiveSocks
 
         public bool InConnectionFastCallback;
 
-        public bool Lz4Compression = false;
+        public string PerChennelEncryption;
+        public byte[] PerChennelEncryptionKey;
 
         Task mainTask;
 
@@ -42,6 +43,14 @@ namespace NaiveSocks
 
         public NaiveMChannels(NaiveMultiplexing channels) : base(channels)
         {
+            this.OnLocalChannelCreated += TryApplyPerChennelEncryption;
+            this.OnRemoteChannelCreated += TryApplyPerChennelEncryption;
+        }
+
+        private void TryApplyPerChennelEncryption(Channel x)
+        {
+            if (PerChennelEncryption.IsNullOrEmpty() == false)
+                NaiveProtocol.ApplyEncryption(x.DataFilter, PerChennelEncryptionKey, PerChennelEncryption);
         }
 
         public class ConnectingSettings
@@ -51,6 +60,7 @@ namespace NaiveSocks
             public byte[] Key { get; set; }
             public string KeyString { set => Key = NaiveProtocol.GetRealKeyFromString(value, 32); }
             public string Encryption { get; set; }
+            public string EncryptionPerChannel { get; set; }
             public bool TlsEnabled { get; set; }
 
             public Dictionary<string, string> Headers { get; set; }
@@ -93,7 +103,7 @@ namespace NaiveSocks
                     additionalString = addStr
                 };
                 if (settings.Encryption != null) {
-                    req.extraStrings = new[] { settings.Encryption };
+                    req.extraStrings = new[] { settings.Encryption, settings.EncryptionPerChannel };
                 }
                 var reqbytes = req.ToBytes();
                 reqbytes = NaiveProtocol.EncryptOrDecryptBytes(true, key, reqbytes);
@@ -174,6 +184,10 @@ namespace NaiveSocks
                 msgStream = await connect("channels", false, ct);
             }
             var ncs = new NaiveMChannels(new NaiveMultiplexing(msgStream));
+            if (settings.EncryptionPerChannel.IsNullOrEmpty() == false) {
+                ncs.PerChennelEncryption = settings.EncryptionPerChannel;
+                ncs.PerChennelEncryptionKey = settings.Key;
+            }
             return ncs;
         }
 
@@ -242,15 +256,9 @@ namespace NaiveSocks
 
         public async Task<ConnectResult> Connect(ConnectArgument arg)
         {
-            var lz4 = Lz4Compression;
             var beginTime = DateTime.Now;
             var req = new NaiveProtocol.Request(arg.Dest);
-            if (lz4) {
-                req.extraStrings = new[] { "lz4" };
-            }
             var result = await Request(req).CAF();
-            if (lz4)
-                result.Channel.DataFilter.ApplyFilterFromFilterCreator(LZ4pn.LZ4Filter.GetFilter);
             try {
                 async Task<NaiveProtocol.Reply> readReply()
                 {
@@ -369,8 +377,11 @@ namespace NaiveSocks
                 if (cmd == "download") {
                     var buf = new byte[32 * 1024];
                     new Random().NextBytes(buf);
-                    while (true) {
-                        await ch.SendMsg(buf).CAF();
+                    try {
+                        while (true) {
+                            await ch.SendMsg(buf).CAF();
+                        }
+                    } catch (Exception) {
                     }
                 } else if (cmd == "upload") {
                     while (true) {

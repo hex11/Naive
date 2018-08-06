@@ -46,7 +46,8 @@ namespace NaiveSocks
 
         public static string DefaultEncryption { get; set; }
 
-        public string encryption { get; set; } = DefaultEncryption;
+        public string encryption { get; set; } = DefaultEncryption; // [enc1][,enc2][//per_ch_enc1[,per_ch_enc2]]
+        public string encryption_per_ch { get; set; } = null;
 
         public bool tls { get; set; }
         public bool tls_only { get; set; }
@@ -332,6 +333,7 @@ namespace NaiveSocks
                         Host = adapter.server,
                         KeyString = adapter.key,
                         Encryption = adapter.encryption,
+                        EncryptionPerChannel = adapter.encryption_per_ch,
                         TlsEnabled = adapter.tls,
                         Path = adapter.path,
                         ImuxWsConnections = adapter.imux_ws,

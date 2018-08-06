@@ -126,6 +126,10 @@ namespace NaiveSocks
                         lock (nmsList)
                             nmsList.Add(nms);
                         try {
+                            if (req.extraStrings.Length > 1) {
+                                nms.PerChennelEncryption = req.extraStrings[1];
+                                nms.PerChennelEncryptionKey = realKey;
+                            }
                             await nms.Start();
                         } finally {
                             lock (nmsList)
@@ -138,7 +142,7 @@ namespace NaiveSocks
                         }
                     }
                 } catch (Exception e) {
-                    Logger.exception(e, Logging.Level.Error, "NaiveMHandler Url: " + p.Url);
+                    Logger.exception(e, Logging.Level.Error, "NaiveMHandler From: " + p.myStream + " Url: " + p.Url);
                 }
             } finally {
                 if (p.ConnectionState == HttpConnection.States.Processing) {
@@ -150,11 +154,10 @@ namespace NaiveSocks
         private async Task<WebSocketServer> HandleWebsocket(HttpConnection p, byte[] realKey, string encType)
         {
             var ws = new WebSocketServer(p);
+            ws.AddToManaged(timeout / 2, timeout);
+            NaiveProtocol.ApplyEncryption(ws, realKey, encType); // check encryption parameters before http response
             if ((await ws.HandleRequestAsync(false)).IsConnected == false)
                 throw new Exception("websocket handshake failed.");
-            ws.AddToManaged(timeout / 2, timeout);
-            NaiveProtocol.ApplyEncryption(ws, realKey, encType);
-            //ws.ApplyAesStreamFilter(realKey);
             return ws;
         }
 

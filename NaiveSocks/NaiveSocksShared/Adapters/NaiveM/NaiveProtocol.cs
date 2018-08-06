@@ -191,6 +191,7 @@ namespace NaiveSocks
         public const string EncryptionSpeck064 = "speck064";
         public const string EncryptionNone = "none";
         public const string CompressionLz4_0 = "lz4-0";
+        public const string HashCrc32c = "crc32c";
 
         public static void ApplyEncryption(FilterBase filterBase, byte[] key, string parameter = "")
         {
@@ -221,6 +222,9 @@ namespace NaiveSocks
                     break;
                 case CompressionLz4_0:
                     filterBase.ApplyFilterFromFilterCreator(LZ4pn.LZ4Filter.GetFilter);
+                    break;
+                case HashCrc32c:
+                    Crc32c.AddToFilterBase(filterBase, 0);
                     break;
                 case EncryptionNone:
                     // no encryption

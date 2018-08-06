@@ -64,6 +64,7 @@ namespace NaiveSocks
             ["aes-192-cfb"] = new Cipher(Cipher.Modes.AesCfb, 24),
             ["aes-256-cfb"] = new Cipher(Cipher.Modes.AesCfb, 32),
             ["chacha20-ietf"] = new Cipher(Cipher.Modes.Chacha20Ietf, 32),
+            ["speck0"] = new Cipher(Cipher.Modes.Speck0, 16), // speck-128/128-ctr
         };
 
         public class Cipher
@@ -73,6 +74,7 @@ namespace NaiveSocks
                 AesCtr,
                 AesCfb,
                 Chacha20Ietf,
+                Speck0, // word size 64
             }
 
             public Cipher(Modes encryptionMode, int keySize)
@@ -107,6 +109,8 @@ namespace NaiveSocks
                         return new CfbEncryptor(alg.CreateEncryptor(), isEncrypt);
                     } else if (Mode == Modes.Chacha20Ietf) {
                         return new ChaCha20IetfEncryptor(key);
+                    } else if (Mode == Modes.Speck0) {
+                        return new Speck.Ctr128128(key);
                     } else {
                         throw new Exception("No such cipher.");
                     }
