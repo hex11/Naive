@@ -127,8 +127,9 @@ namespace NaiveSocks
                             nmsList.Add(nms);
                         try {
                             if (req.extraStrings.Length > 1) {
-                                nms.PerChennelEncryption = req.extraStrings[1];
-                                nms.PerChennelEncryptionKey = realKey;
+                                nms.PerChannelEncryption = req.extraStrings[1];
+                                if (nms.PerChannelEncryption.IsNullOrEmpty() == false)
+                                    nms.PerChannelEncryptionKey = realKey;
                             }
                             await nms.Start();
                         } finally {

@@ -26,8 +26,8 @@ namespace NaiveSocks
 
         public bool InConnectionFastCallback;
 
-        public string PerChennelEncryption;
-        public byte[] PerChennelEncryptionKey;
+        public string PerChannelEncryption;
+        public byte[] PerChannelEncryptionKey;
 
         Task mainTask;
 
@@ -43,14 +43,14 @@ namespace NaiveSocks
 
         public NaiveMChannels(NaiveMultiplexing channels) : base(channels)
         {
-            this.OnLocalChannelCreated += TryApplyPerChennelEncryption;
-            this.OnRemoteChannelCreated += TryApplyPerChennelEncryption;
+            this.OnLocalChannelCreated += TryApplyPerChannelEncryption;
+            this.OnRemoteChannelCreated += TryApplyPerChannelEncryption;
         }
 
-        private void TryApplyPerChennelEncryption(Channel x)
+        private void TryApplyPerChannelEncryption(Channel x)
         {
-            if (PerChennelEncryption.IsNullOrEmpty() == false)
-                NaiveProtocol.ApplyEncryption(x.DataFilter, PerChennelEncryptionKey, PerChennelEncryption);
+            if (PerChannelEncryption.IsNullOrEmpty() == false)
+                NaiveProtocol.ApplyEncryption(x.DataFilter, PerChannelEncryptionKey, PerChannelEncryption);
         }
 
         public class ConnectingSettings
@@ -185,8 +185,8 @@ namespace NaiveSocks
             }
             var ncs = new NaiveMChannels(new NaiveMultiplexing(msgStream));
             if (settings.EncryptionPerChannel.IsNullOrEmpty() == false) {
-                ncs.PerChennelEncryption = settings.EncryptionPerChannel;
-                ncs.PerChennelEncryptionKey = settings.Key;
+                ncs.PerChannelEncryption = settings.EncryptionPerChannel;
+                ncs.PerChannelEncryptionKey = settings.Key;
             }
             return ncs;
         }

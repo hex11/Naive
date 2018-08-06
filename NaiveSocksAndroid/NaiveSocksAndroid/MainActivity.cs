@@ -114,21 +114,9 @@ namespace NaiveSocksAndroid
                     Manifest.Permission.WriteExternalStorage
                 }, 1);
             }
-
-            //if (savedInstanceState == null || !savedInstanceState.ContainsKey("curFragment")) {
+            
             drawer.OpenDrawer(GravityCompat.Start);
-            //} else {
-            //    ReplaceFragment(SupportFragmentManager.GetFragment(savedInstanceState, "curFragment"));
-            //}
-
         }
-
-        //protected override void OnSaveInstanceState(Bundle outState)
-        //{
-        //    base.OnSaveInstanceState(outState);
-        //    if (curFrag != null)
-        //        SupportFragmentManager.PutFragment(outState, "curFragment", curFrag);
-        //}
 
         protected override void OnStart()
         {
