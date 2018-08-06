@@ -138,7 +138,7 @@ namespace Naive.HttpSvr
 
         static int _lastTicks = Environment.TickCount;
 
-        static readonly object _lastTicksLock = new object();
+        static SpinLock _lastTicksLock = new SpinLock(false);
 
         private static int CalcCurrentTime()
         {
@@ -149,12 +149,14 @@ namespace Naive.HttpSvr
                 var delta = curTicks - laTicks;
                 return (int)((_totalMsUntilLastTicks + delta) / 1000);
             } else {
-                lock (_lastTicksLock) {
-                    var delta = (int.MaxValue - laTicks) + (curTicks - int.MinValue) + 1;
-                    _lastTicks = curTicks;
-                    _totalMsUntilLastTicks += delta;
-                    return (int)(_totalMsUntilLastTicks / 1000);
-                }
+                bool lt = false;
+                _lastTicksLock.Enter(ref lt);
+                var delta = (int.MaxValue - laTicks) + (curTicks - int.MinValue) + 1;
+                _lastTicks = curTicks;
+                _totalMsUntilLastTicks += delta;
+                var ret = (int)(_totalMsUntilLastTicks / 1000);
+                _lastTicksLock.Exit(false);
+                return ret;
             }
         }
 
