@@ -280,7 +280,7 @@ namespace Naive.HttpSvr
                     await writeHeadersToBaseStreamAsync().CAF();
                     await writeBufferToBaseStreamAndClearBufferAsync().CAF();
                 } else if (CurrentMode == Mode.KnownLength) {
-                    if (lengthToWrite != haveWrote && (!(p.Method == "HEAD" && haveWrote == 0))) {
+                    if (lengthToWrite != haveWrote && !(p.Method == "HEAD" && haveWrote == 0)) {
                         throw new OutputStreamException("wrote length != content-length.");
                     }
                 }

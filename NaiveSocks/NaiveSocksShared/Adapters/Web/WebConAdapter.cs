@@ -21,6 +21,8 @@ namespace NaiveSocks
 
         public string page_file { get; set; }
 
+        public string[] cmds { get; set; }
+
         ConsoleHub consoleHub;
 
         public override bool Reloading(object oldInstance)
@@ -40,7 +42,17 @@ namespace NaiveSocks
             }
             if (consoleHub == null) {
                 consoleHub = new ConsoleHub();
-                Commands.AddCommands(consoleHub.CommandHub, Controller, "");
+                var cmdHub = consoleHub.CommandHub;
+                Commands.AddCommands(cmdHub, Controller, "");
+                if (cmds != null) {
+                    foreach (var cmd in cmds) {
+                        if (cmd == "proc" && Environment.OSVersion.Platform == PlatformID.Unix) {
+                            cmdHub.AddCmdHandler("proc", (c) => {
+                                c.Write(File.ReadAllText("/proc/self/status"));
+                            });
+                        }
+                    }
+                }
             }
         }
 
@@ -89,9 +101,9 @@ namespace NaiveSocks
                 if (ColorEnabled) {
                     var c = ForegroundColor32;
                     wss.SendBytesAsync(new byte[] { 0x01, c.R, c.G, c.B, c.A });
-                    wss.SendStringAsync(text);
+                    wss.SendStringAsync(text).Forget();
                 } else {
-                    wss.SendStringAsync(text);
+                    wss.SendStringAsync(text).Forget();
                 }
             }
         }

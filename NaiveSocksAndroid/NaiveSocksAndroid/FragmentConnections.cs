@@ -85,48 +85,56 @@ namespace NaiveSocksAndroid
             if (controller != null) {
                 lock (controller.InConnectionsLock) {
                     var conns = controller.InConnections;
-
-                    for (int i = displayingViews.Count - 1; i >= 0; i--) {
-                        ItemView view = displayingViews[i];
-                        bool found = false;
-                        foreach (var item in conns) {
-                            if (object.ReferenceEquals(view.Connection, item)) {
-                                found = true;
-                                break;
-                            }
-                        }
-                        if (!found) {
-                            if (view.pendingRemoving) {
-                                displayingViews.RemoveAt(i);
-                                connParent.RemoveViewAt(i);
-                            } else {
-                                view.pendingRemoving = true;
-                            }
-                        }
-                    }
-
-                    foreach (var item in conns) {
-                        bool found = false;
-                        foreach (var view in displayingViews) {
-                            if (object.ReferenceEquals(view.Connection, item)) {
-                                found = true;
-                                break;
-                            }
-                        }
-                        if (!found) {
-                            var newView = new ItemView(themeWrapper) { Connection = item };
-                            displayingViews.Add(newView);
-                            connParent.AddView(newView);
-                        }
-                    }
-
-                    var sb = new StringBuilder(64);
-                    foreach (var view in displayingViews) {
-                        view.Update(sb);
-                    }
+                    CheckListChanges(conns);
+                    UpdateItemViews();
                 }
             } else {
                 Clear();
+            }
+        }
+
+        private void UpdateItemViews()
+        {
+            var sb = new StringBuilder(64);
+            foreach (var view in displayingViews) {
+                view.Update(sb);
+            }
+        }
+
+        private void CheckListChanges(List<InConnection> conns)
+        {
+            for (int i = displayingViews.Count - 1; i >= 0; i--) {
+                ItemView view = displayingViews[i];
+                bool found = false;
+                foreach (var item in conns) {
+                    if (object.ReferenceEquals(view.Connection, item)) {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    if (view.pendingRemoving) {
+                        displayingViews.RemoveAt(i);
+                        connParent.RemoveViewAt(i);
+                    } else {
+                        view.pendingRemoving = true;
+                    }
+                }
+            }
+
+            foreach (var item in conns) {
+                bool found = false;
+                foreach (var view in displayingViews) {
+                    if (object.ReferenceEquals(view.Connection, item)) {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    var newView = new ItemView(themeWrapper) { Connection = item };
+                    displayingViews.Add(newView);
+                    connParent.AddView(newView);
+                }
             }
         }
 

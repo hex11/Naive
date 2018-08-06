@@ -346,7 +346,7 @@ namespace Naive.HttpSvr
 	body {
 		font-family: sans-serif;
 		max-width: 40em;
-		margin: 10px auto;
+		margin: 0 auto;
 		padding: 0;
 	}
 	.item {

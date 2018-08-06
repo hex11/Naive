@@ -71,7 +71,7 @@ namespace NaiveSocks
         const int readaheadScoreMax = 3;
         int readaheadScore = readaheadScoreMax;
 
-        public static int DefaultReadaheadBufferSize { get; set; } = 4096;
+        public static int DefaultReadaheadBufferSize { get; set; } = 256;
         public int ReadaheadBufferSize { get; set; } = DefaultReadaheadBufferSize;
         BytesSegment readaheadBuffer;
 
@@ -88,7 +88,7 @@ namespace NaiveSocks
         public int LengthCanSyncRead => readaheadBuffer.Len + socketAvailable;
 
         public bool EnableReadaheadBuffer { get; set; } = true;
-        public bool EnableSmartSyncRead { get; set; } = true;
+        public bool EnableSmartSyncRead { get; set; } = false;
         public bool Enable2ndBufferCheck { get; set; } = false;
 
 
@@ -138,7 +138,7 @@ namespace NaiveSocks
                 return NaiveUtils.GetCachedTaskInt(read);
             }
 
-            if (EnableSmartSyncRead | EnableReadaheadBuffer) {
+            if (EnableSmartSyncRead || (EnableReadaheadBuffer && bs.Len < ReadaheadBufferSize)) {
                 if (socketAvailable < bs.Len || socketAvailable < ReadaheadBufferSize) {
                     // Get the Available value from socket when needed.
                     socketAvailable = Socket.Available;
