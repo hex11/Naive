@@ -269,7 +269,7 @@ namespace Naive.HttpSvr
             rawRequestPos = 0;
             try {
                 await readRequest().CAF();
-            } catch (Exception) {
+            } catch (Exception e) when (e.IsConnectionException()) {
                 return false;
             }
             initStatus();
@@ -395,29 +395,55 @@ namespace Naive.HttpSvr
             }
         }
 
-        private const int MaxInputLineLength = 8 * 1024;
-        private readonly byte[] readlineBytes = new byte[4];
+        private const int MaxRequestLength = 64 * 1024;
 
         int rawRequestPos = 0;
         private string readLineFromRawRequest()
         {
             if (rawRequestPos >= RawRequest.Length)
                 throw new Exception("RawRequest EOF.");
-            var endOfLinePos = RawRequest.IndexOf("\r\n", rawRequestPos);
+            var endOfLinePos = RawRequest.IndexOf('\n', rawRequestPos);
             if (endOfLinePos == -1)
-                throw new Exception("CRLF not found.");
+                throw new Exception("EOL not found.");
             var startPos = rawRequestPos;
-            rawRequestPos = endOfLinePos + 2;
+            rawRequestPos = endOfLinePos + 1;
+            if (endOfLinePos - 1 >= 0 && RawRequest[endOfLinePos - 1] == '\r')
+                endOfLinePos -= 1;
             return RawRequest.Substring(startPos, endOfLinePos - startPos);
         }
 
         private async Task readRequest()
         {
-            var ms = new MemoryStream();
-            var len = await NaiveUtils.ReadBytesUntil(realInputStream, ms, NaiveUtils.DoubleCRLFBytes, readlineBytes, MaxInputLineLength);
-            var bytes = ms.GetBuffer();
+            var buf = BufferPool.GlobalGet(MaxRequestLength);
+            var cur = 0;
+            var gotLF = 0;
+
+            while (true) {
+                if (cur + 2 >= MaxRequestLength)
+                    throw new Exception("request length > MaxRequestLength");
+                var read = await realInputStream.ReadAsync(buf, cur, 2 - gotLF).CAF();
+                if (read == 0)
+                    throw new DisconnectedException("unexpected EOF");
+                var parsingCur = cur;
+                cur += read;
+                while (parsingCur < cur) {
+                    var ch = buf[parsingCur++];
+                    if (ch == '\n') {
+                        if (gotLF++ == 1)
+                            goto DONE;
+                    } else if (ch == '\r') {
+                        continue;
+                    } else {
+                        gotLF = 0;
+                    }
+                }
+            }
+            DONE:
+
+            var len = cur;
             RawRequestBytesLength = len;
-            RawRequest = NaiveUtils.UTF8Encoding.GetString(bytes, 0, len);
+            RawRequest = NaiveUtils.UTF8Encoding.GetString(buf, 0, len);
+            BufferPool.GlobalPut(buf);
         }
 
         private void ThrowIfHeadersEnded(string methodName)
