@@ -221,13 +221,12 @@ namespace NaiveSocks
 
         private Channel CreateRemoteChannel(int id)
         {
+            var ch = new Channel(this, id);
             lock (_channelsLock) {
                 ThrowIfClosed();
-                var ch = new Channel(this, id);
                 addChannel(ch);
-                NewRemoteChannel?.Invoke(ch);
-                return ch;
             }
+            return ch;
         }
 
         private async Task MainReadLoop()
@@ -245,8 +244,15 @@ namespace NaiveSocks
                     handleRsvMsg(msg);
                     continue;
                 }
-                var ch = getChannelById(frame.Id) ?? CreateRemoteChannel(frame.Id);
-                ch.MsgReceived(msg);
+                var ch = getChannelById(frame.Id);
+                if (ch != null) {
+                    ch.MsgReceived(msg);
+                } else {
+                    // Enqueue the msg before invoking the event to reduce some waiting overhead.
+                    ch = CreateRemoteChannel(frame.Id);
+                    ch.MsgReceived(msg);
+                    NewRemoteChannel?.Invoke(ch);
+                }
             }
         }
 
@@ -293,9 +299,14 @@ namespace NaiveSocks
         {
             ThrowIfClosed();
             lock (_sendLock) {
-                var frame = new Frame(ch.Id, msg.Data).pack(this);
-                return BaseStream.SendMsg(frame);
+                return SendMsg_NoLock(ch, msg);
             }
+        }
+
+        private Task SendMsg_NoLock(Channel ch, Msg msg)
+        {
+            var frame = new Frame(ch.Id, msg.Data).pack(this);
+            return BaseStream.SendMsg(frame);
         }
 
         private Task SendParentOpcode(ParentOpcode opcode)
@@ -310,14 +321,13 @@ namespace NaiveSocks
 
         internal async Task SendOpcode(Channel ch, byte opcode)
         {
-            BytesView bv = null;
+            BytesView bv = new BytesView(new byte[4 + 1]);
             Task task = null;
             lock (_sendLock) {
-                bv = (BytesView)new byte[Frame.getSendChIdLen(this) + 1];
                 int cur = 0;
                 Frame.writeChId(this, bv, ch.Id, ref cur);
                 bv[cur++] = opcode;
-                task = SendMsg(ReservedChannel, bv);
+                task = this.SendMsg_NoLock(ReservedChannel, bv);
             }
             await task.CAF();
         }
@@ -524,13 +534,12 @@ namespace NaiveSocks
             State = StateEnum.Open;
         }
 
-        public void MsgReceived(Msg msg)
+        internal void MsgReceived(Msg msg)
         {
-            lock (_syncroot) {
-                if (recvQueue.Enqueue(msg)) {
-                    if (!msg.IsEOF)
-                        queuedSize += msg.Data.tlen;
-                    if (queuedSize >= MaxRecvBufferSize) {
+            if (recvQueue.Enqueue(msg)) {
+                if (!msg.IsEOF) {
+                    var newSize = Interlocked.Add(ref queuedSize, msg.Data.tlen);
+                    if (newSize >= MaxRecvBufferSize) {
                         debug("recv buf", queuedSize);
                         SetBlockingRemote(true);
                     }
@@ -540,11 +549,13 @@ namespace NaiveSocks
 
         private void SetBlockingRemote(bool blocking)
         {
-            if (blocking == blockingRemote)
-                return;
-            blockingRemote = blocking;
-            if (State == StateEnum.EOFSent | State == StateEnum.Open)
-                SendRsvOpcode(blocking ? Opcode.BlockSend : Opcode.ResumeSend);
+            lock (_syncroot) {
+                if (blocking == blockingRemote)
+                    return;
+                blockingRemote = blocking;
+                if (State == StateEnum.EOFSent | State == StateEnum.Open)
+                    SendRsvOpcode(blocking ? Opcode.BlockSend : Opcode.ResumeSend);
+            }
         }
 
         private void SetBlockingSend(bool blocking)
@@ -679,10 +690,9 @@ namespace NaiveSocks
             if (!recvQueue.TryDequeue(out var m)) {
                 m = await recvQueue.DequeueAsync(out noWaiting);
             }
-            if (noWaiting) {
-                if (!m.IsEOF)
-                    queuedSize -= m.Data.tlen;
-                if (queuedSize < MaxRecvBufferSize)
+            if (noWaiting && !m.IsEOF) {
+                var newSize = Interlocked.Add(ref queuedSize, -m.Data.tlen);
+                if (newSize < MaxRecvBufferSize)
                     SetBlockingRemote(false);
             }
             if (m.IsEOF) {

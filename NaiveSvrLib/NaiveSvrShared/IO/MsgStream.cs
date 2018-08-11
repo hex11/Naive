@@ -41,7 +41,7 @@ namespace Naive.HttpSvr
             if (Data == null)
                 return;
             if (Data.nextNode != null)
-                Logging.warning("lastMsg.nextNode != null");
+                Logging.logWithStackTrace("lastMsg.nextNode != null", Logging.Level.Warning);
             BufferPool.GlobalPut(Data.bytes);
         }
 

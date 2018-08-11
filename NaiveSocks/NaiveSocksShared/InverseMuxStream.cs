@@ -13,7 +13,7 @@ namespace NaiveSocks
     {
         private readonly IMsgStream[] allStreams, recvStreams, sendStreams;
         private Task<Msg>[] recvTasks;
-        int curSend = -1, curRecv = 0;
+        int lastSend = -1, nextRecv = 0;
 
         public bool PreReadEnabled { get; set; } = true;
 
@@ -70,9 +70,9 @@ namespace NaiveSocks
                     recvTasks[i] = Task.Run(() => recvStreams[i2].RecvMsg(null));
                 }
             }
-            if (curRecv == recvStreams.Length)
-                curRecv = 0;
-            var curRecv2 = curRecv++;
+            if (nextRecv == recvStreams.Length)
+                nextRecv = 0;
+            var curRecv2 = nextRecv++;
             if (recvTasks != null) {
                 var task = recvTasks[curRecv2];
                 recvTasks[curRecv2] = (!task.IsCompleted)
@@ -92,9 +92,9 @@ namespace NaiveSocks
         {
             int curSend, old;
             do {
-                old = this.curSend;
+                old = this.lastSend;
                 curSend = (old + 1) % sendStreams.Length;
-            } while (Interlocked.CompareExchange(ref this.curSend, curSend, old) != old);
+            } while (Interlocked.CompareExchange(ref this.lastSend, curSend, old) != old);
             return sendStreams[curSend].SendMsg(msg);
         }
     }
