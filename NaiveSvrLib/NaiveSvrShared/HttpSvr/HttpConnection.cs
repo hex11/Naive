@@ -201,7 +201,7 @@ namespace Naive.HttpSvr
                 } catch (Exception e) {
                     if (disconnecting || myStream.State.IsClosed)
                         break;
-                    server.logException(e, Logging.Level.Warning, $"[{server.mark}#{id}({requestCount}) {remoteEP}] handling");
+                    server.logException(e, Logging.Level.Warning, $"[{server.mark}#{Id}({requestCount}) {remoteEP}] handling");
                     if (ConnectionState == States.SwitchedProtocol)
                         break;
                     if (ConnectionState == States.Processing & outputStream.Position == 0) {
@@ -512,15 +512,15 @@ namespace Naive.HttpSvr
             writer.Write("\r\n");
         }
 
-        public int Id => id;
-        private int id = id_counter++;
-        private static int id_counter = 0;
+        public int Id { get; } = idGen.Get();
+
+        private static IncrNumberGenerator idGen = new IncrNumberGenerator();
 
         public void info(string text) => log(text, Logging.Level.Info);
 
         public virtual void log(string text, Logging.Level level)
         {
-            server.log($"(#{id}|{remoteEP}({RequestCount})) {text}", level);
+            server.log($"(#{Id}|{remoteEP}({RequestCount})) {text}", level);
         }
 
         public Stream SwitchProtocol()
@@ -538,9 +538,9 @@ namespace Naive.HttpSvr
         public virtual string ToString(bool verbose)
         {
             if (verbose)
-                return $"{{HttpConn #{id}|{remoteEP}({RequestCount})}}";
+                return $"{{HttpConn #{Id}|{remoteEP}({RequestCount})}}";
             else
-                return $"{{HttpConn #{id}({RequestCount})}}";
+                return $"{{HttpConn #{Id}({RequestCount})}}";
         }
 
         #region IDisposable Support
