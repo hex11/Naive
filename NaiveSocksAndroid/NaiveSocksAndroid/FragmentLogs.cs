@@ -17,11 +17,20 @@ using Naive.HttpSvr;
 
 namespace NaiveSocksAndroid
 {
-    public class FragmentLogs : Fragment
+    public class FragmentLogs : Fragment, ICanHandleMenu
     {
         private ContextThemeWrapper logThemeWrapper;
         private LinearLayout outputParent;
         private NestedScrollView outputParentScroll;
+
+        private readonly MainActivity mainActivity;
+        private int menuItemId;
+        private bool autoScroll = true;
+
+        public FragmentLogs(MainActivity mainActivity)
+        {
+            this.mainActivity = mainActivity;
+        }
 
         public override void OnCreate(Bundle savedInstanceState)
         {
@@ -65,7 +74,7 @@ namespace NaiveSocksAndroid
 
         private void Logging_Logged(Logging.Log log)
         {
-            outputParent.Post(() => putLog(log, true));
+            outputParent.Post(() => putLog(log, autoScroll));
         }
 
         private void putLog(Logging.Log log, bool autoScroll)
@@ -100,6 +109,27 @@ namespace NaiveSocksAndroid
             tv.Dispose();
             if (autoScroll) {
                 outputParentScroll.Post(() => outputParentScroll.FullScroll((int)FocusSearchDirection.Down));
+            }
+        }
+
+        public void OnCreateMenu(IMenu menu)
+        {
+            var menuItem = mainActivity.toolbar.Menu.Add(0, menuItemId = 114514, 0, "Autoscroll");
+            menuItem.SetCheckable(true);
+            menuItem.SetShowAsAction(ShowAsAction.Always | ShowAsAction.WithText);
+            menuItem.SetChecked(autoScroll);
+        }
+
+        public void OnMenuItemSelected(IMenuItem item)
+        {
+            if (item.ItemId == menuItemId) {
+                autoScroll = !item.IsChecked;
+                item.SetChecked(autoScroll);
+                mainActivity.MakeSnackbar("Autoscroll is " + (autoScroll ? "enabled" : "disabled"),
+                    Android.Support.Design.Widget.Snackbar.LengthShort).Show();
+                //mainActivity.InvalidateOptionsMenu();
+            } else {
+                Logging.warning($"FragmentLogs.OnMenuItemSelected: unknown menuitem id={item.ItemId}, title={item.TitleFormatted}");
             }
         }
     }

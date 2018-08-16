@@ -46,8 +46,9 @@ namespace NaiveSocksAndroid
 
         public BgService Service => bgServiceConn?.Value;
 
-        private Toolbar toolbar;
+        public Toolbar toolbar;
         private const string TOOLBAR_TITLE = "NaiveSocks";
+        private static readonly Java.Lang.ICharSequence JavaTOOLBAR_TITLE = new Java.Lang.String(TOOLBAR_TITLE);
 
         //private ServiceConnection<ConfigService> cfgService;
 
@@ -81,7 +82,7 @@ namespace NaiveSocksAndroid
             toolbar = FindViewById<Toolbar>(R.Id.toolbar);
             SetSupportActionBar(toolbar);
             SupportActionBar.SetHomeButtonEnabled(true);
-            toolbar.Title = TOOLBAR_TITLE;
+            toolbar.TitleFormatted = JavaTOOLBAR_TITLE;
 
             navigationView = FindViewById<NavigationView>(R.Id.nvView);
             drawer = FindViewById<DrawerLayout>(R.Id.drawer_layout);
@@ -114,8 +115,9 @@ namespace NaiveSocksAndroid
                     Manifest.Permission.WriteExternalStorage
                 }, 1);
             }
-            
-            drawer.OpenDrawer(GravityCompat.Start);
+
+            //drawer.OpenDrawer(GravityCompat.Start);
+            onNavigationItemSelected(navigationView.Menu.GetItem(0));
         }
 
         protected override void OnStart()
@@ -146,17 +148,23 @@ namespace NaiveSocksAndroid
         private void NavigationView_NavigationItemSelected(object sender, NavigationView.NavigationItemSelectedEventArgs e)
         {
             IMenuItem menuItem = e.MenuItem;
+            onNavigationItemSelected(menuItem);
+        }
+
+        private void onNavigationItemSelected(IMenuItem menuItem)
+        {
             if (menuItem.IsChecked) {
                 drawer.CloseDrawers();
                 return;
             }
             Fragment frag = null;
-            switch (menuItem.ItemId) {
+            int itemId = menuItem.ItemId;
+            switch (itemId) {
             case R.Id.nav_home:
-                frag = new FragmentHome();
+                frag = new FragmentHome(this);
                 break;
             case R.Id.nav_logs:
-                frag = new FragmentLogs();
+                frag = new FragmentLogs(this);
                 break;
             case R.Id.nav_connections:
                 frag = new FragmentConnections(this);
@@ -170,7 +178,7 @@ namespace NaiveSocksAndroid
             ReplaceFragment(frag);
 
             menuItem.SetChecked(true);
-            TitleFormatted = menuItem.TitleFormatted;
+            TitleFormatted = itemId == R.Id.nav_home ? JavaTOOLBAR_TITLE : menuItem.TitleFormatted;
             drawer.CloseDrawers();
         }
 
@@ -179,6 +187,7 @@ namespace NaiveSocksAndroid
             var fm = SupportFragmentManager;
             fm.BeginTransaction().Replace(R.Id.flContent, frag).Commit();
             curFrag = frag;
+            InvalidateOptionsMenu();
         }
 
         public override void OnRequestPermissionsResult(int requestCode, string[] permissions, [GeneratedEnum] Permission[] grantResults)
@@ -237,6 +246,10 @@ namespace NaiveSocksAndroid
         public override bool OnCreateOptionsMenu(IMenu menu)
         {
             MenuInflater.Inflate(R.Menu.menu_control, menu);
+
+            if (curFrag is ICanHandleMenu ichm) {
+                ichm.OnCreateMenu(menu);
+            }
 
             if (isConnected) {
                 menu.FindItem(R.Id.menu_start).SetVisible(false);
@@ -317,6 +330,10 @@ namespace NaiveSocksAndroid
                     } catch (Exception e) {
                         Logging.exception(e, Logging.Level.Error, "Failed to kill myself!");
                     }
+                } else {
+                    if (curFrag is ICanHandleMenu ichm) {
+                        ichm.OnMenuItemSelected(item);
+                    }
                 }
             }
             return base.OnOptionsItemSelected(item);
@@ -343,9 +360,15 @@ namespace NaiveSocksAndroid
             MakeSnackbar($"Logger output will{(show ? "" : " not")} be shown in notification.", Snackbar.LengthLong).Show();
         }
 
-        private Snackbar MakeSnackbar(string text, int duration)
+        public Snackbar MakeSnackbar(string text, int duration)
         {
             return Snackbar.Make(topView, text, duration);
         }
+    }
+
+    interface ICanHandleMenu
+    {
+        void OnCreateMenu(IMenu menu);
+        void OnMenuItemSelected(IMenuItem item);
     }
 }
