@@ -50,7 +50,7 @@ namespace Naive.HttpSvr
                     if (_timestamp == null) {
                         var sec = (runningTime / 1000).ToString();
                         var ms = runningTime % 1000;
-                        _timestamp = $"[{time.ToString("MM/dd HH:mm:ss")} ({sec}.{ms.ToString("000")}) {levelStr}]:";
+                        _timestamp = "[" + time.ToString("MM/dd HH:mm:ss") + " (" + sec + "." + ms.ToString("000") + ") " + levelStr + "]:";
                     }
                     return _timestamp;
                 }

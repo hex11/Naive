@@ -64,8 +64,9 @@ namespace NaiveSocks
         public List<InConnection> InConnections = new List<InConnection>();
         public object InConnectionsLock => InConnections;
 
-        private int _totalHandledConnections;
+        private int _totalHandledConnections, _failedConnections;
         public int TotalHandledConnections => _totalHandledConnections;
+        public int TotalFailedConnections => _failedConnections;
         public int RunningConnections => InConnections.Count;
 
         public Dictionary<string, Type> RegisteredInTypes = new Dictionary<string, Type>();
@@ -613,13 +614,15 @@ namespace NaiveSocks
             if (LoggingLevel <= Logging.Level.None)
                 debug($"{inc} End.");
             if (inc.IsHandled == false) {
-                await inc.HandleAndGetStream(new ConnectResult(null, ConnectResultEnum.Failed));
+                await inc.HandleFailed(null);
             }
             var dataStream = inc.DataStream;
             if (dataStream != null && dataStream.State != MyStreamState.Closed)
                 await MyStream.CloseWithTimeout(dataStream);
             try {
                 lock (InConnectionsLock) {
+                    if (inc.ConnectResult?.Result != ConnectResultEnum.Conneceted)
+                        _failedConnections++;
                     InConnections.Remove(inc);
                     EndConnection?.Invoke(inc);
                 }

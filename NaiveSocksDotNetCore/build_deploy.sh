@@ -19,7 +19,7 @@ dotnet publish -c Release -o bin/publish/bin
 
 cat > "bin/publish/run.sh" << 'EOF'
 #!/bin/sh
-dotnet "$(dirname $0)/bin/NaiveSocksDotNetCore.dll" $*
+exec dotnet "$(dirname $0)/bin/NaiveSocksDotNetCore.dll" $*
 EOF
 chmod +x "bin/publish/run.sh"
 
@@ -38,7 +38,7 @@ for x in "${buildrids[@]}"; do
 		linux*)
 			cat > "bin/publish-$rid/run.sh" << 'EOF'
 #!/bin/sh
-"$(dirname $0)/bin/NaiveSocksDotNetCore" $*
+exec "$(dirname $0)/bin/NaiveSocksDotNetCore" $*
 EOF
 			chmod +x "bin/publish-$rid/run.sh"
 		;;

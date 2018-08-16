@@ -1162,9 +1162,9 @@ namespace Naive.HttpSvr
         public override string ToString()
         {
             if (Host?.Contains(":") == true && Host[0] != '[') {
-                return $"[{Host}]:{Port}";
+                return "[" + Host + "]:" + Port;
             }
-            return $"{Host}:{Port}";
+            return Host + ":" + Port;
         }
 
         public AddrPort WithDefaultPort(int defaultPort)

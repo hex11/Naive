@@ -86,6 +86,7 @@ namespace NaiveSocks
             } else {
                 DefaultEncryption = NaiveProtocol.EncryptionSpeck0;
             }
+            DefaultEncryption = NaiveProtocol.HashCrc32c + "," + DefaultEncryption;
             Logging.info($"NaiveOutAdapter default encryption chosen: '{DefaultEncryption}'");
         }
 

@@ -178,7 +178,7 @@ namespace NaiveSocks
                 ThreadPool.GetMinThreads(out var workersMin, out var portsMin);
                 ThreadPool.GetMaxThreads(out var workersMax, out var portsMax);
                 command.WriteLine($"Threads: {proc.Threads.Count} (workers: {workersMin}-{workersMax}, ports: {portsMin}-{portsMax})");
-                command.WriteLine($"Connections: {controller.RunningConnections:N0} running, {controller.TotalHandledConnections} handled");
+                command.WriteLine($"Connections: {controller.RunningConnections} running, {controller.TotalHandledConnections} handled, {controller.TotalFailedConnections} failed");
                 command.WriteLine($"MyStream Copied: {MyStream.TotalCopiedPackets:N0} packets, {MyStream.TotalCopiedBytes:N0} bytes");
                 command.WriteLine($"SocketStream: {SocketStream.GlobalCounters.StringRead};");
                 command.WriteLine($"               {SocketStream.GlobalCounters.StringWrite}.");
