@@ -684,21 +684,12 @@ namespace Naive.HttpSvr
     public class LogFileWriter
     {
         StreamWriter sw;
-        bool pendingFlush;
-        WaitCallback flush;
         bool running;
 
         public LogFileWriter(string logFile, Logger logger)
         {
             var fs = File.Open(logFile, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
             sw = new StreamWriter(fs, NaiveUtils.UTF8Encoding);
-            flush = (x) => {
-                lock (sw) {
-                    if (!running) return;
-                    pendingFlush = false;
-                    sw.Flush();
-                }
-            };
             LogFile = logFile;
             Logger = logger;
         }
@@ -714,7 +705,7 @@ namespace Naive.HttpSvr
                 sw.WriteLine();
                 sw.WriteLine("==========LOG BEGIN========== at " + DateTime.Now.ToString("u"));
                 sw.WriteLine();
-                DelayFlush();
+                Flush();
             }
         }
 
@@ -733,16 +724,13 @@ namespace Naive.HttpSvr
                 if (!running) return;
                 sw.Write(x.timestamp);
                 sw.WriteLine(x.text);
-                DelayFlush();
+                Flush();
             }
         }
 
-        private void DelayFlush()
+        private void Flush()
         {
-            if (!pendingFlush) {
-                pendingFlush = true;
-                ThreadPool.QueueUserWorkItem(flush);
-            }
+            sw.Flush();
         }
     }
 }

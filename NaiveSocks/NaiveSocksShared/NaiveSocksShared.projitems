@@ -24,7 +24,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)Compression\LZ4\LZ4Filter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Encryption\Crc32.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Encryption\Speck.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)InverseMuxStream.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Encryption\Chacha20.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Commands.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Controller.cs" />
@@ -38,6 +37,8 @@
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\NaiveM\NaiveMChannels.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\NaiveM\NaiveProtocol.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\NaiveM\NaiveMServerBase.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IO\InverseMuxStream.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IO\RrChannels.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)OutAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\Direct\DirectOutAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\Http\HttpOutAdapter.cs" />
@@ -46,7 +47,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\RouterAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\Ss\SsOutAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\Web\WebConAdapter.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)RrChannels.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\Socks\Socks5Client.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\Socks\Socks5Server.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\Socks\SocksInAdapter.cs" />

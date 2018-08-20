@@ -10,40 +10,47 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)AsyncHelper.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\CompressedOutputStream.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\HttpHeaderCollection.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\MultipartFormDataReader.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\NaiveHttpServer.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\Http\CompressedOutputStream.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\Http\HttpHeaderCollection.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\Http\MultipartFormDataReader.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\Server\NaiveHttpServer.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\NaiveUtils.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\NaiveWebsiteRouter.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\HttpAuthFilter.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\HttpConnection.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\InputDataStream.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\Server\NaiveWebsiteRouter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\Http\HttpAuthFilter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\Http\HttpConnection.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\Http\InputDataStream.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\Logging.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\OutputStream.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\Http\OutputStream.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\HttpUtil.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\NaiveWebsiteServer.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\Server\NaiveWebsiteServer.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\System.Web\CE.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\System.Web\Helpers.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\System.Web\HttpEncoder.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\System.Web\HttpUtility.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\WebSvrHelper.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)IO\BufferPool.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)IO\BufferHeap.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)IO\BytesSegment.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)IO\BytesView.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IO\Buffer\BufferPool.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IO\Buffer\BufferHeap.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IO\Buffer\BytesSegment.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IO\Buffer\BytesView.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IO\FilterBase.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IO\NaiveResumableMsgStream.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)IO\SocketStream.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IO\Socket\SocketStream.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IO\TlsStream.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)IO\WebSocket.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)IO\WebSocketClient.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)HttpSvr\WebSocketServer.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IO\WebSocket\WebSocket.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IO\WebSocket\WebSocketClient.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IO\WebSocket\WebSocketServer.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IO\MsgStream.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IO\MyStream.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IO\NaiveMultiplexing.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)IO\SocketStream1.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)IO\SocketStream2.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IO\Socket\SocketStream1.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IO\Socket\SocketStream2.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)NaiveTemplate\NaiveTemplate.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="$(MSBuildThisFileDirectory)HttpSvr\Http\" />
+    <Folder Include="$(MSBuildThisFileDirectory)HttpSvr\Server\" />
+    <Folder Include="$(MSBuildThisFileDirectory)IO\Buffer\" />
+    <Folder Include="$(MSBuildThisFileDirectory)IO\WebSocket\" />
+    <Folder Include="$(MSBuildThisFileDirectory)IO\Socket\" />
   </ItemGroup>
 </Project>
