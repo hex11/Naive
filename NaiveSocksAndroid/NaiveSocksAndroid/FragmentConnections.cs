@@ -34,18 +34,9 @@ namespace NaiveSocksAndroid
             this.mainActivity = mainActivity;
             timer = new Timer(timer_Callback);
         }
-
-        public override void OnCreate(Bundle savedInstanceState)
-        {
-            base.OnCreate(savedInstanceState);
-
-            // Create your fragment here
-        }
-
+        
         public override View OnCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState)
         {
-            // Use this to return your custom view for this Fragment
-
             themeWrapper = new ContextThemeWrapper(this.Context, R.Style.ConnTextView);
 
             var view = inflater.Inflate(R.Layout.connections, container, false);
