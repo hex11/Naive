@@ -222,7 +222,7 @@ namespace NaiveSocksAndroid
                 switch (action) {
                 case Actions.START:
                     this.ToForeground();
-                    return StartCommandResult.Sticky;
+                    break;
                 case Actions.STOP:
                     if (IsForegroundRunning)
                         ToBackground(true);
@@ -236,8 +236,8 @@ namespace NaiveSocksAndroid
                     System.Diagnostics.Process.GetCurrentProcess().Kill();
                     break;
                 case Actions.RELOAD:
-                    this.StopSelf(startId);
                     if (!IsForegroundRunning) {
+                        this.StopSelf();
                         Logging.warning("intent.Action == RELOAD while !IsForegroundRunning");
                         break;
                     }
@@ -255,15 +255,17 @@ namespace NaiveSocksAndroid
                     var before = GC.GetTotalMemory(false);
                     GC.Collect(action == Actions.GC ? GC.MaxGeneration : 0);
                     putLine($"GC Done. {before:N0} -> {GC.GetTotalMemory(false):N0}");
-                    this.StopSelf(startId);
+                    if (!IsForegroundRunning)
+                        this.StopSelf();
                     break;
                 default:
                     Logging.warning("Unknown intent.Action: " + action);
-                    this.StopSelf(startId);
+                    if (!IsForegroundRunning)
+                        this.StopSelf();
                     break;
                 }
             }
-            return StartCommandResult.NotSticky;
+            return StartCommandResult.Sticky;
         }
 
         public override IBinder OnBind(Intent intent)
@@ -284,7 +286,7 @@ namespace NaiveSocksAndroid
 
         bool isDestroyed = false;
 
-        string[] textLines;
+        string[] textLines = new string[1];
         bool textLinesChanged = false;
 
         private void Logging_Logged(Logging.Log log)
@@ -328,7 +330,6 @@ namespace NaiveSocksAndroid
 
         void updateNotif(bool force = false)
         {
-
             if (isDestroyed)
                 return;
             if (IsForegroundRunning)
