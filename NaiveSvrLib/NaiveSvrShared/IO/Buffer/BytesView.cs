@@ -62,9 +62,12 @@ namespace Naive.HttpSvr
 
         public void SubSelf(int startIndex)
         {
-            // TODO
-            if (len < startIndex)
+            if (len < startIndex) {
+                if (tlen < startIndex)
+                    throw new ArgumentOutOfRangeException(nameof(startIndex));
+                // TODO
                 throw new NotImplementedException();
+            }
             offset += startIndex;
             len -= startIndex;
         }

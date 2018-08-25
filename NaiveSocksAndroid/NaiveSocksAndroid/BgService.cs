@@ -31,7 +31,7 @@ namespace NaiveSocksAndroid
             AppConfig.Init(Application.Context);
             if (AppConfig.Current.Autostart) {
                 Intent serviceIntent = new Intent(context, typeof(BgService));
-                serviceIntent.SetAction("start!");
+                serviceIntent.SetAction(BgService.Actions.START);
                 serviceIntent.PutExtra("isAutostart", true);
                 ContextCompat.StartForegroundService(Application.Context, serviceIntent);
             }
@@ -39,6 +39,7 @@ namespace NaiveSocksAndroid
     }
 
     [Service(
+        Name = "naive.NaiveSocksAndroid.BgService"
         //IsolatedProcess = true,
         //Process = ":bg"
         )]
@@ -56,11 +57,15 @@ namespace NaiveSocksAndroid
         NotificationCompat.BigTextStyle bigText;
         const int MainNotificationId = 1;
 
-        private Receiver receiver;
+        private Receiver receiverScreenState;
 
         bool isScreenOn;
 
+        public bool IsForegroundRunning { private set; get; }
+
         Config currentConfig = new Config();
+
+        Logger Logger = new Logger("Service", Logging.RootLogger);
 
         class Config
         {
@@ -84,7 +89,9 @@ namespace NaiveSocksAndroid
 
             base.OnCreate();
 
-            Logging.info("service is starting...");
+            Logging.Logged += Logging_Logged;
+
+            Logger.info("service is starting...");
 
             powerManager = (PowerManager)GetSystemService(Context.PowerService);
             notificationManager = (NotificationManager)GetSystemService(Context.NotificationService);
@@ -101,7 +108,7 @@ namespace NaiveSocksAndroid
                         //.SetContentTitle("NaiveSocks")
                         //.SetSubText("running")
                         //.SetStyle(bigText)
-                        .AddAction(BuildServiceAction(Actions.STOP, "Stop", Android.Resource.Drawable.StarOff, 1))
+                        .AddAction(BuildServiceAction(Actions.KILL, "Kill", Android.Resource.Drawable.StarOff, 1))
                         .AddAction(BuildServiceAction(Actions.RELOAD, "Reload", Android.Resource.Drawable.StarOff, 2))
                         .AddAction(BuildServiceAction(Actions.GC, "GC", Android.Resource.Drawable.StarOff, 3))
                         .AddAction(BuildServiceAction(Actions.GC_0, "GC(gen0)", Android.Resource.Drawable.StarOff, 5))
@@ -130,16 +137,31 @@ namespace NaiveSocksAndroid
                         .SetPriority((int)NotificationPriority.Min)
                         .SetVisibility(NotificationCompat.VisibilitySecret)
                         .SetShowWhen(false);
+            //StartForegroundService();
+        }
+
+        public event Action<BgService> ForegroundStateChanged;
+
+        private void ToForeground()
+        {
+            Logger.info("ToForeground()");
+            if (IsForegroundRunning) {
+                Logger.logWithStackTrace("RunForegound() while isForegroundRunning", Logging.Level.Warning);
+                return;
+            }
 
             StartForeground(MainNotificationId, builder.Build());
 
             Controller = new Controller();
             Controller.Logger.ParentLogger = Logging.RootLogger;
 
+            IsForegroundRunning = true;
+            ForegroundStateChanged?.Invoke(this);
+
             onScreen(powerManager.IsInteractive);
             var filter = new IntentFilter(Intent.ActionScreenOff);
             filter.AddAction(Intent.ActionScreenOn);
-            RegisterReceiver(receiver = new Receiver((c, i) => {
+            RegisterReceiver(receiverScreenState = new Receiver((c, i) => {
                 if (i.Action == Intent.ActionScreenOn) {
                     onScreen(true);
                 } else if (i.Action == Intent.ActionScreenOff) {
@@ -147,14 +169,10 @@ namespace NaiveSocksAndroid
                 }
             }), filter);
 
-            //BindService(new Intent(this, typeof(ConfigService)), cfgService = new ServiceConnection<ConfigService>(), Bind.AutoCreate);
-
             SetShowLogs(AppConfig.Current.ShowLogs, true);
 
-            Logging.Logged += Logging_Logged;
-
             Task.Run(() => {
-                Logging.info("starting controller...");
+                Logger.info("starting controller...");
                 try {
                     Controller.ConfigTomlLoaded += (t) => {
                         CrashHandler.CrashLogFile = Controller.ProcessFilePath("UnhandledException.txt");
@@ -167,9 +185,9 @@ namespace NaiveSocksAndroid
                     var paths = AppConfig.GetNaiveSocksConfigPaths(this);
                     Controller.LoadConfigFileFromMultiPaths(paths);
                     Controller.Start();
-                    Logging.info("controller started.");
+                    Logger.info("controller started.");
                 } catch (System.Exception e) {
-                    Logging.exception(e, Logging.Level.Error, "loading/starting controller");
+                    Logger.exception(e, Logging.Level.Error, "loading/starting controller");
                     ShowToast("starting error: " + e.Message);
                     StopSelf();
                 }
@@ -178,18 +196,52 @@ namespace NaiveSocksAndroid
             updateNotif(true);
         }
 
+        private void ToBackground(bool removeNotif)
+        {
+            Logger.info("ToBackground(" + removeNotif + ")");
+            notifyTimer?.Dispose();
+            notifyTimer = null;
+            StopForeground(removeNotif);
+            UnregisterReceiver(receiverScreenState);
+            receiverScreenState = null;
+            onScreen(false);
+            IsForegroundRunning = false;
+            ForegroundStateChanged?.Invoke(this);
+            Controller.Stop();
+        }
+
         [return: GeneratedEnum]
         public override StartCommandResult OnStartCommand(Intent intent, [GeneratedEnum] StartCommandFlags flags, int startId)
         {
             if (intent != null) {
-                switch (intent.Action) {
+                string action = intent.Action;
+                if (action == Actions.TOGGLE) {
+                    Logger.info("toggling controller...");
+                    action = IsForegroundRunning ? Actions.STOP : Actions.START;
+                }
+                switch (action) {
+                case Actions.START:
+                    this.ToForeground();
+                    return StartCommandResult.Sticky;
                 case Actions.STOP:
-                    StopForeground(false);
+                    if (IsForegroundRunning)
+                        ToBackground(true);
                     this.StopSelf();
+                    break;
+                case Actions.KILL:
+                    if (IsForegroundRunning)
+                        ToBackground(false);
+                    this.StopSelf(startId);
                     notificationManager.Notify(MainNotificationId, restartBuilder.Build());
                     System.Diagnostics.Process.GetCurrentProcess().Kill();
                     break;
                 case Actions.RELOAD:
+                    this.StopSelf(startId);
+                    if (!IsForegroundRunning) {
+                        Logging.warning("intent.Action == RELOAD while !IsForegroundRunning");
+                        break;
+                    }
+
                     try {
                         Controller.Reload();
                         putLine("controller reloaded");
@@ -201,12 +253,17 @@ namespace NaiveSocksAndroid
                 case Actions.GC:
                 case Actions.GC_0:
                     var before = GC.GetTotalMemory(false);
-                    GC.Collect(intent.Action == Actions.GC ? GC.MaxGeneration : 0);
+                    GC.Collect(action == Actions.GC ? GC.MaxGeneration : 0);
                     putLine($"GC Done. {before:N0} -> {GC.GetTotalMemory(false):N0}");
+                    this.StopSelf(startId);
+                    break;
+                default:
+                    Logging.warning("Unknown intent.Action: " + action);
+                    this.StopSelf(startId);
                     break;
                 }
             }
-            return StartCommandResult.Sticky;
+            return StartCommandResult.NotSticky;
         }
 
         public override IBinder OnBind(Intent intent)
@@ -216,15 +273,12 @@ namespace NaiveSocksAndroid
 
         public override void OnDestroy()
         {
-            notifyTimer?.Dispose();
             isDestroyed = true;
             Logging.Logged -= Logging_Logged;
-            Logging.warning("service is being destroyed.");
-            //UnbindService(cfgService);
-            UnregisterReceiver(receiver);
-            var tmp = Controller;
-            Controller = null;
-            Task.Run(() => tmp.Stop());
+            Logging.info("service is being destroyed.");
+            if (IsForegroundRunning) {
+                ToBackground(true);
+            }
             base.OnDestroy();
         }
 
@@ -238,8 +292,9 @@ namespace NaiveSocksAndroid
             if (isDestroyed)
                 return;
             Log.WriteLine(GetPri(log), "naivelog", log.text);
-            if (notification_show_logs)
+            if (IsForegroundRunning && notification_show_logs) {
                 putLine(log.text);
+            }
         }
 
         private void clearLines(bool updateNow)
@@ -276,11 +331,12 @@ namespace NaiveSocksAndroid
 
             if (isDestroyed)
                 return;
-            lock (builder) {
-                if (updateNotifBuilder() | force) {
-                    notificationManager.Notify(MainNotificationId, builder.Build());
+            if (IsForegroundRunning)
+                lock (builder) {
+                    if (updateNotifBuilder() | force) {
+                        notificationManager.Notify(MainNotificationId, builder.Build());
+                    }
                 }
-            }
         }
 
         System.Diagnostics.Process currentProcess = System.Diagnostics.Process.GetCurrentProcess();
@@ -289,15 +345,6 @@ namespace NaiveSocksAndroid
 
         private bool updateNotifBuilder()
         {
-            void SetSingleLineText(string text)
-            {
-                //if (isN) {
-                //    builder.SetSubText(text);
-                //} else {
-                builder.SetContentText(text);
-                //}
-            }
-
             var needRenotify = false;
 
             var curRuntime = (DateTime.Now - currentProcess.StartTime).Ticks;
@@ -310,16 +357,12 @@ namespace NaiveSocksAndroid
             if (title != lastTitle) {
                 needRenotify = true;
                 lastTitle = title;
-                //if (notification_show_logs) {
                 builder.SetContentTitle(title);
-                //} else {
-                //    SetSingleLineText(title);
-                //}
             }
             if (textLinesChanged) {
                 textLinesChanged = false;
                 needRenotify = true;
-                SetSingleLineText(textLines.Get(-1));
+                builder.SetContentText(textLines.Get(-1));
                 if (notification_show_logs) {
                     if (bigText == null)
                         bigText = new NotificationCompat.BigTextStyle();
@@ -436,6 +479,8 @@ namespace NaiveSocksAndroid
         {
             public const string START = "start!";
             public const string STOP = "stop!";
+            public const string TOGGLE = "toggle!";
+            public const string KILL = "kill!";
             public const string RELOAD = "reload!";
             public const string GC = "gc!";
             public const string GC_0 = "gc!0";

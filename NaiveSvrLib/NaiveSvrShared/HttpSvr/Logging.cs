@@ -277,11 +277,13 @@ namespace Naive.HttpSvr
                 return;
             }
             var hash = st.GetHashCode(); // TODO
-            if (stackTraceHashes.Contains(hash)) {
-                sb.Append("StackTrace #").Append(hash.ToString("X"));
-            } else {
-                stackTraceHashes.Add(hash);
-                sb.Append("StackTrace (new) #").Append(hash.ToString("X"));
+            var exists = stackTraceHashes.Contains(hash);
+            sb.Append("StackTrace");
+            if (!exists) {
+                sb.Append(" (new)");
+            }
+            sb.Append(" #").Append(hash.ToString("X")).Append(" (").Append(st.Length).Append(" chars)");
+            if (!exists) {
                 sb.AppendLine();
                 sb.Append(st);
             }
@@ -435,7 +437,7 @@ namespace Naive.HttpSvr
         {
             log(text, Logging.Level.Debug);
         }
-        
+
         public void debugForce(string text)
         {
             log(text, Logging.Level.Debug);
@@ -464,6 +466,15 @@ namespace Naive.HttpSvr
                 else
                     log(Logging.getExceptionText(ex, text), level);
             } catch (Exception) { }
+        }
+
+        public void logWithStackTrace(string text, Logging.Level level)
+        {
+            var sb = new StringBuilder(128);
+            sb.AppendLine(text);
+            Logging.GetStackTraceString(new StackTrace(1), sb);
+            sb.AppendLine();
+            log(sb.ToString(), level);
         }
     }
 

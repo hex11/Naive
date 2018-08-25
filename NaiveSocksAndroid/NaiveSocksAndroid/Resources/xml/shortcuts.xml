@@ -1,0 +1,20 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+  <shortcut
+    android:shortcutId="toggle"
+    android:enabled="true"
+    android:icon="@drawable/N"
+    android:shortcutShortLabel="@string/toggle"
+    android:shortcutLongLabel="@string/toggle"
+    android:shortcutDisabledMessage="@string/toggle">
+    <intent
+      android:action="android.intent.action.MAIN"
+      android:targetPackage="naive.NaiveSocksAndroid"
+      android:targetClass="naive.NaiveSocksAndroid.MainActivity"
+      android:data="toggle"/>
+    <!-- If your shortcut is associated with multiple intents, include them
+         here. The last intent in the list is what the user sees when they
+         launch this shortcut. -->
+  </shortcut>
+  <!-- Specify more shortcuts here. -->
+</shortcuts>

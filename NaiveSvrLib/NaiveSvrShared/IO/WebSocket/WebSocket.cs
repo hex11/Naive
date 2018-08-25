@@ -186,6 +186,16 @@ namespace Naive.HttpSvr
                 } finally {
                     _dontCalcTime = false;
                 }
+
+                if (ManagedWebSockets.Count == 0 && AdditionalManagementTasks.Count == 0) {
+                    lock (_manageLock) {
+                        if (ManagedWebSockets.Count == 0 && AdditionalManagementTasks.Count == 0) {
+                            _manageThread = null;
+                            Logging.debug("websocket management thread stopped.");
+                            break;
+                        }
+                    }
+                }
             }
         }
 

@@ -30,9 +30,12 @@ namespace NaiveSocksAndroid
 {
     [Android.App.Activity(
         Label = "NaiveSocks",
+        Name = "naive.NaiveSocksAndroid.MainActivity",
         MainLauncher = true,
+        Exported = true,
         LaunchMode = LaunchMode.SingleTask,
         ConfigurationChanges = ConfigChanges.Orientation | ConfigChanges.ScreenSize | ConfigChanges.ScreenLayout)]
+    [Android.App.MetaData("android.app.shortcuts", Resource = "@xml/shortcuts")]
     public class MainActivity : AppCompatActivity
     {
         private CoordinatorLayout topView;
@@ -41,6 +44,7 @@ namespace NaiveSocksAndroid
         private Intent serviceIntent;
 
         private bool isConnected => bgServiceConn?.IsConnected ?? false;
+        private bool isServiceForegroundRunning => isConnected && service.IsForegroundRunning;
         private BgService service => bgServiceConn?.Value;
         private ServiceConnection<BgService> bgServiceConn;
 
@@ -59,18 +63,26 @@ namespace NaiveSocksAndroid
 
             base.OnCreate(savedInstanceState);
 
-            //BindService(new Intent(this, typeof(ConfigService)), cfgService = new ServiceConnection<ConfigService>(), Bind.AutoCreate);
-
             serviceIntent = new Intent(this, typeof(BgService));
-            serviceIntent.SetAction("start!");
+
+            if (this.Intent.DataString == "toggle") {
+                StartServiceWithAction(BgService.Actions.TOGGLE);
+                if (Build.VERSION.SdkInt >= BuildVersionCodes.NMr1) {
+                    var sm = GetSystemService(ShortcutService) as ShortcutManager;
+                    sm?.ReportShortcutUsed("toggle");
+                }
+                this.Finish();
+                return;
+            }
+
 
             bgServiceConn = new ServiceConnection<BgService>(
                 connected: (ComponentName name, IBinder service) => {
-                    //toolbar.Title = TOOLBAR_TITLE + " - running";
+                    Service.ForegroundStateChanged += Service_ForegroundStateChanged;
                     InvalidateOptionsMenu();
                 },
                 disconnected: (ComponentName name) => {
-                    //toolbar.Title = TOOLBAR_TITLE;
+                    Service.ForegroundStateChanged -= Service_ForegroundStateChanged;
                     InvalidateOptionsMenu();
                 });
 
@@ -120,10 +132,15 @@ namespace NaiveSocksAndroid
             onNavigationItemSelected(navigationView.Menu.GetItem(0));
         }
 
+        private void Service_ForegroundStateChanged(BgService obj)
+        {
+            InvalidateOptionsMenu();
+        }
+
         protected override void OnStart()
         {
             base.OnStart();
-            this.BindService(serviceIntent, bgServiceConn, Bind.None);
+            this.BindService(serviceIntent, bgServiceConn, Bind.AutoCreate);
         }
 
         protected override void OnStop()
@@ -199,15 +216,22 @@ namespace NaiveSocksAndroid
             }
         }
 
+        private void StartServiceWithAction(string action)
+        {
+            lock (serviceIntent) {
+                serviceIntent.SetAction(action);
+                StartService(serviceIntent);
+            }
+        }
+
         private Task startService()
         {
             return Task.Run(() => {
-                if (!isConnected) {
-                    Logging.info("starting/binding service...");
-                    StartService(serviceIntent);
-                    this.BindService(serviceIntent, bgServiceConn, Bind.None);
+                if (Service.IsForegroundRunning == false) {
+                    Logging.info("starting controller...");
+                    StartServiceWithAction(BgService.Actions.START);
                 } else {
-                    Logging.info("cannot start service: service is already running.");
+                    Logging.info("cannot start controller: the controller is already running.");
                 }
             });
         }
@@ -215,24 +239,22 @@ namespace NaiveSocksAndroid
         private Task stopService()
         {
             return Task.Run(() => {
-                Logging.info("requesting to stop service.");
-                if (!StopService(serviceIntent)) {
-                    Logging.info("cannot stop service: service is not connected.");
-                }
+                Logging.info("stopping controller...");
+                StartServiceWithAction(BgService.Actions.STOP);
             });
         }
 
         private void reloadService()
         {
             Task.Run(() => {
-                if (isConnected) {
+                if (isServiceForegroundRunning) {
                     try {
                         service.Controller.Reload();
                     } catch (Exception e) {
                         Logging.exception(e, Logging.Level.Error, "reloading controller");
                     }
                 } else {
-                    Logging.info("connot reload: service is not connected");
+                    Logging.info("cannot reload: the service/controller is not running");
                 }
             });
         }
@@ -240,6 +262,7 @@ namespace NaiveSocksAndroid
         private const string menu_showLogs = "Show logs in notification";
         private const string menu_autostart = "Autostart";
         private const string menu_openConfig = "Open configuation file...";
+        private const string menu_submenu = "Restart/Kill";
         private const string menu_restart = "Restart";
         private const string menu_kill = "Kill!";
 
@@ -251,14 +274,14 @@ namespace NaiveSocksAndroid
                 ichm.OnCreateMenu(menu);
             }
 
-            if (isConnected) {
+            if (isServiceForegroundRunning) {
                 menu.FindItem(R.Id.menu_start).SetVisible(false);
             } else {
                 menu.FindItem(R.Id.menu_stop).SetVisible(false);
                 menu.FindItem(R.Id.menu_reload).SetVisible(false);
             }
 
-            var subMenu = menu.AddSubMenu("Restart/Kill");
+            var subMenu = menu.AddSubMenu(menu_submenu);
             subMenu.Add(menu_restart)
                 .SetShowAsActionFlags(ShowAsAction.Never);
             subMenu.Add(menu_kill)
@@ -319,6 +342,8 @@ namespace NaiveSocksAndroid
                             MakeSnackbar("No activity to handle", Snackbar.LengthLong).Show();
                         }
                     }
+                } else if (title == menu_submenu) {
+                    // nothing to do
                 } else if (title == menu_restart) {
                     NaiveUtils.RunAsyncTask(async () => {
                         await stopService();

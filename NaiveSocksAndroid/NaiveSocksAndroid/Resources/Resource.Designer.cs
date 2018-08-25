@@ -3306,6 +3306,9 @@ namespace NaiveSocksAndroid
 			// aapt resource value: 0x7f090026
 			public const int status_bar_notification_info_overflow = 2131296294;
 			
+			// aapt resource value: 0x7f09002a
+			public const int toggle = 2131296298;
+			
 			static String()
 			{
 				global::Android.Runtime.ResourceIdManager.UpdateIdValues();
@@ -4501,6 +4504,9 @@ namespace NaiveSocksAndroid
 			
 			// aapt resource value: 0x7f060000
 			public const int file_provider_paths = 2131099648;
+			
+			// aapt resource value: 0x7f060001
+			public const int shortcuts = 2131099649;
 			
 			static Xml()
 			{
