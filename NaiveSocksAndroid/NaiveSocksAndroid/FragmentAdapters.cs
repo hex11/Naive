@@ -33,6 +33,9 @@ namespace NaiveSocksAndroid
 
         public override View OnCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState)
         {
+            if (this.Context == null)
+                throw new Exception("this.Context == null");
+
             themeWrapper = new ContextThemeWrapper(this.Context, R.Style.ConnTextView);
 
             var view = inflater.Inflate(R.Layout.connections, container, false);

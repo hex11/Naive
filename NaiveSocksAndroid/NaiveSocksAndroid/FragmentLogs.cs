@@ -39,8 +39,11 @@ namespace NaiveSocksAndroid
 
         public override View OnCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState)
         {
+            if (this.Context == null)
+                throw new Exception("this.Context == null");
+
             logThemeWrapper = new ContextThemeWrapper(this.Context, R.Style.LogTextView);
-            
+
             var View = inflater.Inflate(R.Layout.logs, container, false);
 
             outputParent = View.FindViewById<LinearLayout>(R.Id.logparent);
@@ -76,7 +79,7 @@ namespace NaiveSocksAndroid
 
         private void putLog(Logging.Log log, bool autoScroll)
         {
-            putText($"[{log.time.ToLongTimeString()} {log.levelStr}] {log.text}", autoScroll, getColorFromLevel(log.level));
+            putText("[" + log.time.ToString("HH:mm:ss.fff") + " " + log.levelStr + "] " + log.text, autoScroll, getColorFromLevel(log.level));
         }
 
         private Color? getColorFromLevel(Logging.Level level)
