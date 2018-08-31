@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace NaiveSocks
@@ -35,14 +36,38 @@ namespace NaiveSocks
 
         public WebFileAdapter()
         {
-            hitFile = (p, path) => {
+            hitFile = (p, realPath) => {
+                if (p.Url_qstr == "dlstatus") {
+                    p.Handled = true;
+                    p.setContentTypeTextPlain();
+                    if (downloadTasks.TryGetValue(realPath, out var dlTask)) {
+                        return p.writeLineAsync(dlTask.StatusText);
+                    } else {
+                        return p.writeLineAsync("E: task not found.");
+                    }
+                } else if (p.Url_qstr == "dlcancel") {
+                    p.Handled = true;
+                    p.setContentTypeTextPlain();
+                    //if (p.Method != "POST")
+                    //    return p.writeLineAsync("E: POST needed.");
+                    if (this.allow_netdl == false) {
+                        return p.writeLineAsync($"E: {strMissingPermission("netdl")}.");
+                    }
+
+                    if (downloadTasks.TryGetValue(realPath, out var dlTask)) {
+                        dlTask.Cancel();
+                        return p.writeLineAsync("task is canceled.");
+                    } else {
+                        return p.writeLineAsync("E: task not found.");
+                    }
+                }
                 foreach (var item in gzip_wildcard) {
-                    if (Wildcard.IsMatch(path, item)) {
+                    if (Wildcard.IsMatch(realPath, item)) {
                         p.outputStream.EnableGzipIfClientSupports();
                         break;
                     }
                 }
-                return WebSvrHelper.HandleFileAsync(p, path);
+                return WebSvrHelper.HandleFileAsync(p, realPath);
             };
             hitDir = (HttpConnection p, string path) => {
                 if (p.Method == "POST") {
@@ -100,11 +125,80 @@ namespace NaiveSocks
             }
         }
 
+        class DownloadTask
+        {
+            public DownloadTask(string url, string filePath)
+            {
+                Url = url;
+                FilePath = filePath;
+            }
+
+            private WebClient webcli;
+
+            public string Url { get; }
+            public string FilePath { get; }
+
+            public long TotalBytes { get; private set; }
+            public long ReceivedBytes { get; private set; }
+
+            public States State { get; private set; } = States.init;
+
+            public DateTime StartTimeUtc;
+            public DateTime StopTimeUtc = DateTime.MinValue;
+
+            public enum States
+            {
+                init,
+                running,
+                canceled,
+                error,
+                success
+            }
+
+            public string StatusText => State + "\n"
+                + ReceivedBytes + "/" + TotalBytes + "\n"
+                + StartTimeUtc.ToString("R") + "\n"
+                + ((StopTimeUtc == DateTime.MinValue ? DateTime.UtcNow : StopTimeUtc) - StartTimeUtc).TotalMilliseconds.ToString("#");
+
+            public async Task Start()
+            {
+                try {
+                    using (webcli = new WebClient()) {
+                        webcli.DownloadProgressChanged += (s, e) => {
+                            TotalBytes = e.TotalBytesToReceive;
+                            ReceivedBytes = e.BytesReceived;
+                        };
+                        StartTimeUtc = DateTime.UtcNow;
+                        State = States.running;
+                        await webcli.DownloadFileTaskAsync(Url, FilePath);
+                        State = States.success;
+                    }
+                } catch (Exception) {
+                    if (State != States.canceled)
+                        State = States.error;
+                    throw;
+                } finally {
+                    StopTimeUtc = DateTime.UtcNow;
+                    webcli = null;
+                }
+            }
+
+            public void Cancel()
+            {
+                State = States.canceled;
+                webcli?.CancelAsync();
+            }
+        }
+
+        static Dictionary<string, DownloadTask> downloadTasks = new Dictionary<string, DownloadTask>();
+        static ReaderWriterLockSlim downloadTasksLock = new ReaderWriterLockSlim();
+
         private async Task HandleUpload(HttpConnection p, string path)
         {
+            bool responseListPage = p.ParseUrlQstr()["infoonly"] != "0";
             string info = null;
             if (!(allow_create | allow_edit)) {
-                info = "neither 'create' nor 'edit' is in the allowed list.";
+                info = $"{strMissingPermission("create")} and {strMissingPermission("edit")}.";
                 goto FAIL;
             }
             var reader = new MultipartFormDataReader(p);
@@ -114,18 +208,21 @@ namespace NaiveSocks
             while (await reader.ReadNextPartHeader()) {
                 if (reader.CurrentPartName == "files") {
                     var fileName = reader.CurrentPartFileName;
-                    if (!TryOpenFile(path, fileName, out var fs, out info, out var realPath))
+                    if (!CheckPathForWriting(path, fileName, out info, out var realPath))
+                        goto FAIL;
+                    if (!TryOpenFile(path, fileName + ".uploading", out var fs, out info, out var tempPath))
                         goto FAIL;
                     try {
                         using (fs) {
                             await NaiveUtils.StreamCopyAsync(reader, fs);
                         }
+                        MoveOrReplace(tempPath, realPath);
                     } catch (Exception e) {
-                        Logger.exception(e, Logging.Level.Warning, $"uploading '{fileName}' by {p.myStream}.");
+                        Logger.exception(e, Logging.Level.Warning, $"receiving file '{fileName}' from {p.myStream}.");
                         File.Delete(realPath);
                         if (e is DisconnectedException)
                             return;
-                        info = "IO error.";
+                        info = $"IO error on '{saveFileName}'";
                         goto FAIL;
                     }
                     Logger.info($"uploaded '{fileName}' by {p.myStream}.");
@@ -135,7 +232,9 @@ namespace NaiveSocks
                 } else if (reader.CurrentPartName == "textFileEncoding") {
                     encoding = await reader.ReadAllTextAsync();
                 } else if (reader.CurrentPartName == "textContent") {
-                    if (!TryOpenFile(path, saveFileName, out var fs, out info, out var realPath))
+                    if (!CheckPathForWriting(path, saveFileName, out info, out var realPath))
+                        goto FAIL;
+                    if (!TryOpenFile(path, saveFileName + ".uploading", out var fs, out info, out var tempPath))
                         goto FAIL;
                     try {
                         using (fs) {
@@ -152,11 +251,13 @@ namespace NaiveSocks
                                 }
                             }
                         }
+                        MoveOrReplace(tempPath, realPath);
                     } catch (Exception e) {
-                        File.Delete(realPath);
+                        Logger.exception(e, Logging.Level.Warning, $"receiving text file '{saveFileName}' from {p.myStream}.");
+                        File.Delete(tempPath);
                         if (e is DisconnectedException)
                             return;
-                        info = $"read/write error on '{saveFileName}'";
+                        info = $"IO error on '{saveFileName}'";
                         goto FAIL;
                     }
                     Logger.info($"uploaded text '{saveFileName}' by {p.myStream}.");
@@ -194,7 +295,7 @@ namespace NaiveSocks
                     count++;
                 } else if (reader.CurrentPartName == "netdl") {
                     if (!allow_netdl) {
-                        info = $"'netdl' is not in the allowed list.";
+                        info = $"{strMissingPermission("netdl")}.";
                         goto FAIL;
                     }
                     var unparsed = await reader.ReadAllTextAsync();
@@ -208,7 +309,12 @@ namespace NaiveSocks
                     if (args.Length == 2) {
                         name = args[1];
                     } else {
-                        name = url.Substring(url.LastIndexOf('/'));
+                        int startIndex = url.LastIndexOf('/');
+                        if (startIndex < 0) {
+                            info = "can not determine a filename from the given url, please specify one.";
+                            goto FAIL;
+                        }
+                        name = url.Substring(startIndex);
                     }
                     if (!CheckPathForWriting(path, name, out info, out var realPath, out var r))
                         goto FAIL;
@@ -219,22 +325,55 @@ namespace NaiveSocks
                     }
                     if (!CheckPathForWriting(path, name + ".downloading", out info, out var realDlPath))
                         goto FAIL;
+
+                    var dlTask = new DownloadTask(url, realDlPath);
+
+                    // double checked locking, add the new task into the dict if no task already exist.
+                    downloadTasksLock.EnterReadLock();
+                    var taskExists = downloadTasks.TryGetValue(realDlPath, out var oldTask);
+                    downloadTasksLock.ExitReadLock();
+
+                    if (!taskExists) {
+                        downloadTasksLock.EnterWriteLock();
+                        taskExists = downloadTasks.TryGetValue(realDlPath, out oldTask);
+                        if (!taskExists) {
+                            downloadTasks.Add(realDlPath, dlTask);
+                        }
+                        downloadTasksLock.ExitWriteLock();
+                    }
+
+                    if (taskExists) {
+                        if (oldTask.State <= DownloadTask.States.running) {
+                            info = "a task is already running on this path.";
+                            goto FAIL;
+                        } else {
+                            info = $"override a '{oldTask.State}' task.\n";
+                            downloadTasksLock.EnterWriteLock();
+                            downloadTasks[realDlPath] = dlTask;
+                            downloadTasksLock.ExitWriteLock();
+                        }
+                    }
+
                     try {
                         var t = NaiveUtils.RunAsyncTask(async () => {
-                            using (var webcli = new WebClient()) {
-                                await webcli.DownloadFileTaskAsync(url, realDlPath);
-                            }
+
+                            await dlTask.Start();
+
+                            downloadTasksLock.EnterWriteLock();
+                            downloadTasks.Remove(realDlPath);
+                            downloadTasksLock.ExitWriteLock();
+
                             MoveOrReplace(realDlPath, realPath);
                         });
                         if (await t.WithTimeout(200)) {
-                            info = "downloading task is started.";
+                            info += "downloading task is started.";
                         } else {
                             await t;
-                            info = "downloaded.";
+                            info += "downloaded.";
                         }
                     } catch (Exception e) {
                         Logger.exception(e, Logging.Level.Warning, $"downloading from '{url}' to '{realDlPath}'");
-                        info = "downloading failed.";
+                        info += "downloading failed.";
                         goto FAIL;
                     }
                     count++;
@@ -293,6 +432,8 @@ namespace NaiveSocks
                         Logger.info($"deleted '{delFile}' by {p.myStream}.");
                         count++;
                     }
+                } else if (reader.CurrentPartName.Is("infoonly").Or("isajax")) {
+                    responseListPage = false;
                 } else {
                     info = $"Unknown part name '{reader.CurrentPartName}'";
                     goto FAIL;
@@ -301,7 +442,13 @@ namespace NaiveSocks
             if (info == null || count > 1)
                 info = $"Finished {count} operation{(count > 1 ? "s" : null)}.";
             FAIL:
-            await HandleDirList(p, path, info);
+            if (responseListPage) {
+                await HandleDirList(p, path, info);
+            } else {
+                p.Handled = true;
+                p.setContentTypeTextPlain();
+                await p.writeLineAsync(info);
+            }
         }
 
         private static void MoveOrReplace(string from, string to)
@@ -321,7 +468,7 @@ namespace NaiveSocks
             try {
                 fs = File.Open(realPath, FileMode.Create, FileAccess.Write, FileShare.Read);
             } catch (Exception e) {
-                failReason = ($"Can not open '{relPath}'.");
+                failReason = ($"Can not open '{relPath}' for writing.");
                 return false;
             }
             return true;
@@ -346,15 +493,17 @@ namespace NaiveSocks
             }
             if ((r == WebSvrHelper.PathResult.File || r == WebSvrHelper.PathResult.Directory)
                 && !allow_edit) {
-                failReason = ($"File '{relPath}' exists and 'edit' is not in the allowed list.");
+                failReason = ($"File '{relPath}' exists and {strMissingPermission("edit")}.");
                 return false;
             }
             if (r == WebSvrHelper.PathResult.NotFound && !allow_create) {
-                failReason = ($"File '{relPath}' doesn't exist and 'create' is not in the allowed list.");
+                failReason = ($"File '{relPath}' doesn't exist and {strMissingPermission("create")}.");
                 return false;
             }
             return true;
         }
+
+        private static string strMissingPermission(string perm) => $"'{perm}' is not in the allowed list";
 
         private Task HandleDirList(HttpConnection pp, string path, string infoText = null)
         {

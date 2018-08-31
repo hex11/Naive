@@ -455,6 +455,7 @@ namespace NaiveSocks
         private List<SubRange> whiteWildcardUrlList;
 
         private Dictionary<string, bool> resultCache;
+        private ReaderWriterLockSlim resultCacheLock;
 
         public Logger Logg { get; set; }
 
@@ -477,6 +478,7 @@ namespace NaiveSocks
             whiteRegexUrlList = new List<Regex>();
             whiteWildcardUrlList = new List<SubRange>();
             resultCache = new Dictionary<string, bool>(32);
+            resultCacheLock = new ReaderWriterLockSlim();
             RulesCount = 0;
             int cur = 0;
             int lineNum = 0;
@@ -597,13 +599,20 @@ namespace NaiveSocks
 
             var host = dest.Host;
 
-            lock (resultCache) {
-                if (resultCache.TryGetValue(host, out var cachedHit)) {
-                    return cachedHit;
-                }
 
+            resultCacheLock.EnterReadLock();
+            bool isCacheHit = resultCache.TryGetValue(host, out var cachedHit);
+            resultCacheLock.ExitReadLock();
+
+            if (isCacheHit) {
+                return cachedHit;
+            }
+
+            lock (resultCache) { // to avoid multiple threads compute the same thing
                 var hit = CheckUncached(dest, url);
+                resultCacheLock.EnterWriteLock();
                 resultCache.Add(host, hit);
+                resultCacheLock.ExitWriteLock();
                 return hit;
             }
         }

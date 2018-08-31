@@ -277,11 +277,15 @@ namespace Naive.HttpSvr
                 return;
             }
             var hash = st.GetHashCode(); // TODO
-            var exists = stackTraceHashes.Contains(hash);
-            sb.Append("StackTrace");
-            if (!exists) {
-                sb.Append(" (new)");
+            bool exists;
+            lock (stackTraceHashes) {
+                exists = stackTraceHashes.Contains(hash);
+                if (!exists)
+                    stackTraceHashes.Add(hash);
             }
+            sb.Append("StackTrace");
+            if (!exists)
+                sb.Append(" (new)");
             sb.Append(" #").Append(hash.ToString("X")).Append(" (").Append(st.Length).Append(" chars)");
             if (!exists) {
                 sb.AppendLine();

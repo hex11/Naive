@@ -458,6 +458,11 @@ namespace Naive.HttpSvr
             ResponseHeaders[key] = value;
         }
 
+        public void setContentTypeTextPlain()
+        {
+            this.setHeader(HttpHeaders.KEY_Content_Type, "text/plain; charset=utf-8");
+        }
+
         public void setStatusCode(string statusCode)
         {
             ThrowIfHeadersEnded(nameof(setStatusCode));
