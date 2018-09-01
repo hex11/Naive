@@ -89,7 +89,7 @@ namespace NaiveSocks
             while (pos < count) {
                 var read = await myStream.ReadAsync(new BytesSegment(bv.Bytes, bv.Offset + pos, count - pos));
                 if (read == 0)
-                    throw new DisconnectedException("unexpected EOF");
+                    throw new DisconnectedException($"unexpected EOF while ReadAll() (count={count}, pos={pos})");
                 pos += read;
             }
         }

@@ -628,19 +628,20 @@ namespace NaiveSocks
 
         public static Task ReadFullAsync(this IMyStream myStream, BytesSegment bs)
         {
-            if (myStream is IMyStreamReadFull sync)
-                return sync.ReadFullAsync(bs);
+            if (myStream is IMyStreamReadFull imsrf)
+                return imsrf.ReadFullAsync(bs);
             else
                 return ReadFullImpl(myStream, bs);
         }
 
         public static async Task ReadFullImpl(IMyStream myStream, BytesSegment bs)
         {
-            while (bs.Len > 0) {
-                var read = await myStream.ReadAsync(bs).CAF();
+            int pos = 0;
+            while (pos < bs.Len) {
+                var read = await myStream.ReadAsync(bs.Sub(pos)).CAF();
                 if (read == 0)
-                    throw new DisconnectedException("unexpected EOF");
-                bs.SubSelf(read);
+                    throw new DisconnectedException($"unexpected EOF while ReadFull() (count={bs.Len}, pos={pos})");
+                pos += read;
             }
         }
 

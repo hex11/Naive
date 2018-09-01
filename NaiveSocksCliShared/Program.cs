@@ -160,8 +160,21 @@ Usage: {NAME_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FILE]
             Commands.AddCommands(cmdHub, controller, null);
             cmdHub.AddCmdHandler("newbie", (cmd) => Commands.NewbieWizard(cmd, controller, specifiedConfigPath ?? configFilePath));
             cmdHub.AddCmdHandler("ver", (cmd) => cmd.WriteLine(NameWithVertionText));
-            if (Environment.OSVersion.Platform == PlatformID.Win32NT)
-                cmdHub.AddCmdHandler("openfolder", (cmd) => Process.Start("explorer", "."));
+            if (Environment.OSVersion.Platform == PlatformID.Win32NT) {
+                cmdHub.AddCmdHandler("openfolder", (cmd) => {
+                    if (cmd.args.Length == 0) {
+                        Process.Start("explorer", ".");
+                    } else if (cmd.args.Length > 1) {
+                        cmd.statusCode = 1;
+                        cmd.WriteLine("wrong arguments");
+                    } else if (cmd.args[0] == "exe") {
+                        OpenFolerAndShowFile(Process.GetCurrentProcess().MainModule.FileName);
+                    } else if (cmd.args[0] == "config") {
+                        OpenFolerAndShowFile(controller.CurrentConfig.FilePath);
+                    }
+                    void OpenFolerAndShowFile(string fileName) => Process.Start("explorer", $"/select, \"{fileName}\"");
+                }, "Usage: openfolder [exe|config]");
+            }
 #if NS_WINFORM
             cmdHub.AddCmdHandler("gui", (cmd) => {
                 var form = new GUI.FormConnections();
