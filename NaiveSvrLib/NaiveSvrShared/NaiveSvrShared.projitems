@@ -44,6 +44,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)IO\NaiveMultiplexing.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IO\Socket\SocketStream1.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IO\Socket\SocketStream2.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ForceJit.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)NaiveTemplate\NaiveTemplate.cs" />
   </ItemGroup>
   <ItemGroup>

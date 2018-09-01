@@ -79,8 +79,15 @@ namespace NaiveSocks
 
         internal List<PoolItem> ncsPool = new List<PoolItem>();
 
-        static NaiveMOutAdapter()
+        public NaiveMOutAdapter()
         {
+            CheckDefaultEncryption();
+        }
+
+        private static void CheckDefaultEncryption()
+        {
+            if (DefaultEncryption != null)
+                return;
             if (Environment.OSVersion.Platform == PlatformID.Win32NT) {
                 DefaultEncryption = NaiveProtocol.EncryptionAesOfb128;
             } else {

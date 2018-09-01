@@ -52,7 +52,8 @@ namespace NaiveSocks
         private static string cmdHelpText => $@"{NameWithVertionText}
 
 Usage: {NAME_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FILE]
-        [--no-cli] [--no-log-stdout] [--log-file FILE] [--log-stdout-no-time]";
+        [--no-cli] [--no-log-stdout] [--log-file FILE] [--log-stdout-no-time]
+        [--force-jit[-async]]";
 
         private static bool __magic_is_packed;
 
@@ -140,6 +141,13 @@ Usage: {NAME_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FILE]
                 }
             };
             Logging.info(NameWithVertionText);
+
+            if (ar.ContainsKey("--force-jit")) {
+                ForceJit();
+            } else if (ar.ContainsKey("--force-jit-async")) {
+                Task.Run(() => ForceJit());
+            }
+
             if (specifiedConfigPath != null) {
                 Commands.loadController(controller, specifiedConfigPath);
             } else {
@@ -180,6 +188,19 @@ Usage: {NAME_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FILE]
             WAIT:
             while (true)
                 Thread.Sleep(int.MaxValue);
+        }
+
+        private static void ForceJit()
+        {
+            Logging.info("Running ForceJit...");
+            Stopwatch sw = Stopwatch.StartNew();
+            try {
+                var result = Naive.HttpSvr.ForceJit.ForceJitAssembly(typeof(Program).Assembly, typeof(ForceJit).Assembly);
+                Logging.info($"ForceJit spent {sw.ElapsedMilliseconds:N0} ms to complete.");
+                Logging.info($"ForceJit result: {result.Types} types, {result.Ctors} ctors and {result.Methods} methods have been JITed. {result.Errors} errors.");
+            } catch (Exception e) {
+                Logging.exception(e, Logging.Level.Error, "ForceJit error");
+            }
         }
 
         private static void initLogFile(string logFile)
