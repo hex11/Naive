@@ -89,6 +89,9 @@ namespace Naive.HttpSvr
             });
         }
 
+        /// <summary>
+        /// Read a string from the msgstream, returns null on EOF.
+        /// </summary>
         public static async Task<string> RecvString(this IMsgStream ms)
         {
             if (ms is IMsgStreamStringSupport isss)

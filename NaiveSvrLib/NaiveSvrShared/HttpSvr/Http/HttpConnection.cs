@@ -245,7 +245,7 @@ namespace Naive.HttpSvr
         private bool checkInputData()
         {
             if (inputDataStream?.IsEOF == false) {
-                log("unread input data is found.", Logging.Level.Warning);
+                log($"unread input data is found. (length={inputDataStream.Length}, read={inputDataStream.Position})", Logging.Level.Warning);
                 if (ConnectionState == States.Processing)
                     ResponseHeaders[KEY_Connection] = VALUE_Connection_close;
                 keepAlive = false;

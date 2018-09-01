@@ -56,7 +56,7 @@ namespace NaiveSocks
                         if (task != null)
                             await task.CAF();
                     } catch (Exception e) {
-                        Logging.exception(e, Logging.Level.Error, "RrChannels handler");
+                        Logging.exception(e, Logging.Level.Error, this.ToString() + " handler");
                     }
                 }
             }

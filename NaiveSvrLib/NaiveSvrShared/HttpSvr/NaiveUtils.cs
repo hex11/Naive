@@ -508,6 +508,9 @@ namespace Naive.HttpSvr
 
         public static DeserializedArray DeserializeArray(string input)
         {
+            if (input == null)
+                throw new ArgumentNullException(nameof(input));
+
             var list = new DeserializedArray();
             list.Input = input;
             var begin = 0;

@@ -323,7 +323,10 @@ namespace NaiveSocks
             var channel = req.Channel;
             await req.Reply(new NaiveProtocol.Reply(AddrPort.Empty, 0, "ok"));
             while (true) {
-                var a = NaiveUtils.DeserializeArray(await channel.RecvString());
+                string subcommand = await channel.RecvString();
+                if (subcommand == null)
+                    return;
+                var a = NaiveUtils.DeserializeArray(subcommand);
                 var m = a[0];
                 if (m == "join") {
                     foreach (var item in from x in a.Skip(1) select x.Split('@')) {
