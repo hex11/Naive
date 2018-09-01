@@ -325,9 +325,9 @@ namespace Naive.HttpSvr
         public static long getRuntime()
         {
             if (StartTimeTicks == -1) {
-                StartTimeTicks = Process.GetCurrentProcess().StartTime.Ticks;
+                StartTimeTicks = Process.GetCurrentProcess().StartTime.ToUniversalTime().Ticks;
             }
-            return (DateTime.Now.Ticks - StartTimeTicks) / 10000;
+            return (DateTime.UtcNow.Ticks - StartTimeTicks) / 10000;
         }
 
         public static long Runtime => getRuntime();

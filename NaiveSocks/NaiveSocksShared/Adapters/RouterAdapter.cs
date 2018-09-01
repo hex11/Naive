@@ -598,7 +598,8 @@ namespace NaiveSocks
             }
 
             var host = dest.Host;
-
+            if (host == null)
+                throw new NullReferenceException("dest.Host == null");
 
             resultCacheLock.EnterReadLock();
             bool isCacheHit = resultCache.TryGetValue(host, out var cachedHit);
@@ -609,10 +610,15 @@ namespace NaiveSocks
             }
 
             lock (resultCache) { // to avoid multiple threads compute the same thing
+                if (resultCache.TryGetValue(host, out cachedHit))
+                    return cachedHit;
                 var hit = CheckUncached(dest, url);
                 resultCacheLock.EnterWriteLock();
-                resultCache.Add(host, hit);
-                resultCacheLock.ExitWriteLock();
+                try {
+                    resultCache.Add(host, hit);
+                } finally {
+                    resultCacheLock.ExitWriteLock();
+                }
                 return hit;
             }
         }

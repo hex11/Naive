@@ -73,7 +73,7 @@ namespace NaiveSocksAndroid
 
             var cpuTime = proc.TotalProcessorTime.TotalMilliseconds;
             sb.Append("CPUTime: ").Append(cpuTime.ToString("N0")).Append(" ms")
-                .Append(" (").Append((cpuTime / Logging.Runtime * 100).ToString("N2")).Append("% since process started");
+                .Append(" (").Append((cpuTime / Logging.Runtime * 100).ToString("N2")).AppendLine("% since process started)");
 
             ThreadPool.GetMinThreads(out var workersMin, out var portsMin);
             ThreadPool.GetMaxThreads(out var workersMax, out var portsMax);
