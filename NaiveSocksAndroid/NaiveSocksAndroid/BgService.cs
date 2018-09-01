@@ -540,8 +540,8 @@ namespace NaiveSocksAndroid
 
         public override void OnServiceDisconnected(ComponentName name)
         {
-            Value = null;
             base.OnServiceDisconnected(name);
+            Value = null;
         }
     }
 

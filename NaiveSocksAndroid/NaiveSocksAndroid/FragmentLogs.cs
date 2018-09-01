@@ -125,7 +125,7 @@ namespace NaiveSocksAndroid
             if (item.ItemId == menuItemId) {
                 autoScroll = !item.IsChecked;
                 item.SetChecked(autoScroll);
-                mainActivity.MakeSnackbar("Autoscroll is " + (autoScroll ? "enabled" : "disabled"),
+                mainActivity.MakeSnackbar(MainActivity.FormatSwitchString(this.Context, R.String.autoscroll, autoScroll),
                     Android.Support.Design.Widget.Snackbar.LengthShort).Show();
                 //mainActivity.InvalidateOptionsMenu();
             } else {

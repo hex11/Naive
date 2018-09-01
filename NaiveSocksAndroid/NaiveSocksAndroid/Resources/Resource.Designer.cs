@@ -3267,11 +3267,20 @@ namespace NaiveSocksAndroid
 			// aapt resource value: 0x7f090010
 			public const int abc_toolbar_collapse_description = 2131296272;
 			
+			// aapt resource value: 0x7f09002e
+			public const int adapters = 2131296302;
+			
 			// aapt resource value: 0x7f090027
 			public const int app_name = 2131296295;
 			
 			// aapt resource value: 0x7f09001e
 			public const int appbar_scrolling_view_behavior = 2131296286;
+			
+			// aapt resource value: 0x7f090038
+			public const int autoscroll = 2131296312;
+			
+			// aapt resource value: 0x7f090033
+			public const int autostart = 2131296307;
 			
 			// aapt resource value: 0x7f09001f
 			public const int bottom_sheet_behavior = 2131296287;
@@ -3279,11 +3288,38 @@ namespace NaiveSocksAndroid
 			// aapt resource value: 0x7f090020
 			public const int character_counter_pattern = 2131296288;
 			
+			// aapt resource value: 0x7f09002d
+			public const int connections = 2131296301;
+			
 			// aapt resource value: 0x7f090029
 			public const int drawer_close = 2131296297;
 			
 			// aapt resource value: 0x7f090028
 			public const int drawer_open = 2131296296;
+			
+			// aapt resource value: 0x7f09003a
+			public const int format_disable = 2131296314;
+			
+			// aapt resource value: 0x7f090039
+			public const int format_enabled = 2131296313;
+			
+			// aapt resource value: 0x7f09002b
+			public const int home = 2131296299;
+			
+			// aapt resource value: 0x7f090037
+			public const int kill = 2131296311;
+			
+			// aapt resource value: 0x7f09002c
+			public const int logs = 2131296300;
+			
+			// aapt resource value: 0x7f090032
+			public const int logs_in_notif = 2131296306;
+			
+			// aapt resource value: 0x7f09003b
+			public const int no_config = 2131296315;
+			
+			// aapt resource value: 0x7f090034
+			public const int openconfig = 2131296308;
 			
 			// aapt resource value: 0x7f090021
 			public const int password_toggle_content_description = 2131296289;
@@ -3300,11 +3336,26 @@ namespace NaiveSocksAndroid
 			// aapt resource value: 0x7f090025
 			public const int path_password_strike_through = 2131296293;
 			
+			// aapt resource value: 0x7f090031
+			public const int reload = 2131296305;
+			
+			// aapt resource value: 0x7f090036
+			public const int restart = 2131296310;
+			
 			// aapt resource value: 0x7f090011
 			public const int search_menu_title = 2131296273;
 			
+			// aapt resource value: 0x7f09002f
+			public const int start = 2131296303;
+			
 			// aapt resource value: 0x7f090026
 			public const int status_bar_notification_info_overflow = 2131296294;
+			
+			// aapt resource value: 0x7f090030
+			public const int stop = 2131296304;
+			
+			// aapt resource value: 0x7f090035
+			public const int submenu_restart_kill = 2131296309;
 			
 			// aapt resource value: 0x7f09002a
 			public const int toggle = 2131296298;

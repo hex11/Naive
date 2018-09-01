@@ -4,4 +4,21 @@
   <string name="drawer_open">Open navigation drawer</string>
   <string name="drawer_close">Close navigation drawer</string>
   <string name="toggle">Toggle</string>
+  <string name="home">Home</string>
+  <string name="logs">Logs</string>
+  <string name="connections">Connections</string>
+  <string name="adapters">Adapters</string>
+  <string name="start">Start</string>
+  <string name="stop">Stop</string>
+  <string name="reload">Reload</string>
+  <string name="logs_in_notif">Logs in notification</string>
+  <string name="autostart">Autostart</string>
+  <string name="openconfig">Open configuation file...</string>
+  <string name="submenu_restart_kill">Restart/Kill</string>
+  <string name="restart">Restart</string>
+  <string name="kill">Kill!</string>
+  <string name="autoscroll">Autoscroll</string>
+  <string name="format_enabled">{0} is enabled</string>
+  <string name="format_disable">{0} is disabled</string>
+  <string name="no_config">No configuation file</string>
 </resources>

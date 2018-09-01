@@ -4,16 +4,16 @@
   <item
         android:id="@+id/menu_start"
         android:icon="@drawable/ic_play_arrow_white_24dp"
-        android:title="Start"
+        android:title="@string/start"
         app:showAsAction="ifRoom" />
   <item
         android:id="@+id/menu_stop"
         android:icon="@drawable/ic_stop_white_24dp"
-        android:title="Stop"
+        android:title="@string/stop"
         app:showAsAction="ifRoom" />
   <item
         android:id="@+id/menu_reload"
         android:icon="@drawable/ic_refresh_white_24dp"
-        android:title="Reload"
+        android:title="@string/reload"
         app:showAsAction="ifRoom" />
 </menu>

@@ -41,7 +41,8 @@ namespace NaiveSocksAndroid
         private CoordinatorLayout topView;
         private NavigationView navigationView;
         private DrawerLayout drawer;
-        private Intent serviceIntent;
+        private Intent serviceStartIntent;
+        private Intent serviceBindIntent;
 
         private bool isConnected => bgServiceConn?.IsConnected ?? false;
         private bool isServiceForegroundRunning => isConnected && service.IsForegroundRunning;
@@ -51,8 +52,8 @@ namespace NaiveSocksAndroid
         public BgService Service => bgServiceConn?.Value;
 
         public Toolbar toolbar;
-        private const string TOOLBAR_TITLE = "NaiveSocks";
-        private static readonly Java.Lang.ICharSequence JavaTOOLBAR_TITLE = new Java.Lang.String(TOOLBAR_TITLE);
+        private string AppName;
+        private Java.Lang.ICharSequence JavaAppName;
 
         //private ServiceConnection<ConfigService> cfgService;
 
@@ -61,9 +62,13 @@ namespace NaiveSocksAndroid
             CrashHandler.CheckInit();
             AppConfig.Init(ApplicationContext);
 
+            AppName = Resources.GetString(R.String.app_name);
+            JavaAppName = new Java.Lang.String(AppName);
+
             base.OnCreate(savedInstanceState);
 
-            serviceIntent = new Intent(this, typeof(BgService));
+            serviceStartIntent = new Intent(this, typeof(BgService));
+            serviceBindIntent = new Intent(this, typeof(BgService));
 
             if (this.Intent.DataString == "toggle") {
                 StartServiceWithAction(BgService.Actions.TOGGLE);
@@ -94,7 +99,7 @@ namespace NaiveSocksAndroid
             toolbar = FindViewById<Toolbar>(R.Id.toolbar);
             SetSupportActionBar(toolbar);
             SupportActionBar.SetHomeButtonEnabled(true);
-            toolbar.TitleFormatted = JavaTOOLBAR_TITLE;
+            toolbar.TitleFormatted = JavaAppName;
 
             navigationView = FindViewById<NavigationView>(R.Id.nvView);
             drawer = FindViewById<DrawerLayout>(R.Id.drawer_layout);
@@ -129,7 +134,20 @@ namespace NaiveSocksAndroid
             }
 
             //drawer.OpenDrawer(GravityCompat.Start);
-            onNavigationItemSelected(navigationView.Menu.GetItem(0));
+
+            int initNavIndex = 0;
+
+            if (this.Intent.DataString == "logs") {
+                initNavIndex = 1;
+            } else if (this.Intent.DataString == "connections") {
+                initNavIndex = 2;
+            } else if (this.Intent.DataString == "adapters") {
+                initNavIndex = 3;
+            }
+
+            this.BindService(serviceBindIntent, bgServiceConn, Bind.AutoCreate);
+
+            topView.Post(() => onNavigationItemSelected(navigationView.Menu.GetItem(initNavIndex)));
         }
 
         private void Service_ForegroundStateChanged(BgService obj)
@@ -140,15 +158,22 @@ namespace NaiveSocksAndroid
         protected override void OnStart()
         {
             base.OnStart();
-            this.BindService(serviceIntent, bgServiceConn, Bind.AutoCreate);
+            if (!isConnected)
+                this.BindService(serviceBindIntent, bgServiceConn, Bind.AutoCreate);
         }
 
         protected override void OnStop()
         {
-            if (bgServiceConn?.IsConnected == true)
-                this.UnbindService(bgServiceConn);
+            if (isConnected)
+                UnbindService();
             Task.Delay(100).ContinueWith((t) => GC.Collect(0));
             base.OnStop();
+        }
+
+        private void UnbindService()
+        {
+            bgServiceConn.OnServiceDisconnected(null);
+            this.UnbindService(bgServiceConn);
         }
 
         public override void OnBackPressed()
@@ -195,7 +220,7 @@ namespace NaiveSocksAndroid
             ReplaceFragment(frag);
 
             menuItem.SetChecked(true);
-            TitleFormatted = itemId == R.Id.nav_home ? JavaTOOLBAR_TITLE : menuItem.TitleFormatted;
+            TitleFormatted = itemId == R.Id.nav_home ? JavaAppName : menuItem.TitleFormatted;
             drawer.CloseDrawers();
         }
 
@@ -218,9 +243,9 @@ namespace NaiveSocksAndroid
 
         private void StartServiceWithAction(string action)
         {
-            lock (serviceIntent) {
-                serviceIntent.SetAction(action);
-                StartService(serviceIntent);
+            lock (serviceStartIntent) {
+                serviceStartIntent.SetAction(action);
+                StartService(serviceStartIntent);
             }
         }
 
@@ -259,13 +284,6 @@ namespace NaiveSocksAndroid
             });
         }
 
-        private const string menu_showLogs = "Show logs in notification";
-        private const string menu_autostart = "Autostart";
-        private const string menu_openConfig = "Open configuation file...";
-        private const string menu_submenu = "Restart/Kill";
-        private const string menu_restart = "Restart";
-        private const string menu_kill = "Kill!";
-
         public override bool OnCreateOptionsMenu(IMenu menu)
         {
             MenuInflater.Inflate(R.Menu.menu_control, menu);
@@ -281,21 +299,21 @@ namespace NaiveSocksAndroid
                 menu.FindItem(R.Id.menu_reload).SetVisible(false);
             }
 
-            var subMenu = menu.AddSubMenu(menu_submenu);
-            subMenu.Add(menu_restart)
+            var subMenu = menu.AddSubMenu(R.String.submenu_restart_kill);
+            subMenu.Add(R.String.restart)
                 .SetShowAsActionFlags(ShowAsAction.Never);
-            subMenu.Add(menu_kill)
+            subMenu.Add(R.String.kill)
                 .SetShowAsActionFlags(ShowAsAction.Never);
 
-            menu.Add(menu_showLogs)
+            menu.Add(R.String.logs_in_notif)
                 .SetCheckable(true)
                 .SetChecked(AppConfig.Current.ShowLogs)
                 .SetShowAsActionFlags(ShowAsAction.Never);
-            menu.Add(menu_autostart)
+            menu.Add(R.String.autostart)
                 .SetCheckable(true)
                 .SetChecked(AppConfig.Current.Autostart)
                 .SetShowAsActionFlags(ShowAsAction.Never);
-            menu.Add(menu_openConfig)
+            menu.Add(R.String.openconfig)
                 .SetShowAsActionFlags(ShowAsAction.Never);
 
             return true;
@@ -315,15 +333,16 @@ namespace NaiveSocksAndroid
                 reloadService();
             } else {
                 var title = item.TitleFormatted.ToString();
-                if (title == menu_showLogs) {
+                bool EqualsId(string str, int strId) => str == GetString(strId);
+                if (EqualsId(title, R.String.logs_in_notif)) {
                     setShowLogs(!item.IsChecked);
-                } else if (title == menu_autostart) {
+                } else if (EqualsId(title, R.String.autostart)) {
                     setAutostart(!item.IsChecked);
-                } else if (title == menu_openConfig) {
+                } else if (EqualsId(title, R.String.openconfig)) {
                     var paths = AppConfig.GetNaiveSocksConfigPaths(this);
                     var found = paths.FirstOrDefault(x => File.Exists(x));
                     if (found == null) {
-                        MakeSnackbar("No configuation file.", Snackbar.LengthLong).Show();
+                        MakeSnackbar(GetString(R.String.no_config), Snackbar.LengthLong).Show();
                     } else {
                         var intent = new Intent(Intent.ActionEdit);
                         Android.Net.Uri fileUri;
@@ -342,14 +361,14 @@ namespace NaiveSocksAndroid
                             MakeSnackbar("No activity to handle", Snackbar.LengthLong).Show();
                         }
                     }
-                } else if (title == menu_submenu) {
+                } else if (EqualsId(title, R.String.submenu_restart_kill)) {
                     // nothing to do
-                } else if (title == menu_restart) {
+                } else if (EqualsId(title, R.String.restart)) {
                     NaiveUtils.RunAsyncTask(async () => {
                         await stopService();
                         await startService();
                     });
-                } else if (title == menu_kill) {
+                } else if (EqualsId(title, R.String.kill)) {
                     try {
                         System.Diagnostics.Process.GetCurrentProcess().Kill();
                     } catch (Exception e) {
@@ -372,7 +391,17 @@ namespace NaiveSocksAndroid
             var enabledState = (enabled) ? ComponentEnabledState.Enabled : ComponentEnabledState.Disabled;
             pm.SetComponentEnabledSetting(componentName, enabledState, ComponentEnableOption.DontKillApp);
             this.InvalidateOptionsMenu();
-            MakeSnackbar($"Autostart is {(enabled ? "enabled" : "disabled")}.", Snackbar.LengthLong).Show();
+            MakeSnackbar(FormatSwitchString(R.String.autostart, enabled), Snackbar.LengthLong).Show();
+        }
+
+        private string FormatSwitchString(int what, bool enabled)
+        {
+            return FormatSwitchString(this, what, enabled);
+        }
+
+        public static string FormatSwitchString(Context context, int what, bool enabled)
+        {
+            return String.Format(context.GetString(enabled ? R.String.format_enabled : R.String.format_disable), context.GetString(what));
         }
 
         private void setShowLogs(bool show)
@@ -382,7 +411,7 @@ namespace NaiveSocksAndroid
             if (isConnected) {
                 service.SetShowLogs(show);
             }
-            MakeSnackbar($"Logger output will{(show ? "" : " not")} be shown in notification.", Snackbar.LengthLong).Show();
+            MakeSnackbar(FormatSwitchString(R.String.logs_in_notif, show), Snackbar.LengthLong).Show();
         }
 
         public Snackbar MakeSnackbar(string text, int duration)
