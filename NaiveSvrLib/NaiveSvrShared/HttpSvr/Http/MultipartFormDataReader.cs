@@ -12,6 +12,7 @@ using System.Threading.Tasks;
 using System.Net.Sockets;
 using System.Net;
 using System.Diagnostics;
+using NaiveSocks;
 
 namespace Naive.HttpSvr
 {
@@ -22,6 +23,7 @@ namespace Naive.HttpSvr
         public HttpConnection p { get; }
         BackableStream bstream;
         public Stream BaseStream => bstream;
+        IMyStream myStream;
 
         public byte[] Boundary { get; private set; }
         public string CurrentPartName { get; private set; }
@@ -45,6 +47,7 @@ namespace Naive.HttpSvr
         public MultipartFormDataReader(HttpConnection p)
         {
             bstream = new BackableStream(p.inputDataStream);
+            myStream = MyStream.FromStream(bstream);
             this.p = p;
             Boundary = GetBoundary(p);
         }
@@ -86,15 +89,18 @@ namespace Naive.HttpSvr
                 Boundary = NaiveUtils.ConcatBytes(NaiveUtils.CRLFBytes, Boundary);
                 firstBoundaryRead = true;
             }
-            var buf = new byte[2];
-            var cur = 0;
-            do {
-                cur += await BaseStream.ReadAsync(buf, cur, 2 - cur);
-            } while (cur < 2);
-            if (buf[0] == '-' && buf[1] == '-')
+            var twoBytes = new byte[2];
+            await myStream.ReadFullAsync(twoBytes);
+            bool noMoreParts = false;
+            if (twoBytes[0] == '-' && twoBytes[1] == '-') {
+                noMoreParts = true;
+                // read the last CRLF to buf
+                await myStream.ReadFullAsync(twoBytes);
+            }
+            if (twoBytes[0] != '\r' || twoBytes[1] != '\n')
+                throw new Exception($"unexcepted data: {twoBytes[0]}({(char)twoBytes[0]}), {twoBytes[1]}({(char)twoBytes[1]})");
+            if (noMoreParts)
                 return false;
-            if (buf[0] != '\r' || buf[1] != '\n')
-                throw new Exception($"unexcepted data: {buf[0]}({(char)buf[0]}), {buf[1]}({(char)buf[1]})");
             CurrentPartRawHeader = (await NaiveUtils.ReadStringUntil(BaseStream, NaiveUtils.DoubleCRLFBytes, withPattern: true));
             var headers = CurrentPartRawHeader.Split(separator, StringSplitOptions.None);
             var i = 0;

@@ -353,6 +353,7 @@ namespace Naive.HttpSvr
 		/*padding: .1em;*/
 		/*margin: 4px 0;*/
 		/*border-bottom: solid 1px gray;*/
+		background: lightgray;
 		transition: all .3s;
 		position: relative;
 	}
@@ -403,9 +404,12 @@ namespace Naive.HttpSvr
 		            user-select: none; /* Non-prefixed version, currently
 		                                  supported by Chrome and Opera */
 	}
+    .upload-title {
+        padding: 6px;
+        background: #aaa;
+    }
 	.upload-form {
-		background: lightgray;
-		margin-top: 8px;
+        padding: 4px;
 	}
 	.float-bottom {
 		position: sticky;
@@ -434,15 +438,18 @@ namespace Naive.HttpSvr
 {{ head }}</head>
 <body>
 {{#info}}<div class='info'>{{info}}</div>{{/}}
+<div id='list'>
 {{#upPath}}<div class='item updir'><a href='{{upPath}}'>(Up Directory)</a></div>{{/}}
 {{#dirs}}<div class='item dir'><a href='{{url}}/'>{{name}}/</a><div class='item-info'>dir</div></div>{{/}}
 {{#files}}<div class='item file'><a href='{{url}}'>{{name}}</a><div class='item-info'>{{#size_n}}{{size_n}} bytes{{/size_n}}{{^size_n}}{{size_n}}file{{/size_n}}</div></div>{{/}}
+</div>
 {{#can_upload}}
-<div id='upload-top' style='margin-top: 20px;'></div>
-<div class='float-bottom'>
-	<form class='item upload-form flexbox' id='upload-file' method='post' action='?upload' enctype='multipart/form-data' onclick='javascript: jumpToUpload()'>
-		<input style='width: 80px;' type='submit' value='Upload'>
-		<div style='flex: 1;'><input style='flex: 1;' type='file' name='files' multiple></div>
+<div id='upload' style='margin-top: 20px;'></div>
+<div class='item upload-title float-bottom' onclick='javascript: uploadTitleClicked()'>Upload <span id='upload-ajaxinfo'></span></div>
+<div>
+	<form class='item upload-form flexbox' id='upload-file' method='post' action='?upload' enctype='multipart/form-data'>
+		<input id='btn-file-submit' style='width: 80px;' type='submit' value='Upload'>
+        <div style='flex: 1;'><input style='flex: 1;' type='file' name='files' multiple></div>
 	</form>
 </div>
 <div class='upload-div'>
@@ -488,9 +495,122 @@ namespace Naive.HttpSvr
 {{foot}}
 {{#can_upload}}
 <script type='text/javascript'>
-	function jumpToUpload() {
-		window.location.hash = '#upload-top';
-	}
+    function uploadTitleClicked() {
+        window.location.hash = '#upload';
+    }
+
+    var formatBytes = function(bytes) { return (bytes / (1024 * 1024)).toPrecision(4) + ' MiB'; };
+
+    function initAjaxUpload() {
+        var forms = document.getElementsByClassName('upload-form');
+        var eleInfo = document.getElementById('upload-ajaxinfo');
+        var updateText = function (text) {
+            if (eleInfo.hidden) {
+                eleInfo.hidden = false;
+                eleInfo.style.minWidth = '10em';
+            }
+            console.log('info text: ' + text);
+            eleInfo.textContent = text;
+        };
+        var monitorXhr = function (xhr, handler) {
+            xhr.upload.onprogress = function (e) {
+                handler((e.loaded / e.total * 100).toFixed(2) +  '% (' + formatBytes(e.loaded) + ' / ' + formatBytes(e.total) + ')');
+            };
+            xhr.onload = function (e) { handler('Reply: ' + xhr.responseText); };
+            xhr.onerror = function (e) { handler('Error: ' + xhr.status + ' ' + xhr.statusText); };
+            xhr.onabort = function (e) { handler('Abort'); };
+        }
+        for (var i = 0; i < forms.length; i++) {
+            var form = forms[i];
+            !function (form) {
+                form.onsubmit = function (e) {
+                    updateText('submitting...');
+                    console.log('ajax submitting, form: ', form);
+                    var formdata = new FormData(form);
+                    var xhr = new XMLHttpRequest();
+                    xhr.open('POST', '?upload=1&infoonly=1');
+                    monitorXhr(xhr, updateText);
+                    xhr.send(formdata);
+                    return false;
+                };
+            }(form);
+        }
+    }
+
+    initAjaxUpload();
+
+    var downloadingList = [];
+
+    function initDownloadingStatus() {
+        var dlList = downloadingList;
+        var list = document.getElementById('list');
+        var items = list.childNodes;
+        for (var i = 0; i < items.length; i++) {
+            var item = items[i];
+            if(!(item instanceof HTMLDivElement))
+                continue;
+            if(!(item.classList.contains('file')))
+                continue;
+            var href = item.firstChild.getAttribute('href');
+            if (href.endsWith('.downloading')) {
+                var eleDlInfo = document.createTextNode('fetching status...');
+                var iteminfo = item.lastChild;
+                iteminfo.insertBefore(document.createTextNode(' '), iteminfo.firstChild)
+                iteminfo.insertBefore(eleDlInfo, iteminfo.firstChild)
+                dlList.push({item: item, href: href, eleDlInfo: eleDlInfo});
+            }
+        }
+        updateDownloadingStatus();
+    }
+
+    function updateDownloadingStatus() {
+        var dlList = downloadingList;
+        for (var i = 0; i < dlList.length; i++) {
+            var item = dlList[i];
+            if (item.loading || item.error)
+                continue;
+            !function(item) {
+                var xhr = new XMLHttpRequest();
+                item.loading = true;
+                xhr.onload = function () {
+                    item.loading = false;
+                    var resp = xhr.responseText;
+                    console.log(item.href + '?dlstatus response: ' + resp);
+                    if (resp.startsWith('E:')) {
+                        item.eleDlInfo.textContent = item.error = resp;
+                    } else {
+                        var lines = resp.split('\n');
+                        var prog_total = lines[1].split('/');
+                        var progress = parseInt(prog_total[0]);
+                        var total = parseInt(prog_total[1]);
+                        var etime = parseInt(lines[3]);
+                        var deltaEtime = etime - (item.lastEtime || 0);
+                        var deltaProg = progress - (item.lastProg || 0);
+                        item.lastEtime = etime;
+                        item.lastProg = progress;
+                        var floatPercent = progress / total * 100;
+                        var formatted = lines[0] + ' ' + floatPercent.toFixed(2) + '% ('
+                            + formatBytes(progress) + ' / ' + formatBytes(total) + ') ' + (deltaProg / 1024 / deltaEtime * 1000).toFixed(2) + ' KiB/s ';
+                        item.eleDlInfo.textContent = formatted;
+                        if (lines[0] != 'running') {
+                            item.error = formatted;
+                        }
+                    }
+                };
+                xhr.onerror = function () {
+                    item.eleDlInfo.textContent = item.error = 'XHR error';
+                };
+                xhr.open('GET', item.href + '?dlstatus');
+                xhr.send();
+            }(item);
+        }
+
+        if (dlList.length > 0) {
+            setTimeout(updateDownloadingStatus, 2000);
+        }
+    }
+
+    setTimeout(initDownloadingStatus, 100);
 </script>
 {{/can_upload}}
 </body>

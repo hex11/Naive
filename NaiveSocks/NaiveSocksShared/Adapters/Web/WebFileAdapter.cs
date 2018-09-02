@@ -37,15 +37,7 @@ namespace NaiveSocks
         public WebFileAdapter()
         {
             hitFile = (p, realPath) => {
-                if (p.Url_qstr == "dlstatus") {
-                    p.Handled = true;
-                    p.setContentTypeTextPlain();
-                    if (downloadTasks.TryGetValue(realPath, out var dlTask)) {
-                        return p.writeLineAsync(dlTask.StatusText);
-                    } else {
-                        return p.writeLineAsync("E: task not found.");
-                    }
-                } else if (p.Url_qstr == "dlcancel") {
+                if (p.Url_qstr == "dlcancel") {
                     p.Handled = true;
                     p.setContentTypeTextPlain();
                     //if (p.Method != "POST")
@@ -119,7 +111,26 @@ namespace NaiveSocks
                 p.Url_path = index;
             }
             try {
-                await WebSvrHelper.HandleDirectoryAsync(p, Controller.ProcessFilePath(dir), hitFile, allow_list ? hitDir : null);
+                string dirPath = Controller.ProcessFilePath(dir);
+                WebSvrHelper.PathResult r = WebSvrHelper.CheckPath(dirPath, p.Url_path, out var fsFilePath);
+                if (p.Url_qstr == "dlstatus" && (r == WebSvrHelper.PathResult.File || r == WebSvrHelper.PathResult.NotFound)) {
+                    p.Handled = true;
+                    p.setContentTypeTextPlain();
+                    if (downloadTasks.TryGetValue(fsFilePath, out var dlTask)) {
+                        await p.writeLineAsync(dlTask.StatusText);
+                    } else {
+                        await p.writeLineAsync("E: task not found.");
+                    }
+                    return;
+                } else if (r == WebSvrHelper.PathResult.File) {
+                    p.Handled = true;
+                    p.ResponseStatusCode = "200 OK";
+                    await hitFile(p, fsFilePath);
+                } else if (r == WebSvrHelper.PathResult.Directory && allow_list) {
+                    p.Handled = true;
+                    p.ResponseStatusCode = "200 OK";
+                    await hitDir(p, fsFilePath);
+                }
             } finally {
                 p.Url_path = realPath;
             }
@@ -195,7 +206,7 @@ namespace NaiveSocks
 
         private async Task HandleUpload(HttpConnection p, string path)
         {
-            bool responseListPage = p.ParseUrlQstr()["infoonly"] != "0";
+            bool responseListPage = p.ParseUrlQstr()["infoonly"] != "1";
             string info = null;
             if (!(allow_create | allow_edit)) {
                 info = $"{strMissingPermission("create")} and {strMissingPermission("edit")}.";
@@ -359,9 +370,12 @@ namespace NaiveSocks
 
                             await dlTask.Start();
 
-                            downloadTasksLock.EnterWriteLock();
-                            downloadTasks.Remove(realDlPath);
-                            downloadTasksLock.ExitWriteLock();
+                            // If success, remove the task from list after 30 minutes.
+                            AsyncHelper.SetTimeout(30 * 60 * 1000, () => {
+                                downloadTasksLock.EnterWriteLock();
+                                downloadTasks.Remove(realDlPath);
+                                downloadTasksLock.ExitWriteLock();
+                            });
 
                             MoveOrReplace(realDlPath, realPath);
                         });
