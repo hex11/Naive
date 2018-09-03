@@ -1,0 +1,48 @@
+image: Visual Studio 2017
+
+version: build-{build}
+
+clone_script:
+  - cmd: >-
+      git config --global core.autocrlf false
+      && git clone -q --branch=%APPVEYOR_REPO_BRANCH% https://github.com/%APPVEYOR_REPO_NAME%.git %APPVEYOR_BUILD_FOLDER%
+      && cd %APPVEYOR_BUILD_FOLDER%
+      && git checkout -qf %APPVEYOR_REPO_COMMIT%
+      && git submodule update --init --recursive
+
+before_build:
+  - bash build.sh pre-build
+
+configuration: Release
+
+build:
+  parallel: true
+  project: Naive.sln
+
+after_build:
+  - bash build.sh deploy
+  - nuget restore "NaiveSocksAndroid\NaiveSocksAndroid.sln"
+  - msbuild /m /t:Build /p:Configuration=Release "NaiveSocksAndroid\NaiveSocksAndroid.sln"
+  - msbuild /m /t:PackageForAndroid /p:Configuration=Release "NaiveSocksAndroid\NaiveSocksAndroid\NaiveSocksAndroid.csproj"
+  - copy "NaiveSocksAndroid\NaiveSocksAndroid\bin\Release\naive.NaiveSocksAndroid.apk" "bin/upload/NaiveSocksAndroid-Unsigned.apk"
+
+test: off
+
+artifacts:
+  - path: bin/upload/*
+
+deploy:
+  description: 'Appveyor build'
+  provider: GitHub
+  auth_token:
+    secure: 0f7Tju3g2JTTgZ6/yfzXwD4AmGnmwBqdeuffFJj1X3faN0o1NmgAoOxnK6gnEOux
+  artifact: /.*/
+  draft: false
+  prerelease: false
+  on:
+    # branch: master
+    appveyor_repo_tag: true
+
+
+# cache:
+#   - '%USERPROFILE%\.nuget\packages'

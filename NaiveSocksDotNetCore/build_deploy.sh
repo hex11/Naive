@@ -15,7 +15,9 @@ pushd "$dotnetdir"
 
 STEP build dotnet core publish...
 
-dotnet publish -c Release -o bin/publish/bin
+dotnet build -c Release || exit 1
+
+dotnet publish -c Release -o bin/publish/bin || exit 1
 
 cat > "bin/publish/run.sh" << 'EOF'
 #!/bin/sh
@@ -32,7 +34,14 @@ for x in "${buildrids[@]}"; do
 
 	STEP build dotnet core publish with runtime for $rid...
 
-	dotnet publish -c Release -o "bin/publish-$rid/bin" -r $rid
+	dotnet build -c Release -o "$publishdir/bin" -r $rid || continue
+
+	publishdir="bin/publish-$rid"
+
+	if ! dotnet publish -c Release -o "$publishdir/bin" -r $rid ; then
+		[[ -d $publishdir ]] && rm -rf $publishdir
+		continue
+	fi
 
 	case $rid in
 		linux*)
@@ -52,23 +61,40 @@ done
 
 popd
 
+function has() {
+	return hash $* 2>/dev/null
+}
+
+function pack_zip() {
+	zip=$1
+	dir=$2
+	if has zip ; then
+		zip -r $zip $dir || return 1
+	else
+		7z a $zip $dir || return 1
+	fi
+}
+
 if getopts "u:" opt; then
 	to_upload="$OPTARG"
 	mkdir -p "$to_upload"
 	STEP build dotnet core publish packs...
 	pushd "$dotnetdir/bin"
 	mkdir -p packs
-	zip -r "packs/${packname}.zip" publish
+	pack_zip "packs/${packname}.zip" publish
+	tar -cavf "packs/${packname}.tar.gz" publish
 
 	for x in "${buildrids[@]}"; do
 		rid=${x%/*}
 		packtype=${x#*/}
+		publishdir=publish-$rid
+		[[ -d $publishdir ]] || continue
 		case $packtype in
 			zip)
-				zip -r "packs/${packname}_$rid.zip" publish-$rid
+				pack_zip "packs/${packname}_$rid.zip" $publishdir
 			;;
 			tar*)
-				tar -cavf "packs/${packname}_$rid.$packtype" publish-$rid
+				tar -cavf "packs/${packname}_$rid.$packtype" $publishdir
 			;;
 		esac
 	done
