@@ -204,16 +204,16 @@ namespace NaiveSocksAndroid
             int itemId = menuItem.ItemId;
             switch (itemId) {
             case R.Id.nav_home:
-                frag = new FragmentHome(this);
+                frag = new FragmentHome();
                 break;
             case R.Id.nav_logs:
-                frag = new FragmentLogs(this);
+                frag = new FragmentLogs();
                 break;
             case R.Id.nav_connections:
-                frag = new FragmentConnections(this);
+                frag = new FragmentConnections();
                 break;
             case R.Id.nav_adapters:
-                frag = new FragmentAdapters(this);
+                frag = new FragmentAdapters();
                 break;
             }
             if (frag == null)

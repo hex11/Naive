@@ -21,17 +21,15 @@ using Android.Content;
 
 namespace NaiveSocksAndroid
 {
-    public class FragmentConnections : InfoFragment
+    public class FragmentConnections : MyBaseFragment
     {
         LinearLayout connParent;
         List<ItemView> displayingViews = new List<ItemView>();
-        private MainActivity mainActivity;
         private ContextThemeWrapper themeWrapper;
 
 
-        public FragmentConnections(MainActivity mainActivity)
+        public FragmentConnections()
         {
-            this.mainActivity = mainActivity;
             TimerInterval = 2000;
         }
 
@@ -58,7 +56,7 @@ namespace NaiveSocksAndroid
         protected override void OnUpdate()
         {
             base.OnUpdate();
-            var controller = mainActivity.Service?.Controller;
+            var controller = Controller;
             if (controller != null) {
                 lock (controller.InConnectionsLock) {
                     var conns = controller.InConnections;

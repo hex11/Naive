@@ -3,19 +3,30 @@ using Android.Support.V4.App;
 using System.Threading;
 using Android.OS;
 using Java.Lang;
+using Android.Content;
 
 namespace NaiveSocksAndroid
 {
-    public class InfoFragment : Fragment
+    public class MyBaseFragment : Fragment
     {
         Handler handler;
         int timerInterval = -1;
         Runnable callbackRunnable;
 
-        public InfoFragment()
+        public MyBaseFragment()
         {
             handler = new Handler();
             callbackRunnable = new Runnable(Callback);
+        }
+
+        public MainActivity MainActivity { get; private set; }
+
+        public NaiveSocks.Controller Controller => MainActivity?.Service?.Controller;
+
+        public override void OnAttach(Context context)
+        {
+            base.OnAttach(context);
+            this.MainActivity = context as MainActivity;
         }
 
         public int TimerInterval

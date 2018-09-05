@@ -13,14 +13,14 @@ using Android.Widget;
 using Java.Lang;
 using NaiveSocks;
 using Naive.HttpSvr;
+using Android.Content;
 
 namespace NaiveSocksAndroid
 {
-    public class FragmentHome : InfoFragment
+    public class FragmentHome : MyBaseFragment
     {
-        public FragmentHome(MainActivity mainActivity)
+        public FragmentHome()
         {
-            this.mainActivity = mainActivity;
             TimerInterval = 1000;
         }
 
@@ -30,7 +30,6 @@ namespace NaiveSocksAndroid
             Refresh();
         }
 
-        private readonly MainActivity mainActivity;
         private TextView textView;
 
         private void Refresh()
@@ -43,7 +42,7 @@ namespace NaiveSocksAndroid
         private void MakeText(System.Text.StringBuilder sb)
         {
             var proc = System.Diagnostics.Process.GetCurrentProcess();
-            var controller = mainActivity?.Service?.Controller;
+            var controller = Controller;
 
             sb.Append("TotalMemory: ").AppendLine(GC.GetTotalMemory(false).ToString("N0"));
 

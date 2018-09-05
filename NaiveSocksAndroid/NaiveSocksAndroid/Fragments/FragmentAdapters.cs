@@ -16,18 +16,17 @@ using R = NaiveSocksAndroid.Resource;
 using Naive.HttpSvr;
 using NaiveSocks;
 using System.Threading;
+using Android.Content;
 
 namespace NaiveSocksAndroid
 {
-    public class FragmentAdapters : InfoFragment
+    public class FragmentAdapters : MyBaseFragment
     {
         LinearLayout connParent;
-        private MainActivity mainActivity;
         private ContextThemeWrapper themeWrapper;
 
-        public FragmentAdapters(MainActivity mainActivity)
+        public FragmentAdapters()
         {
-            this.mainActivity = mainActivity;
             TimerInterval = 2000;
         }
 
@@ -54,7 +53,7 @@ namespace NaiveSocksAndroid
         protected override void OnUpdate()
         {
             connParent.RemoveAllViews();
-            var controller = mainActivity.Service?.Controller;
+            var controller = Controller;
             if (controller != null) {
                 var adapters = controller.InAdapters.Union<NaiveSocks.Adapter>(controller.OutAdapters).ToList();
                 foreach (var item in adapters) {

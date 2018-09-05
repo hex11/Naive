@@ -14,28 +14,18 @@ using Android.Support.V4.Widget;
 
 using R = NaiveSocksAndroid.Resource;
 using Naive.HttpSvr;
+using Android.Content;
 
 namespace NaiveSocksAndroid
 {
-    public class FragmentLogs : Fragment, ICanHandleMenu
+    public class FragmentLogs : MyBaseFragment, ICanHandleMenu
     {
         private ContextThemeWrapper logThemeWrapper;
         private LinearLayout outputParent;
         private NestedScrollView outputParentScroll;
-
-        private readonly MainActivity mainActivity;
+        
         private int menuItemId;
         private bool autoScroll = true;
-
-        public FragmentLogs(MainActivity mainActivity)
-        {
-            this.mainActivity = mainActivity;
-        }
-
-        public override void OnCreate(Bundle savedInstanceState)
-        {
-            base.OnCreate(savedInstanceState);
-        }
 
         public override View OnCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState)
         {
@@ -125,7 +115,7 @@ namespace NaiveSocksAndroid
             if (item.ItemId == menuItemId) {
                 autoScroll = !item.IsChecked;
                 item.SetChecked(autoScroll);
-                mainActivity.MakeSnackbar(MainActivity.FormatSwitchString(this.Context, R.String.autoscroll, autoScroll),
+                MainActivity.MakeSnackbar(MainActivity.FormatSwitchString(this.Context, R.String.autoscroll, autoScroll),
                     Android.Support.Design.Widget.Snackbar.LengthShort).Show();
                 //mainActivity.InvalidateOptionsMenu();
             } else {
