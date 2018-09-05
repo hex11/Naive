@@ -324,6 +324,11 @@ namespace Naive.HttpSvr
 
         public static long getRuntime()
         {
+            var tmp = CustomRunningTimeImpl;
+            if (tmp != null) {
+                return tmp();
+            }
+
             if (StartTimeTicks == -1) {
                 StartTimeTicks = Process.GetCurrentProcess().StartTime.ToUniversalTime().Ticks;
             }
@@ -331,6 +336,8 @@ namespace Naive.HttpSvr
         }
 
         public static long Runtime => getRuntime();
+
+        public static Func<long> CustomRunningTimeImpl;
     }
 
     // TODO: update ResultingStamp when the stamp of parent changed.

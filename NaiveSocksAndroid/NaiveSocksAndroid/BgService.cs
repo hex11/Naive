@@ -89,7 +89,6 @@ namespace NaiveSocksAndroid
 
             base.OnCreate();
 
-            Logging.Logged += Logging_Logged;
 
             Logger.info("service is starting...");
 
@@ -158,6 +157,7 @@ namespace NaiveSocksAndroid
             IsForegroundRunning = true;
             ForegroundStateChanged?.Invoke(this);
 
+            SetShowLogs(AppConfig.Current.ShowLogs, true, true);
             onScreen(powerManager.IsInteractive);
             var filter = new IntentFilter(Intent.ActionScreenOff);
             filter.AddAction(Intent.ActionScreenOn);
@@ -169,7 +169,7 @@ namespace NaiveSocksAndroid
                 }
             }), filter);
 
-            SetShowLogs(AppConfig.Current.ShowLogs, true);
+            Logging.Logged += Logging_Logged;
 
             Task.Run(() => {
                 Logger.info("starting controller...");
@@ -199,6 +199,7 @@ namespace NaiveSocksAndroid
         private void ToBackground(bool removeNotif)
         {
             Logger.info("ToBackground(" + removeNotif + ")");
+            Logging.Logged -= Logging_Logged;
             notifyTimer?.Dispose();
             notifyTimer = null;
             StopForeground(removeNotif);
@@ -276,7 +277,6 @@ namespace NaiveSocksAndroid
         public override void OnDestroy()
         {
             isDestroyed = true;
-            Logging.Logged -= Logging_Logged;
             Logging.info("service is being destroyed.");
             if (IsForegroundRunning) {
                 ToBackground(true);
@@ -293,7 +293,6 @@ namespace NaiveSocksAndroid
         {
             if (isDestroyed)
                 return;
-            Log.WriteLine(GetPri(log), "naivelog", log.text);
             if (IsForegroundRunning && notification_show_logs) {
                 putLine(log.text);
             }
@@ -340,7 +339,6 @@ namespace NaiveSocksAndroid
                 }
         }
 
-        System.Diagnostics.Process currentProcess = System.Diagnostics.Process.GetCurrentProcess();
         long lastRuntime = 0;
         long lastCpuTime = 0;
 
@@ -348,8 +346,8 @@ namespace NaiveSocksAndroid
         {
             var needRenotify = false;
 
-            var curRuntime = (DateTime.Now - currentProcess.StartTime).Ticks;
-            var curCpuTime = currentProcess.TotalProcessorTime.Ticks;
+            var curRuntime = Logging.getRuntime();
+            var curCpuTime = Process.ElapsedCpuTime;
             var load = (float)(curCpuTime - lastCpuTime) / (curRuntime - lastRuntime);
             lastRuntime = curRuntime;
             lastCpuTime = curCpuTime;
@@ -374,13 +372,15 @@ namespace NaiveSocksAndroid
             return needRenotify;
         }
 
-        public void SetShowLogs(bool show, bool forceUpdate = false)
+        public void SetShowLogs(bool show, bool forceUpdate = false, bool dontUpdateNotif = false)
         {
             if (!forceUpdate && show == notification_show_logs)
                 return;
             AppConfig.Current.ShowLogs = show;
             lock (builder) {
                 notification_show_logs = show;
+                if (!IsForegroundRunning)
+                    return;
                 if (show) {
                     textLines = new string[3];
                 } else {
@@ -392,7 +392,8 @@ namespace NaiveSocksAndroid
                     }
                     builder.SetContentTitle((Java.Lang.ICharSequence)null);
                 }
-                updateNotif();
+                if (!dontUpdateNotif)
+                    updateNotif();
             }
         }
 
@@ -429,24 +430,6 @@ namespace NaiveSocksAndroid
                 manageIntervalSeconds = currentConfig.manage_interval_screen_off;
             }
             WebSocket.ConfigManageTask(manageIntervalSeconds, manageIntervalSeconds * 1000);
-        }
-
-        private static LogPriority GetPri(Logging.Log log)
-        {
-            switch (log.level) {
-            case Logging.Level.None:
-                return LogPriority.Verbose;
-            case Logging.Level.Debug:
-                return LogPriority.Debug;
-            case Logging.Level.Info:
-                return LogPriority.Info;
-            case Logging.Level.Warning:
-                return LogPriority.Warn;
-            case Logging.Level.Error:
-                return LogPriority.Error;
-            default:
-                return LogPriority.Info;
-            }
         }
 
         void ShowToast(string text)

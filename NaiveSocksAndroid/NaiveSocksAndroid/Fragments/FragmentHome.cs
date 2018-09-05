@@ -55,9 +55,10 @@ namespace NaiveSocksAndroid
 
             sb.Append("PrivateMemory: ").AppendLine(proc.PrivateMemorySize64.ToString("N0"));
 
-            var cpuTime = proc.TotalProcessorTime.TotalMilliseconds;
+            var cpuTime = Android.OS.Process.ElapsedCpuTime;
+            var runTime = SystemClock.ElapsedRealtime() - Android.OS.Process.StartElapsedRealtime;
             sb.Append("CPUTime: ").Append(cpuTime.ToString("N0")).Append(" ms")
-                .Append(" (").Append((cpuTime / Logging.Runtime * 100).ToString("N2")).AppendLine("% since process started)");
+                .Append(" (").Append(((float)cpuTime / runTime * 100).ToString("N2")).AppendLine("% since process started)");
 
             ThreadPool.GetMinThreads(out var workersMin, out var portsMin);
             ThreadPool.GetMaxThreads(out var workersMax, out var portsMax);

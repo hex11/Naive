@@ -43,7 +43,6 @@ namespace NaiveSocksAndroid
         private NavigationView navigationView;
         private DrawerLayout drawer;
         private Intent serviceStartIntent;
-        private Intent serviceBindIntent;
 
         private bool isConnected => bgServiceConn?.IsConnected ?? false;
         private bool isServiceForegroundRunning => isConnected && service.IsForegroundRunning;
@@ -56,12 +55,32 @@ namespace NaiveSocksAndroid
         private string AppName;
         private Java.Lang.ICharSequence JavaAppName;
 
+        public Handler Handler { get; private set; }
+
         //private ServiceConnection<ConfigService> cfgService;
+
+        static IncrNumberGenerator idGen = new IncrNumberGenerator();
+        int id = idGen.Get();
+
+        void DebugEvent(string text)
+        {
+            //Logging.debugForce("Activity#" + id + ": " + text);
+        }
 
         protected override void OnCreate(Bundle savedInstanceState)
         {
             CrashHandler.CheckInit();
             AppConfig.Init(ApplicationContext);
+            Handler = new Handler(ApplicationContext.MainLooper);
+            DebugEvent("OnCreate");
+            DebugEvent("Intent: " + Intent?.ToUri(IntentUriType.None) ?? "(null)");
+            //if (savedInstanceState != null) {
+            //    DebugEvent("Dumping savedInstanceState");
+            //    foreach (var item in savedInstanceState.KeySet()) {
+            //        DebugEvent(item + ": " + savedInstanceState.Get(item));
+            //    }
+            //    DebugEvent("Dumping savedInstanceState End");
+            //}
 
             AppName = Resources.GetString(R.String.app_name);
             JavaAppName = new Java.Lang.String(AppName);
@@ -69,7 +88,6 @@ namespace NaiveSocksAndroid
             base.OnCreate(savedInstanceState);
 
             serviceStartIntent = new Intent(this, typeof(BgService));
-            serviceBindIntent = new Intent(this, typeof(BgService));
 
             if (this.Intent.DataString == "toggle") {
                 StartServiceWithAction(BgService.Actions.TOGGLE);
@@ -146,25 +164,32 @@ namespace NaiveSocksAndroid
                 initNavIndex = 3;
             }
 
-            this.BindService(serviceBindIntent, bgServiceConn, Bind.AutoCreate);
-
             topView.Post(() => onNavigationItemSelected(navigationView.Menu.GetItem(initNavIndex)));
         }
 
         private void Service_ForegroundStateChanged(BgService obj)
         {
+            DebugEvent("Service_ForegroundStateChanged");
             InvalidateOptionsMenu();
         }
 
         protected override void OnStart()
         {
+            DebugEvent("OnStart");
             base.OnStart();
             if (!isConnected)
-                this.BindService(serviceBindIntent, bgServiceConn, Bind.AutoCreate);
+                BindBgService();
+        }
+
+        private void BindBgService()
+        {
+            DebugEvent("BindBgService");
+            this.BindService(new Intent(this, typeof(BgService)), bgServiceConn, Bind.AutoCreate);
         }
 
         protected override void OnStop()
         {
+            DebugEvent("OnStop");
             base.OnStop();
             if (isConnected)
                 UnbindService();
@@ -173,6 +198,7 @@ namespace NaiveSocksAndroid
 
         private void UnbindService()
         {
+            DebugEvent("UnbindService");
             bgServiceConn.OnServiceDisconnected(null);
             this.UnbindService(bgServiceConn);
         }
@@ -227,6 +253,7 @@ namespace NaiveSocksAndroid
 
         private void ReplaceFragment(Fragment frag)
         {
+            DebugEvent("ReplaceFragment");
             var fm = SupportFragmentManager;
             fm.BeginTransaction().Replace(R.Id.flContent, frag).Commit();
             curFrag = frag;
@@ -245,8 +272,12 @@ namespace NaiveSocksAndroid
         private void StartServiceWithAction(string action)
         {
             lock (serviceStartIntent) {
-                serviceStartIntent.SetAction(action);
-                StartService(serviceStartIntent);
+                try {
+                    serviceStartIntent.SetAction(action);
+                    StartService(serviceStartIntent);
+                } catch (Exception e) {
+                    Logging.exception(e, Logging.Level.Error, "StartService() with action=" + action);
+                }
             }
         }
 
