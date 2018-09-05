@@ -6,7 +6,7 @@
     <SharedGUID>0b623dfc-5129-419c-bb03-823809f9178d</SharedGUID>
   </PropertyGroup>
   <PropertyGroup Label="Configuration">
-    <Import_RootNamespace>NaiveSvr</Import_RootNamespace>
+    <Import_RootNamespace>Naive</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)AsyncHelper.cs" />
@@ -53,5 +53,8 @@
     <Folder Include="$(MSBuildThisFileDirectory)IO\Buffer\" />
     <Folder Include="$(MSBuildThisFileDirectory)IO\WebSocket\" />
     <Folder Include="$(MSBuildThisFileDirectory)IO\Socket\" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="$(MSBuildThisFileDirectory)HttpSvr\ListPage.html" />
   </ItemGroup>
 </Project>
