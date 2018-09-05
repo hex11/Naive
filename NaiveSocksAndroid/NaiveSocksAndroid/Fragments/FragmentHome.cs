@@ -16,37 +16,22 @@ using Naive.HttpSvr;
 
 namespace NaiveSocksAndroid
 {
-    public class FragmentHome : Fragment
+    public class FragmentHome : InfoFragment
     {
         public FragmentHome(MainActivity mainActivity)
         {
             this.mainActivity = mainActivity;
-            timer = new Timer(timer_Callback);
+            TimerInterval = 1000;
         }
 
-        public override void OnStart()
+        protected override void OnUpdate()
         {
-            base.OnResume();
-            timer.Change(1000, 1000);
+            base.OnUpdate();
             Refresh();
         }
 
-        public override void OnStop()
-        {
-            base.OnPause();
-            timer.Change(-1, -1);
-        }
-
         private readonly MainActivity mainActivity;
-        private readonly Timer timer;
-        private Runnable timerRunnable;
         private TextView textView;
-
-        private void timer_Callback(object state)
-        {
-            if (timerRunnable != null)
-                View.Post(timerRunnable);
-        }
 
         private void Refresh()
         {
@@ -99,11 +84,6 @@ namespace NaiveSocksAndroid
         {
             textView = new TextView(this.Context);
             textView.SetPadding(16, 16, 16, 16);
-            timerRunnable = new Runnable(() => {
-                if (this.IsVisible == false)
-                    return;
-                Refresh();
-            });
             return textView;
         }
     }

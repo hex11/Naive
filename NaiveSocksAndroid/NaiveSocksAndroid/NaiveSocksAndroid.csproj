@@ -123,10 +123,11 @@
     <Compile Include="BgService.cs" />
     <Compile Include="AppConfig.cs" />
     <Compile Include="CrashHandler.cs" />
-    <Compile Include="FragmentAdapters.cs" />
-    <Compile Include="FragmentConnections.cs" />
-    <Compile Include="FragmentHome.cs" />
-    <Compile Include="FragmentLogs.cs" />
+    <Compile Include="Fragments\FragmentAdapters.cs" />
+    <Compile Include="Fragments\FragmentConnections.cs" />
+    <Compile Include="Fragments\FragmentHome.cs" />
+    <Compile Include="Fragments\FragmentLogs.cs" />
+    <Compile Include="Fragments\InfoFragment.cs" />
     <Compile Include="MainActivity.cs" />
     <Compile Include="Resources\Resource.Designer.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

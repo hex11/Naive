@@ -144,10 +144,14 @@ namespace Naive.HttpSvr
             await asyncTask();
         }
 
-        public static async void SetTimeout(int timeout, Action action)
+        public static void SetTimeout(int timeout, Action action)
         {
-            await Task.Delay(timeout);
-            action();
+            new Timer((s) => action(), null, timeout, -1);
+        }
+
+        public static void SetTimeout<TState>(TState state, int timeout, Action<TState> action)
+        {
+            new Timer((s) => action((TState)s), state, timeout, -1);
         }
     }
 

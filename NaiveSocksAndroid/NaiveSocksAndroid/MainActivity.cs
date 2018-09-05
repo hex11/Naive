@@ -25,6 +25,7 @@ using Android.Support.V4.App;
 using Android.Runtime;
 using System.Text;
 using Android.Support.V4.View;
+using System.Threading;
 
 namespace NaiveSocksAndroid
 {
@@ -164,10 +165,10 @@ namespace NaiveSocksAndroid
 
         protected override void OnStop()
         {
+            base.OnStop();
             if (isConnected)
                 UnbindService();
-            Task.Delay(100).ContinueWith((t) => GC.Collect(0));
-            base.OnStop();
+            AsyncHelper.SetTimeout(100, () => GC.Collect(0));
         }
 
         private void UnbindService()

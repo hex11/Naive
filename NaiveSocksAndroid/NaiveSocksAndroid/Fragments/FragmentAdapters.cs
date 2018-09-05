@@ -19,7 +19,7 @@ using System.Threading;
 
 namespace NaiveSocksAndroid
 {
-    public class FragmentAdapters : Fragment
+    public class FragmentAdapters : InfoFragment
     {
         LinearLayout connParent;
         private MainActivity mainActivity;
@@ -28,7 +28,7 @@ namespace NaiveSocksAndroid
         public FragmentAdapters(MainActivity mainActivity)
         {
             this.mainActivity = mainActivity;
-            timer = new Timer(timer_Callback);
+            TimerInterval = 2000;
         }
 
         public override View OnCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState)
@@ -38,39 +38,20 @@ namespace NaiveSocksAndroid
 
             themeWrapper = new ContextThemeWrapper(this.Context, R.Style.ConnTextView);
 
-            var view = inflater.Inflate(R.Layout.connections, container, false);
+            var view = inflater.CloneInContext(themeWrapper).Inflate(R.Layout.connections, container, false);
 
             connParent = view.FindViewById<LinearLayout>(R.Id.connparent);
 
             return view;
         }
 
-        Timer timer;
-
-        private void timer_Callback(object state)
-        {
-            View.Post(() => {
-                if (!IsVisible)
-                    return;
-                Refresh();
-            });
-        }
-
-        public override void OnStart()
-        {
-            base.OnResume();
-            timer.Change(2000, 2000);
-            Refresh();
-        }
-
         public override void OnStop()
         {
-            base.OnPause();
-            timer.Change(-1, -1);
+            base.OnStop();
             connParent.RemoveAllViews();
         }
 
-        void Refresh()
+        protected override void OnUpdate()
         {
             connParent.RemoveAllViews();
             var controller = mainActivity.Service?.Controller;
