@@ -499,16 +499,12 @@ namespace Naive.HttpSvr
         window.location.hash = '#upload';
     }
 
-    var formatBytes = function(bytes) { return (bytes / (1024 * 1024)).toPrecision(4) + ' MiB'; };
+    var formatBytes = function(bytes) { return (bytes > 1024 * 1024) ? (bytes / (1024 * 1024)).toFixed(2) + ' MiB' : bytes.toFixed(0) + ' Bytes'; };
 
     function initAjaxUpload() {
         var forms = document.getElementsByClassName('upload-form');
         var eleInfo = document.getElementById('upload-ajaxinfo');
         var updateText = function (text) {
-            if (eleInfo.hidden) {
-                eleInfo.hidden = false;
-                eleInfo.style.minWidth = '10em';
-            }
             console.log('info text: ' + text);
             eleInfo.textContent = text;
         };
@@ -589,8 +585,13 @@ namespace Naive.HttpSvr
                         item.lastEtime = etime;
                         item.lastProg = progress;
                         var floatPercent = progress / total * 100;
-                        var formatted = lines[0] + ' ' + floatPercent.toFixed(2) + '% ('
-                            + formatBytes(progress) + ' / ' + formatBytes(total) + ') ' + (deltaProg / 1024 / deltaEtime * 1000).toFixed(2) + ' KiB/s ';
+                        var formatted = lines[0] + ' ';
+						if (total >= 0) {
+							formatted += floatPercent.toFixed(2) + '% (' + formatBytes(progress) + ' / ' + formatBytes(total) + ') ';
+						} else {
+							formatted += '-1% (' + formatBytes(progress) + ' / unknown total size) ';
+						}
+						formatted += (deltaProg / 1024 / deltaEtime * 1000).toFixed(2) + ' KiB/s ';
                         item.eleDlInfo.textContent = formatted;
                         if (lines[0] != 'running') {
                             item.error = formatted;
