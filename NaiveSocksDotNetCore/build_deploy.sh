@@ -5,7 +5,11 @@ function STEP {
 	echo "=> $*"
 }
 
-buildrids=("linux-x64/tar.gz" "android/zip" "win-x86/zip" "win-x64/zip")
+buildrids=()
+
+if [[ $APPVEYOR_REPO_TAG == "true" ]]; then 
+	buildrids=( "linux-x64/tar.gz" )
+fi
 
 dotnetdir=.
 
