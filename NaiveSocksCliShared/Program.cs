@@ -53,7 +53,7 @@ namespace NaiveSocks
 
 Usage: {NAME_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FILE]
         [--no-cli] [--no-log-stdout] [--log-file FILE] [--log-stdout-no-time]
-        [--force-jit[-async]]";
+        [--force-jit[-async]] [--socket-impl (1|2)]";
 
         private static bool __magic_is_packed;
 
@@ -93,6 +93,17 @@ Usage: {NAME_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FILE]
             if (ar.TryGetValue("-c", out var v)) {
                 specifiedConfigPath = v.FirstParaOrThrow;
                 Logging.info($"configuation file: {specifiedConfigPath}");
+            }
+
+            if (ar.TryGetValue("--socket-impl", out var socketImpl)) {
+                if (socketImpl.FirstParaOrThrow == "1") {
+                    MyStream.CurrentSocketImpl = MyStream.SocketImpl.SocketStream1;
+                } else if (socketImpl.FirstParaOrThrow == "2") {
+                    MyStream.CurrentSocketImpl = MyStream.SocketImpl.SocketStream2;
+                } else {
+                    Logging.error(socketImpl.arg + " with wrong parameter");
+                }
+                Logging.info("Current SocketStream implementation: " + MyStream.CurrentSocketImpl);
             }
 
             var controller = new Controller();
