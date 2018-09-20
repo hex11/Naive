@@ -164,7 +164,11 @@ namespace NaiveSocksAndroid
                 initNavIndex = 3;
             }
 
-            topView.Post(() => onNavigationItemSelected(navigationView.Menu.GetItem(initNavIndex)));
+            topView.Post(() => {
+                // User may have exited from this activity.
+                if (isActivityRunning)
+                    onNavigationItemSelected(navigationView.Menu.GetItem(initNavIndex));
+            });
         }
 
         private void Service_ForegroundStateChanged(BgService obj)
@@ -173,9 +177,12 @@ namespace NaiveSocksAndroid
             InvalidateOptionsMenu();
         }
 
+        bool isActivityRunning;
+
         protected override void OnStart()
         {
             DebugEvent("OnStart");
+            isActivityRunning = true;
             base.OnStart();
             if (!isConnected)
                 BindBgService();
@@ -190,6 +197,7 @@ namespace NaiveSocksAndroid
         protected override void OnStop()
         {
             DebugEvent("OnStop");
+            isActivityRunning = false;
             base.OnStop();
             if (isConnected)
                 UnbindService();
