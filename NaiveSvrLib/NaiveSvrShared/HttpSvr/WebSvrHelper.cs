@@ -163,7 +163,7 @@ namespace Naive.HttpSvr
                 if (slashIndex >= 0)
                     prefix = p.RealPathEscaped.Substring(slashIndex + 1) + "/";
             }
-
+            data.Add("dirPath", p.Url_path);
             var subData = new TemplaterData();
             data.Add("dirs", Directory.EnumerateDirectories(path).Select(x => {
                 var name = Path.GetFileName(x);

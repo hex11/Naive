@@ -19,28 +19,43 @@
 		transition: all .3s;
 		position: relative;
 	}
-	.item a {
+	.dir a, .file a {
+		display: block;
 		padding: .5em .25em .8em .25em;
-		text-decoration: none;
+		text-decoration: none;	
 		color: black;
 		word-wrap: break-word;
 		line-height: 1.2em;
 	}
-	.item a,
-	.updir a {
-		display: block;
-	}
-	.updir a {
+	.titlebar {
 		line-height: 30px;
 		box-shadow: 0 3px 3px 0 rgba(0, 0, 0, .2);
 	}
-	.updir {
+	.titlebar {
 		background: orange;
 		position: sticky;
 		top: 0;
 		z-index: 1;
 	}
-	.item a:hover {
+	.updir {
+		transition: all .3s;
+		display: inline-block;
+		vertical-align: middle;
+		text-align: center;
+		width: 48px;
+		line-height: 48px;
+		text-decoration: none;
+	}
+	#title {
+		display: inline-block;
+		vertical-align: middle;
+		line-height: 48px;
+		width: calc(100% - 68px);
+		overflow: auto;
+		font-size: 1.2em;
+		margin: 0 10px 0;
+	}
+	.file a:hover, .dir a:hover {
 		text-decoration: underline;
 	}
 	.dir {
@@ -111,7 +126,7 @@
 <body>
 {{#info}}<div class='info'>{{info}}</div>{{/}}
 <div id='list'>
-{{#upPath}}<div class='item updir'><a href='{{upPath}}'>(Up Directory)</a></div>{{/}}
+<div id='titlebar' class='item titlebar'>{{#upPath}}<a class='updir' href='{{upPath}}'>←</a>{{/}}<h1 id='title'>{{title}}{{dirPath}}</h1></div>
 {{#dirs}}<div class='item dir'><a href='{{url}}/'>{{name}}/</a><div class='item-info'>dir</div></div>{{/}}
 {{#files}}<div class='item file'><a href='{{url}}'>{{name}}</a><div class='item-info'>{{#size_n}}{{size_n}} bytes{{/size_n}}{{^size_n}}{{size_n}}file{{/size_n}}</div></div>{{/}}
 </div>
