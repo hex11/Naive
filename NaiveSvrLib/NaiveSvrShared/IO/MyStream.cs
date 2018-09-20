@@ -999,21 +999,9 @@ namespace NaiveSocks
             Another = another;
         }
 
-        private TaskCompletionSource<VoidType> tcsNewBuffer;
-        private void notifyNewBuffer()
-        {
-            var tmp = tcsNewBuffer;
-            tcsNewBuffer = null;
-            tmp?.SetResult(0);
-        }
+        private readonly ReusableAwaiter<VoidType> tcsNewBuffer = new ReusableAwaiter<VoidType>();
 
-        private TaskCompletionSource<VoidType> tcsBufferEmptied;
-        private void notifyBufferEmptied()
-        {
-            var tmp = tcsBufferEmptied;
-            tcsBufferEmptied = null;
-            tmp?.SetResult(0);
-        }
+        private readonly ReusableAwaiter<VoidType> tcsBufferEmptied = new ReusableAwaiter<VoidType>();
 
         private BytesSegment buffer;
 
@@ -1030,7 +1018,7 @@ namespace NaiveSocks
         {
             lock (Another._syncRoot) {
                 Another.recvEOF = true;
-                Another.notifyNewBuffer();
+                Another.tcsNewBuffer.SetResult(0);
             }
             return NaiveUtils.CompletedTask;
         }
@@ -1042,18 +1030,16 @@ namespace NaiveSocks
 
         public async Task<int> ReadAsync(BytesSegment bs)
         {
-            Task task = null;
             lock (_syncRoot) {
-                if (tcsNewBuffer?.Task.IsCompleted == false) {
+                if (tcsNewBuffer?.IsCompleted == false) {
                     throw new Exception("another recv task is running.");
                 }
                 if (buffer.Len == 0 & !recvEOF) {
-                    tcsNewBuffer = new TaskCompletionSource<VoidType>();
-                    task = tcsNewBuffer.Task;
+                    tcsNewBuffer.Reset();
                 }
             }
-            if (task != null)
-                await task;
+            if (tcsNewBuffer != null)
+                await tcsNewBuffer;
             lock (_syncRoot) {
                 if (recvEOF && buffer.Len == 0) {
                     return 0;
@@ -1063,7 +1049,7 @@ namespace NaiveSocks
                 buffer.SubSelf(read);
                 if (buffer.Len == 0) {
                     buffer = new BytesSegment();
-                    notifyBufferEmptied();
+                    tcsBufferEmptied.SetResult(0);
                 }
                 return read;
             }
@@ -1075,9 +1061,11 @@ namespace NaiveSocks
                 if (recvEOF)
                     throw new Exception($"{this}: stream closed/shutdown.");
                 buffer = bv;
-                tcsBufferEmptied = new TaskCompletionSource<VoidType>();
-                notifyNewBuffer();
-                return tcsBufferEmptied?.Task ?? NaiveUtils.CompletedTask;
+                tcsBufferEmptied.Reset();
+                tcsNewBuffer.SetResult(0);
+                if (tcsBufferEmptied.IsCompleted)
+                    return NaiveUtils.CompletedTask;
+                return tcsBufferEmptied.CreateTask();
             }
         }
 

@@ -363,6 +363,11 @@ namespace Naive.HttpSvr
         }
 
         public ReusableAwaiter<T> CAF() => this;
+
+        public async Task<T> CreateTask()
+        {
+            return await this;
+        }
     }
 
     public sealed class JustAwaiter : INotifyCompletion, ICriticalNotifyCompletion
@@ -445,10 +450,14 @@ namespace Naive.HttpSvr
         internal static void TryRunContinuation(Action c)
         {
             if (c != null) {
-                c();
-                //Task.Run(c);
-                //ThreadPool.QueueUserWorkItem(waitCallback, c);
-                //ThreadPool.UnsafeQueueUserWorkItem(waitCallback, c);
+                try {
+                    c();
+                    //Task.Run(c);
+                    //ThreadPool.QueueUserWorkItem(waitCallback, c);
+                    //ThreadPool.UnsafeQueueUserWorkItem(waitCallback, c);
+                } catch (Exception e) {
+                    Logging.exception(e, Logging.Level.Error, "continuation threw an exception.");
+                }
             }
         }
     }
