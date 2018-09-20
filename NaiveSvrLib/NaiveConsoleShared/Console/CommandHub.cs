@@ -89,7 +89,6 @@ namespace Naive.Console
         public void CmdLoop(CmdConsole con)
         {
             int lastStatusCode = 0;
-            con.WriteLine("Welcome!");
             while (true) {
                 string cmdline;
                 if (lastStatusCode != 0) {

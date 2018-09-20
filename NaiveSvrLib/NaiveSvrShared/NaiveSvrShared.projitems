@@ -35,6 +35,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)IO\FilterBase.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IO\NaiveResumableMsgStream.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IO\Socket\SocketStream.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IO\Socket\SocketStreamFa.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IO\TlsStream.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IO\WebSocket\WebSocket.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IO\WebSocket\WebSocketClient.cs" />
@@ -52,7 +53,6 @@
     <Folder Include="$(MSBuildThisFileDirectory)HttpSvr\Server\" />
     <Folder Include="$(MSBuildThisFileDirectory)IO\Buffer\" />
     <Folder Include="$(MSBuildThisFileDirectory)IO\WebSocket\" />
-    <Folder Include="$(MSBuildThisFileDirectory)IO\Socket\" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="$(MSBuildThisFileDirectory)HttpSvr\ListPage.html" />

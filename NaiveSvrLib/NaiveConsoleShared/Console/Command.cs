@@ -273,9 +273,11 @@ namespace Naive.Console
 
         public static ConsoleOnStdIO StdIO { get; } = new ConsoleOnStdIO();
         public static CmdConsole Null { get; } = new nullConsole();
-        public abstract void Write(string text);
-        public abstract void WriteLine(string text);
+        protected abstract void WriteImpl(string text);
+        protected abstract void WriteLineImpl(string text);
         public abstract string ReadLine();
+
+        public bool LastCharIsNewline;
 
         public bool PromptColorEnabled { get; set; }
         public Color32 PromptColor32 { get; set; }
@@ -323,7 +325,32 @@ namespace Naive.Console
             _foregroundColor32 = _color;
         }
 
-        public virtual string ReadLine(string prompt)
+        public void Write(string text)
+        {
+            CheckOutput(text);
+            WriteImpl(text);
+        }
+
+        public void WriteLine(string text)
+        {
+            LastCharIsNewline = true;
+            WriteLineImpl(text);
+        }
+
+        private void CheckOutput(string text)
+        {
+            if (text?.Length > 0) {
+                LastCharIsNewline = text[text.Length - 1] == '\n';
+            }
+        }
+
+        public string ReadLine(string prompt)
+        {
+            CheckOutput(prompt);
+            return ReadLineImpl(prompt);
+        }
+
+        protected virtual string ReadLineImpl(string prompt)
         {
             if (PromptColorEnabled) {
                 Write(prompt, PromptColor32);
@@ -349,7 +376,7 @@ namespace Naive.Console
         {
             public static object Lock = new object();
             public override string ReadLine() => System.Console.ReadLine();
-            public override void Write(string text)
+            protected override void WriteImpl(string text)
             {
                 lock (Lock)
                     if (!CustomColorEnabled) {
@@ -361,7 +388,7 @@ namespace Naive.Console
                     }
             }
 
-            public override void WriteLine(string text)
+            protected override void WriteLineImpl(string text)
             {
                 lock (Lock)
                     if (!CustomColorEnabled) {
@@ -378,11 +405,11 @@ namespace Naive.Console
         {
             public override string ReadLine() => null;
 
-            public override void Write(string text)
+            protected override void WriteImpl(string text)
             {
             }
 
-            public override void WriteLine(string text)
+            protected override void WriteLineImpl(string text)
             {
             }
         }

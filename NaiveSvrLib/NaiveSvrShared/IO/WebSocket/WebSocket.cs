@@ -42,9 +42,35 @@ namespace Naive.HttpSvr
             return SendBytesAsync(msg.Data);
         }
 
-        public Task<Msg> RecvMsg(BytesView buf)
+        public async Task<Msg> RecvMsg(BytesView buf)
         {
-            return CreateReadTask(new BytesSegment(buf?.bytes, buf?.offset ?? 0, buf?.len ?? 0), VoidType.Void, (s, x) => new Msg(x.bv), null);
+            var frame = await _readAsyncR(new BytesSegment(buf?.bytes, buf?.offset ?? 0, buf?.len ?? 0));
+            return new Msg(frame.bv);
+        }
+
+        ReusableAwaiter<Msg> _RecvMsgR_ra = new ReusableAwaiter<Msg>();
+        ReusableAwaiter<FrameValue> _RecvMsgR_awaiter;
+        Action _RecvMsgR_cont;
+
+        public AwaitableWrapper<Msg> RecvMsgR(BytesView buf)
+        {
+            if (_RecvMsgR_cont == null) {
+                _RecvMsgR_cont = () => {
+                    if (!_RecvMsgR_awaiter.TryGetResult(out var r, out var ex)) {
+                        _RecvMsgR_ra.SetException(ex);
+                    } else {
+                        _RecvMsgR_ra.SetResult(new Msg(r.bv));
+                    }
+                };
+            }
+            _RecvMsgR_ra.Reset();
+            var awaiter = _RecvMsgR_awaiter = _readAsyncR(new BytesSegment(buf?.bytes, buf?.offset ?? 0, buf?.len ?? 0));
+            if (awaiter.IsCompleted) {
+                _RecvMsgR_cont();
+            } else {
+                awaiter.OnCompleted(_RecvMsgR_cont);
+            }
+            return new AwaitableWrapper<Msg>(_RecvMsgR_ra);
         }
 
         public async Task Close(CloseOpt opt)
@@ -359,7 +385,7 @@ namespace Naive.HttpSvr
             try {
                 Connected?.Invoke(this);
                 while (ConnectionState == States.Open) {
-                    await processFrameAsync(await ReadAsync().CAF()).CAF();
+                    await processFrameAsync(await _readAsyncR()).CAF();
                 }
             } catch (DisconnectedException) {
 
@@ -427,16 +453,18 @@ namespace Naive.HttpSvr
             return ReadAsync(null, 0);
         }
 
-        public Task<FrameValue> ReadAsync(byte[] buf, int offset)
+        public async Task<FrameValue> ReadAsync(byte[] buf, int offset)
         {
             if (ConnectionState == States.Closed) {
                 throw new DisconnectedException("read on closed connection");
             }
-            return CreateReadTask(new BytesSegment() { Bytes = buf }.Sub(offset), VoidType.Void, returnAsIs, (s, e) => {
+            try {
+                return await _readAsyncR(new BytesSegment() { Bytes = buf }.Sub(offset)); // buf can be null
+            } catch (Exception) {
                 throwIfTimeout();
                 Close();
-                throw e;
-            });
+                throw;
+            }
         }
 
         public void Read(out int opcode, out byte[] payload, out bool fin)
@@ -483,53 +511,53 @@ namespace Naive.HttpSvr
             }
         }
 
-        private readonly byte[] _read_buf = new byte[8];
-
-        private Task<FrameValue> _readAsync()
-        {
-            return _readAsync(null, 0);
-        }
-
-        Task<FrameValue> _prereadTask;
-
         public void StartPrereadForControlFrame()
         {
-            if (_prereadTask != null)
-                throw new InvalidOperationException("_prereadTask != null");
-            _prereadTask = __readAsync(new BytesSegment(), VoidType.Void, returnAsIs, null, true);
+            if (_loopR_prereadStarted)
+                throw new InvalidOperationException("Preread task is already started.");
+            _readAsyncR();
+            _loopR_prereadStarted = true;
         }
 
-        private Task<FrameValue> _readAsync(byte[] optionalBuffer, int offset)
+        private async Task<FrameValue> _readAsync()
         {
-            var tmp = _prereadTask;
-            if (tmp != null) {
-                _prereadTask = null;
-                return tmp;
+            return await _readAsyncR();
+        }
+
+        ReusableAwaiter<FrameValue> _readAsyncR(BytesSegment optionalBuffer = default(BytesSegment))
+        {
+            if (_loopR_task == null) {
+                _loopR_task = _loopR();
+            } else if (_loopR_task.IsCompleted) {
+                throw new Exception("loopR task is completed!");
             }
-            return CreateReadTask(new BytesSegment() { Bytes = optionalBuffer }.Sub(offset), VoidType.Void, returnAsIs, null);
+            if (_loopR_prereadStarted) {
+                _loopR_prereadStarted = false;
+                return _loopR_result;
+            }
+            _loopR_result.Reset();
+            _loopR_request.SetResult(optionalBuffer);
+            return _loopR_result;
         }
 
-        private Task<TRet> CreateReadTask<TState, TRet>(BytesSegment optionalBuffer, TState state, Func<TState, FrameValue, TRet> retWrapper, Func<TState, Exception, TRet> errWrapper)
-        {
-            return __readAsync(optionalBuffer, state, retWrapper, errWrapper, false);
-        }
+        Task _loopR_task;
 
-        static readonly Func<VoidType, FrameValue, FrameValue> returnAsIs = (s, x) => x;
+        bool _loopR_prereadStarted = false;
 
-        private async Task<TRet> __readAsync<TState, TRet>(BytesSegment optionalBuffer, TState state,
-                                        Func<TState, FrameValue, TRet> retWrapper, Func<TState, Exception, TRet> errWrapper, bool isPrereadTask)
+        ReusableAwaiter<BytesSegment> _loopR_request = new ReusableAwaiter<BytesSegment>();
+        ReusableAwaiter<FrameValue> _loopR_result = new ReusableAwaiter<FrameValue>();
+
+        private readonly byte[] _read_buf = new byte[8];
+
+        private async Task _loopR()
         {
+            START:
+            var optionalBuffer = await _loopR_request;
+
             try {
                 optionalBuffer.CheckAsParameter_AllowNull();
-                var wf = new FrameValue();
                 BytesView bv = new BytesView();
-
-                if (!isPrereadTask && _prereadTask != null) {
-                    var tmp = _prereadTask;
-                    _prereadTask = null;
-                    wf = await tmp;
-                    goto HANDLE_MSG;
-                }
+                var wf = new FrameValue();
 
                 REREAD:
 
@@ -596,8 +624,6 @@ namespace Naive.HttpSvr
                 wf.len = bv.tlen;
                 wf.bv = bv;
 
-                HANDLE_MSG:
-
                 if (wf.opcode != 0x8)
                     Activated?.Invoke(this);
                 switch (wf.opcode) {
@@ -618,13 +644,17 @@ namespace Naive.HttpSvr
                     PongReceived?.Invoke(this);
                     break;
                 default:
-                    return retWrapper(state, wf);
+                    _loopR_request.Reset();
+                    _loopR_result.SetResult(wf);
+                    goto START;
                 }
 
                 goto REREAD;
 
-            } catch (Exception e) when (errWrapper != null) {
-                return errWrapper(state, e);
+            } catch (Exception e) {
+                _loopR_request.Reset();
+                _loopR_result.SetException(e);
+                return;
             }
         }
 
@@ -667,7 +697,7 @@ namespace Naive.HttpSvr
         }
 
         private Task processFrameAsync(FrameValue wf) => processFrameAsync(wf, wf.fin, wf.opcode, wf.payload, wf.len);
-        private async Task processFrameAsync(FrameValue wf, bool fin, int opcode, byte[] buf, int len)
+        private Task processFrameAsync(FrameValue wf, bool fin, int opcode, byte[] buf, int len)
         {
             WebSocketMsg msg;
             if (_unfin == null) {
@@ -692,15 +722,16 @@ namespace Naive.HttpSvr
                     msg.data = (msg.data as BytesView).GetBytes();
                 break;
             default:
-                return;
+                return NaiveUtils.CompletedTask;
             }
             if (fin) {
                 _unfin = null;
                 Received?.Invoke(msg);
-                await ReceivedAsync.InvokeAsync(msg).CAF();
+                return ReceivedAsync.InvokeAsync(msg);
             } else {
                 _unfin = msg;
             }
+            return NaiveUtils.CompletedTask;
         }
 
         ReusableAwaiter<VoidType> readFullR;
@@ -873,7 +904,7 @@ namespace Naive.HttpSvr
             byte[] sendMsgBuf;
             var isMasked = IsClient;
             var stream = BaseStream;
-            if (!isMasked && BaseStream is IMyStreamMultiBuffer msmb) {
+            if (!isMasked && stream is IMyStreamMultiBuffer msmb) {
                 // if base stream supports writing multiple buffers,
                 // we can reduce copying overhead.
                 sendMsgBuf = BufferPool.GlobalGet(calcFrameHeaderSize(tlen, isMasked));
@@ -882,7 +913,10 @@ namespace Naive.HttpSvr
                 _sendMsgBvCache = null;
                 sendMsgBv.Set(sendMsgBuf, 0, bufcur);
                 sendMsgBv.nextNode = bv;
-                await msmb.WriteMultipleAsync(sendMsgBv);
+                if (stream is IMyStreamMultiBufferR msmbr)
+                    await msmbr.WriteMultipleAsyncR(sendMsgBv);
+                else
+                    await msmb.WriteMultipleAsync(sendMsgBv);
                 sendMsgBv.Reset();
                 _sendMsgBvCache = sendMsgBv;
                 BufferPool.GlobalPut(sendMsgBuf);
@@ -901,7 +935,7 @@ namespace Naive.HttpSvr
                             for (; cur < end; cur++) {
                                 sendMsgBuf[bufcur++] = (byte)(bytes[cur] ^ maskbytes[maskIndex++ % 4]);
                                 if (bufcur >= curSendBufSize) {
-                                    await stream.WriteAsync(sendMsgBuf, 0, bufcur).CAF();
+                                    await stream.WriteAsyncR(new BytesSegment(sendMsgBuf, 0, bufcur)).CAF();
                                     bufcur = 0;
                                 }
                             }
@@ -912,7 +946,7 @@ namespace Naive.HttpSvr
                                 cur += toCopy;
                                 bufcur += toCopy;
                                 if (bufcur == curSendBufSize) {
-                                    await stream.WriteAsync(sendMsgBuf, 0, bufcur).CAF();
+                                    await stream.WriteAsyncR(new BytesSegment(sendMsgBuf, 0, bufcur)).CAF();
                                     bufcur = 0;
                                 }
                             }
@@ -920,7 +954,7 @@ namespace Naive.HttpSvr
                     } while ((curbv = curbv.nextNode) != null);
                 }
                 if (bufcur > 0)
-                    await stream.WriteAsync(sendMsgBuf, 0, bufcur).CAF();
+                    await stream.WriteAsyncR(new BytesSegment(sendMsgBuf, 0, bufcur)).CAF();
                 BufferPool.GlobalPut(sendMsgBuf);
             }
         }

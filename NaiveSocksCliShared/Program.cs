@@ -53,7 +53,7 @@ namespace NaiveSocks
 
 Usage: {NAME_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FILE]
         [--no-cli] [--no-log-stdout] [--log-file FILE] [--log-stdout-no-time]
-        [--force-jit[-async]] [--socket-impl (1|2)]";
+        [--force-jit[-async]] [--socket-impl (1|2|fa)]";
 
         private static bool __magic_is_packed;
 
@@ -63,8 +63,16 @@ Usage: {NAME_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FILE]
         {
             Console.Title = NAME;
             //Logging.HistroyEnabled = false;
-            Logging.WriteLogToConsole = true;
-            CmdConsole.ConsoleOnStdIO.Lock = Logging.ConsoleLock;
+            Logging.WriteLogToConsole = false;
+            Logging.Logged += (log) => {
+                lock (CmdConsole.ConsoleOnStdIO.Lock) {
+                    if (CmdConsole.StdIO.LastCharIsNewline == false) {
+                        Console.WriteLine();
+                        CmdConsole.StdIO.LastCharIsNewline = true;
+                    }
+                    log.WriteToConsoleWithoutLock();
+                }
+            };
 
             LogFileWriter logWriter = null;
 
@@ -98,14 +106,7 @@ Usage: {NAME_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FILE]
             }
 
             if (ar.TryGetValue("--socket-impl", out var socketImpl)) {
-                if (socketImpl.FirstParaOrThrow == "1") {
-                    MyStream.CurrentSocketImpl = MyStream.SocketImpl.SocketStream1;
-                } else if (socketImpl.FirstParaOrThrow == "2") {
-                    MyStream.CurrentSocketImpl = MyStream.SocketImpl.SocketStream2;
-                } else {
-                    Logging.error(socketImpl.arg + " with wrong parameter");
-                }
-                Logging.info("Current SocketStream implementation: " + MyStream.CurrentSocketImpl);
+                MyStream.SetSocketImpl(socketImpl.FirstParaOrThrow);
             }
 
             var controller = Controller = new Controller();

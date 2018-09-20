@@ -31,6 +31,11 @@ namespace NaiveSocks
         Task WriteMultipleAsync(BytesView bv);
     }
 
+    public interface IMyStreamMultiBufferR : IMyStreamMultiBuffer
+    {
+        AwaitableWrapper WriteMultipleAsyncR(BytesView bv);
+    }
+
     public interface IMyStreamSync : IMyStream
     {
         void Write(BytesSegment bs);
@@ -253,15 +258,32 @@ namespace NaiveSocks
         public enum SocketImpl
         {
             SocketStream1,
-            SocketStream2
+            SocketStream2,
+            SocketStreamFa
         }
 
         public static SocketImpl CurrentSocketImpl = SocketImpl.SocketStream1;
+
+        public static void SetSocketImpl(string str)
+        {
+            if (str == "1") {
+                CurrentSocketImpl = SocketImpl.SocketStream1;
+            } else if (str == "2") {
+                CurrentSocketImpl = SocketImpl.SocketStream2;
+            } else if (str == "fa") {
+                CurrentSocketImpl = SocketImpl.SocketStreamFa;
+            } else {
+                Logging.error("SetSocketStreamImpl with wrong argument");
+            }
+            Logging.info("Current SocketStream implementation: " + CurrentSocketImpl);
+        }
 
         public static SocketStream FromSocket(Socket socket)
         {
             if (CurrentSocketImpl == SocketImpl.SocketStream2)
                 return new SocketStream2(socket);
+            if (CurrentSocketImpl == SocketImpl.SocketStreamFa)
+                return new SocketStreamFa(socket);
             return new SocketStream1(socket);
         }
 
@@ -513,6 +535,9 @@ namespace NaiveSocks
         {
             public static bool DefaultUseLoggerAsVerboseLogger = false;
 
+            public static bool TryReadSync = false;
+            public static bool TryWriteSync = false;
+
             private const int defaultBufferSize = 64 * 1024;
 
             private Logger _verboseLogger;
@@ -555,7 +580,10 @@ namespace NaiveSocks
                     while (true) {
                         int read;
                         if (msgStream == null) {
-                            read = await From.ReadAsyncR(buf);
+                            if (TryReadSync && From is IMyStreamSync fromSync)
+                                read = fromSync.Read(buf);
+                            else
+                                read = await From.ReadAsyncR(buf);
                         } else {
                             // no buffer preallocated for IMsgStream
                             var msg = await msgStream.RecvMsgR(null);
@@ -578,7 +606,10 @@ namespace NaiveSocks
                             break;
                         }
                         CounterR?.Add(read);
-                        await To.WriteAsyncR(new BytesSegment(buf.Bytes, buf.Offset, read));
+                        if (TryWriteSync && To is IMyStreamSync toSync)
+                            toSync.Write(new BytesSegment(buf.Bytes, buf.Offset, read));
+                        else
+                            await To.WriteAsyncR(new BytesSegment(buf.Bytes, buf.Offset, read));
                         CounterW?.Add(read);
                         lastMsg.TryRecycle();
                     }

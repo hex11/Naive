@@ -364,6 +364,171 @@ namespace NaiveSocks
                 ThreadPool.SetMinThreads(cmd.ArgOrNull(0).ToInt(), cmd.ArgOrNull(1).ToInt());
                 ThreadPool.SetMaxThreads(cmd.ArgOrNull(2).ToInt(), cmd.ArgOrNull(3).ToInt());
             }, "workerMin portMin workerMax portMax");
+            AddSocketTests(cmdHub, prefix);
+        }
+
+        private static void AddSocketTests(CommandHub cmdHub, string prefix)
+        {
+            cmdHub.AddCmdHandler(prefix + "socketperftest", command => {
+                const int BufSize = 64 * 1024;
+                var listener = new System.Net.Sockets.TcpListener(NaiveUtils.ParseIPEndPoint("0:52333"));
+                listener.Start();
+                command.WriteLine("Running socket test...");
+                Task.Run(() => {
+                    try {
+                        using (var cli = listener.AcceptTcpClient()) {
+                            var s = cli.Client;
+                            var buf = new byte[BufSize];
+                            var sw = Stopwatch.StartNew();
+                            while (true) {
+                                s.Send(buf, 0, BufSize, System.Net.Sockets.SocketFlags.None);
+                                if (sw.ElapsedMilliseconds > 10 * 1000) {
+                                    break;
+                                }
+                            }
+                        }
+                    } finally {
+                        listener.Stop();
+                    }
+                }).Forget();
+
+                {
+                    long total = 0;
+                    var sw = Stopwatch.StartNew();
+                    using (var cli = new System.Net.Sockets.TcpClient()) {
+                        cli.Connect(NaiveUtils.ParseIPEndPoint("127.1:52333"));
+                        var s = cli.Client;
+                        var buf = new byte[BufSize];
+                        int read;
+                        while ((read = s.Receive(buf)) > 0) {
+                            total += read;
+                        }
+                    }
+                    var ms = sw.ElapsedMilliseconds;
+                    command.WriteLine($"Transferred {total:N0} bytes in {ms:N0} ms.");
+                    command.WriteLine("Speed: " + (total / 1024 / 1024 * 1000 / ms) + " MiB/s");
+                }
+            });
+            cmdHub.AddCmdHandler(prefix + "socketperftest-async", command => {
+                const int BufSize = 64 * 1024;
+                var listener = new System.Net.Sockets.TcpListener(NaiveUtils.ParseIPEndPoint("0:52333"));
+                listener.Start();
+                command.WriteLine("Running socket test...");
+                Task.Run(async () => {
+                    try {
+                        using (var cli = await listener.AcceptTcpClientAsync()) {
+                            var s = new SocketStream1(cli.Client);
+                            var buf = new byte[BufSize];
+                            var sw = Stopwatch.StartNew();
+                            while (true) {
+                                await s.WriteAsync(buf, 0, BufSize);
+                                if (sw.ElapsedMilliseconds > 10 * 1000) {
+                                    break;
+                                }
+                            }
+                        }
+                    } finally {
+                        listener.Stop();
+                    }
+                }).Forget();
+
+                Task.Run(async () => {
+                    long total = 0;
+                    var sw = Stopwatch.StartNew();
+                    using (var cli = new System.Net.Sockets.TcpClient()) {
+                        await cli.ConnectAsync("127.1", 52333);
+                        var s = new SocketStream1(cli.Client);
+                        var buf = new byte[BufSize];
+                        int read;
+                        while ((read = await s.ReadAsync(buf)) > 0) {
+                            total += read;
+                        }
+                    }
+                    var ms = sw.ElapsedMilliseconds;
+                    command.WriteLine($"Transferred {total:N0} bytes in {ms:N0} ms.");
+                    command.WriteLine("Speed: " + (total / 1024 / 1024 * 1000 / ms) + " MiB/s");
+                }).Wait();
+            });
+            cmdHub.AddCmdHandler(prefix + "socketperftest-asyncr", command => {
+                const int BufSize = 64 * 1024;
+                var listener = new System.Net.Sockets.TcpListener(NaiveUtils.ParseIPEndPoint("0:52333"));
+                listener.Start();
+                command.WriteLine("Running socket test...");
+                Task.Run(async () => {
+                    try {
+                        using (var cli = await listener.AcceptTcpClientAsync()) {
+                            var s = new SocketStream1(cli.Client);
+                            var buf = new byte[BufSize];
+                            var sw = Stopwatch.StartNew();
+                            while (true) {
+                                await s.WriteAsyncR(new BytesSegment(buf, 0, BufSize));
+                                if (sw.ElapsedMilliseconds > 10 * 1000) {
+                                    break;
+                                }
+                            }
+                        }
+                    } finally {
+                        listener.Stop();
+                    }
+                }).Forget();
+
+                Task.Run(async () => {
+                    long total = 0;
+                    var sw = Stopwatch.StartNew();
+                    using (var cli = new System.Net.Sockets.TcpClient()) {
+                        await cli.ConnectAsync("127.1", 52333);
+                        var s = new SocketStream1(cli.Client);
+                        var buf = new byte[BufSize];
+                        int read;
+                        while ((read = await s.ReadAsyncR(new BytesSegment(buf, 0, BufSize))) > 0) {
+                            total += read;
+                        }
+                    }
+                    var ms = sw.ElapsedMilliseconds;
+                    command.WriteLine($"Transferred {total:N0} bytes in {ms:N0} ms.");
+                    command.WriteLine("Speed: " + (total / 1024 / 1024 * 1000 / ms) + " MiB/s");
+                }).Wait();
+            });
+            cmdHub.AddCmdHandler(prefix + "socketperftest-async2", command => {
+                const int BufSize = 64 * 1024;
+                var listener = new System.Net.Sockets.TcpListener(NaiveUtils.ParseIPEndPoint("0:52333"));
+                listener.Start();
+                command.WriteLine("Running socket test...");
+                Task.Run(async () => {
+                    try {
+                        using (var cli = await listener.AcceptTcpClientAsync()) {
+                            var s = new SocketStream2(cli.Client);
+                            var buf = new byte[BufSize];
+                            var sw = Stopwatch.StartNew();
+                            while (true) {
+                                await s.WriteAsyncR(new BytesSegment(buf, 0, BufSize));
+                                if (sw.ElapsedMilliseconds > 10 * 1000) {
+                                    break;
+                                }
+                            }
+                        }
+                    } finally {
+                        listener.Stop();
+                    }
+                }).Forget();
+
+                Task.Run(async () => {
+                    long total = 0;
+                    var sw = Stopwatch.StartNew();
+                    using (var cli = new System.Net.Sockets.TcpClient()) {
+                        await cli.ConnectAsync("127.1", 52333);
+                        var s = new SocketStream2(cli.Client);
+                        var buf = new byte[BufSize];
+                        int read;
+                        while ((read = await s.ReadAsyncR(new BytesSegment(buf, 0, BufSize))) > 0) {
+                            total += read;
+                        }
+                    }
+                    var ms = sw.ElapsedMilliseconds;
+                    command.WriteLine($"Transferred {total:N0} bytes in {ms:N0} ms.");
+                    command.WriteLine("Speed: " + (total / 1024 / 1024 * 1000 / ms) + " MiB/s");
+                }).Wait();
+            });
         }
 
         static byte[] sampleKey(int bytesCount) => NaiveProtocol.GetRealKeyFromString("testtttt", bytesCount);

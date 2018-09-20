@@ -103,7 +103,7 @@ namespace Naive.Console
                 return line;
             }
 
-            public override void Write(string text)
+            protected override void WriteImpl(string text)
             {
                 _session.appendHistory(text);
                 _session.foreachClient(text, (txt, r) => {
@@ -111,7 +111,7 @@ namespace Naive.Console
                 });
             }
 
-            public override void WriteLine(string text)
+            protected override void WriteLineImpl(string text)
             {
                 _session.appendHistory(text);
                 _session.appendHistory("\r\n");

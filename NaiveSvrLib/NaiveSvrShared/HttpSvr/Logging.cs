@@ -60,29 +60,19 @@ namespace Naive.HttpSvr
             {
                 get => level == Level.Warning ? "Warn" : level.ToString();
             }
-        }
 
-        private static void log(Log log)
-        {
-            RootLogger.log(log);
-        }
-
-        private static void _log(Log log)
-        {
-            if (HistroyEnabled) {
-                logBuffer.Add(log);
+            public static object ConsoleLock = new object();
+            public void WriteToConsole()
+            {
+                lock (ConsoleLock) {
+                    WriteToConsoleWithoutLock();
+                }
             }
-            if (WriteLogToConsole)
-                writeToConsole(log);
-            Logged?.Invoke(log);
-        }
 
-        public static object ConsoleLock = new object();
-        private static void writeToConsole(Logging.Log log)
-        {
-            lock (ConsoleLock) {
+            public void WriteToConsoleWithoutLock()
+            {
                 System.Console.ForegroundColor = ConsoleColor.Black;
-                switch (log.level) {
+                switch (this.level) {
                 default:
                 case Level.None:
                     System.Console.BackgroundColor = ConsoleColor.DarkGray;
@@ -97,12 +87,26 @@ namespace Naive.HttpSvr
                     System.Console.BackgroundColor = ConsoleColor.Red;
                     break;
                 }
-                string stamp;
-                stamp = (WriteLogToConsoleWithTime) ? log.timestamp : "[" + log.levelStr + "] ";
+                string stamp = (WriteLogToConsoleWithTime) ? this.timestamp : "[" + this.levelStr + "] ";
                 System.Console.Write(stamp);
                 System.Console.ResetColor();
-                System.Console.WriteLine(processText(log.text, stamp.Length));
+                System.Console.WriteLine(processText(this.text, stamp.Length));
             }
+        }
+
+        private static void log(Log log)
+        {
+            RootLogger.log(log);
+        }
+
+        private static void _log(Log log)
+        {
+            if (HistroyEnabled) {
+                logBuffer.Add(log);
+            }
+            if (WriteLogToConsole)
+                log.WriteToConsole();
+            Logged?.Invoke(log);
         }
 
         static unsafe string processText(string text, int indent)

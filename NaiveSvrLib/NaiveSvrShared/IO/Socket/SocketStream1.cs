@@ -10,7 +10,7 @@ using System.Reflection;
 
 namespace NaiveSocks
 {
-    public class SocketStream1 : SocketStream, IMyStreamMultiBuffer, IMyStreamWriteR
+    public class SocketStream1 : SocketStream, IMyStreamMultiBuffer, IMyStreamWriteR, IMyStreamMultiBufferR
     {
         public SocketStream1(Socket socket) : base(socket)
         {
@@ -57,6 +57,12 @@ namespace NaiveSocks
 
         public Task WriteMultipleAsync(BytesView bv)
         {
+            ArraySegment<byte>[] bufList = PrepareWriteMultiple(bv);
+            return TaskHelper.FromAsyncTrim(this, bufList, WriteMultipleBegin, WriteMultipleEnd);
+        }
+
+        private static ArraySegment<byte>[] PrepareWriteMultiple(BytesView bv)
+        {
             int count = 0;
             foreach (var cur in bv) {
                 if (cur.len > 0)
@@ -68,18 +74,23 @@ namespace NaiveSocks
                 if (cur.len > 0)
                     bufList[index++] = new ArraySegment<byte>(cur.bytes, cur.offset, cur.len);
             }
-            return TaskHelper.FromAsyncTrim(
-                thisRef: this,
-                args: bufList,
-                beginMethod: (thisRef, args, callback, state) => thisRef.Socket.BeginSend(args, SocketFlags.None, callback, state),
-                endMethod: (thisRef, asyncResult) => {
-                    if (asyncResult.CompletedSynchronously)
-                        Interlocked.Increment(ref ctr.Wsync);
-                    else
-                        Interlocked.Increment(ref ctr.Wasync);
-                    thisRef.Socket.EndSend(asyncResult);
-                    return VoidType.Void;
-                });
+
+            return bufList;
+        }
+
+        private static IAsyncResult WriteMultipleBegin(SocketStream1 thisRef, ArraySegment<byte>[] args, AsyncCallback callback, object state)
+        {
+            return thisRef.Socket.BeginSend(args, SocketFlags.None, callback, state);
+        }
+
+        private static VoidType WriteMultipleEnd(SocketStream1 thisRef, IAsyncResult asyncResult)
+        {
+            if (asyncResult.CompletedSynchronously)
+                Interlocked.Increment(ref ctr.Wsync);
+            else
+                Interlocked.Increment(ref ctr.Wasync);
+            thisRef.Socket.EndSend(asyncResult);
+            return VoidType.Void;
         }
 
         ReusableAwaiter<int> raR;
@@ -106,6 +117,23 @@ namespace NaiveSocks
                 Interlocked.Increment(ref ctr.Wasync);
             }
             return new AwaitableWrapper(raW);
+        }
+
+        ReusableAwaiter<VoidType> raWm;
+        Action<ArraySegment<byte>[]> raWm_start;
+
+        public AwaitableWrapper WriteMultipleAsyncR(BytesView bv)
+        {
+            if (raWm == null)
+                raWm = ReusableAwaiter<VoidType>.FromBeginEnd(this, WriteMultipleBegin, WriteMultipleEnd, out raWm_start);
+            ArraySegment<byte>[] bufList = PrepareWriteMultiple(bv);
+            raWm_start(bufList);
+            if (raWm.IsCompleted) {
+                Interlocked.Increment(ref ctr.Wsync);
+            } else {
+                Interlocked.Increment(ref ctr.Wasync);
+            }
+            return new AwaitableWrapper(raWm);
         }
     }
 

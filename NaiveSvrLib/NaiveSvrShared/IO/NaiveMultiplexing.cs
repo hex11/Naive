@@ -711,8 +711,10 @@ namespace NaiveSocks
                     Msg m;
                     var tmp = raR_deq;
                     raR_deq = null;
+                    if (!tmp.TryGetResult(out m, out var ex))
+                        raR.SetException(ex);
                     try {
-                        m = rar_continuation2(tmp.GetResult());
+                        m = rar_continuation2(m);
                     } catch (Exception e) {
                         raR.SetException(e);
                         return;

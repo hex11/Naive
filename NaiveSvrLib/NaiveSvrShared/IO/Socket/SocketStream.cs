@@ -239,7 +239,7 @@ namespace NaiveSocks
             return ReadSocketDirectSync(bs);
         }
 
-        int ReadSocketDirectSync(BytesSegment bs)
+        protected int ReadSocketDirectSync(BytesSegment bs)
         {
             int r;
             r = SocketReadImpl(bs);

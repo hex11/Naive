@@ -73,6 +73,11 @@ namespace NaiveSocksAndroid
             public int manage_interval_screen_on { get; set; } = 5;
             public int notif_update_interval { get; set; } = 2;
 
+            public string socket_impl { get; set; }
+
+            public bool copier_sync_r { get; set; }
+            public bool copier_sync_w { get; set; }
+
             public bool socket_underlying { get; set; } = false;
 
             public string title_format { get; set; } = "[{0}/{1}] {2:N0} KB, {3:N0} pkt, {4:N2} CPUs";
@@ -178,6 +183,13 @@ namespace NaiveSocksAndroid
                         CrashHandler.CrashLogFile = Controller.ProcessFilePath("UnhandledException.txt");
                         if (t.TryGetValue<Config>("android", out var config)) {
                             currentConfig = config;
+                            if (config.socket_impl != null) {
+                                MyStream.SetSocketImpl(config.socket_impl);
+                            } else {
+                                MyStream.CurrentSocketImpl = MyStream.SocketImpl.SocketStreamFa;
+                            }
+                            MyStream.Copier.TryReadSync = config.copier_sync_r;
+                            MyStream.Copier.TryWriteSync = config.copier_sync_w;
                             SocketStream.EnableUnderlyingCalls = config.socket_underlying;
                             onScreen(isScreenOn);
                         }

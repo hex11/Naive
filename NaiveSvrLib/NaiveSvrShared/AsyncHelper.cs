@@ -165,6 +165,8 @@ namespace Naive.HttpSvr
         private SpinLock _lock = new SpinLock(false);
         private int _waitForGetResult = 0;
 
+        public object Tag;
+
         public static ReusableAwaiter<T> NewCompleted(T result)
         {
             return new ReusableAwaiter<T>() { IsCompleted = true, _result = result };
@@ -180,15 +182,33 @@ namespace Naive.HttpSvr
 
         public T GetResult()
         {
+            PreGetResult();
+            if (_exception != null)
+                throw _exception;
+            return _result;
+        }
+
+        public bool TryGetResult(out T result, out Exception exception)
+        {
+            PreGetResult();
+            if (_exception != null) {
+                result = default(T);
+                exception = _exception;
+                return false;
+            }
+            exception = null;
+            result = _result;
+            return true;
+        }
+
+        private void PreGetResult()
+        {
             if (!IsCompleted) {
                 Logging.logWithStackTrace("GetResult() when not completed", Logging.Level.Warning);
                 throw new InvalidOperationException("not completed");
             }
             if (_waitForGetResult > 0)
                 _waitForGetResult--;
-            if (_exception != null)
-                throw _exception;
-            return _result;
         }
 
         public void OnCompleted(Action continuation)
@@ -291,11 +311,15 @@ namespace Naive.HttpSvr
                 throw new InvalidOperationException("failed to SetException. the exception to set: " + exception.Message);
         }
 
+        public bool CanResetNow()
+        {
+            return _continuation == null && _waitForGetResult == 0;
+        }
+
         /// <summary>
         /// Reset the awaiter to initial status
         /// </summary>
-        /// <returns></returns>
-        public ReusableAwaiter<T> Reset()
+        public void Reset()
         {
             if (_continuation != null) {
                 throw new InvalidOperationException("Cannot reset: this awaiter is being listening. (complete this awaiter before reset)");
@@ -308,7 +332,6 @@ namespace Naive.HttpSvr
             this._continuation_2 = null;
             this._exception = null;
             this.IsCompleted = false;
-            return this;
         }
 
         public ReusableAwaiter<T> GetAwaiter()
