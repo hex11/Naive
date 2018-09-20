@@ -57,6 +57,8 @@ Usage: {NAME_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FILE]
 
         private static bool __magic_is_packed;
 
+        public static Controller Controller { get; private set; }
+
         private static void Main(string[] args)
         {
             Console.Title = NAME;
@@ -106,7 +108,7 @@ Usage: {NAME_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FILE]
                 Logging.info("Current SocketStream implementation: " + MyStream.CurrentSocketImpl);
             }
 
-            var controller = new Controller();
+            var controller = Controller = new Controller();
             controller.Logger.ParentLogger = Logging.RootLogger;
             long lastPackets = 0, lastBytes = 0;
             void updateTitle()
@@ -195,19 +197,21 @@ Usage: {NAME_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FILE]
             if (!ar.ContainsKey("--no-cli")) {
                 var stdio = CmdConsole.StdIO;
                 stdio.Write("(Press [Enter] to start interactive interface)\n", Color32.FromConsoleColor(ConsoleColor.Green));
-                //var readTime = DateTime.Now;
+                var sw = Stopwatch.StartNew();
                 var line = stdio.ReadLine();
+                sw.Stop();
                 if (line == null) {
                     Logging.warning("read an EOF from stdin");
-                    //if (DateTime.Now - readTime < TimeSpan.FromMilliseconds(50)) {
-                    //    Logging.warning("...in 50 ms. keep running without interactive interface.");
-                    //    goto WAIT;
-                    //}
+                    if (sw.ElapsedMilliseconds < 50) {
+                        Logging.warning("...in 50 ms. keep running without interactive interface.");
+                        Logging.warning("Please use --no-cli option if the program do not run from a console.");
+                        goto WAIT;
+                    }
                     Logging.warning("...exiting...");
-                    return;
+                } else {
+                    cmdHub.CmdLoop(CmdConsole.StdIO);
                 }
-                cmdHub.CmdLoop(CmdConsole.StdIO);
-                return;
+                Environment.Exit(0);
             }
             WAIT:
             while (true)
@@ -225,29 +229,6 @@ Usage: {NAME_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FILE]
             } catch (Exception e) {
                 Logging.exception(e, Logging.Level.Error, "ForceJit error");
             }
-        }
-
-        private static void initLogFile(string logFile)
-        {
-            var fs = File.Open(logFile, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
-            var sw = new StreamWriter(fs, NaiveUtils.UTF8Encoding);
-            var pendingFlush = false;
-            var delayFlush = new WaitCallback((x) => {
-                lock (sw) {
-                    pendingFlush = false;
-                    sw.Flush();
-                }
-            });
-            Logging.Logged += (x) => {
-                lock (sw) {
-                    sw.Write(x.timestamp);
-                    sw.WriteLine(x.text);
-                    if (!pendingFlush) {
-                        pendingFlush = true;
-                        ThreadPool.QueueUserWorkItem(delayFlush);
-                    }
-                }
-            };
         }
     }
 }

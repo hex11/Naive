@@ -38,8 +38,8 @@ namespace NaiveSocks
             BaseStream = baseStream;
             MainChannel = new Channel(this, MainId);
             ReservedChannel = new Channel(this, ReservedId);
-            addChannel(MainChannel);
-            addChannel(ReservedChannel);
+            addChannel_NoLock(MainChannel);
+            addChannel_NoLock(ReservedChannel);
         }
 
         public IMsgStream BaseStream;
@@ -89,7 +89,7 @@ namespace NaiveSocks
             return ch;
         }
 
-        private void addChannel(Channel ch)
+        private void addChannel_NoLock(Channel ch)
         {
             var id = ch.Id;
             try {
@@ -118,20 +118,18 @@ namespace NaiveSocks
                     TotalRemoteChannels--;
         }
 
-        void extendChannels()
+        void extendChannels_NoSendLock()
         {
-            lock (_sendLock) {
-                if (sendChannelIdLength == 1) {
-                    Logging.info($"{this}: extending IdLength to 16 bits.");
-                    SendParentOpcode(ParentOpcode.ExtendIdLength16).Forget();
-                    sendChannelIdLength = 2;
-                } else if (sendChannelIdLength == 2) {
-                    Logging.info($"{this}: extending IdLength to 32 bits.");
-                    SendParentOpcode(ParentOpcode.ExtendIdLength32).Forget();
-                    sendChannelIdLength = 4;
-                } else {
-                    throw new Exception($"sendChannelIdLength == {sendChannelIdLength}");
-                }
+            if (sendChannelIdLength == 1) {
+                Logging.info($"{this}: extending IdLength to 16 bits.");
+                SendParentOpcode(ParentOpcode.ExtendIdLength16).Forget();
+                sendChannelIdLength = 2;
+            } else if (sendChannelIdLength == 2) {
+                Logging.info($"{this}: extending IdLength to 32 bits.");
+                SendParentOpcode(ParentOpcode.ExtendIdLength32).Forget();
+                sendChannelIdLength = 4;
+            } else {
+                throw new Exception($"sendChannelIdLength == {sendChannelIdLength}");
             }
         }
 
@@ -203,16 +201,16 @@ namespace NaiveSocks
             if (id > MaxId) // should never happen since MaxId == Int32.MaxValue
                 throw new ArgumentOutOfRangeException(nameof(id), $"channel id > {MaxId}.");
             Channel ch;
-            lock (_sendLock)
-                lock (_channelsLock) {
-                    ThrowIfClosed();
+            lock (_channelsLock) {
+                ThrowIfClosed();
+                lock (_sendLock)
                     while (id > currentMaxId)
-                        extendChannels();
-                    if (getChannelById(id) != null)
-                        throw new Exception($"channel {id} already exists in {this}.");
-                    ch = new Channel(this, id);
-                    addChannel(ch);
-                }
+                        extendChannels_NoSendLock();
+                if (getChannelById(id) != null)
+                    throw new Exception($"channel {id} already exists in {this}.");
+                ch = new Channel(this, id);
+                addChannel_NoLock(ch);
+            }
             if (SendChannelCreatingFrame) {
                 await ch.SendRsvOpcode(Channel.Opcode.Create).CAF();
             }
@@ -224,7 +222,7 @@ namespace NaiveSocks
             var ch = new Channel(this, id);
             lock (_channelsLock) {
                 ThrowIfClosed();
-                addChannel(ch);
+                addChannel_NoLock(ch);
             }
             return ch;
         }
@@ -232,7 +230,7 @@ namespace NaiveSocks
         private async Task MainReadLoop()
         {
             while (true) {
-                var r = await BaseStream.RecvMsg(null).CAF();
+                var r = await BaseStream.RecvMsgR(null).CAF();
                 if (r.IsEOF)
                     throw new DisconnectedException("EOF Msg.");
                 var frame = Frame.unpack(this, r.Data);
@@ -244,7 +242,9 @@ namespace NaiveSocks
                     handleRsvMsg(msg);
                     continue;
                 }
-                var ch = getChannelById(frame.Id);
+                Channel ch;
+                lock (_channelsLock)
+                    ch = getChannelById(frame.Id);
                 if (ch != null) {
                     ch.MsgReceived(msg);
                 } else {
@@ -430,7 +430,7 @@ namespace NaiveSocks
         }
     }
 
-    public class Channel : IMsgStream, IDisposable
+    public class Channel : IMsgStream, IDisposable, IMsgStreamReadR
     {
         public NaiveMultiplexing Parent { get; }
         public int Id { get; }
@@ -438,8 +438,10 @@ namespace NaiveSocks
         FilterBase _dataFilter;
         public FilterBase DataFilter => _dataFilter ?? (_dataFilter = new FilterBase());
 
-        public static int DefaultMaxRecvBufferSize = 128 * 1024; // 128 KiB
-        public int MaxRecvBufferSize = DefaultMaxRecvBufferSize;
+        public static int DefaultBlockThreshold = 256 * 1024;
+        public static int DefaultResumeThreshold = 128 * 1024;
+        public int ResumeThreshold = DefaultResumeThreshold;
+        public int BlockThreshold = DefaultBlockThreshold;
 
         MsgStreamStatus IMsgStream.State
         {
@@ -523,7 +525,7 @@ namespace NaiveSocks
 
         private object _syncroot => recvQueue;
 
-        private ReusableAwaiter<VoidType> blockSendAwaiter = ReusableAwaiter<VoidType>.NewCompleted(VoidType.Void);
+        private JustAwaiter blockSendAwaiter = JustAwaiter.NewCompleted();
         private AsyncQueue<Msg> recvQueue = new AsyncQueue<Msg>();
         private StateEnum _state;
 
@@ -536,20 +538,19 @@ namespace NaiveSocks
 
         internal void MsgReceived(Msg msg)
         {
-            if (recvQueue.Enqueue(msg)) {
-                if (!msg.IsEOF) {
-                    var newSize = Interlocked.Add(ref queuedSize, msg.Data.tlen);
-                    if (newSize >= MaxRecvBufferSize) {
-                        debug("recv buf", queuedSize);
-                        SetBlockingRemote(true);
-                    }
-                }
+            if (recvQueue.Enqueue(msg) && !msg.IsEOF) {
+                Interlocked.Add(ref queuedSize, msg.Data.tlen);
+                CheckBlockingRemote();
             }
         }
 
-        private void SetBlockingRemote(bool blocking)
+        private void CheckBlockingRemote()
         {
+            var blocking = _CheckBlocking();
+            if (blocking == blockingRemote)
+                return;
             lock (_syncroot) {
+                blocking = _CheckBlocking();
                 if (blocking == blockingRemote)
                     return;
                 blockingRemote = blocking;
@@ -558,14 +559,19 @@ namespace NaiveSocks
             }
         }
 
+        private bool _CheckBlocking()
+        {
+            bool blocking = blockingRemote;
+            if (queuedSize < ResumeThreshold && blocking)
+                blocking = false;
+            else if (queuedSize > BlockThreshold && !blocking)
+                blocking = true;
+            return blocking;
+        }
+
         private void SetBlockingSend(bool blocking)
         {
-            if (blocking) {
-                if (blockSendAwaiter.IsCompleted)
-                    blockSendAwaiter.Reset();
-            } else {
-                blockSendAwaiter.TrySetResult(VoidType.Void);
-            }
+            blockSendAwaiter.SetBlocking(blocking);
         }
 
         private void logUnexpectedOpcode(Opcode opcode)
@@ -623,6 +629,7 @@ namespace NaiveSocks
                             logUnexpectedOpcode(opcode);
                         return;
                     }
+                    Logging.warning("block send");
                     SetBlockingSend(true);
                 } else if (opcode == Opcode.ResumeSend) {
                     if (IsClosed) {
@@ -630,6 +637,7 @@ namespace NaiveSocks
                             logUnexpectedOpcode(opcode);
                         return;
                     }
+                    Logging.warning("resume send");
                     SetBlockingSend(false);
                 } else {
                     Logging.warning($"{this} BUG?: unknown opcode: {opcode}");
@@ -650,7 +658,7 @@ namespace NaiveSocks
 
         private async Task _SendMsg_Blocking(Msg msg)
         {
-            debug("pausing send", msg.Data?.tlen);
+            debug("blocking send", msg.Data?.tlen);
             await blockSendAwaiter;
             debug("resumed send", msg.Data?.tlen);
             await _SendMsg(msg);
@@ -684,16 +692,44 @@ namespace NaiveSocks
 
         public async Task<Msg> RecvMsg(BytesView buf)
         {
+            return await RecvMsgR(buf);
+        }
+
+        ReusableAwaiter<Msg> raR = new ReusableAwaiter<Msg>();
+        ReusableAwaiter<Msg> raR_deq;
+        Action raR_continuation;
+        bool raR_noWaiting;
+
+        public AwaitableWrapper<Msg> RecvMsgR(BytesView buf)
+        {
             if (readEOF)
                 ThrowInvalidOperation();
-            var noWaiting = true;
-            if (!recvQueue.TryDequeue(out var m)) {
-                m = await recvQueue.DequeueAsync(out noWaiting);
+            raR.Reset();
+            raR_deq = recvQueue.DequeueAsync(out raR_noWaiting);
+            if (raR_continuation == null) {
+                raR_continuation = () => {
+                    Msg m;
+                    var tmp = raR_deq;
+                    raR_deq = null;
+                    try {
+                        m = rar_continuation2(tmp.GetResult());
+                    } catch (Exception e) {
+                        raR.SetException(e);
+                        return;
+                    }
+                    raR.SetResult(m);
+                };
             }
-            if (noWaiting && !m.IsEOF) {
-                var newSize = Interlocked.Add(ref queuedSize, -m.Data.tlen);
-                if (newSize < MaxRecvBufferSize)
-                    SetBlockingRemote(false);
+            raR_deq.OnCompleted(raR_continuation);
+
+            return new AwaitableWrapper<Msg>(raR);
+        }
+
+        private Msg rar_continuation2(Msg m)
+        {
+            if (raR_noWaiting && !m.IsEOF) {
+                Interlocked.Add(ref queuedSize, -m.Data.tlen);
+                CheckBlockingRemote();
             }
             if (m.IsEOF) {
                 readEOF = true;
@@ -834,7 +870,12 @@ namespace NaiveSocks
         private void debug<T>(string str, T obj)
         {
             if (Debug)
-                Logging.log($"{this} {str}: {obj}", Logging.Level.Debug);
+                debugForce(str, obj);
+        }
+
+        private void debugForce<T>(string str, T obj)
+        {
+            Logging.log($"{this} {str}: {obj}", Logging.Level.Debug);
         }
 
         private void debug<T1, T2>(string str, T1 obj1, T2 obj2)
@@ -852,7 +893,7 @@ namespace NaiveSocks
         public override string ToString()
         {
             var chname = Id == NaiveMultiplexing.ReservedId ? "Rsv" : Id.ToString();
-            return $"{{#{Parent?.Id}ch{chname} R/W={CounterR}/{CounterW} {State}}}";
+            return "{{#" + Parent?.Id + "ch" + chname + " R/W=" + CounterR + "/" + CounterW + (queuedSize > 0 ? " queued=" + queuedSize : null) + " " + State + "}}";
         }
 
         public void Dispose()
@@ -870,11 +911,14 @@ namespace NaiveSocks
         public int Count => queue.Count;
 
         private SpinLock _lock = new SpinLock(false);
+        private const int lockTimeout = 1000;
+
+        public bool IsWaiting => isWaiting;
 
         public bool Enqueue(T obj)
         {
             bool lt = false;
-            _lock.Enter(ref lt);
+            _lock.TryEnter(lockTimeout, ref lt);
             if (isWaiting) {
                 isWaiting = false;
                 _lock.Exit();
@@ -890,22 +934,21 @@ namespace NaiveSocks
         public ReusableAwaiter<T> DequeueAsync(out bool noAwaiting)
         {
             bool lt = false;
-            _lock.Enter(ref lt);
             if (isWaiting) {
                 throw new Exception("another dequeuing task is running");
             }
+            awaiter.Reset();
+            _lock.TryEnter(lockTimeout, ref lt);
             if (queue.Count > 0) {
-                noAwaiting = true;
                 var result = queue.Dequeue();
                 _lock.Exit();
-                awaiter.Reset();
+                noAwaiting = true;
                 awaiter.SetResult(result);
                 return awaiter;
             } else {
-                noAwaiting = false;
                 isWaiting = true;
-                awaiter.Reset();
                 _lock.Exit();
+                noAwaiting = false;
                 return awaiter;
             }
         }
@@ -913,7 +956,7 @@ namespace NaiveSocks
         public bool TryDequeue(out T value)
         {
             bool lt = false;
-            _lock.Enter(ref lt);
+            _lock.TryEnter(lockTimeout, ref lt);
             if (queue.Count > 0) {
                 value = queue.Dequeue();
                 _lock.Exit();

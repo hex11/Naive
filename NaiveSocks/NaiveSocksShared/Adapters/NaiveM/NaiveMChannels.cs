@@ -388,7 +388,7 @@ namespace NaiveSocks
                     }
                 } else if (cmd == "upload") {
                     while (true) {
-                        var msg = await ch.RecvMsg(null).CAF();
+                        var msg = await ch.RecvMsgR(null);
                         msg.TryRecycle();
                         if (msg.IsEOF)
                             break;
@@ -431,15 +431,16 @@ namespace NaiveSocks
                     long downloadedBytes = -1;
                     long lastReportBytes = 0;
                     long lastReportMs = 0;
+                    BufferPool.GlobalPut(BufferPool.GlobalGet(64 * 1024));
                     while (true) {
-                        var msg = await ch.RecvMsg(null);
+                        var msg = await ch.RecvMsgR(null);
+                        msg.TryRecycle();
                         if (downloadedBytes == -1) {
                             log(" Started download.");
                             downloadedBytes = 0;
                             sw.Restart();
                             continue;
                         }
-                        msg.TryRecycle();
                         if (msg.IsEOF)
                             break;
                         downloadedBytes += msg.Data.tlen;

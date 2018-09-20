@@ -12,7 +12,7 @@ using System.Runtime.InteropServices;
 namespace NaiveSocks
 {
 
-    public abstract class SocketStream : MyStream, IMyStreamSync, IMyStreamBeginEnd, IMyStreamReadFull
+    public abstract class SocketStream : MyStream, IMyStreamSync, IMyStreamReadFull, IMyStreamReadR
     {
         static SocketStream()
         {
@@ -121,21 +121,29 @@ namespace NaiveSocks
             // It's important since there is a hardware bug named 'Meltdown' in Intel CPUs.
             // TESTED: This optimization made ReadAsync 20x faster when bs.Len == 4, 
             //         on Windows 10 x64 16299.192 with a laptop Haswell CPU.
+            var ret = PreReadAsync(ref bs, full);
+            if (ret > 0)
+                return NaiveUtils.GetCachedTaskInt(ret);
+            Interlocked.Increment(ref ctr.Rasync);
+            return ReadAsyncImpl(bs);
+        }
 
+        private int PreReadAsync(ref BytesSegment bs, bool full)
+        {
             var bufRead = TryReadInternalBuffer(bs);
             if (bufRead > 0) {
                 if ((full || (EnableSmartSyncRead && Enable2ndBufferCheck)) && bs.Len > bufRead && socketAvailable > 0) {
                     int read = ReadSync_SocketHaveAvailableData(bs.Sub(bufRead));
-                    return NaiveUtils.GetCachedTaskInt(bufRead + read);
+                    return (bufRead + read);
                 } else {
-                    return NaiveUtils.GetCachedTaskInt(bufRead);
+                    return (bufRead);
                 }
             }
 
             if (full) {
                 // when bufRead == 0 && socketAvailable > 0
                 int read = ReadSync_SocketHaveAvailableData(bs);
-                return NaiveUtils.GetCachedTaskInt(read);
+                return (read);
             }
 
             if (EnableSmartSyncRead || (EnableReadaheadBuffer && bs.Len < ReadaheadBufferSize)) {
@@ -145,18 +153,17 @@ namespace NaiveSocks
                 }
                 var bufRead2 = TryFillAndReadInternalBuffer(bs);
                 if (bufRead2 > 0) {
-                    return NaiveUtils.GetCachedTaskInt(bufRead2);
+                    return (bufRead2);
                 }
                 if (EnableSmartSyncRead && socketAvailable > 0) {
                     // If the receive buffer of OS is not empty,
                     // use sync operation to reduce async overhead.
                     // This optimization made ReadAsync 12x faster.
                     int read = ReadSync_SocketHaveAvailableData(bs);
-                    return NaiveUtils.GetCachedTaskInt(read);
+                    return (read);
                 }
             }
-            Interlocked.Increment(ref ctr.Rasync);
-            return ReadAsyncImpl(bs);
+            return 0;
         }
 
         protected abstract Task<int> ReadAsyncImpl(BytesSegment bs);
@@ -255,26 +262,6 @@ namespace NaiveSocks
             return r;
         }
 
-        public IAsyncResult BeginWrite(byte[] buffer, int offset, int count, AsyncCallback callback, object state)
-        {
-            return Socket.BeginSend(buffer, offset, count, SocketFlags.None, callback, state);
-        }
-
-        public void EndWrite(IAsyncResult asyncResult)
-        {
-            Socket.EndSend(asyncResult);
-        }
-
-        public IAsyncResult BeginRead(byte[] buffer, int offset, int count, AsyncCallback callback, object state)
-        {
-            return Socket.BeginReceive(buffer, offset, count, SocketFlags.None, callback, state);
-        }
-
-        public int EndRead(IAsyncResult asyncResult)
-        {
-            return Socket.EndReceive(asyncResult);
-        }
-
         public static bool EnableUnderlyingCalls { get; set; } = false;
 
         static void InitUnderlyingRead()
@@ -312,6 +299,20 @@ namespace NaiveSocks
 
         [DllImport("Ws2_32", EntryPoint = "recv", SetLastError = true)]
         private unsafe static extern int win_recv([In]IntPtr s, [In]byte* buf, [In]int len, [In]int flags);
+
+        public AwaitableWrapper<int> ReadAsyncR(BytesSegment bs)
+        {
+            var ret = PreReadAsync(ref bs, false);
+            if (ret > 0)
+                return new AwaitableWrapper<int>(ret);
+            Interlocked.Increment(ref ctr.Rasync);
+            return ReadAsyncRImpl(bs);
+        }
+
+        protected virtual AwaitableWrapper<int> ReadAsyncRImpl(BytesSegment bs)
+        {
+            return new AwaitableWrapper<int>(ReadAsyncImpl(bs));
+        }
 
         //[System.Runtime.InteropServices.DllImport("Ws2_32", EntryPoint = "WSAGetLastError")]
         //private unsafe static extern int win_WSAGetLastError();

@@ -156,12 +156,14 @@ namespace Naive.HttpSvr
     }
 
     // https://stackoverflow.com/a/40689207
-    public sealed class ReusableAwaiter<T> : INotifyCompletion
+    public sealed class ReusableAwaiter<T> : INotifyCompletion, ICriticalNotifyCompletion
     {
         private Action _continuation = null;
+        private Action _continuation_2 = null;
         private T _result = default(T);
         private Exception _exception = null;
         private SpinLock _lock = new SpinLock(false);
+        private int _waitForGetResult = 0;
 
         public static ReusableAwaiter<T> NewCompleted(T result)
         {
@@ -178,8 +180,12 @@ namespace Naive.HttpSvr
 
         public T GetResult()
         {
-            if (!IsCompleted)
+            if (!IsCompleted) {
+                Logging.logWithStackTrace("GetResult() when not completed", Logging.Level.Warning);
                 throw new InvalidOperationException("not completed");
+            }
+            if (_waitForGetResult > 0)
+                _waitForGetResult--;
             if (_exception != null)
                 throw _exception;
             return _result;
@@ -187,17 +193,31 @@ namespace Naive.HttpSvr
 
         public void OnCompleted(Action continuation)
         {
-            if (_continuation != null)
-                throw new InvalidOperationException("This ReusableAwaiter instance has already been listened");
             bool lt = false;
             _lock.Enter(ref lt);
             if (this.IsCompleted) {
                 _lock.Exit();
                 continuation();
             } else {
-                _continuation = continuation;
-                _lock.Exit();
+                _waitForGetResult++;
+                if (_continuation == null) {
+                    _continuation = continuation;
+                    _lock.Exit();
+                } else if (_continuation_2 == null) {
+                    _continuation_2 = continuation;
+                    _lock.Exit();
+                    Logging.logWithStackTrace("continuation_2", Logging.Level.Warning);
+                } else {
+                    _lock.Exit();
+                    //throw new InvalidOperationException("This ReusableAwaiter instance has already been listened");
+                    throw new Exception("Too many continuations");
+                }
             }
+        }
+
+        public void UnsafeOnCompleted(Action continuation)
+        {
+            OnCompleted(continuation);
         }
 
         /// <summary>
@@ -218,9 +238,7 @@ namespace Naive.HttpSvr
                 this._result = result;
                 this.IsCompleted = true;
 
-                var c = TryGetContinuation();
-                _lock.Exit();
-                c?.Invoke();
+                ExitLockAndTryRunContinuations();
                 return true;
             }
             return false;
@@ -250,22 +268,27 @@ namespace Naive.HttpSvr
                 this._exception = exception;
                 this.IsCompleted = true;
 
-                var c = TryGetContinuation();
-                _lock.Exit();
-                c?.Invoke();
+                ExitLockAndTryRunContinuations();
                 return true;
             }
             return false;
         }
 
-        private Action TryGetContinuation()
+        private void ExitLockAndTryRunContinuations()
         {
-            var tmp = _continuation;
-            if (tmp != null) {
-                _continuation = null;
-                return tmp;
-            }
-            return null;
+            var c1 = _continuation;
+            var c2 = _continuation_2;
+            _continuation = null;
+            _continuation_2 = null;
+            _lock.Exit();
+            JustAwaiter.TryRunContinuation(c1);
+            JustAwaiter.TryRunContinuation(c2);
+        }
+
+        public void SetException(Exception exception)
+        {
+            if (!TrySetException(exception))
+                throw new InvalidOperationException("failed to SetException. the exception to set: " + exception.Message);
         }
 
         /// <summary>
@@ -277,8 +300,12 @@ namespace Naive.HttpSvr
             if (_continuation != null) {
                 throw new InvalidOperationException("Cannot reset: this awaiter is being listening. (complete this awaiter before reset)");
             }
+            if (_waitForGetResult != 0) {
+                throw new InvalidOperationException("Connot reset: GetResult() haven't been called. Race conditions may happen. _waitGetResult=" + _waitForGetResult);
+            }
             this._result = default(T);
             this._continuation = null;
+            this._continuation_2 = null;
             this._exception = null;
             this.IsCompleted = false;
             return this;
@@ -287,6 +314,298 @@ namespace Naive.HttpSvr
         public ReusableAwaiter<T> GetAwaiter()
         {
             return this;
+        }
+
+        public static ReusableAwaiter<T> FromBeginEnd<TInstance, TArgs, T>(
+            TInstance thisRef, Func<TInstance, TArgs, AsyncCallback, object, IAsyncResult> beginMethod,
+            Func<TInstance, IAsyncResult, T> endMethod, out Action<TArgs> reusableStart)
+        {
+            var _ra = new ReusableAwaiter<T>();
+            var _thisRef = thisRef;
+            AsyncCallback _callback = (ar) => {
+                T result;
+                try {
+                    result = endMethod(_thisRef, ar);
+                } catch (Exception e) {
+                    _ra.SetException(e);
+                    return;
+                }
+                _ra.SetResult(result);
+            };
+            reusableStart = (args) => {
+                _ra.Reset();
+                beginMethod(_thisRef, args, _callback, _ra);
+            };
+            return _ra;
+        }
+
+        public ReusableAwaiter<T> CAF() => this;
+    }
+
+    public sealed class JustAwaiter : INotifyCompletion, ICriticalNotifyCompletion
+    {
+        private static readonly Action IS_COMPLETED = () => { };
+        private Action _continuation = null;
+
+        public static JustAwaiter NewCompleted()
+        {
+            return new JustAwaiter() { _continuation = IS_COMPLETED };
+        }
+
+        public bool IsBeingListening => _continuation != null;
+
+        public bool IsCompleted => _continuation == IS_COMPLETED;
+
+        public void GetResult()
+        {
+        }
+
+        public void OnCompleted(Action continuation)
+        {
+            if (continuation == null)
+                throw new ArgumentNullException(nameof(continuation));
+
+            if (_continuation == IS_COMPLETED) {
+                TryRunContinuation(continuation);
+                return;
+            }
+            var v = Interlocked.Exchange(ref _continuation, continuation);
+            if (v == null) {
+                // nothing to do
+            } else if (v == IS_COMPLETED) {
+                v = Interlocked.Exchange(ref _continuation, IS_COMPLETED);
+                if (v == continuation) {
+                    TryRunContinuation(continuation);
+                } // or the continuation is called somewhere else
+            } else {
+                throw new Exception("a continuation is already registered!");
+            }
+        }
+
+        public void UnsafeOnCompleted(Action continuation)
+        {
+            OnCompleted(continuation);
+        }
+
+        public void SetBlocking(bool blocking)
+        {
+            if (!blocking && (_continuation == IS_COMPLETED))
+                return;
+            if (blocking) {
+                var v = Interlocked.Exchange(ref _continuation, null);
+                if (v == IS_COMPLETED || v == null) {
+                    // nothing to do
+                } else {
+                    // then it's a continuation
+                    _continuation = v;
+                }
+            } else {
+                var v = Interlocked.Exchange(ref _continuation, IS_COMPLETED);
+                if (v != null && v != IS_COMPLETED) {
+                    TryRunContinuation(v);
+                }
+            }
+        }
+
+        public void Reset()
+        {
+            _continuation = null;
+        }
+
+        public JustAwaiter GetAwaiter()
+        {
+            return this;
+        }
+
+        static WaitCallback waitCallback = (state) => ((Action)state)();
+
+        internal static void TryRunContinuation(Action c)
+        {
+            if (c != null) {
+                c();
+                //Task.Run(c);
+                //ThreadPool.QueueUserWorkItem(waitCallback, c);
+                //ThreadPool.UnsafeQueueUserWorkItem(waitCallback, c);
+            }
+        }
+    }
+
+    public struct AwaitableWrapper<T> : INotifyCompletion, ICriticalNotifyCompletion
+    {
+        public static readonly object COMPLETED = new object();
+        object awaitable;
+        T result;
+
+        public AwaitableWrapper(T result)
+        {
+            awaitable = COMPLETED;
+            this.result = result;
+        }
+
+        public AwaitableWrapper(Task<T> task)
+        {
+            awaitable = task ?? throw new ArgumentNullException(nameof(task));
+            result = default(T);
+        }
+
+        public AwaitableWrapper(ReusableAwaiter<T> ra)
+        {
+            awaitable = ra ?? throw new ArgumentNullException(nameof(ra));
+            result = default(T);
+        }
+
+        public AwaitableWrapper<T> GetAwaiter() => this;
+
+        private static ConfiguredTaskAwaitable<T>.ConfiguredTaskAwaiter GetTaskAwaiter(Task<T> task)
+        {
+            return task.CAF().GetAwaiter();
+        }
+
+        public bool IsCompleted
+        {
+            get {
+                if (awaitable == COMPLETED) {
+                    return true;
+                } else if (awaitable is Task<T> task) {
+                    return GetTaskAwaiter(task).IsCompleted;
+                } else if (awaitable is ReusableAwaiter<T> ra) {
+                    return ra.IsCompleted;
+                } else {
+                    throw WrongAwaitableType();
+                }
+            }
+        }
+
+        public T GetResult()
+        {
+            if (awaitable == COMPLETED) {
+                return result;
+            } else if (awaitable is Task<T> task) {
+                return GetTaskAwaiter(task).GetResult();
+            } else if (awaitable is ReusableAwaiter<T> ra) {
+                return ra.GetResult();
+            } else {
+                throw WrongAwaitableType();
+            }
+        }
+
+        public void OnCompleted(Action continuation)
+        {
+            if (awaitable == COMPLETED) {
+                JustAwaiter.TryRunContinuation(continuation);
+            } else if (awaitable is Task<T> task) {
+                GetTaskAwaiter(task).OnCompleted(continuation);
+            } else if (awaitable is ReusableAwaiter<T> ra) {
+                ra.OnCompleted(continuation);
+            } else {
+                throw WrongAwaitableType();
+            }
+        }
+
+        public void UnsafeOnCompleted(Action continuation)
+        {
+            if (awaitable == COMPLETED) {
+                JustAwaiter.TryRunContinuation(continuation);
+            } else if (awaitable is Task<T> task) {
+                GetTaskAwaiter(task).UnsafeOnCompleted(continuation);
+            } else if (awaitable is ReusableAwaiter<T> ra) {
+                ra.UnsafeOnCompleted(continuation);
+            } else {
+                throw WrongAwaitableType();
+            }
+        }
+
+        public AwaitableWrapper<T> CAF() => this;
+
+        private Exception WrongAwaitableType()
+        {
+            return new Exception("should not happend! awaitable=" + awaitable);
+        }
+    }
+
+    public struct AwaitableWrapper : INotifyCompletion, ICriticalNotifyCompletion
+    {
+        public static readonly object COMPLETED = new object();
+        object awaitable;
+
+        public static AwaitableWrapper GetCompleted() => new AwaitableWrapper { awaitable = COMPLETED };
+
+        public AwaitableWrapper(Task task)
+        {
+            awaitable = task ?? throw new ArgumentNullException(nameof(task));
+        }
+
+        public AwaitableWrapper(ReusableAwaiter<VoidType> ra)
+        {
+            awaitable = ra ?? throw new ArgumentNullException(nameof(ra));
+        }
+
+        public AwaitableWrapper GetAwaiter() => this;
+
+        private static ConfiguredTaskAwaitable.ConfiguredTaskAwaiter GetTaskAwaiter(Task task)
+        {
+            return task.CAF().GetAwaiter();
+        }
+
+        public bool IsCompleted
+        {
+            get {
+                if (awaitable == COMPLETED) {
+                    return true;
+                } else if (awaitable is Task task) {
+                    return GetTaskAwaiter(task).IsCompleted;
+                } else if (awaitable is ReusableAwaiter<VoidType> ra) {
+                    return ra.IsCompleted;
+                } else {
+                    throw WrongAwaitableType();
+                }
+            }
+        }
+
+        public void GetResult()
+        {
+            if (awaitable == COMPLETED) {
+                // noop
+            } else if (awaitable is Task task) {
+                GetTaskAwaiter(task).GetResult();
+            } else if (awaitable is ReusableAwaiter<VoidType> ra) {
+                ra.GetResult();
+            } else {
+                throw WrongAwaitableType();
+            }
+        }
+
+        public void OnCompleted(Action continuation)
+        {
+            if (awaitable == COMPLETED) {
+                JustAwaiter.TryRunContinuation(continuation);
+            } else if (awaitable is Task task) {
+                GetTaskAwaiter(task).OnCompleted(continuation);
+            } else if (awaitable is ReusableAwaiter<VoidType> ra) {
+                ra.OnCompleted(continuation);
+            } else {
+                throw WrongAwaitableType();
+            }
+        }
+
+        public void UnsafeOnCompleted(Action continuation)
+        {
+            if (awaitable == COMPLETED) {
+                JustAwaiter.TryRunContinuation(continuation);
+            } else if (awaitable is Task task) {
+                GetTaskAwaiter(task).UnsafeOnCompleted(continuation);
+            } else if (awaitable is ReusableAwaiter<VoidType> ra) {
+                ra.UnsafeOnCompleted(continuation);
+            } else {
+                throw WrongAwaitableType();
+            }
+        }
+
+        public AwaitableWrapper CAF() => this;
+
+        private Exception WrongAwaitableType()
+        {
+            return new Exception("should not happend! awaitable=" + awaitable);
         }
     }
 }

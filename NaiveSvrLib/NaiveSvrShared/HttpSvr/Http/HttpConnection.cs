@@ -421,7 +421,7 @@ namespace Naive.HttpSvr
             while (true) {
                 if (cur + 2 >= MaxRequestLength)
                     throw new Exception("request length > MaxRequestLength");
-                var read = await realInputStream.ReadAsync(buf, cur, 2 - gotLF).CAF();
+                var read = await myStream.ReadAsyncR(new BytesSegment(buf, cur, 2 - gotLF)).CAF();
                 if (read == 0)
                     throw new DisconnectedException("unexpected EOF");
                 var parsingCur = cur;

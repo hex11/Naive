@@ -55,6 +55,16 @@ namespace NaiveSocks
         Stream GetStream();
     }
 
+    public interface IMyStreamReadR : IMyStream
+    {
+        AwaitableWrapper<int> ReadAsyncR(BytesSegment bs);
+    }
+
+    public interface IMyStreamWriteR : IMyStream
+    {
+        AwaitableWrapper WriteAsyncR(BytesSegment bs);
+    }
+
     public struct MyStreamState
     {
         private const int
@@ -545,10 +555,10 @@ namespace NaiveSocks
                     while (true) {
                         int read;
                         if (msgStream == null) {
-                            read = await From.ReadAsync(buf).CAF();
+                            read = await From.ReadAsyncR(buf);
                         } else {
                             // no buffer preallocated for IMsgStream
-                            var msg = await msgStream.RecvMsg(null).CAF();
+                            var msg = await msgStream.RecvMsgR(null);
                             lastMsg = msg;
                             if (msg.IsEOF) {
                                 read = 0;
@@ -568,7 +578,7 @@ namespace NaiveSocks
                             break;
                         }
                         CounterR?.Add(read);
-                        await To.WriteAsync(new BytesSegment(buf.Bytes, buf.Offset, read)).CAF();
+                        await To.WriteAsyncR(new BytesSegment(buf.Bytes, buf.Offset, read));
                         CounterW?.Add(read);
                         lastMsg.TryRecycle();
                     }
@@ -637,12 +647,102 @@ namespace NaiveSocks
         public static async Task ReadFullImpl(IMyStream myStream, BytesSegment bs)
         {
             int pos = 0;
+            if (myStream is IMyStreamReadR r) {
+                while (pos < bs.Len) {
+                    var read = await r.ReadAsyncR(bs.Sub(pos));
+                    if (read == 0)
+                        throw new DisconnectedException($"unexpected EOF while ReadFull() (count={bs.Len}, pos={pos})");
+                    pos += read;
+                }
+                return;
+            }
             while (pos < bs.Len) {
                 var read = await myStream.ReadAsync(bs.Sub(pos)).CAF();
                 if (read == 0)
                     throw new DisconnectedException($"unexpected EOF while ReadFull() (count={bs.Len}, pos={pos})");
                 pos += read;
             }
+        }
+
+        public static ReusableAwaiter<VoidType> NewReadFullRStateMachine(out Action<IMyStream, BytesSegment> reuseableStart)
+        {
+            var ra = new ReusableAwaiter<VoidType>();
+            IMyStream myStream = null;
+            var bs = default(BytesSegment);
+            int step = -1;
+            int pos = 0;
+            var awaitable = default(AwaitableWrapper<int>);
+            Action moveNext = null;
+            moveNext = () => {
+                if (step == 0) {
+
+                } else if (step == 1) {
+                    goto STEP1;
+                } else {
+                    throw new Exception();
+                }
+
+                //while (pos < bs.Len) {
+                WHILE:
+                try {
+                    if (!(pos < bs.Len))
+                        goto EWHILE;
+                    awaitable = myStream.ReadAsyncR(bs.Sub(pos));
+                    step = 1;
+                    if (awaitable.IsCompleted)
+                        goto STEP1;
+                    awaitable.UnsafeOnCompleted(moveNext);
+                } catch (Exception e) {
+                    step = -1;
+                    ra.SetException(e);
+                    return;
+                }
+                return;
+                STEP1:
+                try {
+                    var read = awaitable.GetResult();
+                    if (read == 0)
+                        throw new DisconnectedException($"unexpected EOF while ReadFull() (count={bs.Len}, pos={pos})");
+                    pos += read;
+                } catch (Exception e) {
+                    step = -1;
+                    ra.SetException(e);
+                    return;
+                }
+                goto WHILE;
+                //}
+                EWHILE:
+                step = -1;
+                ra.SetResult(VoidType.Void);
+                return;
+            };
+            reuseableStart = (m, b) => {
+                if (step != -1)
+                    throw new Exception("state machine is running");
+                ra.Reset();
+                step = 0;
+                myStream = m;
+                bs = b;
+                pos = 0;
+                moveNext();
+            };
+            return ra;
+        }
+
+        public static AwaitableWrapper<int> ReadAsyncR(this IMyStream myStream, BytesSegment bs)
+        {
+            if (myStream is IMyStreamReadR myStreamReuse) {
+                return myStreamReuse.ReadAsyncR(bs);
+            }
+            return new AwaitableWrapper<int>(myStream.ReadAsync(bs));
+        }
+
+        public static AwaitableWrapper WriteAsyncR(this IMyStream myStream, BytesSegment bs)
+        {
+            if (myStream is IMyStreamWriteR myStreamReuse) {
+                return myStreamReuse.WriteAsyncR(bs);
+            }
+            return new AwaitableWrapper(myStream.WriteAsync(bs));
         }
 
         public static Task RelayWith(this IMyStream stream1, IMyStream stream2)

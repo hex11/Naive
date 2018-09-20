@@ -20,6 +20,7 @@ namespace Naive.HttpSvr
             IsClient = isClient;
             PongReceived += WebSocket_PongReceived;
             Activated += _activated;
+            readFullR = MyStreamExt.NewReadFullRStateMachine(out readFullR_start);
         }
 
         public WebSocket(IMyStream BaseStream, bool isClient, bool isOpen) : this(BaseStream, isClient)
@@ -572,13 +573,13 @@ namespace Naive.HttpSvr
                 }
                 bv.Set(payload, payloadOffset, payloadlen);
                 if (payloadlen > 0) {
-                    await WebSocket._readBaseAsync(stream, payload, payloadOffset, payloadlen).CAF();
+                    await _readBaseAsync(stream, payload, payloadOffset, payloadlen).CAF();
                     if (mask) {
                         for (int i = 0; i < payloadlen; i++) {
                             payload[payloadOffset + i] ^= maskkey[i % 4];
                         }
                     }
-                    if (HaveReadFilter != null) {
+                    if (HaveReadFilter) {
                         var oldlen = bv.len;
                         OnRead(bv);
                         if (optionalBuffer.Bytes != null && bv.bytes != optionalBuffer.Bytes) {
@@ -702,16 +703,24 @@ namespace Naive.HttpSvr
             }
         }
 
-        Task _readBaseAsync(int count) => _readBaseAsync(BaseStream, _read_buf, count);
+        ReusableAwaiter<VoidType> readFullR;
+        Action<IMyStream, BytesSegment> readFullR_start;
 
-        private static Task _readBaseAsync(IMyStream stream, byte[] buf, int count)
+
+        ReusableAwaiter<VoidType> _readBaseAsync(int count)
         {
-            return stream.ReadFullAsync(new BytesSegment(buf, 0, count));
+            return _readBaseAsync(BaseStream, _read_buf, 0, count);
         }
 
-        private static Task _readBaseAsync(IMyStream stream, byte[] buf, int offset, int count)
+        private ReusableAwaiter<VoidType> _readBaseAsync(IMyStream stream, byte[] buf, int count)
         {
-            return stream.ReadFullAsync(new BytesSegment(buf, offset, count));
+            return _readBaseAsync(stream, buf, 0, count);
+        }
+
+        private ReusableAwaiter<VoidType> _readBaseAsync(IMyStream stream, byte[] buf, int offset, int count)
+        {
+            readFullR_start(BaseStream, new BytesSegment(buf, offset, count));
+            return readFullR;
         }
 
         private byte[] concatBytes(byte[] a, byte[] b)

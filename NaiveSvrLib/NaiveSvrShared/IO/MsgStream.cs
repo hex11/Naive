@@ -14,6 +14,11 @@ namespace Naive.HttpSvr
         Task Close(CloseOpt closeOpt);
     }
 
+    public interface IMsgStreamReadR
+    {
+        AwaitableWrapper<Msg> RecvMsgR(BytesView buf);
+    }
+
     public interface IMsgStreamStringSupport
     {
         Task SendString(string str);
@@ -136,6 +141,13 @@ namespace Naive.HttpSvr
             if (msg.IsEOF)
                 throw new DisconnectedException("EOF Msg");
             return msg;
+        }
+
+        public static AwaitableWrapper<Msg> RecvMsgR(this IMsgStream ms, BytesView bv)
+        {
+            if (ms is IMsgStreamReadR r)
+                return r.RecvMsgR(bv);
+            return new AwaitableWrapper<Msg>(ms.RecvMsg(bv));
         }
     }
 

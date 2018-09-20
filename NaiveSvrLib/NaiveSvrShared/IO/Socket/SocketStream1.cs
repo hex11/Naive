@@ -10,7 +10,7 @@ using System.Reflection;
 
 namespace NaiveSocks
 {
-    public class SocketStream1 : SocketStream, IMyStreamMultiBuffer
+    public class SocketStream1 : SocketStream, IMyStreamMultiBuffer, IMyStreamWriteR
     {
         public SocketStream1(Socket socket) : base(socket)
         {
@@ -18,33 +18,41 @@ namespace NaiveSocks
 
         protected override Task<int> ReadAsyncImpl(BytesSegment bs)
         {
-            return TaskHelper.FromAsyncTrim(
-                thisRef: this,
-                args: bs,
-                beginMethod: (thisRef, args, callback, state) => thisRef.Socket.BeginReceive(args.Bytes, args.Offset, args.Len, SocketFlags.None, callback, state),
-                endMethod: (thisRef, asyncResult) => {
-                    var read = thisRef.Socket.EndReceive(asyncResult);
-                    thisRef.OnAsyncReadCompleted(read);
-                    if (read == 0)
-                        thisRef.State |= MyStreamState.RemoteShutdown;
-                    return read;
-                });
+            return TaskHelper.FromAsyncTrim(this, bs, ReadBeginMethod, ReadEndMethod);
+        }
+
+        private static IAsyncResult ReadBeginMethod(SocketStream1 thisRef, BytesSegment args, AsyncCallback callback, object state)
+        {
+            return thisRef.Socket.BeginReceive(args.Bytes, args.Offset, args.Len, SocketFlags.None, callback, state);
+        }
+
+        private static int ReadEndMethod(SocketStream1 thisRef, IAsyncResult asyncResult)
+        {
+            var read = thisRef.Socket.EndReceive(asyncResult);
+            thisRef.OnAsyncReadCompleted(read);
+            if (read == 0)
+                thisRef.State |= MyStreamState.RemoteShutdown;
+            return read;
         }
 
         public override Task WriteAsync(BytesSegment bs)
         {
-            return TaskHelper.FromAsyncTrim(
-                thisRef: this,
-                args: bs,
-                beginMethod: (thisRef, args, callback, state) => thisRef.Socket.BeginSend(args.Bytes, args.Offset, args.Len, SocketFlags.None, callback, state),
-                endMethod: (thisRef, asyncResult) => {
-                    if (asyncResult.CompletedSynchronously)
-                        Interlocked.Increment(ref ctr.Wsync);
-                    else
-                        Interlocked.Increment(ref ctr.Wasync);
-                    thisRef.Socket.EndSend(asyncResult);
-                    return VoidType.Void;
-                });
+            return TaskHelper.FromAsyncTrim(this, bs, WriteBeginMethod, WriteEndMethod);
+        }
+
+        private static VoidType WriteEndMethod(SocketStream1 thisRef, IAsyncResult asyncResult)
+        {
+            if (asyncResult.CompletedSynchronously)
+                Interlocked.Increment(ref ctr.Wsync);
+            else
+                Interlocked.Increment(ref ctr.Wasync);
+            thisRef.Socket.EndSend(asyncResult);
+            return VoidType.Void;
+        }
+
+        private static IAsyncResult WriteBeginMethod(SocketStream1 thisRef, BytesSegment args, AsyncCallback callback, object state)
+        {
+            return thisRef.Socket.BeginSend(args.Bytes, args.Offset, args.Len, SocketFlags.None, callback, state);
         }
 
         public Task WriteMultipleAsync(BytesView bv)
@@ -72,6 +80,32 @@ namespace NaiveSocks
                     thisRef.Socket.EndSend(asyncResult);
                     return VoidType.Void;
                 });
+        }
+
+        ReusableAwaiter<int> raR;
+        Action<BytesSegment> raR_start;
+        ReusableAwaiter<VoidType> raW;
+        Action<BytesSegment> raW_start;
+
+        protected override AwaitableWrapper<int> ReadAsyncRImpl(BytesSegment bs)
+        {
+            if (raR == null)
+                raR = ReusableAwaiter<int>.FromBeginEnd(this, ReadBeginMethod, ReadEndMethod, out raR_start);
+            raR_start(bs);
+            return new AwaitableWrapper<int>(raR);
+        }
+
+        public AwaitableWrapper WriteAsyncR(BytesSegment bs)
+        {
+            if (raW == null)
+                raW = ReusableAwaiter<VoidType>.FromBeginEnd(this, WriteBeginMethod, WriteEndMethod, out raW_start);
+            raW_start(bs);
+            if (raW.IsCompleted) {
+                Interlocked.Increment(ref ctr.Wsync);
+            } else {
+                Interlocked.Increment(ref ctr.Wasync);
+            }
+            return new AwaitableWrapper(raW);
         }
     }
 
