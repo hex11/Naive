@@ -15,7 +15,9 @@ function action_pre-build() {
 		[[ $BUILD_TIME ]] && buildText+=" built at $BUILD_TIME"
 		sed -i "s/BuildText = \".*\";/BuildText = \"$buildText\";/" "$BUILDINFO_FILE"
 	elif [[ $APPVEYOR ]]; then
-		buildText="git $APPVEYOR_REPO_BRANCH $SHORT_COMMIT $APPVEYOR_BUILD_VERSION"
+		buildText="git"
+		[[ $APPVEYOR_REPO_TAG == true ]] && buildText+=" $APPVEYOR_REPO_TAG_NAME" || buildText+=" $APPVEYOR_REPO_BRANCH"
+		buildText+=" $SHORT_COMMIT $APPVEYOR_BUILD_VERSION"
 		[[ $BUILD_TIME ]] && buildText+=" built at $BUILD_TIME"
 		sed -i "s/BuildText = \".*\";/BuildText = \"$buildText\";/" "$BUILDINFO_FILE"
 		MSBUILD=MSBuild.exe
