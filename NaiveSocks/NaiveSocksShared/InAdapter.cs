@@ -156,6 +156,10 @@ namespace NaiveSocks
         public Controller Controller { get; private set; }
         public Logger Logger { get; } = new Logger();
 
+        public string socket_impl { get; set; }
+
+        public IMyStream GetMyStreamFromSocket(Socket socket) => MyStream.FromSocket(socket, socket_impl);
+
         public BytesCountersRW BytesCountersRW { get; } = new BytesCountersRW {
             R = new BytesCounter(),
             W = new BytesCounter(MyStream.GlobalWriteCounter)
@@ -329,11 +333,11 @@ namespace NaiveSocks
         public override void Start()
         {
             base.Start();
-            if(listen == null) {
+            if (listen == null) {
                 Logger.warning("No 'listen'!");
                 return;
             }
-            listener = new Listener(listen);
+            listener = new Listener(this, listen);
             listener.Accepted += OnNewConnection;
             listener.Run().Forget();
         }

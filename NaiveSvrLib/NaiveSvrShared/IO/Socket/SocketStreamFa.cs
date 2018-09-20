@@ -48,7 +48,7 @@ namespace NaiveSocks
         BytesSegment _write_bs;
         ReusableAwaiter<VoidType> _write_ra = new ReusableAwaiter<VoidType>();
 
-        public AwaitableWrapper WriteAsyncR(BytesSegment bs)
+        public override AwaitableWrapper WriteAsyncRImpl(BytesSegment bs)
         {
             _write_ra.Reset();
             _write_bs = bs;
@@ -77,7 +77,7 @@ namespace NaiveSocks
         object _write_lock = new object();
         Task _write_last;
 
-        public override Task WriteAsync(BytesSegment bs)
+        public override Task WriteAsyncImpl(BytesSegment bs)
         {
             Interlocked.Increment(ref ctr.Wasync);
             lock (_write_lock) {

@@ -12,7 +12,7 @@ using System.Runtime.InteropServices;
 namespace NaiveSocks
 {
 
-    public abstract class SocketStream : MyStream, IMyStreamSync, IMyStreamReadFull, IMyStreamReadR
+    public abstract class SocketStream : MyStream, IMyStreamSync, IMyStreamReadFull, IMyStreamReadR, IMyStreamWriteR
     {
         static SocketStream()
         {
@@ -23,12 +23,12 @@ namespace NaiveSocks
         {
             this.Socket = socket;
             this.EPPair = EPPair.FromSocket(socket);
-            this.fd = socket.Handle;
+            this.Fd = socket.Handle;
         }
 
         public Socket Socket { get; }
 
-        private IntPtr fd { get; }
+        public IntPtr Fd { get; }
 
         public EPPair EPPair { get; }
 
@@ -105,6 +105,8 @@ namespace NaiveSocks
             }
         }
 
+        public virtual int GetAvailable() => Socket.Available;
+
         public virtual Task ReadFullAsyncImpl(BytesSegment bs)
         {
             return MyStreamExt.ReadFullImpl(this, bs);
@@ -149,7 +151,7 @@ namespace NaiveSocks
             if (EnableSmartSyncRead || (EnableReadaheadBuffer && bs.Len < ReadaheadBufferSize)) {
                 if (socketAvailable < bs.Len || socketAvailable < ReadaheadBufferSize) {
                     // Get the Available value from socket when needed.
-                    socketAvailable = Socket.Available;
+                    socketAvailable = GetAvailable();
                 }
                 var bufRead2 = TryFillAndReadInternalBuffer(bs);
                 if (bufRead2 > 0) {
@@ -247,7 +249,7 @@ namespace NaiveSocks
             return r;
         }
 
-        private int SocketReadImpl(BytesSegment bs)
+        protected virtual int SocketReadImpl(BytesSegment bs)
         {
             int r;
             if (EnableUnderlyingCalls && underlyingReadImpl != null) {
@@ -262,6 +264,40 @@ namespace NaiveSocks
             return r;
         }
 
+        public override Task WriteAsync(BytesSegment bs)
+        {
+            if (TryWriteSync(bs)) {
+                return NaiveUtils.CompletedTask;
+            }
+            return WriteAsyncImpl(bs);
+        }
+
+        public abstract Task WriteAsyncImpl(BytesSegment bs);
+
+        public AwaitableWrapper WriteAsyncR(BytesSegment bs)
+        {
+            if (TryWriteSync(bs)) {
+                return AwaitableWrapper.GetCompleted();
+            }
+            return WriteAsyncRImpl(bs);
+        }
+
+        public virtual AwaitableWrapper WriteAsyncRImpl(BytesSegment bs)
+        {
+            return new AwaitableWrapper(WriteAsyncImpl(bs));
+        }
+
+        private bool TryWriteSync(BytesSegment bs)
+        {
+            if (Socket.Poll(0, SelectMode.SelectWrite)) {
+                if (Socket.Send(bs.Bytes, bs.Offset, bs.Len, SocketFlags.None) != bs.Len)
+                    throw new Exception("should not happen: Socket.Send() != bs.Len");
+                Interlocked.Increment(ref ctr.Wsync);
+                return true;
+            }
+            return false;
+        }
+
         public static bool EnableUnderlyingCalls { get; set; } = false;
 
         static void InitUnderlyingRead()
@@ -270,10 +306,16 @@ namespace NaiveSocks
                 underlyingReadImpl = (s, bs) => {
                     bs.CheckAsParameter();
                     unsafe {
+                        int r;
                         fixed (byte* ptr = bs.Bytes) {
-                            return (int)unix_read((int)s.fd, ptr + bs.Offset, (IntPtr)bs.Len);
+                            r = (int)unix_read((int)s.Fd, ptr + bs.Offset, (IntPtr)bs.Len);
                             // TODO: Handle errors
                         }
+                        if (r < 0) {
+                            var errCode = Marshal.GetLastWin32Error();
+                            throw new SocketException(errCode);
+                        }
+                        return r;
                     }
                 };
             } else if (osPlatform == PlatformID.Win32NT) {
@@ -282,7 +324,7 @@ namespace NaiveSocks
                     int r;
                     unsafe {
                         fixed (byte* ptr = bs.Bytes) {
-                            r = win_recv(s.fd, ptr + bs.Offset, bs.Len, 0);
+                            r = win_recv(s.Fd, ptr + bs.Offset, bs.Len, 0);
                         }
                     }
                     if (r < 0) {

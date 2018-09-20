@@ -36,6 +36,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)IO\NaiveResumableMsgStream.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IO\Socket\SocketStream.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IO\Socket\SocketStreamFa.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IO\Socket\YASocket.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IO\TlsStream.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IO\WebSocket\WebSocket.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IO\WebSocket\WebSocketClient.cs" />

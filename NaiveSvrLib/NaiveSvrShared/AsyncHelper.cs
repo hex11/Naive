@@ -180,6 +180,8 @@ namespace Naive.HttpSvr
             private set;
         }
 
+        public Exception Exception => _exception;
+
         public T GetResult()
         {
             PreGetResult();

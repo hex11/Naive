@@ -35,7 +35,7 @@ namespace NaiveSocks
         private async Task Handle(TcpClient client)
         {
             try {
-                SocketStream socketStream = MyStream.FromSocket(client.Client);
+                var socketStream = GetMyStreamFromSocket(client.Client);
                 var ws = new WebSocket(socketStream, false, true);
                 if (timeout > 0)
                     ws.AddToManaged(timeout / 2, timeout);

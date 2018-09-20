@@ -35,7 +35,7 @@ namespace NaiveSocks
         {
             Socket socket = tcpClient.Client;
             var epPair = EPPair.FromSocket(socket);
-            var dataStream = MyStream.FromSocket(socket);
+            var dataStream = GetMyStreamFromSocket(socket);
             AddrPort dest;
             if (tproxy) {
                 dest = Unsafe.GetOriginalDst(socket, Logger);

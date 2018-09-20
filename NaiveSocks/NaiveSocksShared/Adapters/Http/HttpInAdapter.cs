@@ -11,7 +11,7 @@ using Nett;
 
 namespace NaiveSocks
 {
-    public class HttpInAdapter : InAdapterWithListenField, IHttpRequestAsyncHandler, IConnectionHandler, ICanReload
+    public class HttpInAdapter : InAdapterWithListener, IHttpRequestAsyncHandler, IConnectionHandler, ICanReload
     {
         public struct WebRoute
         {
@@ -66,20 +66,6 @@ namespace NaiveSocks
         {
             base.Init();
             httpServer = new HttpServer(this);
-            if (listen != null)
-                httpServer.AddListener(listen);
-        }
-
-        public override void Start()
-        {
-            base.Start();
-            httpServer.Run();
-        }
-
-        public override void Stop()
-        {
-            base.Stop();
-            httpServer.Stop();
         }
 
         HttpInAdapter newInstance;
@@ -98,6 +84,13 @@ namespace NaiveSocks
             var stream = await connection.HandleAndGetStream(this);
             var httpConn = WebBaseAdapter.CreateHttpConnectionFromMyStream(stream, httpServer);
             await httpConn.Process();
+        }
+
+        public override void OnNewConnection(TcpClient client)
+        {
+            var stream = GetMyStreamFromSocket(client.Client);
+            var httpConn = WebBaseAdapter.CreateHttpConnectionFromMyStream(stream, httpServer);
+            httpConn.Process().Forget();
         }
 
         static byte[] ConnectedResponse = NaiveUtils.UTF8Encoding.GetBytes(

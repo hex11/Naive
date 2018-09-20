@@ -35,7 +35,7 @@ namespace NaiveSocks
             return read;
         }
 
-        public override Task WriteAsync(BytesSegment bs)
+        public override Task WriteAsyncImpl(BytesSegment bs)
         {
             return TaskHelper.FromAsyncTrim(this, bs, WriteBeginMethod, WriteEndMethod);
         }
@@ -106,7 +106,7 @@ namespace NaiveSocks
             return new AwaitableWrapper<int>(raR);
         }
 
-        public AwaitableWrapper WriteAsyncR(BytesSegment bs)
+        public override AwaitableWrapper WriteAsyncRImpl(BytesSegment bs)
         {
             if (raW == null)
                 raW = ReusableAwaiter<VoidType>.FromBeginEnd(this, WriteBeginMethod, WriteEndMethod, out raW_start);

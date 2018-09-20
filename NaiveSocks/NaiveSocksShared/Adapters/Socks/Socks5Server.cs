@@ -9,7 +9,6 @@ namespace NaiveSocks
 {
     internal class Socks5Server
     {
-        public TcpClient Client { get; }
         public IMyStream Stream { get; }
         public byte[] buf;
 
@@ -43,10 +42,9 @@ namespace NaiveSocks
             Disconnected
         }
 
-        public Socks5Server(TcpClient socket)
+        public Socks5Server(IMyStream stream)
         {
-            this.Client = socket;
-            Stream = MyStream.FromSocket(socket.Client);
+            Stream = stream;
         }
 
         public async Task<bool> ProcessAsync()

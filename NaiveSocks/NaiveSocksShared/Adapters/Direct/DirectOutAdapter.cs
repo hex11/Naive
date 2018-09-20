@@ -26,7 +26,7 @@ namespace NaiveSocks
         protected override void GetDetail(GetDetailContext ctx)
         {
             base.GetDetail(ctx);
-            if(force_dest.IsDefault == false)
+            if (force_dest.IsDefault == false)
                 ctx.AddField("force_dest", force_dest);
         }
     }
@@ -37,7 +37,7 @@ namespace NaiveSocks
         {
             try {
                 var socket = await NaiveUtils.ConnectTcpAsync(dest, timeoutSeconds * 1000);
-                return new ConnectResult(adapter, MyStream.FromSocket(socket));
+                return new ConnectResult(adapter, MyStream.FromSocket(socket, adapter.GetAdapter().socket_impl));
             } catch (Exception e) {
                 return new ConnectResult(adapter, ConnectResultEnum.Failed) {
                     FailedReason = e.Message,

@@ -28,6 +28,8 @@ namespace NaiveSocks
 
             public string[] DebugFlags;
 
+            public string SocketImpl;
+
             public Logging.Level LoggingLevel;
 
             public string FilePath;
@@ -40,13 +42,13 @@ namespace NaiveSocks
 
         public class ConfigFile
         {
-            public string Context;
+            public string Content;
             public string Path;
 
             public static ConfigFile FromPath(string path)
             {
                 return new ConfigFile {
-                    Context = File.ReadAllText(path, Encoding.UTF8),
+                    Content = File.ReadAllText(path, Encoding.UTF8),
                     Path = path
                 };
             }
@@ -54,7 +56,7 @@ namespace NaiveSocks
             public static ConfigFile FromContent(string content)
             {
                 return new ConfigFile {
-                    Context = content
+                    Content = content
                 };
             }
         }
@@ -186,6 +188,8 @@ namespace NaiveSocks
         private void SetCurrentConfig(LoadedConfig loadedConfig)
         {
             CurrentConfig = loadedConfig;
+            if (!loadedConfig.SocketImpl.IsNullOrEmpty())
+                MyStream.SetSocketImpl(loadedConfig.SocketImpl);
             MyStream.TwoWayCopier.DefaultUseLoggerAsVerboseLogger = IsDebugFlagEnabled("copier_v");
             Channel.Debug = IsDebugFlagEnabled("mux_v");
             ConfigTomlLoaded?.Invoke(loadedConfig.TomlTable);
@@ -193,7 +197,7 @@ namespace NaiveSocks
 
         private LoadedConfig LoadConfig(ConfigFile cf, LoadedConfig newcfg)
         {
-            var toml = cf.Context;
+            var toml = cf.Content;
             newcfg = newcfg ?? new LoadedConfig();
             if (cf.Path != null) {
                 newcfg.FilePath = cf.Path;
@@ -272,6 +276,7 @@ namespace NaiveSocks
             ConfigTomlLoading?.Invoke(tomlTable);
 
             newcfg.TomlTable = tomlTable;
+            newcfg.SocketImpl = t.socket_impl;
             newcfg.LoggingLevel = t.log_level;
             newcfg.Aliases = t.aliases;
             newcfg.DebugFlags = t?.debug?.flags ?? new string[0];
@@ -689,7 +694,7 @@ namespace NaiveSocks
 
     public class Config
     {
-        public int gc_interval { get; set; } = 0;
+        public string socket_impl { get; set; }
         public Logging.Level log_level { get; set; } =
 #if DEBUG
             Logging.Level.None;

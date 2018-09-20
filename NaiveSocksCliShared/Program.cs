@@ -16,6 +16,7 @@ namespace NaiveSocks
         public static string configFilePath = configFileName;
 
         public static string specifiedConfigPath;
+        public static string specifiedConfigContent;
 
         public static string[] GetConfigFilePaths()
         {
@@ -51,9 +52,9 @@ namespace NaiveSocks
 
         private static string cmdHelpText => $@"{NameWithVertionText}
 
-Usage: {NAME_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FILE]
+Usage: {NAME_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FILE] [--config-stdin]
         [--no-cli] [--no-log-stdout] [--log-file FILE] [--log-stdout-no-time]
-        [--force-jit[-async]] [--socket-impl (1|2|fa)]";
+        [--force-jit[-async]] [--socket-impl (1|2|fa|ya)]";
 
         private static bool __magic_is_packed;
 
@@ -103,6 +104,10 @@ Usage: {NAME_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FILE]
             if (ar.TryGetValue("-c", out var v)) {
                 specifiedConfigPath = v.FirstParaOrThrow;
                 Logging.info($"configuation file: {specifiedConfigPath}");
+            } else if (ar.ContainsKey("--config-stdin")) {
+                Logging.info("reading configuration from stdin until EOF...");
+                specifiedConfigContent = Console.In.ReadToEnd();
+                Logging.info($"configuration read {specifiedConfigContent.Length} chars");
             }
 
             if (ar.TryGetValue("--socket-impl", out var socketImpl)) {
@@ -164,6 +169,10 @@ Usage: {NAME_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FILE]
 
             if (specifiedConfigPath != null) {
                 Commands.loadController(controller, specifiedConfigPath);
+            } else if (specifiedConfigContent != null) {
+                controller.FuncGetConfigFile = () => Controller.ConfigFile.FromContent(specifiedConfigContent);
+                controller.Load();
+                controller.Start();
             } else {
                 var paths = GetConfigFilePaths();
                 controller.LoadConfigFileFromMultiPaths(paths);

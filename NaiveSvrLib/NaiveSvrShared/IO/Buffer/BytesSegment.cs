@@ -74,6 +74,13 @@ namespace Naive.HttpSvr
             this.Len -= begin;
         }
 
+        public void ResetSelf()
+        {
+            this.Bytes = null;
+            this.Offset = 0;
+            this.Len = 0;
+        }
+
         public BytesSegment Sub(int begin) => Sub(begin, Len - begin);
         public BytesSegment Sub(int begin, int count)
         {

@@ -285,17 +285,19 @@ namespace NaiveSocks
 
     public class Listener
     {
-        public Listener(IPEndPoint localEP) : this(new TcpListener(localEP))
+        public Listener(IAdapter adapter, IPEndPoint localEP) : this(adapter, new TcpListener(localEP))
         {
         }
 
-        public Listener(TcpListener baseListener)
+        public Listener(IAdapter adapter, TcpListener baseListener)
         {
+            Adapter = adapter;
             BaseListener = baseListener;
         }
 
         bool stopping = false;
 
+        public IAdapter Adapter { get; }
         public TcpListener BaseListener { get; }
         public Action<TcpClient> Accepted;
 

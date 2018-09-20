@@ -259,31 +259,57 @@ namespace NaiveSocks
         {
             SocketStream1,
             SocketStream2,
-            SocketStreamFa
+            SocketStreamFa,
+            YASocket
         }
 
         public static SocketImpl CurrentSocketImpl = SocketImpl.SocketStream1;
 
         public static void SetSocketImpl(string str)
         {
-            if (str == "1") {
-                CurrentSocketImpl = SocketImpl.SocketStream1;
-            } else if (str == "2") {
-                CurrentSocketImpl = SocketImpl.SocketStream2;
-            } else if (str == "fa") {
-                CurrentSocketImpl = SocketImpl.SocketStreamFa;
-            } else {
-                Logging.error("SetSocketStreamImpl with wrong argument");
-            }
+            CurrentSocketImpl = GetSocketImplFromString(str);
             Logging.info("Current SocketStream implementation: " + CurrentSocketImpl);
+        }
+
+        public static SocketImpl GetSocketImplFromString(string str)
+        {
+            SocketImpl impl;
+            if (str == "1") {
+                impl = SocketImpl.SocketStream1;
+            } else if (str == "2") {
+                impl = SocketImpl.SocketStream2;
+            } else if (str == "fa") {
+                impl = SocketImpl.SocketStreamFa;
+            } else if (str == "ya") {
+                if (Environment.OSVersion.Platform == PlatformID.Unix) {
+                    impl = SocketImpl.YASocket;
+                } else {
+                    Logging.warning($"SocketStream implementation 'ya' (YASocket) is only available on Linux.");
+                    impl = SocketImpl.SocketStream1;
+                }
+            } else {
+                impl = SocketImpl.SocketStream1;
+                Logging.warning($"GetSocketImplFromString with wrong argument '{str}'");
+            }
+            return impl;
         }
 
         public static SocketStream FromSocket(Socket socket)
         {
-            if (CurrentSocketImpl == SocketImpl.SocketStream2)
+            return FromSocket(socket, CurrentSocketImpl);
+        }
+
+        public static SocketStream FromSocket(Socket socket, string impl)
+            => FromSocket(socket, (impl.IsNullOrEmpty() ? CurrentSocketImpl : GetSocketImplFromString(impl)));
+
+        public static SocketStream FromSocket(Socket socket, SocketImpl impl)
+        {
+            if (impl == SocketImpl.SocketStream2)
                 return new SocketStream2(socket);
-            if (CurrentSocketImpl == SocketImpl.SocketStreamFa)
+            if (impl == SocketImpl.SocketStreamFa)
                 return new SocketStreamFa(socket);
+            if (impl == SocketImpl.YASocket)
+                return new YASocket(socket);
             return new SocketStream1(socket);
         }
 

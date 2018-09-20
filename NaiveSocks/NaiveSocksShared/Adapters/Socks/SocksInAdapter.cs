@@ -50,12 +50,14 @@ namespace NaiveSocks
             private Socks5Server socks5svr;
             private readonly EPPair _eppair;
             private readonly SocksInAdapter _adapter;
+            private readonly IMyStream _stream;
 
             public SocksInConnection(TcpClient tcp, SocksInAdapter adapter) : base(adapter)
             {
                 _eppair = EPPair.FromSocket(tcp.Client);
                 _adapter = adapter;
-                socks5svr = new Socks5Server(tcp);
+                _stream = adapter.GetMyStreamFromSocket(tcp.Client);
+                socks5svr = new Socks5Server(_stream);
 
                 Socks5Server.Methods methods = Socks5Server.Methods.None;
                 if (adapter._allowNoAuth)
@@ -84,8 +86,10 @@ namespace NaiveSocks
                     if (adapter.fastreply)
                         await OnConnectionResult(new ConnectResult(null, ConnectResultEnum.Conneceted)).CAF();
                     NaiveUtils.RunAsyncTask(async () => {
-                        using (tcp) {
+                        try {
                             await _adapter.Controller.HandleInConnection(this, outRef);
+                        } finally {
+                            MyStream.CloseWithTimeout(_stream).Forget();
                         }
                     }).Forget();
                 };

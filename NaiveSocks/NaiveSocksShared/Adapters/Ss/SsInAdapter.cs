@@ -28,7 +28,7 @@ namespace NaiveSocks
                     using (client) {
                         var socket = client.Client;
                         var remoteEP = socket.RemoteEndPoint as IPEndPoint;
-                        var dataStream = getEncryptionStream(MyStream.FromSocket(socket));
+                        var dataStream = getEncryptionStream(GetMyStreamFromSocket(socket));
                         var buf = new BytesSegment(new byte[3]);
                         await dataStream.ReadAllAsync(buf, 3).CAF(); // read ahead
                         var addrType = (Socks5Server.AddrType)buf[0];

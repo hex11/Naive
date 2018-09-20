@@ -198,21 +198,40 @@
 		var monitorXhr = function (xhr, handler, progress) {
 			var lastLoaded = 0;
 			var lastTime = 0;
-			xhr.upload.onprogress = function (e) {
-				var prog = e.loaded / e.total;
+			var loaded = 0;
+			var total = 1;
+			var timer = null;
+			var onprogress = function () {
+				var prog = loaded / total;
 				progress(prog);
-				var str = (prog * 100).toFixed(2) +  '% (' + formatBytes(e.loaded) + ' / ' + formatBytes(e.total) + ')';
+				var str = (prog * 100).toFixed(2) +  '% (' + formatBytes(loaded) + ' / ' + formatBytes(total) + ')';
 				var curTime = new Date().getTime();
 				if (lastTime) {
-					str += ' ' + ((e.loaded - lastLoaded) / 1024 / (curTime - lastTime) * 1000).toFixed(2) + ' KiB/s';
+					str += ' ' + ((loaded - lastLoaded) / 1024 / (curTime - lastTime) * 1000).toFixed(2) + ' KiB/s';
 				}
 				lastTime = curTime;
-				lastLoaded = e.loaded;
+				lastLoaded = loaded;
 				handler(str);
 			};
-			xhr.onload = function (e) { progress(1); handler('Reply: ' + xhr.responseText); };
-			xhr.onerror = function (e) { progress(1); handler('Error: ' + xhr.status + ' ' + xhr.statusText); };
-			xhr.onabort = function (e) { progress(1); handler('Abort'); };
+			xhr.upload.onprogress = function (e) {
+				loaded = e.loaded;
+				total = e.total;
+				if (timer === null) {
+					timer = setInterval(function (){
+						onprogress();
+					}, 500);
+					onprogress();
+				}
+			};
+			var finalize = function (handlerArg) {
+				if (timer !== null)
+					clearInterval(timer);
+				progress(1);
+				handler(handlerArg);
+			};
+			xhr.onload = function (e) { finalize('Reply: ' + xhr.responseText); };
+			xhr.onerror = function (e) { finalize('Error: ' + xhr.status + ' ' + xhr.statusText); };
+			xhr.onabort = function (e) { finalize('Abort'); };
 		}
 		for (var i = 0; i < forms.length; i++) {
 			var form = forms[i];

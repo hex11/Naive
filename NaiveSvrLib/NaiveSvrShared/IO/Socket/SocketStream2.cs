@@ -134,7 +134,7 @@ namespace NaiveSocks
             }
         }
 
-        public override Task WriteAsync(BytesSegment bv)
+        public override Task WriteAsyncImpl(BytesSegment bv)
         {
             var e = writeArgPool.GetValue();
             e.SetBuffer(bv.Bytes, bv.Offset, bv.Len);
