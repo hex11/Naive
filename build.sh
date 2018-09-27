@@ -52,5 +52,5 @@ function action_all() {
 
 for var in "$@"
 do
-	action_$var || exit 1
+	"action_$var" || exit 1
 done

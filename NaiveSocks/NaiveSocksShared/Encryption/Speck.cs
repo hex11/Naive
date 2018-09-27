@@ -74,35 +74,30 @@ namespace NaiveSocks
             {
                 bs.CheckAsParameter();
                 var pos = bs.Offset;
-                var end = pos + bs.Len;
-                var bytesGCHandle = GCHandle.Alloc(bs.Bytes, GCHandleType.Pinned);
-                try {
-                    var bytes = (byte*)bytesGCHandle.AddrOfPinnedObject();
+                var len = bs.Len;
+                fixed (byte* bytes = &bs.Bytes[pos]) {
                     if (EnableMultiThreading && bs.Len >= 32 * 1024 && ThreadCount > 1) {
-                        UpdateMT(bytes, pos, end, ThreadCount);
+                        UpdateMT(bytes, len, ThreadCount);
                     } else {
-                        Update(bytes, pos, end, keyStreamBuf, ref keystreamBufferPos, ref counter, keys);
+                        Update(bytes, len, keyStreamBuf, ref keystreamBufferPos, ref counter, keys);
                     }
-                } finally {
-                    bytesGCHandle.Free();
                 }
             }
 
-            private void UpdateMT(byte* bytes, int pos, int end, int threadCount)
+            private void UpdateMT(byte* bytes, int len, int threadCount)
             {
+                var pos = 0;
                 // update until end of keystream buffer:
                 if (keystreamBufferPos != KeystreamBufferSize)
-                    Update(bytes, pos, (pos = pos + KeystreamBufferSize - keystreamBufferPos),
+                    Update(bytes, (pos = KeystreamBufferSize - keystreamBufferPos),
                         keyStreamBuf, ref keystreamBufferPos, ref counter, keys);
-
-                int len = end - pos;
                 int lenPerThread = (len / threadCount);
                 lenPerThread -= (lenPerThread % KeystreamBufferSize); // align to keystream buffer size
                 var ctrPerThread = (ulong)lenPerThread / BlockSize;
                 var tasks = new Task[threadCount - 1];
                 for (int i = 0; i < tasks.Length; i++) {
                     var threadPos = pos;
-                    var threadEnd = pos += lenPerThread;
+                    pos += lenPerThread;
                     var threadCtr = counter;
                     var oldV1 = counter.v1;
                     if ((counter.v1 += ctrPerThread) < oldV1)
@@ -110,19 +105,19 @@ namespace NaiveSocks
                     tasks[i] = Task.Run(() => {
                         var ksBuffer = stackalloc byte[KeystreamBufferSize];
                         var ksPos = KeystreamBufferSize;
-                        Update(bytes, threadPos, threadEnd,
+                        Update(&bytes[threadPos], lenPerThread,
                             ksBuffer, ref ksPos, ref threadCtr, keys);
                     });
                 }
                 // update the last part by this thread:
-                Update(bytes, pos, end, keyStreamBuf, ref keystreamBufferPos, ref counter, keys);
+                Update(&bytes[pos], len - pos, keyStreamBuf, ref keystreamBufferPos, ref counter, keys);
                 Task.WaitAll(tasks);
             }
 
-            static void Update(byte* bytes, int pos, int end,
+            static void Update(byte* bytes, int len,
                 byte* keyStreamBuf, ref int keystreamBufferPos, ref QWords128 counter, Keys128128 keys)
             {
-                while (pos < end) {
+                while (len > 0) {
                     var remainningKeystream = KeystreamBufferSize - keystreamBufferPos;
                     if (remainningKeystream == 0) {
                         keystreamBufferPos = 0;
@@ -132,13 +127,13 @@ namespace NaiveSocks
                             ksb[i] = counter;
                             if (++counter.v1 == 0)
                                 ++counter.v0;
-                            ksb[i] = Cipher.encrypt_128_128(ref keys, ksb[i]);
+                            ksb[i] = Cipher.encrypt_128_128(keys, ksb[i]);
                         }
                     }
-                    var count = end - pos;
-                    count = count < remainningKeystream ? count : remainningKeystream;
-                    NaiveUtils.XorBytesUnsafe(keyStreamBuf + keystreamBufferPos, bytes + pos, count);
-                    pos += count;
+                    var count = len < remainningKeystream ? len : remainningKeystream;
+                    NaiveUtils.XorBytesUnsafe(&keyStreamBuf[keystreamBufferPos], bytes, count);
+                    bytes += count;
+                    len -= count;
                     keystreamBufferPos += count;
                 }
             }
@@ -337,7 +332,7 @@ namespace NaiveSocks
                 return keys;
             }
 
-            public static QWords128 encrypt_128_128(ref Keys128128 keySchedules, QWords128 plaintext)
+            public static QWords128 encrypt_128_128(Keys128128 keySchedules, QWords128 plaintext)
             {
                 var keys = keySchedules.keys;
                 var cv1 = plaintext.v1;

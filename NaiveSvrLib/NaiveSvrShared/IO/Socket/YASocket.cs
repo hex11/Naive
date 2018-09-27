@@ -12,14 +12,14 @@ namespace NaiveSocks
 {
     public class YASocket : SocketStream, IEpollHandler
     {
-        const EPOLL_EVENTS PollInEvents = EPOLL_EVENTS.IN | EPOLL_EVENTS.RDHUP | EPOLL_EVENTS.ONESHOT;
+        private const EPOLL_EVENTS PollInEvents = EPOLL_EVENTS.IN | EPOLL_EVENTS.RDHUP | EPOLL_EVENTS.ONESHOT | EPOLL_EVENTS.ET;
 
         public YASocket(Socket socket) : base(socket)
         {
         }
 
-        int fd => Fd.ToInt32();
-        int fdR;
+        private int fd => Fd.ToInt32();
+        private int fdR;
 
         public void HandleEvent(Epoller s, EPOLL_EVENTS e)
         {
@@ -80,8 +80,8 @@ namespace NaiveSocks
             await WriteAsyncRImpl(bs);
         }
 
-        ReusableAwaiter<VoidType> raWrite = new ReusableAwaiter<VoidType>();
-        BytesSegment bufWrite;
+        private ReusableAwaiter<VoidType> raWrite = new ReusableAwaiter<VoidType>();
+        private BytesSegment bufWrite;
 
         public override AwaitableWrapper WriteAsyncRImpl(BytesSegment bs)
         {
@@ -97,8 +97,8 @@ namespace NaiveSocks
             return await ReadAsyncRImpl(bs);
         }
 
-        ReusableAwaiter<int> raRead = new ReusableAwaiter<int>();
-        BytesSegment bufRead;
+        private ReusableAwaiter<int> raRead = new ReusableAwaiter<int>();
+        private BytesSegment bufRead;
 
         protected override AwaitableWrapper<int> ReadAsyncRImpl(BytesSegment bs)
         {
@@ -117,7 +117,7 @@ namespace NaiveSocks
             return new AwaitableWrapper<int>(raRead);
         }
 
-        const int FIONBIO = 0x5421;
+        private const int FIONBIO = 0x5421;
 
         public override int GetAvailable()
         {
@@ -168,12 +168,12 @@ namespace NaiveSocks
 
     public class Epoller
     {
-        const int MAX_EVENTS = 16;
+        private const int MAX_EVENTS = 16;
 
-        int ep;
-        Dictionary<int, IEpollHandler> mapFdToHandler = new Dictionary<int, IEpollHandler>();
-        System.Threading.ReaderWriterLockSlim mapLock = new System.Threading.ReaderWriterLockSlim();
-        Logger Logger = new Logger() { ParentLogger = Logging.RootLogger };
+        private int ep;
+        private Dictionary<int, IEpollHandler> mapFdToHandler = new Dictionary<int, IEpollHandler>();
+        private System.Threading.ReaderWriterLockSlim mapLock = new System.Threading.ReaderWriterLockSlim();
+        private Logger Logger = new Logger() { ParentLogger = Logging.RootLogger };
 
         public int[] GetFds() => mapFdToHandler.Keys.ToArray();
 
@@ -287,34 +287,35 @@ namespace NaiveSocks
             return 0;
         }
 
-        private void PollLoop(int ep)
+        private unsafe void PollLoop(int ep)
         {
             if (ep < 0)
                 throw new Exception("epoll fd does not exist.");
             Logger.debug("PollLoop running");
 
-            var events = new epoll_event[MAX_EVENTS];
-            while (true) {
-                var eventCount = LinuxNative.epoll_wait(ep, events, MAX_EVENTS, -1);
-                if (eventCount < 0) {
-                    var errno = LinuxNative.GetErrno();
-                    if (errno == 4) // Interrupted system call
-                        continue;
-                    LinuxNative.ThrowWithErrno(nameof(LinuxNative.epoll_wait));
-                }
-                Logger.debug("eventcount " + eventCount);
-                for (int i = 0; i < eventCount; i++) {
-                    var e = events[i];
-                    var eventType = e.events;
-                    mapLock.EnterReadLock();
-                    bool ok = mapFdToHandler.TryGetValue(e.u32a, out var handler);
-                    mapLock.ExitReadLock();
-                    if (!ok) {
-                        Logger.warning($"EpollHandler not found! event({i}/{eventCount})=[{eventType}] u64=[{e.u64:X}]");
+            fixed (epoll_event* events = new epoll_event[MAX_EVENTS])
+                while (true) {
+                    var eventCount = LinuxNative.epoll_wait(ep, events, MAX_EVENTS, -1);
+                    if (eventCount < 0) {
+                        var errno = LinuxNative.GetErrno();
+                        if (errno == 4) // Interrupted system call
+                            continue;
+                        LinuxNative.ThrowWithErrno(nameof(LinuxNative.epoll_wait), errno);
                     }
-                    handler.HandleEvent(this, eventType);
+                    Logger.debug("eventcount " + eventCount);
+                    for (int i = 0; i < eventCount; i++) {
+                        var e = events[i];
+                        var eventType = e.events;
+                        mapLock.EnterReadLock();
+                        bool ok = mapFdToHandler.TryGetValue(e.u32a, out var handler);
+                        mapLock.ExitReadLock();
+                        if (!ok) {
+                            Logger.warning($"EpollHandler not found! event({i}/{eventCount})=[{eventType}] u64=[{e.u64:X}]");
+                            continue;
+                        }
+                        handler.HandleEvent(this, eventType);
+                    }
                 }
-            }
         }
 
         private static int EpollCreate()
@@ -328,9 +329,9 @@ namespace NaiveSocks
         }
     }
 
-    class LinuxNative
+    internal static class LinuxNative
     {
-        const string LIBC = "libc";
+        private const string LIBC = "libc";
 
         [DllImport(LIBC, SetLastError = true)]
         public unsafe static extern int read([In]int fd, [In]byte* buf, [In]int count);
@@ -354,7 +355,7 @@ namespace NaiveSocks
         public static extern int epoll_create([In]int size);
 
         [DllImport(LIBC, SetLastError = true)]
-        public unsafe static extern int epoll_wait(int fileDescriptor, [In, Out] epoll_event[] events, int maxevents, int timeout);
+        public unsafe static extern int epoll_wait(int fileDescriptor, epoll_event* events, int maxevents, int timeout);
 
         [DllImport(LIBC, SetLastError = true)]
         public unsafe static extern int epoll_ctl(int epFd, EPOLL_CTL op, int fd, ref epoll_event ev);
@@ -427,7 +428,7 @@ namespace NaiveSocks
     }
 
     [StructLayout(LayoutKind.Explicit, Pack = 1, Size = 12)]
-    struct epoll_event
+    internal struct epoll_event
     {
         [FieldOffset(0)]
         public EPOLL_EVENTS events;      /* Epoll events */
