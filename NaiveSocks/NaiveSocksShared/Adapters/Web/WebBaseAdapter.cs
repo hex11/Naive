@@ -55,9 +55,9 @@ namespace NaiveSocks
             return false;
         }
 
-        public override void Start()
+        protected override void OnStart()
         {
-            base.Start();
+            base.OnStart();
             if (_oldInstance != null) {
                 _oldInstance._newInstance = this;
                 _oldInstance = null;

@@ -58,15 +58,15 @@ namespace NaiveSocks
 
         Action<InConnection> _handler;
 
-        protected override void Init()
+        protected override void OnInit()
         {
-            base.Init();
+            base.OnInit();
             _handler = ConnectionHandlerFromRules(rules);
         }
 
-        public override void Stop()
+        protected override void OnStop()
         {
-            base.Stop();
+            base.OnStop();
             ctsOnStop.Cancel();
         }
 

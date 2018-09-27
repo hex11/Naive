@@ -45,9 +45,9 @@ namespace NaiveSocks
             this.enc = Ss.GetCipherByName("aes-256-ctr").GetEncryptorFunc(key);
         }
 
-        public override void Start()
+        protected override void OnStart()
         {
-            base.Start();
+            base.OnStart();
             if (connect_on_start) {
                 CheckPool();
             }

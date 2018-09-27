@@ -428,8 +428,8 @@ namespace NaiveSocks
             foreach (var item in OutAdapters) {
                 info($"OutAdapter '{item.Name}' = {item.ToString(false)}");
                 try {
-                    item.InternalInit(this);
-                    item.InternalStart(checkIcr(item));
+                    item.Init(this);
+                    item.StartInternal(checkIcr(item));
                 } catch (Exception e) {
                     Logger.exception(e, Logging.Level.Error, $"starting OutAdapter '{item.Name}' = {item}");
                     failedCount++;
@@ -438,8 +438,8 @@ namespace NaiveSocks
             foreach (var item in InAdapters) {
                 info($"InAdapter '{item.Name}' = {item.ToString(false)} -> {item.@out?.Adapter?.Name?.Quoted() ?? "(No OutAdapter)"}");
                 try {
-                    item.InternalInit(this);
-                    item.InternalStart(checkIcr(item));
+                    item.Init(this);
+                    item.StartInternal(checkIcr(item));
                 } catch (Exception e) {
                     Logger.exception(e, Logging.Level.Error, $"starting InAdapter '{item.Name}' = {item}");
                     failedCount++;
@@ -458,12 +458,12 @@ namespace NaiveSocks
             foreach (var item in config.InAdapters) {
                 var reloading = item is ICanReload icr && listNotCallStop?.Contains(icr) == true;
                 info($"stopping{(reloading ? " (reloading)" : "")} InAdapter: {item}");
-                item.InternalStop(!reloading);
+                item.StopInternal(!reloading);
             }
             foreach (var item in config.OutAdapters) {
                 var reloading = item is ICanReload icr && listNotCallStop?.Contains(icr) == true;
                 info($"stopping{(reloading ? " (reloading)" : "")} OutAdapter: '{item.Name}' {item}");
-                item.InternalStop(!reloading);
+                item.StopInternal(!reloading);
             }
             Logger.info($"=====Adapters Stopped=====");
         }

@@ -224,14 +224,5 @@ namespace NaiveSocks
         //        _request = request;
         //    }
         //}
-
-
-        public override void Start()
-        {
-        }
-
-        public override void Stop()
-        {
-        }
     }
 }

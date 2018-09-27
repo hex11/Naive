@@ -1,4 +1,5 @@
-﻿using System.Net;
+﻿using System;
+using System.Net;
 using System.Net.Sockets;
 using System.Threading.Tasks;
 using Nett;
@@ -175,34 +176,68 @@ namespace NaiveSocks
             }
         }
 
-        public bool IsRunning { get; set; }
+        public bool IsRunning { get; private set; }
 
-        public virtual void Start()
+        protected virtual void OnStart()
         {
         }
 
-        internal void InternalStart(bool callStart)
+        public void Start()
         {
+            StartInternal(true);
+        }
+
+        internal void StartInternal(bool callStart)
+        {
+            if (IsRunning) {
+                Logger.warning("Start() when is already running.");
+                return;
+            }
             IsRunning = true;
-            if (callStart)
-                Start();
+            try {
+                if (callStart)
+                    OnStart();
+            } catch (Exception e) {
+                Logger.exception(e, Logging.Level.Error, "OnStart()");
+            }
         }
 
-        public virtual void Stop()
+        protected virtual void OnStop()
         {
         }
 
-        internal void InternalStop(bool callStop)
+        public void Stop(bool callStop)
         {
+            StopInternal(true);
+        }
+
+        internal void StopInternal(bool callStop)
+        {
+            if (!IsRunning) {
+                Logger.warning("Stop() when is not running.");
+                return;
+            }
             IsRunning = false;
-            if (callStop)
-                Stop();
+            try {
+                if (callStop)
+                    OnStop();
+            } catch (Exception e) {
+                Logger.exception(e, Logging.Level.Error, "OnStop()");
+            }
         }
 
-        internal void InternalInit(Controller controller)
+        protected virtual void OnInit()
+        {
+        }
+
+        internal void Init(Controller controller)
         {
             this.Controller = controller;
-            Init();
+            try {
+                OnInit();
+            } catch (Exception e) {
+                Logger.exception(e, Logging.Level.Error, "OnInit()");
+            }
         }
 
         public virtual void SetConfig(TomlTable toml)
@@ -234,8 +269,6 @@ namespace NaiveSocks
                 }
             }
         }
-
-        protected virtual void Init() { }
 
         public override string ToString()
         {
@@ -330,9 +363,9 @@ namespace NaiveSocks
     {
         private Listener listener;
 
-        public override void Start()
+        protected override void OnStart()
         {
-            base.Start();
+            base.OnStart();
             if (listen == null) {
                 Logger.warning("No 'listen'!");
                 return;
@@ -342,7 +375,7 @@ namespace NaiveSocks
             listener.Run().Forget();
         }
 
-        public override void Stop()
+        protected override void OnStop()
         {
             listener.Stop();
         }

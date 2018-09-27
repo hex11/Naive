@@ -62,9 +62,9 @@ namespace NaiveSocks
             }
         }
 
-        protected override void Init()
+        protected override void OnInit()
         {
-            base.Init();
+            base.OnInit();
             httpServer = new HttpServer(this);
         }
 
@@ -74,7 +74,7 @@ namespace NaiveSocks
         {
             if (oldInstance is HttpInAdapter old) {
                 old.newInstance = this;
-                old.Stop();
+                old.OnStop();
             }
             return false;
         }

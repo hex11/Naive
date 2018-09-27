@@ -34,9 +34,9 @@ namespace NaiveSocks
             return false;
         }
 
-        public override void Start()
+        protected override void OnStart()
         {
-            base.Start();
+            base.OnStart();
             if (passwd.IsNullOrEmpty()) {
                 Logger.warning("passwd is null or empty!");
             }

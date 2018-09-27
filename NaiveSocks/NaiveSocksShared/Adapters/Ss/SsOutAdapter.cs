@@ -25,9 +25,9 @@ namespace NaiveSocks
 
         private Func<IMyStream, IMyStream> getEncryptionStream;
 
-        public override void Start()
+        protected override void OnStart()
         {
-            base.Start();
+            base.OnStart();
             getEncryptionStream = Ss.GetCipherByName(encryption).GetEncryptionStreamFunc(key);
         }
 

@@ -52,9 +52,9 @@ namespace NaiveSocks
             listen = toml.TryGetValue("local", listen);
         }
 
-        public override void Start()
+        protected override void OnStart()
         {
-            base.Start();
+            base.OnStart();
 
             httpServer = new NaiveWebsiteServer();
             httpServer.Router.AutoSetHandled = false;
@@ -111,10 +111,10 @@ namespace NaiveSocks
             });
         }
 
-        public override void Stop()
+        protected override void OnStop()
         {
             httpServer.Stop();
-            base.Stop();
+            base.OnStop();
         }
 
         public Task HandleRequestAsync(HttpConnection p)

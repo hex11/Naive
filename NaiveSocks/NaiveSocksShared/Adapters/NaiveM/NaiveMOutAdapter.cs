@@ -161,9 +161,9 @@ namespace NaiveSocks
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/63.0.3239.84 Safari/537.36"
         };
 
-        protected override void Init()
+        protected override void OnInit()
         {
-            base.Init();
+            base.OnInit();
             if (@out == null && network != null) {
                 @out = Controller.AdapterRefFromName("direct");
             }
@@ -174,9 +174,9 @@ namespace NaiveSocks
             }
         }
 
-        public override void Start()
+        protected override void OnStart()
         {
-            base.Start();
+            base.OnStart();
             if (connect_on_start || network != null) {
                 CheckPoolWithDelay();
             }

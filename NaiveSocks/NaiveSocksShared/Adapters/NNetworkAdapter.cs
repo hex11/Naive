@@ -57,9 +57,9 @@ namespace NaiveSocks
 
         List<NClient> clients = new List<NClient>();
 
-        protected override void Init()
+        protected override void OnInit()
         {
-            base.Init();
+            base.OnInit();
             domain = domain.TrimStart('.');
         }
 

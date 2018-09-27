@@ -14,10 +14,10 @@ namespace NaiveSocks
         private Func<IMyStream, IMyStream> getEncryptionStream;
         public string encryption { get; set; } = "aes-128-ctr";
 
-        public override void Start()
+        protected override void OnStart()
         {
             getEncryptionStream = Ss.GetCipherByName(encryption).GetEncryptionStreamFunc(key);
-            base.Start();
+            base.OnStart();
         }
 
         public override void OnNewConnection(TcpClient client)
