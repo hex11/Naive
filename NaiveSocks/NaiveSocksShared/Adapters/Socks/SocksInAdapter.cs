@@ -1,4 +1,6 @@
-﻿using System.Linq;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading.Tasks;
@@ -12,6 +14,8 @@ namespace NaiveSocks
         public bool fastreply { get; set; } = false;
 
         public User[] users { get; set; }
+
+        public Func<AddrPort, AddrPort> AddrMap { get; set; }
 
         public struct User
         {
@@ -83,6 +87,9 @@ namespace NaiveSocks
                     this.Dest.Host = s.TargetAddr;
                     this.Dest.Port = s.TargetPort;
                     this.DataStream = s.Stream;
+                    if(adapter.AddrMap != null) {
+                        this.Dest = adapter.AddrMap(this.Dest);
+                    }
                     if (adapter.fastreply)
                         await OnConnectionResult(new ConnectResult(null, ConnectResultEnum.Conneceted)).CAF();
                     NaiveUtils.RunAsyncTask(async () => {

@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Android.App;
 using Android.Content;
 using Android.Graphics;
+using Android.Net;
 using Android.OS;
 using Android.Runtime;
 using Android.Support.V4.App;
@@ -39,11 +40,12 @@ namespace NaiveSocksAndroid
     }
 
     [Service(
-        Name = "naive.NaiveSocksAndroid.BgService"
+        Name = "naive.NaiveSocksAndroid.BgService",
+        Permission = "android.permission.BIND_VPN_SERVICE"
         //IsolatedProcess = true,
         //Process = ":bg"
         )]
-    public class BgService : Service
+    public class BgService : VpnService
     {
         static bool isN = Build.VERSION.SdkInt >= BuildVersionCodes.N;
         static bool isO = Build.VERSION.SdkInt >= BuildVersionCodes.O;
@@ -81,6 +83,8 @@ namespace NaiveSocksAndroid
             public bool socket_underlying { get; set; } = false;
 
             public string title_format { get; set; } = "[{0}/{1}] {2:N0} KB, {3:N0} pkt, {4:N2} CPUs";
+
+            public VpnConfig vpn { get; set; }
         }
 
         bool notification_show_logs = true;
@@ -199,6 +203,10 @@ namespace NaiveSocksAndroid
                     Controller.LoadConfigFileFromMultiPaths(paths);
                     Controller.Start();
                     Logger.info("controller started.");
+                    if (currentConfig?.vpn?.Enabled == true) {
+                        Logging.info("Starting VPN");
+                        StartVpn();
+                    }
                 } catch (System.Exception e) {
                     Logger.exception(e, Logging.Level.Error, "loading/starting controller");
                     ShowToast("starting error: " + e.Message);
@@ -207,6 +215,25 @@ namespace NaiveSocksAndroid
             });
 
             updateNotif(true);
+        }
+
+        BgServiceVpnHelper vpnHelper;
+
+        private void StartVpn()
+        {
+            Intent vpnIntent = VpnService.Prepare(this);
+            if (vpnIntent != null) {
+                Logging.info("Starting activity to requesting VPN permission.");
+                StartActivity(new Intent(this, typeof(MainActivity)).SetAction("PREP_VPN").SetFlags(ActivityFlags.ReorderToFront));
+            } else {
+                // continue starting vpn service
+                try {
+                    vpnHelper = new BgServiceVpnHelper(this, currentConfig.vpn);
+                    vpnHelper.StartVpn();
+                } catch (Exception e) {
+                    Logging.exception(e, Logging.Level.Error, "Starting VPN");
+                }
+            }
         }
 
         private void ToBackground(bool removeNotif)
@@ -221,6 +248,8 @@ namespace NaiveSocksAndroid
             onScreen(false);
             IsForegroundRunning = false;
             ForegroundStateChanged?.Invoke(this);
+            vpnHelper?.Stop();
+            vpnHelper = null;
             Controller.Stop();
         }
 
@@ -236,6 +265,9 @@ namespace NaiveSocksAndroid
                 switch (action) {
                 case Actions.START:
                     this.ToForeground();
+                    break;
+                case Actions.START_VPN:
+                    StartVpn();
                     break;
                 case Actions.STOP:
                     if (IsForegroundRunning)
@@ -475,6 +507,7 @@ namespace NaiveSocksAndroid
         public static class Actions
         {
             public const string START = "start!";
+            public const string START_VPN = "startVpn!";
             public const string STOP = "stop!";
             public const string TOGGLE = "toggle!";
             public const string KILL = "kill!";

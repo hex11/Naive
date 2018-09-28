@@ -57,6 +57,8 @@ namespace NaiveSocksAndroid
 
         public Handler Handler { get; private set; }
 
+        private const int REQ_VPN = 1;
+
         //private ServiceConnection<ConfigService> cfgService;
 
         static IncrNumberGenerator idGen = new IncrNumberGenerator();
@@ -88,6 +90,15 @@ namespace NaiveSocksAndroid
             base.OnCreate(savedInstanceState);
 
             serviceStartIntent = new Intent(this, typeof(BgService));
+
+            if (this.Intent.Action == "PREP_VPN") {
+                var r = VpnService.Prepare(this);
+                if (r == null) {
+                    StartServiceWithAction(BgService.Actions.START_VPN);
+                } else {
+                    StartActivityForResult(r, REQ_VPN);
+                }
+            }
 
             if (this.Intent.DataString == "toggle") {
                 StartServiceWithAction(BgService.Actions.TOGGLE);
@@ -186,6 +197,18 @@ namespace NaiveSocksAndroid
             base.OnStart();
             if (!isConnected)
                 BindBgService();
+        }
+
+        protected override void OnActivityResult(int requestCode, [GeneratedEnum] Android.App.Result resultCode, Intent data)
+        {
+            if (requestCode == REQ_VPN) {
+                Logging.info("VPN grant: " + resultCode);
+                if (resultCode == Android.App.Result.Ok) {
+                    StartServiceWithAction(BgService.Actions.START_VPN);
+                }
+            } else {
+                Logging.warning("Unknown requestCode: " + requestCode);
+            }
         }
 
         private void BindBgService()

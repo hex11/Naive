@@ -28,6 +28,7 @@ namespace NaiveSocksAndroid
             Current = new AppConfig() {
                 MainPreference = GetPreference(ctx)
             };
+            FilesDir = ctx.ApplicationContext.FilesDir.AbsolutePath;
         }
 
         public ISharedPreferences MainPreference { get; private set; }
@@ -38,6 +39,8 @@ namespace NaiveSocksAndroid
         {
             return ctx.GetSharedPreferences("Config", FileCreationMode.Private);
         }
+
+        public static string FilesDir { get; private set; }
 
         public void Set(string key, bool value)
         {
