@@ -184,6 +184,7 @@ namespace NaiveSocksAndroid
             foreach (var item in q.Questions) {
                 if (item.RecordType == RecordType.A) {
                     var strName = item.Name.ToString();
+                    strName = strName.Substring(0, strName.Length - 1); // remove the trailing '.'
                     IPAddress ip;
                     mapLock.EnterWriteLock();
                     try {
