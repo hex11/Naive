@@ -12,7 +12,7 @@ using System.Threading;
 
 namespace NaiveSocks
 {
-    public class RouterAdapter : OutAdapter
+    public class RouterAdapter : OutAdapter, IDnsProvider
     {
         public bool logging { get; set; }
         public bool log_uri { get; set; }
@@ -36,6 +36,7 @@ namespace NaiveSocks
             public string abpuri { get; set; }
             public string abpfile { get; set; }
             public string abpuri_maxage { get; set; } = "1d";
+            public Func<ConnectArgument, bool> _abp_current_filter;
 
             public string eq { get; set; }
             public string wildcard { get; set; }
@@ -56,12 +57,13 @@ namespace NaiveSocks
 
         Logger Logg => logging ? Logger : null;
 
-        Action<InConnection> _handler;
+        List<Rule> parsedRules;
 
         protected override void OnInit()
         {
             base.OnInit();
-            _handler = ConnectionHandlerFromRules(rules);
+            if (rules?.Count > 0)
+                parsedRules = rules.Select(ParseRule).ToList();
         }
 
         protected override void OnStop()
@@ -70,50 +72,54 @@ namespace NaiveSocks
             ctsOnStop.Cancel();
         }
 
-        Action<InConnection> ConnectionHandlerFromRules(List<Rule> rules)
+        bool Handle(ConnectArgument x, out AdapterRef redir)
         {
-            if (rules == null || rules.Count == 0)
-                return (x) => { };
-            var parsedRules = rules.Select(ParseRule).ToList();
-            return (x) => {
-                foreach (var item in parsedRules) {
-                    if (item is Rule r) {
-                        var hit = false;
-                        Match regexMatch = null;
-                        if (r.eq != null) {
-                            hit |= r.eq == x.Dest.Host;
-                        }
-                        if (r.regex != null) {
-                            var match = Regex.Match(x.Dest.Host, r.regex);
-                            if (match.Success) {
-                                regexMatch = match;
-                                hit = true;
-                            }
-                        }
-                        if (r.wildcard != null) {
-                            hit |= Wildcard.IsMatch(x.Dest.Host, r.wildcard);
-                        }
-                        if (r.port != 0) {
-                            hit |= r.port == x.Dest.Port;
-                        }
-                        if (r.ip != null && !hit) {
-                            hit = HandleIp(x, r);
-                        }
-                        if (hit && onConnectionHit(r, x, regexMatch)) {
-                            break;
-                        }
-                    } else if (item is Func<InConnection, bool> a) {
-                        if (a(x))
-                            break;
-                    } else {
-                        // WTF
-                        throw new Exception($"unexpected object in parsedRules {item}");
-                    }
+            redir = null;
+            if (parsedRules == null)
+                return false;
+            foreach (var r in parsedRules) {
+                var abpFilter = r._abp_current_filter;
+                bool hit = false;
+                if (abpFilter != null) {
+                    hit = abpFilter(x);
                 }
-            };
+                Match regexMatch = null;
+                if (!hit)
+                    hit = HandleRule(x, r, out regexMatch);
+                if (hit && onConnectionHit(r, x, regexMatch, out redir)) {
+                    return true;
+                }
+            }
+            return false;
         }
 
-        private static bool HandleIp(InConnection x, Rule r)
+        private static bool HandleRule(ConnectArgument x, Rule r, out Match regexMatch)
+        {
+            bool hit = false;
+            regexMatch = null;
+            if (r.eq != null) {
+                hit |= r.eq == x.Dest.Host;
+            }
+            if (r.regex != null) {
+                var match = Regex.Match(x.Dest.Host, r.regex);
+                if (match.Success) {
+                    regexMatch = match;
+                    hit = true;
+                }
+            }
+            if (r.wildcard != null) {
+                hit |= Wildcard.IsMatch(x.Dest.Host, r.wildcard);
+            }
+            if (r.port != 0) {
+                hit |= r.port == x.Dest.Port;
+            }
+            if (r.ip != null && !hit) {
+                hit = HandleIp(x.Dest.Host, r);
+            }
+            return hit;
+        }
+
+        private static bool HandleIp(string host, Rule r)
         {
             if (r._ip_addr == null) {
                 var strsplits = r.ip.Split(',').Select(s => s.Trim()).Where(s => !string.IsNullOrEmpty(s));
@@ -127,7 +133,7 @@ namespace NaiveSocks
                 r._ip_addr = addr.ToArray();
                 r._ip_masklen = lens.ToArray();
             }
-            if (IPAddress.TryParse(x.Dest.Host, out var destip)) {
+            if (IPAddress.TryParse(host, out var destip)) {
                 for (int i = 0; i < r._ip_addr.Length; i++) {
                     var raddr = r._ip_addr[i];
                     var rlen = r._ip_masklen[i];
@@ -141,15 +147,10 @@ namespace NaiveSocks
             return false;
         }
 
-        // returns Rule or Func<InConnection, bool>
-        private object ParseRule(Rule rule)
+        private Rule ParseRule(Rule rule)
         {
-            if (rule.abpfile == null && rule.abp == null && rule.abpuri == null) {
-                return (object)rule;
-            } else {
+            if (rule.abpfile != null || rule.abp != null || rule.abpuri != null) {
                 try {
-                    Func<InConnection, bool> currentAbpFilter = null;
-
                     void load(Rule rule2, string abpString)
                     {
                         Stopwatch sw = Stopwatch.StartNew();
@@ -159,7 +160,7 @@ namespace NaiveSocks
                                 var realPath = Controller.ProcessFilePath(rule2.abpfile);
                                 if (!File.Exists(realPath)) {
                                     Logger.warning($"abp file '{realPath}' does not exist.");
-                                    currentAbpFilter = null;
+                                    rule._abp_current_filter = null;
                                     return;
                                 }
                                 abpString = File.ReadAllText(realPath, Encoding.UTF8);
@@ -167,10 +168,10 @@ namespace NaiveSocks
                             if (rule2.base64) {
                                 abpString = Encoding.UTF8.GetString(Convert.FromBase64String(abpString));
                             }
-                            var isreloading = currentAbpFilter != null;
+                            var isreloading = rule._abp_current_filter != null;
                             var abpProcessor = new AbpProcessor();
                             abpProcessor.Parse(abpString);
-                            currentAbpFilter = abpProcessor.Check;
+                            rule._abp_current_filter = abpProcessor.Check;
                             Logg?.info($"{(isreloading ? "re" : null)}loaded abp filter" +
                                 $" {(rule2.abpfile == null ? "(inline/network)" : rule2.abpfile.Quoted())}" +
                                 $" {abpProcessor.RulesCount} rules in {sw.ElapsedMilliseconds} ms");
@@ -184,14 +185,11 @@ namespace NaiveSocks
                     if (rule.abpuri != null) {
                         UpdateAbpFile(rule, load);
                     }
-                    return new Func<InConnection, bool>((x) => {
-                        return (currentAbpFilter?.Invoke(x) ?? false) && onConnectionHit(rule, x);
-                    });
                 } catch (Exception e) {
                     Logger.exception(e);
-                    return new Func<InConnection, bool>((x) => false);
                 }
             }
+            return rule;
         }
 
         public bool TryParseTime(string str, out TimeSpan timeSpan)
@@ -326,9 +324,10 @@ namespace NaiveSocks
         }
 
         // returns true if redirected
-        private static bool onConnectionHit(Rule rule, InConnection connection, Match regexMatch = null)
+        private static bool onConnectionHit(Rule rule, ConnectArgument connection, Match regexMatch, out AdapterRef redirect)
         {
             AddrPort dest = connection.Dest;
+            redirect = null;
             var destChanged = false;
             if (!rule.new_dest.IsDefault) {
                 dest = rule.new_dest;
@@ -347,7 +346,7 @@ namespace NaiveSocks
                 connection.Dest = dest;
             }
             if (rule.to != null) {
-                connection.RedirectTo(rule.to);
+                redirect = rule.to;
                 return true;
             }
             return false;
@@ -356,8 +355,9 @@ namespace NaiveSocks
         public override Task HandleConnection(InConnection connection)
         {
             var sw = Stopwatch.StartNew();
-            _handler(connection);
-            if (connection.IsRedirected == false) {
+            if (Handle(connection, out var redir)) {
+                connection.RedirectTo(redir);
+            } else {
                 connection.RedirectTo(@default);
             }
             if (logging) {
@@ -369,6 +369,23 @@ namespace NaiveSocks
                 Logger.info($"{connection.Redirected} <- {dest} - '{connection.InAdapter?.Name}' ({ms} ms)");
             }
             return AsyncHelper.CompletedTask;
+        }
+
+        public Task<IPAddress[]> ResolveName(string name)
+        {
+            var arg = new ConnectArgument(this) { Dest = new AddrPort(name, 53) };
+            AdapterRef adapterRef;
+            if (Handle(arg, out var redir)) {
+                adapterRef = redir;
+            } else {
+                adapterRef = @default;
+            }
+            var dnsProvider = adapterRef.Adapter as IDnsProvider;
+            if (dnsProvider == null) {
+                Logger.error($"{adapterRef} is not a DNS resolver.");
+                return Task.FromResult<IPAddress[]>(null);
+            }
+            return dnsProvider.ResolveName(name);
         }
     }
 
@@ -586,7 +603,7 @@ namespace NaiveSocks
             whiteWildcardUrlList.TrimExcess();
         }
 
-        public bool Check(InConnection conn)
+        public bool Check(ConnectArgument conn)
         {
             return Check(conn.Dest, conn.Url);
         }
