@@ -477,7 +477,8 @@ namespace NaiveSocks
             var resMsg = await Request(new NaiveProtocol.Request(AddrPort.Empty, "dns:" + name));
             var response = await resMsg.GetReply(keepOpen: false);
             if (response.status == 0 && response.additionalString?.StartsWith("dns_ok:") == true) {
-                var addrs = from x in response.additionalString.Split('|') select IPAddress.Parse(x);
+                var str = response.additionalString.Substring(7);
+                var addrs = from x in str.Split('|') select IPAddress.Parse(x);
                 return addrs.ToArray();
             } else if (response.additionalString == "dns_failed") {
                 throw new Exception("remote returned an error");

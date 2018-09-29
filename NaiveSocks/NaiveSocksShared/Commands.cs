@@ -360,6 +360,28 @@ namespace NaiveSocks
                     cmd.WriteLine($"waiting timed out.");
                 }
             }, "Usage: mping [start|stop]");
+            cmdHub.AddCmdHandler(prefix + "dns", cmd => {
+                var adapters = controller.OutAdapters.Select(x => x as IDnsProvider).Where(x => x != null).ToList();
+                if (adapters.Count == 0) {
+                    cmd.WriteLine("NaiveM OutAdapter not found.");
+                    return;
+                }
+                IDnsProvider selected;
+                if (adapters.Count == 1) {
+                    selected = adapters.Single();
+                } else {
+                    var selectedId = cmd.Select("IDnsProviders:", adapters.Select(x => x.GetAdapter().ToString(true)).ToList(),
+                            "Select one: ", false);
+                    if (selectedId < 0)
+                        return;
+                    selected = adapters[selectedId];
+                }
+                Task.Run(async () => {
+                    foreach (var item in await selected.ResolveName(cmd.args[0])) {
+                        cmd.WriteLine(item.ToString());
+                    }
+                }).Wait(3000);
+            }, "Usage: dns DOMAIN");
             cmdHub.AddCmdHandler(prefix + "settp", cmd => {
                 ThreadPool.SetMinThreads(cmd.ArgOrNull(0).ToInt(), cmd.ArgOrNull(1).ToInt());
                 ThreadPool.SetMaxThreads(cmd.ArgOrNull(2).ToInt(), cmd.ArgOrNull(3).ToInt());

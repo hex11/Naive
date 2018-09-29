@@ -18,6 +18,7 @@ using Mono.Unix.Native;
 using Naive.HttpSvr;
 using ARSoft.Tools.Net.Dns;
 using System.Net;
+using NaiveSocks;
 
 namespace NaiveSocksAndroid
 {
@@ -27,9 +28,12 @@ namespace NaiveSocksAndroid
         public bool EnableAppFilter { get; set; }
         public string AppList { get; set; }
         public bool ByPass { get; set; }
-        public string Socks { get; set; } = "vpnin";
-        public int FakeDnsPort { get; set; } = 5333;
-        public string FakeDnsIpPrefix { get; set; } = "1.";
+
+        public string Socks { get; set; }
+
+        public string DnsResolver { get; set; }
+        public int LocalDnsPort { get; set; } = 5333;
+        public string FakeDnsPrefix { get; set; } = "1.";
 
         public string DnsGw { get; set; }
 
@@ -58,30 +62,39 @@ namespace NaiveSocksAndroid
 
         Dictionary<string, long> mapHostIp = new Dictionary<string, long>();
 
+        IDnsProvider dnsResolver;
+
         public void StartVpn()
         {
-            var socksInAdapter = Bg.Controller.FindAdapter<NaiveSocks.SocksInAdapter>(vpnConfig.Socks)
-                ?? throw new Exception($"SocksInAdapter '{vpnConfig.Socks}' not found.");
+            var controller = Bg.Controller;
+            var socksInAdapter = controller.FindAdapter<SocksInAdapter>(vpnConfig.Socks) ?? throw new Exception($"SocksInAdapter '{vpnConfig.Socks}' not found.");
+            if (vpnConfig.DnsResolver != null) {
+                dnsResolver = controller.FindAdapter<NaiveSocks.Adapter>(vpnConfig.DnsResolver) as IDnsProvider;
+                if (dnsResolver == null) {
+                    Logging.warning($"'{vpnConfig.DnsResolver}' is not a DNS resolver!");
+                }
+            }
             socksInAdapter.AddrMap = (x) => {
                 if (IPAddress.TryParse(x.Host, out var ip)) {
-                    if (ip.ToString().StartsWith(ipPrefix)) {
-                        mapLock.EnterReadLock();
-                        try {
-                            if (mapIpHost.TryGetValue(ip.Address, out var host)) {
-                                x.Host = host;
-                            } else {
+                    bool isFake = dnsResolver == null && ip.ToString().StartsWith(ipPrefix);
+                    mapLock.EnterReadLock();
+                    try {
+                        if (mapIpHost.TryGetValue(ip.Address, out var host)) {
+                            x.Host = host;
+                        } else {
+                            if (isFake)
                                 Logging.warning("Fake DNS not found: " + ip);
-                            }
-                        } finally {
-                            mapLock.ExitReadLock();
                         }
+                    } finally {
+                        mapLock.ExitReadLock();
                     }
                 }
                 return x;
             };
+            Logging.info("VPN connections handler: " + socksInAdapter.QuotedName);
 
             var builder = new VpnService.Builder(Bg)
-                .SetSession("NaiveSocks")
+                .SetSession("NaiveSocks VPN bridge")
                 .SetMtu(vpnConfig.Mtu)
                 .AddAddress("172.31.1.1", 24);
             foreach (var item in vpnConfig.RemoteDns) {
@@ -115,8 +128,10 @@ namespace NaiveSocksAndroid
             Running = true;
             Logging.info("VPN established, fd=" + pfd.Fd);
 
-            if (vpnConfig.FakeDnsPort > 0) {
-                Logging.info("Starting fake DNS server at 127.0.0.1:" + vpnConfig.FakeDnsPort);
+            if (vpnConfig.LocalDnsPort > 0) {
+                Logging.info("Starting local DNS server at 127.0.0.1:" + vpnConfig.LocalDnsPort);
+                string strResolver = dnsResolver?.GetAdapter().QuotedName ?? $"(fake resolver, prefix='{vpnConfig.FakeDnsPrefix}')";
+                Logging.info("DNS resolver: " + strResolver);
                 StartDnsServer();
             }
 
@@ -132,8 +147,8 @@ namespace NaiveSocksAndroid
                          + " --enable-udprelay";
             if (vpnConfig.DnsGw.IsNullOrEmpty() == false) {
                 arg += " --dnsgw " + vpnConfig.DnsGw;
-            } else if (vpnConfig.FakeDnsPort > 0) {
-                arg += " --dnsgw 127.0.0.1:" + vpnConfig.FakeDnsPort;
+            } else if (vpnConfig.LocalDnsPort > 0) {
+                arg += " --dnsgw 127.0.0.1:" + vpnConfig.LocalDnsPort;
             }
             var filesDir = AppConfig.FilesDir;
             StartProcess(t2s, arg, filesDir);
@@ -159,53 +174,52 @@ namespace NaiveSocksAndroid
 
         private void StartDnsServer()
         {
-            ipPrefix = vpnConfig.FakeDnsIpPrefix;
-            dnsServer = new DnsServer(new IPEndPoint(IPAddress.Any, vpnConfig.FakeDnsPort), 1, 1);
+            ipPrefix = vpnConfig.FakeDnsPrefix;
+            dnsServer = new DnsServer(new IPEndPoint(IPAddress.Any, vpnConfig.LocalDnsPort), 10, 0);
             dnsServer.QueryReceived += DnsServer_QueryReceived;
             dnsServer.Start();
         }
 
-        private Task DnsServer_QueryReceived(object sender, QueryReceivedEventArgs eventArgs)
+        private async Task DnsServer_QueryReceived(object sender, QueryReceivedEventArgs eventArgs)
         {
             try {
-                HandleQuery(eventArgs);
-            } catch (Exception e) {
-                Logging.exception(e, Logging.Level.Error, "Fake DNS handling query");
-            }
-            return AsyncHelper.CompletedTask;
-        }
-
-        private void HandleQuery(QueryReceivedEventArgs eventArgs)
-        {
-            var q = eventArgs.Query as DnsMessage;
-            var r = q.CreateResponseInstance();
-            eventArgs.Response = r;
-            r.ReturnCode = ReturnCode.ServerFailure;
-            foreach (var item in q.Questions) {
-                if (item.RecordType == RecordType.A) {
-                    var strName = item.Name.ToString();
-                    strName = strName.Substring(0, strName.Length - 1); // remove the trailing '.'
-                    IPAddress ip;
-                    mapLock.EnterWriteLock();
-                    try {
-                        if (mapHostIp.TryGetValue(strName, out var ipLong)) {
+                var q = eventArgs.Query as DnsMessage;
+                var r = q.CreateResponseInstance();
+                eventArgs.Response = r;
+                r.ReturnCode = ReturnCode.ServerFailure;
+                foreach (var item in q.Questions) {
+                    if (item.RecordType == RecordType.A) {
+                        var strName = item.Name.ToString();
+                        strName = strName.Substring(0, strName.Length - 1); // remove the trailing '.'
+                        IPAddress ip;
+                        mapLock.EnterReadLock();
+                        bool v = mapHostIp.TryGetValue(strName, out var ipLong);
+                        mapLock.ExitReadLock();
+                        if (v) {
                             ip = new IPAddress(ipLong);
                         } else {
-                            lastIp++;
-                            ip = IPAddress.Parse(ipPrefix + lastIp);
+                            if (dnsResolver == null) {
+                                ip = IPAddress.Parse(ipPrefix + Interlocked.Increment(ref lastIp));
+                                Logging.info("Fake DNS: " + ip.ToString() + " -> " + strName);
+                            } else {
+                                var dnsResult = await dnsResolver.ResolveName(strName);
+                                ip = dnsResult.First(x => x.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork);
+                                Logging.info("DNS: " + ip.ToString() + " -> " + strName);
+                            }
                             ipLong = ip.Address;
-                            mapIpHost.Add(ipLong, strName);
-                            mapHostIp.Add(strName, ipLong);
-                            Logging.info("Fake DNS: " + ip.ToString() + " -> " + strName);
+                            mapLock.EnterWriteLock();
+                            mapIpHost[ipLong] = strName;
+                            mapHostIp[strName] = ipLong;
+                            mapLock.ExitWriteLock();
                         }
-                    } finally {
-                        mapLock.ExitWriteLock();
+                        r.AnswerRecords.Add(new ARecord(item.Name, 120, ip));
+                        r.ReturnCode = ReturnCode.NoError;
+                    } else {
+                        Logging.warning("Notsupported DNS record: " + item);
                     }
-                    r.AnswerRecords.Add(new ARecord(item.Name, 120, ip));
-                    r.ReturnCode = ReturnCode.NoError;
-                } else {
-                    Logging.warning("Notsupported DNS record: " + item);
                 }
+            } catch (Exception e) {
+                Logging.exception(e, Logging.Level.Error, "DNS server");
             }
         }
 
