@@ -29,8 +29,9 @@ namespace NaiveSocksAndroid
         public string AppList { get; set; }
         public bool ByPass { get; set; }
 
-        public string Socks { get; set; }
+        public string Handler { get; set; }
 
+        public string Socks { get; set; }
         public string DnsResolver { get; set; }
         public int LocalDnsPort { get; set; } = 5333;
         public string FakeDnsPrefix { get; set; } = "1.";
@@ -63,16 +64,46 @@ namespace NaiveSocksAndroid
         Dictionary<string, long> mapHostIp = new Dictionary<string, long>();
 
         IDnsProvider dnsResolver;
+        SocksInAdapter socksInAdapter;
 
         public void StartVpn()
         {
+            if ((vpnConfig.Handler == null) == (vpnConfig.Socks == null)) {
+                throw new Exception("Should specify ('Handler' or 'Socks') and optional 'DnsResolver'");
+            }
+
+            dnsResolver = null;
+            socksInAdapter = null;
+
             var controller = Bg.Controller;
-            var socksInAdapter = controller.FindAdapter<SocksInAdapter>(vpnConfig.Socks) ?? throw new Exception($"SocksInAdapter '{vpnConfig.Socks}' not found.");
+            if (vpnConfig.Handler == null) {
+                socksInAdapter = controller.FindAdapter<SocksInAdapter>(vpnConfig.Socks) ?? throw new Exception($"SocksInAdapter '{vpnConfig.Socks}' not found.");
+            } else {
+                var existVpn = controller.FindAdapter<NaiveSocks.Adapter>("VPN");
+                if (existVpn is SocksInAdapter s) {
+                    socksInAdapter = s;
+                } else if (existVpn != null) {
+                    throw new Exception("adapter 'VPN' is exist and it's not a SocksInAdapter");
+                } else {
+                    socksInAdapter = new SocksInAdapter() {
+                        Name = "VPN",
+                        listen = NaiveUtils.ParseIPEndPoint("127.1:5334"),
+                        @out = controller.AdapterRefFromName(vpnConfig.Handler)
+                    };
+                    controller.AddInAdapter(socksInAdapter, true);
+                    socksInAdapter.Start();
+                }
+            }
             if (vpnConfig.DnsResolver != null) {
                 dnsResolver = controller.FindAdapter<NaiveSocks.Adapter>(vpnConfig.DnsResolver) as IDnsProvider;
                 if (dnsResolver == null) {
                     Logging.warning($"'{vpnConfig.DnsResolver}' is not a DNS resolver!");
                 }
+            } else {
+                dnsResolver = controller.FindAdapter<IDnsProvider>(vpnConfig.Handler);
+            }
+            if (dnsResolver == null) {
+                Logging.warning("Fake DNS is enabled because no valid DNS resolver specified.");
             }
             socksInAdapter.AddrMap = (x) => {
                 if (IPAddress.TryParse(x.Host, out var ip)) {
@@ -250,10 +281,10 @@ namespace NaiveSocksAndroid
 
         public void Stop()
         {
+            StopDnsServer();
+            KillProcesses();
             if (Running) {
                 Running = false;
-                StopDnsServer();
-                KillProcesses();
                 pfd.Close();
             }
         }

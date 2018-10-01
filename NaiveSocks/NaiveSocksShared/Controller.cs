@@ -428,7 +428,7 @@ namespace NaiveSocks
             foreach (var item in OutAdapters) {
                 info($"OutAdapter '{item.Name}' = {item.ToString(false)}");
                 try {
-                    item.Init(this);
+                    InitAdapter(item);
                     item.StartInternal(checkIcr(item));
                 } catch (Exception e) {
                     Logger.exception(e, Logging.Level.Error, $"starting OutAdapter '{item.Name}' = {item}");
@@ -438,7 +438,7 @@ namespace NaiveSocks
             foreach (var item in InAdapters) {
                 info($"InAdapter '{item.Name}' = {item.ToString(false)} -> {item.@out?.Adapter?.Name?.Quoted() ?? "(No OutAdapter)"}");
                 try {
-                    item.Init(this);
+                    InitAdapter(item);
                     item.StartInternal(checkIcr(item));
                 } catch (Exception e) {
                     Logger.exception(e, Logging.Level.Error, $"starting InAdapter '{item.Name}' = {item}");
@@ -450,6 +450,19 @@ namespace NaiveSocks
             } else {
                 Logger.info($"=====Adapters Started=====");
             }
+        }
+
+        public void AddInAdapter(InAdapter adap, bool init)
+        {
+            InAdapters.Add(adap);
+            if (init) {
+                adap.Init(this);
+            }
+        }
+
+        private void InitAdapter(Adapter item)
+        {
+            item.Init(this);
         }
 
         public void Stop() => Stop(CurrentConfig, null);
@@ -677,7 +690,7 @@ namespace NaiveSocks
 
         public AdapterRef AdapterRefFromName(string name)
         {
-            return new AdapterRef() { IsName = true, Ref = name, Adapter = FindOutAdapter(name) };
+            return new AdapterRef() { IsName = true, Ref = name, Adapter = FindAdapter<IAdapter>(name) };
         }
 
         private void debug(string str) => log(str, Logging.Level.None);

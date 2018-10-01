@@ -176,6 +176,7 @@ namespace NaiveSocks
             }
         }
 
+        public bool Inited { get; private set; }
         public bool IsRunning { get; private set; }
 
         protected virtual void OnStart()
@@ -232,7 +233,12 @@ namespace NaiveSocks
 
         internal void Init(Controller controller)
         {
+            if (Inited) {
+                Logger.warning("Init() when already inited.");
+                return;
+            }
             this.Controller = controller;
+            Inited = true;
             try {
                 OnInit();
             } catch (Exception e) {
