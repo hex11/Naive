@@ -3778,11 +3778,11 @@ namespace NaiveSocksAndroid
 			// aapt resource value: 0x7f0d0020
 			public const int appbar_scrolling_view_behavior = 2131558432;
 			
-			// aapt resource value: 0x7f0d003c
-			public const int autoscroll = 2131558460;
+			// aapt resource value: 0x7f0d003b
+			public const int autoscroll = 2131558459;
 			
-			// aapt resource value: 0x7f0d0037
-			public const int autostart = 2131558455;
+			// aapt resource value: 0x7f0d0036
+			public const int autostart = 2131558454;
 			
 			// aapt resource value: 0x7f0d0021
 			public const int bottom_sheet_behavior = 2131558433;
@@ -3799,29 +3799,26 @@ namespace NaiveSocksAndroid
 			// aapt resource value: 0x7f0d002c
 			public const int drawer_open = 2131558444;
 			
-			// aapt resource value: 0x7f0d003e
-			public const int format_disable = 2131558462;
-			
 			// aapt resource value: 0x7f0d003d
-			public const int format_enabled = 2131558461;
+			public const int format_disable = 2131558461;
+			
+			// aapt resource value: 0x7f0d003c
+			public const int format_enabled = 2131558460;
 			
 			// aapt resource value: 0x7f0d002f
 			public const int home = 2131558447;
 			
-			// aapt resource value: 0x7f0d003b
-			public const int kill = 2131558459;
+			// aapt resource value: 0x7f0d003a
+			public const int kill = 2131558458;
 			
 			// aapt resource value: 0x7f0d0030
 			public const int logs = 2131558448;
 			
-			// aapt resource value: 0x7f0d0036
-			public const int logs_in_notif = 2131558454;
+			// aapt resource value: 0x7f0d003e
+			public const int no_config = 2131558462;
 			
-			// aapt resource value: 0x7f0d003f
-			public const int no_config = 2131558463;
-			
-			// aapt resource value: 0x7f0d0038
-			public const int openconfig = 2131558456;
+			// aapt resource value: 0x7f0d0037
+			public const int openconfig = 2131558455;
 			
 			// aapt resource value: 0x7f0d0023
 			public const int password_toggle_content_description = 2131558435;
@@ -3841,8 +3838,8 @@ namespace NaiveSocksAndroid
 			// aapt resource value: 0x7f0d0035
 			public const int reload = 2131558453;
 			
-			// aapt resource value: 0x7f0d003a
-			public const int restart = 2131558458;
+			// aapt resource value: 0x7f0d0039
+			public const int restart = 2131558457;
 			
 			// aapt resource value: 0x7f0d0013
 			public const int search_menu_title = 2131558419;
@@ -3856,8 +3853,8 @@ namespace NaiveSocksAndroid
 			// aapt resource value: 0x7f0d0034
 			public const int stop = 2131558452;
 			
-			// aapt resource value: 0x7f0d0039
-			public const int submenu_restart_kill = 2131558457;
+			// aapt resource value: 0x7f0d0038
+			public const int submenu_restart_kill = 2131558456;
 			
 			// aapt resource value: 0x7f0d002e
 			public const int toggle = 2131558446;

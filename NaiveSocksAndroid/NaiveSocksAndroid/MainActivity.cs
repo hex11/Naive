@@ -107,7 +107,6 @@ namespace NaiveSocksAndroid
                 return;
             }
 
-
             bgServiceConn = new ServiceConnection<BgService>(
                 connected: (ComponentName name, IBinder service) => {
                     if (Service.ShowingActivity != null) {
@@ -383,10 +382,6 @@ namespace NaiveSocksAndroid
             subMenu.Add(R.String.kill)
                 .SetShowAsActionFlags(ShowAsAction.Never);
 
-            menu.Add(R.String.logs_in_notif)
-                .SetCheckable(true)
-                .SetChecked(AppConfig.Current.ShowLogs)
-                .SetShowAsActionFlags(ShowAsAction.Never);
             menu.Add(R.String.autostart)
                 .SetCheckable(true)
                 .SetChecked(AppConfig.Current.Autostart)
@@ -412,9 +407,7 @@ namespace NaiveSocksAndroid
             } else {
                 var title = item.TitleFormatted.ToString();
                 bool EqualsId(string str, int strId) => str == GetString(strId);
-                if (EqualsId(title, R.String.logs_in_notif)) {
-                    setShowLogs(!item.IsChecked);
-                } else if (EqualsId(title, R.String.autostart)) {
+                if (EqualsId(title, R.String.autostart)) {
                     setAutostart(!item.IsChecked);
                 } else if (EqualsId(title, R.String.openconfig)) {
                     var paths = AppConfig.GetNaiveSocksConfigPaths(this);
@@ -480,16 +473,6 @@ namespace NaiveSocksAndroid
         public static string FormatSwitchString(Context context, int what, bool enabled)
         {
             return String.Format(context.GetString(enabled ? R.String.format_enabled : R.String.format_disable), context.GetString(what));
-        }
-
-        private void setShowLogs(bool show)
-        {
-            AppConfig.Current.ShowLogs = show;
-            this.InvalidateOptionsMenu();
-            if (isConnected) {
-                service.SetShowLogs(show);
-            }
-            MakeSnackbar(FormatSwitchString(R.String.logs_in_notif, show), Snackbar.LengthLong).Show();
         }
 
         public Snackbar MakeSnackbar(string text, int duration)

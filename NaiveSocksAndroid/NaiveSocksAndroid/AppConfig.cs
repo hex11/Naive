@@ -54,10 +54,8 @@ namespace NaiveSocksAndroid
             return MainPreference.GetBoolean(key, def);
         }
 
-        public const string notification_show_logs = "notification_show_logs";
         public const string start_on_boot = "start_on_boot";
 
-        public bool ShowLogs { get => GetBool(notification_show_logs, false); set => Set(notification_show_logs, value); }
         public bool Autostart { get => GetBool(start_on_boot, false); set => Set(start_on_boot, value); }
 
         public static string[] GetNaiveSocksConfigPaths(Context ctx)

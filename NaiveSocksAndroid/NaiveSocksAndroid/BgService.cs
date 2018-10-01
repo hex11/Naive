@@ -31,6 +31,7 @@ namespace NaiveSocksAndroid
             CrashHandler.CheckInit();
             AppConfig.Init(Application.Context);
             if (AppConfig.Current.Autostart) {
+                Logging.info("Autostart...");
                 Intent serviceIntent = new Intent(context, typeof(BgService));
                 serviceIntent.SetAction(BgService.Actions.START);
                 serviceIntent.PutExtra("isAutostart", true);
@@ -56,7 +57,6 @@ namespace NaiveSocksAndroid
         private NotificationManager notificationManager;
 
         NotificationCompat.Builder builder, restartBuilder;
-        NotificationCompat.BigTextStyle bigText;
         const int MainNotificationId = 1;
 
         private Receiver receiverScreenState;
@@ -84,12 +84,10 @@ namespace NaiveSocksAndroid
 
             public bool socket_underlying { get; set; } = false;
 
-            public string title_format { get; set; } = "[{0}/{1}] {2:N0} KB, {3:N0} pkt, {4:N2} CPUs";
+            public string title_format { get; set; } = "{0}/{1} | {2:N0} KB ({5:N0}/s) | {4:N2} CPUs";
 
             public VpnConfig vpn { get; set; }
         }
-
-        bool notification_show_logs = true;
 
         //private ServiceConnection<ConfigService> cfgService;
 
@@ -168,7 +166,6 @@ namespace NaiveSocksAndroid
             IsForegroundRunning = true;
             ForegroundStateChanged?.Invoke(this);
 
-            SetShowLogs(AppConfig.Current.ShowLogs, true, true);
             onScreen(powerManager.IsInteractive);
             var filter = new IntentFilter(Intent.ActionScreenOff);
             filter.AddAction(Intent.ActionScreenOn);
@@ -179,8 +176,6 @@ namespace NaiveSocksAndroid
                     onScreen(false);
                 }
             }), filter);
-
-            Logging.Logged += Logging_Logged;
 
             Task.Run(() => {
                 Logger.info("starting controller...");
@@ -246,7 +241,6 @@ namespace NaiveSocksAndroid
         private void ToBackground(bool removeNotif)
         {
             Logger.info("ToBackground(" + removeNotif + ")");
-            Logging.Logged -= Logging_Logged;
             notifyTimer?.Dispose();
             notifyTimer = null;
             StopForeground(removeNotif);
@@ -346,36 +340,16 @@ namespace NaiveSocksAndroid
 
         bool isDestroyed = false;
 
-        string[] textLines = new string[1];
+        string textLine;
+        long textLineEndtime = 0;
         bool textLinesChanged = false;
 
-        private void Logging_Logged(Logging.Log log)
+        private void putLine(string line, int timeout = 5000)
         {
-            if (isDestroyed)
-                return;
-            if (IsForegroundRunning && notification_show_logs) {
-                putLine(log.text);
-            }
-        }
-
-        private void clearLines(bool updateNow)
-        {
-            for (int i = 0; i < textLines.Length; i++) {
-                textLines[i] = null;
-            }
-            if (updateNow)
-                needUpdateNotif();
-        }
-
-        private void putLine(string line, bool updateNow = true)
-        {
-            for (int i = 0; i < textLines.Length - 1; i++) {
-                textLines[i] = textLines[i + 1];
-            }
-            textLines.Set(-1, line);
+            textLineEndtime = Logging.getRuntime() + timeout;
+            textLine = line;
             textLinesChanged = true;
-            if (updateNow)
-                needUpdateNotif();
+            needUpdateNotif();
         }
 
         void needUpdateNotif()
@@ -401,6 +375,7 @@ namespace NaiveSocksAndroid
 
         long lastRuntime = 0;
         long lastCpuTime = 0;
+        long lastCopiedBytes = 0;
 
         private bool updateNotifBuilder()
         {
@@ -408,53 +383,38 @@ namespace NaiveSocksAndroid
 
             var curRuntime = Logging.getRuntime();
             var curCpuTime = Process.ElapsedCpuTime;
-            var load = (float)(curCpuTime - lastCpuTime) / (curRuntime - lastRuntime);
+            float deltaRuntime = (float)Math.Max(1, curRuntime - lastRuntime);
+            var load = (curCpuTime - lastCpuTime) / deltaRuntime;
             lastRuntime = curRuntime;
             lastCpuTime = curCpuTime;
 
-            var title = string.Format(currentConfig.title_format ?? "", Controller.RunningConnections, Controller.TotalHandledConnections, MyStream.TotalCopiedBytes / 1024, MyStream.TotalCopiedPackets, load);
+            long copiedBytes = MyStream.TotalCopiedBytes;
+            var deltaBytes = copiedBytes - lastCopiedBytes;
+            lastCopiedBytes = copiedBytes;
+
+            var title = currentConfig.title_format == null ? null : string.Format(currentConfig.title_format,
+                Controller.RunningConnections,
+                Controller.TotalHandledConnections,
+                copiedBytes / 1024,
+                MyStream.TotalCopiedPackets,
+                load,
+                ((float)deltaBytes / 1024) / (deltaRuntime / 1000) // KiB/s
+            );
             if (title != lastTitle) {
                 needRenotify = true;
                 lastTitle = title;
                 builder.SetContentTitle(title);
             }
+            if (textLine != null && curRuntime > textLineEndtime) {
+                textLine = null;
+                textLinesChanged = true;
+            }
             if (textLinesChanged) {
                 textLinesChanged = false;
                 needRenotify = true;
-                builder.SetContentText(textLines.Get(-1));
-                if (notification_show_logs) {
-                    if (bigText == null)
-                        bigText = new NotificationCompat.BigTextStyle();
-                    bigText.BigText(string.Join("\n", textLines.Where(x => !string.IsNullOrEmpty(x))));
-                    builder.SetStyle(bigText);
-                }
+                builder.SetContentText(textLine);
             }
             return needRenotify;
-        }
-
-        public void SetShowLogs(bool show, bool forceUpdate = false, bool dontUpdateNotif = false)
-        {
-            if (!forceUpdate && show == notification_show_logs)
-                return;
-            AppConfig.Current.ShowLogs = show;
-            lock (builder) {
-                notification_show_logs = show;
-                if (!IsForegroundRunning)
-                    return;
-                if (show) {
-                    textLines = new string[3];
-                } else {
-                    textLines = new string[1];
-                    if (bigText != null) {
-                        bigText = null;
-                        builder.SetStyle(null);
-
-                    }
-                    builder.SetContentTitle((Java.Lang.ICharSequence)null);
-                }
-                if (!dontUpdateNotif)
-                    updateNotif();
-            }
         }
 
         Timer notifyTimer;

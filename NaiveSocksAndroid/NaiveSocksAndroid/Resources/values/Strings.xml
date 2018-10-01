@@ -11,7 +11,6 @@
   <string name="start">Start</string>
   <string name="stop">Stop</string>
   <string name="reload">Reload</string>
-  <string name="logs_in_notif">Logs in notification</string>
   <string name="autostart">Autostart</string>
   <string name="openconfig">Open configuation file...</string>
   <string name="submenu_restart_kill">Restart/Kill</string>
