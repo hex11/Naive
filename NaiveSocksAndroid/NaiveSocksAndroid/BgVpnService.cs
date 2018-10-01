@@ -233,8 +233,13 @@ namespace NaiveSocksAndroid
                                 ip = IPAddress.Parse(ipPrefix + Interlocked.Increment(ref lastIp));
                                 Logging.info("Fake DNS: " + ip.ToString() + " -> " + strName);
                             } else {
-                                var dnsResult = await dnsResolver.ResolveName(strName);
-                                ip = dnsResult.First(x => x.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork);
+                                try {
+                                    var dnsResult = await dnsResolver.ResolveName(strName);
+                                    ip = dnsResult.First(x => x.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork);
+                                } catch (Exception e) {
+                                    Logging.warning("DNS resolving: " + strName + ": " + e.Message);
+                                    continue;
+                                }
                                 Logging.info("DNS: " + ip.ToString() + " -> " + strName);
                             }
                             ipLong = ip.Address;
