@@ -268,6 +268,8 @@ namespace NaiveSocksAndroid
                 if (action == Actions.TOGGLE) {
                     Logger.info("toggling controller...");
                     action = IsForegroundRunning ? Actions.STOP : Actions.START;
+                    var msg = "NaiveSocks " + (IsForegroundRunning ? "stopping" : "starting");
+                    ShowToast(msg);
                 }
                 switch (action) {
                 case Actions.START:

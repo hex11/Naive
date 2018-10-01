@@ -87,6 +87,8 @@ namespace NaiveSocksAndroid
             AppName = Resources.GetString(R.String.app_name);
             JavaAppName = new Java.Lang.String(AppName);
 
+            SetTheme(R.Style.MyTheme_Light);
+
             base.OnCreate(savedInstanceState);
 
             serviceStartIntent = new Intent(this, typeof(BgService));

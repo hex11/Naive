@@ -1,5 +1,8 @@
 ﻿<?xml version="1.0" encoding="utf-8" ?>
 <resources>
+  <style name="MyTheme.LaunchScreen" parent="MyTheme.Light">
+    <item name="android:windowBackground">@drawable/launch_screen</item>
+  </style>
   <style name="MyTheme.Light" parent="MyTheme.Base">
     <!-- Your customizations go here -->
   </style>
@@ -12,6 +15,7 @@
     <item name="android:textSize">12sp</item>
   </style>
   <style name="MyTheme.Base" parent="Theme.AppCompat.Light.DarkActionBar">
+    <item name="android:windowBackground">@android:color/black</item>
     <!--If you are using revision 22.1 please use just windowNoTitle. Without android:-->
     <item name="windowNoTitle">true</item>
     <!--We will be using the toolbar so no need to show ActionBar-->

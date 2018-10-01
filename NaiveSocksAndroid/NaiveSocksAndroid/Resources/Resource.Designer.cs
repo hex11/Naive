@@ -2479,26 +2479,26 @@ namespace NaiveSocksAndroid
 			// aapt resource value: 0x7f020053
 			public const int avd_hide_password = 2130837587;
 			
-			// aapt resource value: 0x7f02007b
-			public const int avd_hide_password_1 = 2130837627;
-			
 			// aapt resource value: 0x7f02007c
-			public const int avd_hide_password_2 = 2130837628;
+			public const int avd_hide_password_1 = 2130837628;
 			
 			// aapt resource value: 0x7f02007d
-			public const int avd_hide_password_3 = 2130837629;
+			public const int avd_hide_password_2 = 2130837629;
+			
+			// aapt resource value: 0x7f02007e
+			public const int avd_hide_password_3 = 2130837630;
 			
 			// aapt resource value: 0x7f020054
 			public const int avd_show_password = 2130837588;
 			
-			// aapt resource value: 0x7f02007e
-			public const int avd_show_password_1 = 2130837630;
-			
 			// aapt resource value: 0x7f02007f
-			public const int avd_show_password_2 = 2130837631;
+			public const int avd_show_password_1 = 2130837631;
 			
 			// aapt resource value: 0x7f020080
-			public const int avd_show_password_3 = 2130837632;
+			public const int avd_show_password_2 = 2130837632;
+			
+			// aapt resource value: 0x7f020081
+			public const int avd_show_password_3 = 2130837633;
 			
 			// aapt resource value: 0x7f020055
 			public const int design_bottom_navigation_item_background = 2130837589;
@@ -2528,91 +2528,94 @@ namespace NaiveSocksAndroid
 			public const int ic_stop_white_24dp = 2130837597;
 			
 			// aapt resource value: 0x7f02005e
-			public const int N = 2130837598;
+			public const int launch_screen = 2130837598;
 			
 			// aapt resource value: 0x7f02005f
-			public const int navigation_empty_icon = 2130837599;
+			public const int N = 2130837599;
 			
 			// aapt resource value: 0x7f020060
-			public const int notification_action_background = 2130837600;
+			public const int navigation_empty_icon = 2130837600;
 			
 			// aapt resource value: 0x7f020061
-			public const int notification_bg = 2130837601;
+			public const int notification_action_background = 2130837601;
 			
 			// aapt resource value: 0x7f020062
-			public const int notification_bg_low = 2130837602;
+			public const int notification_bg = 2130837602;
 			
 			// aapt resource value: 0x7f020063
-			public const int notification_bg_low_normal = 2130837603;
+			public const int notification_bg_low = 2130837603;
 			
 			// aapt resource value: 0x7f020064
-			public const int notification_bg_low_pressed = 2130837604;
+			public const int notification_bg_low_normal = 2130837604;
 			
 			// aapt resource value: 0x7f020065
-			public const int notification_bg_normal = 2130837605;
+			public const int notification_bg_low_pressed = 2130837605;
 			
 			// aapt resource value: 0x7f020066
-			public const int notification_bg_normal_pressed = 2130837606;
+			public const int notification_bg_normal = 2130837606;
 			
 			// aapt resource value: 0x7f020067
-			public const int notification_icon_background = 2130837607;
-			
-			// aapt resource value: 0x7f020079
-			public const int notification_template_icon_bg = 2130837625;
-			
-			// aapt resource value: 0x7f02007a
-			public const int notification_template_icon_low_bg = 2130837626;
+			public const int notification_bg_normal_pressed = 2130837607;
 			
 			// aapt resource value: 0x7f020068
-			public const int notification_tile_bg = 2130837608;
+			public const int notification_icon_background = 2130837608;
+			
+			// aapt resource value: 0x7f02007a
+			public const int notification_template_icon_bg = 2130837626;
+			
+			// aapt resource value: 0x7f02007b
+			public const int notification_template_icon_low_bg = 2130837627;
 			
 			// aapt resource value: 0x7f020069
-			public const int notify_panel_notification_icon_bg = 2130837609;
+			public const int notification_tile_bg = 2130837609;
 			
 			// aapt resource value: 0x7f02006a
-			public const int tooltip_frame_dark = 2130837610;
+			public const int notify_panel_notification_icon_bg = 2130837610;
 			
 			// aapt resource value: 0x7f02006b
-			public const int tooltip_frame_light = 2130837611;
+			public const int tooltip_frame_dark = 2130837611;
 			
 			// aapt resource value: 0x7f02006c
-			public const int ws_action_item_background = 2130837612;
+			public const int tooltip_frame_light = 2130837612;
 			
 			// aapt resource value: 0x7f02006d
-			public const int ws_action_item_icon_background = 2130837613;
+			public const int ws_action_item_background = 2130837613;
 			
 			// aapt resource value: 0x7f02006e
-			public const int ws_ic_expand_less_white_22 = 2130837614;
+			public const int ws_action_item_icon_background = 2130837614;
 			
 			// aapt resource value: 0x7f02006f
-			public const int ws_ic_expand_more_white_22 = 2130837615;
+			public const int ws_ic_expand_less_white_22 = 2130837615;
 			
 			// aapt resource value: 0x7f020070
-			public const int ws_ic_more_horiz_24dp_wht = 2130837616;
+			public const int ws_ic_expand_more_white_22 = 2130837616;
 			
 			// aapt resource value: 0x7f020071
-			public const int ws_ic_more_vert_24dp_wht = 2130837617;
+			public const int ws_ic_more_horiz_24dp_wht = 2130837617;
 			
 			// aapt resource value: 0x7f020072
-			public const int ws_switch_thumb_material_anim = 2130837618;
+			public const int ws_ic_more_vert_24dp_wht = 2130837618;
 			
 			// aapt resource value: 0x7f020073
-			public const int ws_switch_thumb_mtrl_14w = 2130837619;
+			public const int ws_switch_thumb_material_anim = 2130837619;
 			
 			// aapt resource value: 0x7f020074
-			public const int ws_switch_thumb_mtrl_15w = 2130837620;
+			public const int ws_switch_thumb_mtrl_14w = 2130837620;
 			
 			// aapt resource value: 0x7f020075
-			public const int ws_switch_thumb_mtrl_16w = 2130837621;
+			public const int ws_switch_thumb_mtrl_15w = 2130837621;
 			
 			// aapt resource value: 0x7f020076
-			public const int ws_switch_thumb_mtrl_17w = 2130837622;
+			public const int ws_switch_thumb_mtrl_16w = 2130837622;
 			
 			// aapt resource value: 0x7f020077
-			public const int ws_switch_thumb_mtrl_18w = 2130837623;
+			public const int ws_switch_thumb_mtrl_17w = 2130837623;
 			
 			// aapt resource value: 0x7f020078
-			public const int ws_switch_track_mtrl = 2130837624;
+			public const int ws_switch_thumb_mtrl_18w = 2130837624;
+			
+			// aapt resource value: 0x7f020079
+			public const int ws_switch_track_mtrl = 2130837625;
 			
 			static Drawable()
 			{
@@ -4385,20 +4388,23 @@ namespace NaiveSocksAndroid
 			// aapt resource value: 0x7f080168
 			public const int Base_Widget_Design_TabLayout = 2131231080;
 			
+			// aapt resource value: 0x7f08018a
+			public const int ConnTextView = 2131231114;
+			
+			// aapt resource value: 0x7f08018c
+			public const int DrawerArrowStyle = 2131231116;
+			
 			// aapt resource value: 0x7f080189
-			public const int ConnTextView = 2131231113;
+			public const int LogTextView = 2131231113;
 			
 			// aapt resource value: 0x7f08018b
-			public const int DrawerArrowStyle = 2131231115;
-			
-			// aapt resource value: 0x7f080188
-			public const int LogTextView = 2131231112;
-			
-			// aapt resource value: 0x7f08018a
-			public const int MyTheme_Base = 2131231114;
+			public const int MyTheme_Base = 2131231115;
 			
 			// aapt resource value: 0x7f080187
-			public const int MyTheme_Light = 2131231111;
+			public const int MyTheme_LaunchScreen = 2131231111;
+			
+			// aapt resource value: 0x7f080188
+			public const int MyTheme_Light = 2131231112;
 			
 			// aapt resource value: 0x7f080025
 			public const int Platform_AppCompat = 2131230757;
