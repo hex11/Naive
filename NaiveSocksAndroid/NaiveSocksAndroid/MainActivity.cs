@@ -92,12 +92,7 @@ namespace NaiveSocksAndroid
             serviceStartIntent = new Intent(this, typeof(BgService));
 
             if (this.Intent.Action == "PREP_VPN") {
-                var r = VpnService.Prepare(this);
-                if (r == null) {
-                    StartServiceWithAction(BgService.Actions.START_VPN);
-                } else {
-                    StartActivityForResult(r, REQ_VPN);
-                }
+                VpnServicePrepare();
             }
 
             if (this.Intent.DataString == "toggle") {
@@ -113,10 +108,18 @@ namespace NaiveSocksAndroid
 
             bgServiceConn = new ServiceConnection<BgService>(
                 connected: (ComponentName name, IBinder service) => {
+                    if (Service.ShowingActivity != null) {
+                        Logging.error("BUG?: Service.ShowingActivity != null");
+                    }
+                    Service.ShowingActivity = this;
                     Service.ForegroundStateChanged += Service_ForegroundStateChanged;
                     InvalidateOptionsMenu();
                 },
                 disconnected: (ComponentName name) => {
+                    if (Service.ShowingActivity != this) {
+                        Logging.error("BUG?: Service.ShowingActivity != this");
+                    }
+                    Service.ShowingActivity = null;
                     Service.ForegroundStateChanged -= Service_ForegroundStateChanged;
                     InvalidateOptionsMenu();
                 });
@@ -180,6 +183,16 @@ namespace NaiveSocksAndroid
                 if (isActivityRunning)
                     onNavigationItemSelected(navigationView.Menu.GetItem(initNavIndex));
             });
+        }
+
+        public void VpnServicePrepare()
+        {
+            var r = VpnService.Prepare(this);
+            if (r == null) {
+                StartServiceWithAction(BgService.Actions.START_VPN);
+            } else {
+                StartActivityForResult(r, REQ_VPN);
+            }
         }
 
         private void Service_ForegroundStateChanged(BgService obj)
@@ -337,7 +350,7 @@ namespace NaiveSocksAndroid
             Task.Run(() => {
                 if (isServiceForegroundRunning) {
                     try {
-                        service.Controller.Reload();
+                        service.Reload();
                     } catch (Exception e) {
                         Logging.exception(e, Logging.Level.Error, "reloading controller");
                     }

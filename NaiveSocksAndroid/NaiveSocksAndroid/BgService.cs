@@ -65,6 +65,8 @@ namespace NaiveSocksAndroid
 
         public bool IsForegroundRunning { private set; get; }
 
+        public MainActivity ShowingActivity;
+
         Config currentConfig = new Config();
 
         Logger Logger = new Logger("Service", Logging.RootLogger);
@@ -221,10 +223,15 @@ namespace NaiveSocksAndroid
 
         private void StartVpn()
         {
-            Intent vpnIntent = VpnService.Prepare(this);
-            if (vpnIntent != null) {
-                Logging.info("Starting activity to requesting VPN permission.");
-                StartActivity(new Intent(this, typeof(MainActivity)).SetAction("PREP_VPN").SetFlags(ActivityFlags.ReorderToFront));
+            if (VpnService.Prepare(this) != null) {
+                var activity = ShowingActivity;
+                if (activity == null) {
+                    Logging.info("Starting activity to request VPN permission.");
+                    StartActivity(new Intent(this, typeof(MainActivity)).SetAction("PREP_VPN").SetFlags(ActivityFlags.NewTask));
+                } else {
+                    Logging.info("Using showing activity to request VPN permission.");
+                    activity.VpnServicePrepare();
+                }
             } else {
                 // continue starting vpn service
                 try {
@@ -282,14 +289,8 @@ namespace NaiveSocksAndroid
                     System.Diagnostics.Process.GetCurrentProcess().Kill();
                     break;
                 case Actions.RELOAD:
-                    if (!IsForegroundRunning) {
-                        this.StopSelf();
-                        Logging.warning("intent.Action == RELOAD while !IsForegroundRunning");
-                        break;
-                    }
-
                     try {
-                        Controller.Reload();
+                        Reload();
                         putLine("controller reloaded");
                     } catch (Exception e) {
                         ShowToast("reloading error: " + e.Message);
@@ -312,6 +313,18 @@ namespace NaiveSocksAndroid
                 }
             }
             return StartCommandResult.Sticky;
+        }
+
+        public void Reload()
+        {
+            if (!IsForegroundRunning) {
+                this.StopSelf();
+                Logging.warning("Reload() while !IsForegroundRunning");
+                return;
+            }
+            vpnHelper?.Stop();
+            Controller.Reload();
+            vpnHelper?.StartVpn();
         }
 
         public override IBinder OnBind(Intent intent)
