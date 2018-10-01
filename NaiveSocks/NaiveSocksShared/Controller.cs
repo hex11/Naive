@@ -455,8 +455,10 @@ namespace NaiveSocks
         public void AddInAdapter(InAdapter adap, bool init)
         {
             InAdapters.Add(adap);
+            SetLogger(adap);
+            //adap.SetConfig(null);
             if (init) {
-                adap.Init(this);
+                InitAdapter(adap);
             }
         }
 
@@ -690,7 +692,7 @@ namespace NaiveSocks
 
         public AdapterRef AdapterRefFromName(string name)
         {
-            return new AdapterRef() { IsName = true, Ref = name, Adapter = FindAdapter<IAdapter>(name) };
+            return new AdapterRef() { IsName = true, Ref = name, Adapter = FindAdapter<Adapter>(name) };
         }
 
         private void debug(string str) => log(str, Logging.Level.None);

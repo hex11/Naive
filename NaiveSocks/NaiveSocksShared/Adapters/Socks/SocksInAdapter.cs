@@ -81,13 +81,14 @@ namespace NaiveSocks
                             return true;
                         }
                     }
+                    adapter.Logger.warning("Auth failed: " + _eppair.RemoteEP);
                     return false;
                 };
                 socks5svr.RequestingToConnect = async (s) => {
                     this.Dest.Host = s.TargetAddr;
                     this.Dest.Port = s.TargetPort;
                     this.DataStream = s.Stream;
-                    if(adapter.AddrMap != null) {
+                    if (adapter.AddrMap != null) {
                         this.Dest = adapter.AddrMap(this.Dest);
                     }
                     if (adapter.fastreply)
@@ -115,13 +116,14 @@ namespace NaiveSocks
                 }
             }
 
-            protected override async Task OnConnectionResult(ConnectResult result)
+            protected override Task OnConnectionResult(ConnectResult result)
             {
                 if (socks5svr != null) {
                     var tmp = socks5svr;
                     socks5svr = null;
-                    await tmp.WriteConnectionResult(new IPEndPoint(0, Dest.Port), (result.Ok) ? Socks5Server.Rep.succeeded : Socks5Server.Rep.Connection_refused);
+                    return tmp.WriteConnectionResult(new IPEndPoint(0, Dest.Port), (result.Ok) ? Socks5Server.Rep.succeeded : Socks5Server.Rep.Connection_refused);
                 }
+                return NaiveUtils.CompletedTask;
             }
 
             public override string GetInfoStr() => _eppair.ToString();

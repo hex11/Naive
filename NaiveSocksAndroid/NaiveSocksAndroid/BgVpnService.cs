@@ -30,8 +30,10 @@ namespace NaiveSocksAndroid
         public bool ByPass { get; set; }
 
         public string Handler { get; set; }
+        public int SocksPort { get; set; } = 5334;
 
         public string Socks { get; set; }
+
         public string DnsResolver { get; set; }
         public int LocalDnsPort { get; set; } = 5333;
         public string FakeDnsPrefix { get; set; } = "1.";
@@ -69,7 +71,7 @@ namespace NaiveSocksAndroid
         public void StartVpn()
         {
             if ((vpnConfig.Handler == null) == (vpnConfig.Socks == null)) {
-                throw new Exception("Should specify ('Handler' or 'Socks') and optional 'DnsResolver'");
+                throw new Exception("Should specify (('Handler' and optional 'SocksPort') or 'Socks') and optional 'DnsResolver'");
             }
 
             dnsResolver = null;
@@ -80,16 +82,20 @@ namespace NaiveSocksAndroid
                 socksInAdapter = controller.FindAdapter<SocksInAdapter>(vpnConfig.Socks) ?? throw new Exception($"SocksInAdapter '{vpnConfig.Socks}' not found.");
             } else {
                 var existVpn = controller.FindAdapter<NaiveSocks.Adapter>("VPN");
-                if (existVpn is SocksInAdapter s) {
-                    socksInAdapter = s;
-                } else if (existVpn != null) {
-                    throw new Exception("adapter 'VPN' is exist and it's not a SocksInAdapter");
+                if (existVpn != null) {
+                    throw new Exception("adapter 'VPN' is already exist.");
                 } else {
+                    var handlerRef = controller.AdapterRefFromName(vpnConfig.Handler);
+                    if (handlerRef.Adapter == null) {
+                        throw new Exception("Handler not found.");
+                    }
                     socksInAdapter = new SocksInAdapter() {
                         Name = "VPN",
-                        listen = NaiveUtils.ParseIPEndPoint("127.1:5334"),
-                        @out = controller.AdapterRefFromName(vpnConfig.Handler)
+                        listen = NaiveUtils.ParseIPEndPoint("127.1:" + vpnConfig.SocksPort),
+                        @out = handlerRef
                     };
+                    Logging.info("Automatically created adapter " + socksInAdapter);
+                    socksInAdapter.SetConfig(Nett.Toml.Create());
                     controller.AddInAdapter(socksInAdapter, true);
                     socksInAdapter.Start();
                 }
@@ -157,7 +163,7 @@ namespace NaiveSocksAndroid
             pfd = builder.Establish();
             var fd = pfd.Fd;
             Running = true;
-            Logging.info("VPN established, fd=" + pfd.Fd);
+            Logging.info("VPN established, fd=" + fd);
 
             if (vpnConfig.LocalDnsPort > 0) {
                 Logging.info("Starting local DNS server at 127.0.0.1:" + vpnConfig.LocalDnsPort);
@@ -166,23 +172,31 @@ namespace NaiveSocksAndroid
                 StartDnsServer();
             }
 
+            string dnsgw = null;
+            if (vpnConfig.DnsGw.IsNullOrEmpty() == false) {
+                dnsgw = vpnConfig.DnsGw;
+            } else if (vpnConfig.LocalDnsPort > 0) {
+                dnsgw = "127.0.0.1:" + vpnConfig.LocalDnsPort;
+            }
+            StartTun2Socks(fd, "127.0.0.1:" + socksInAdapter.listen.Port, vpnConfig.Mtu, dnsgw);
+        }
+
+        private void StartTun2Socks(int fd, string socksAddr, int mtu, string dnsgw)
+        {
             string sockPath = "t2s_sock_path";
-            var t2s = Native.GetLibFullPath(Native.SsTun2Socks);
             var arg = "--netif-ipaddr 172.31.1.2"
                          + " --netif-netmask 255.255.255.0"
-                         + " --socks-server-addr " + "127.0.0.1:" + socksInAdapter.listen.Port
+                         + " --socks-server-addr " + socksAddr
                          + " --tunfd " + fd
-                         + " --tunmtu " + vpnConfig.Mtu
+                         + " --tunmtu " + mtu
                          + " --sock-path " + sockPath
                          + " --loglevel 3"
                          + " --enable-udprelay";
-            if (vpnConfig.DnsGw.IsNullOrEmpty() == false) {
-                arg += " --dnsgw " + vpnConfig.DnsGw;
-            } else if (vpnConfig.LocalDnsPort > 0) {
-                arg += " --dnsgw 127.0.0.1:" + vpnConfig.LocalDnsPort;
+            if (dnsgw != null) {
+                arg += " --dnsgw " + dnsgw;
             }
             var filesDir = AppConfig.FilesDir;
-            StartProcess(t2s, arg, filesDir);
+            StartProcess(Native.GetLibFullPath(Native.SsTun2Socks), arg, filesDir);
             int delay = 100;
             while (true) {
                 if (Native.SendFd(Path.Combine(filesDir, sockPath), fd)) {
