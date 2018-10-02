@@ -10,6 +10,7 @@ using System.Security.Cryptography;
 using System.Threading;
 using System.Net;
 using System.Text;
+using System.Net.Sockets;
 
 namespace NaiveSocks
 {
@@ -404,7 +405,7 @@ namespace NaiveSocks
         private static void AddSocketTests(CommandHub cmdHub, string prefix)
         {
             prefix += "spt";
-            cmdHub.AddCmdHandler(prefix, command => {
+            cmdHub.AddCmdHandler(prefix + "-sync", command => {
                 const int BufSize = 64 * 1024;
                 var ip = $"127.{NaiveUtils.Random.Next(1 << 16)}";
                 var listener = new System.Net.Sockets.TcpListener(NaiveUtils.ParseIPEndPoint(ip + ":52345"));
@@ -432,7 +433,7 @@ namespace NaiveSocks
                     long total = 0;
                     var sw = Stopwatch.StartNew();
                     using (var cli = new System.Net.Sockets.TcpClient()) {
-                        cli.Connect(NaiveUtils.ParseIPEndPoint(ip));
+                        cli.Connect(NaiveUtils.ParseIPEndPoint(ip + ":52345"));
                         var s = cli.Client;
                         var buf = new byte[BufSize];
                         int read;
@@ -446,210 +447,73 @@ namespace NaiveSocks
                 }
             });
             cmdHub.AddCmdHandler(prefix + "-1", command => {
-                const int BufSize = 64 * 1024;
-                var ip = $"127.{NaiveUtils.Random.Next(1 << 16)}";
-                var listener = new System.Net.Sockets.TcpListener(NaiveUtils.ParseIPEndPoint(ip + ":52345"));
-                listener.Start();
-                command.WriteLine("Running socket test...");
-                Task.Run(async () => {
-                    try {
-                        using (var cli = await listener.AcceptTcpClientAsync()) {
-                            var s = new SocketStream1(cli.Client);
-                            var buf = new byte[BufSize];
-                            var sw = Stopwatch.StartNew();
-                            while (true) {
-                                await s.WriteAsync(buf, 0, BufSize);
-                                if (sw.ElapsedMilliseconds > 5 * 1000) {
-                                    break;
-                                }
-                            }
-                        }
-                    } finally {
-                        listener.Stop();
-                    }
-                }).Forget();
-
-                Task.Run(async () => {
-                    long total = 0;
-                    var sw = Stopwatch.StartNew();
-                    using (var cli = new System.Net.Sockets.TcpClient()) {
-                        await cli.ConnectAsync(ip, 52345);
-                        var s = new SocketStream1(cli.Client);
-                        var buf = new byte[BufSize];
-                        int read;
-                        while ((read = await s.ReadAsync(buf)) > 0) {
-                            total += read;
-                        }
-                    }
-                    var ms = sw.ElapsedMilliseconds;
-                    command.WriteLine($"Transferred {total:N0} bytes in {ms:N0} ms.");
-                    command.WriteLine("Speed: " + (total / 1024 / 1024 * 1000 / ms) + " MiB/s");
-                }).Wait();
+                RunSocketTest(command, x => new SocketStream1(x), false);
             });
             cmdHub.AddCmdHandler(prefix + "-1r", command => {
-                const int BufSize = 64 * 1024;
-                var ip = $"127.{NaiveUtils.Random.Next(1 << 16)}";
-                var listener = new System.Net.Sockets.TcpListener(NaiveUtils.ParseIPEndPoint(ip + ":52345"));
-                listener.Start();
-                command.WriteLine("Running socket test...");
-                Task.Run(async () => {
-                    try {
-                        using (var cli = await listener.AcceptTcpClientAsync()) {
-                            var s = new SocketStream1(cli.Client);
-                            var buf = new byte[BufSize];
-                            var sw = Stopwatch.StartNew();
-                            while (true) {
-                                await s.WriteAsyncR(new BytesSegment(buf, 0, BufSize));
-                                if (sw.ElapsedMilliseconds > 5 * 1000) {
-                                    break;
-                                }
-                            }
-                        }
-                    } finally {
-                        listener.Stop();
-                    }
-                }).Forget();
-
-                Task.Run(async () => {
-                    long total = 0;
-                    var sw = Stopwatch.StartNew();
-                    using (var cli = new System.Net.Sockets.TcpClient()) {
-                        await cli.ConnectAsync(ip, 52345);
-                        var s = new SocketStream1(cli.Client);
-                        var buf = new byte[BufSize];
-                        int read;
-                        while ((read = await s.ReadAsyncR(new BytesSegment(buf, 0, BufSize))) > 0) {
-                            total += read;
-                        }
-                    }
-                    var ms = sw.ElapsedMilliseconds;
-                    command.WriteLine($"Transferred {total:N0} bytes in {ms:N0} ms.");
-                    command.WriteLine("Speed: " + (total / 1024 / 1024 * 1000 / ms) + " MiB/s");
-                }).Wait();
+                RunSocketTest(command, x => new SocketStream1(x), true);
             });
             cmdHub.AddCmdHandler(prefix + "-2", command => {
-                const int BufSize = 64 * 1024;
-                var ip = $"127.{NaiveUtils.Random.Next(1 << 16)}";
-                var listener = new System.Net.Sockets.TcpListener(NaiveUtils.ParseIPEndPoint(ip + ":52345"));
-                listener.Start();
-                command.WriteLine("Running socket test...");
-                Task.Run(async () => {
-                    try {
-                        using (var cli = await listener.AcceptTcpClientAsync()) {
-                            var s = new SocketStream2(cli.Client);
-                            var buf = new byte[BufSize];
-                            var sw = Stopwatch.StartNew();
-                            while (true) {
-                                await s.WriteAsyncR(new BytesSegment(buf, 0, BufSize));
-                                if (sw.ElapsedMilliseconds > 5 * 1000) {
-                                    break;
-                                }
-                            }
-                        }
-                    } finally {
-                        listener.Stop();
-                    }
-                }).Forget();
-
-                Task.Run(async () => {
-                    long total = 0;
-                    var sw = Stopwatch.StartNew();
-                    using (var cli = new System.Net.Sockets.TcpClient()) {
-                        await cli.ConnectAsync(ip, 52345);
-                        var s = new SocketStream2(cli.Client);
-                        var buf = new byte[BufSize];
-                        int read;
-                        while ((read = await s.ReadAsyncR(new BytesSegment(buf, 0, BufSize))) > 0) {
-                            total += read;
-                        }
-                    }
-                    var ms = sw.ElapsedMilliseconds;
-                    command.WriteLine($"Transferred {total:N0} bytes in {ms:N0} ms.");
-                    command.WriteLine("Speed: " + (total / 1024 / 1024 * 1000 / ms) + " MiB/s");
-                }).Wait();
+                RunSocketTest(command, x => new SocketStream2(x), false);
             });
             cmdHub.AddCmdHandler(prefix + "-ya", command => {
-                const int BufSize = 64 * 1024;
-                var ip = $"127.{NaiveUtils.Random.Next(1 << 16)}";
-                var listener = new System.Net.Sockets.TcpListener(NaiveUtils.ParseIPEndPoint(ip + ":52345"));
-                listener.Start();
-                command.WriteLine("Running socket test...");
-                Task.Run(async () => {
-                    try {
-                        using (var cli = await listener.AcceptTcpClientAsync()) {
-                            var s = new SocketStream2(cli.Client);
-                            var buf = new byte[BufSize];
-                            var sw = Stopwatch.StartNew();
-                            while (true) {
-                                await s.WriteAsync(new BytesSegment(buf, 0, BufSize));
-                                if (sw.ElapsedMilliseconds > 5 * 1000) {
-                                    break;
-                                }
-                            }
-                        }
-                    } finally {
-                        listener.Stop();
-                    }
-                }).Forget();
-
-                Task.Run(async () => {
-                    long total = 0;
-                    var sw = Stopwatch.StartNew();
-                    using (var cli = new System.Net.Sockets.TcpClient()) {
-                        await cli.ConnectAsync(ip, 52345);
-                        var s = new SocketStream2(cli.Client);
-                        var buf = new byte[BufSize];
-                        int read;
-                        while ((read = await s.ReadAsync(new BytesSegment(buf, 0, BufSize))) > 0) {
-                            total += read;
-                        }
-                    }
-                    var ms = sw.ElapsedMilliseconds;
-                    command.WriteLine($"Transferred {total:N0} bytes in {ms:N0} ms.");
-                    command.WriteLine("Speed: " + (total / 1024 / 1024 * 1000 / ms) + " MiB/s");
-                }).Wait();
+                RunSocketTest(command, x => new YASocket(x), false);
             });
             cmdHub.AddCmdHandler(prefix + "-yar", command => {
-                const int BufSize = 64 * 1024;
-                var ip = $"127.{NaiveUtils.Random.Next(1 << 16)}";
-                var listener = new System.Net.Sockets.TcpListener(NaiveUtils.ParseIPEndPoint(ip + ":52345"));
-                listener.Start();
-                command.WriteLine("Running socket test...");
-                Task.Run(async () => {
-                    try {
-                        using (var cli = await listener.AcceptTcpClientAsync()) {
-                            var s = new YASocket(cli.Client);
-                            var buf = new byte[BufSize];
-                            var sw = Stopwatch.StartNew();
-                            while (true) {
+                RunSocketTest(command, x => new YASocket(x), true);
+            });
+        }
+
+        private static void RunSocketTest(Command command, Func<Socket, IMyStream> createStream, bool useR)
+        {
+            const int BufSize = 64 * 1024;
+            var ip = $"127.{NaiveUtils.Random.Next(1 << 16)}";
+            var listener = new System.Net.Sockets.TcpListener(NaiveUtils.ParseIPEndPoint(ip + ":52345"));
+            listener.Start();
+            command.WriteLine("Running socket test...");
+            Task.Run(async () => {
+                try {
+                    using (var cli = await listener.AcceptTcpClientAsync()) {
+                        var s = createStream(cli.Client);
+                        var buf = new byte[BufSize];
+                        var sw = Stopwatch.StartNew();
+                        while (true) {
+                            if (useR)
                                 await s.WriteAsyncR(new BytesSegment(buf, 0, BufSize));
-                                if (sw.ElapsedMilliseconds > 5 * 1000) {
-                                    break;
-                                }
+                            else
+                                await s.WriteAsync(new BytesSegment(buf, 0, BufSize));
+                            if (sw.ElapsedMilliseconds > 5 * 1000) {
+                                break;
                             }
                         }
-                    } finally {
-                        listener.Stop();
                     }
-                }).Forget();
+                } finally {
+                    listener.Stop();
+                }
+            }).Forget();
 
-                Task.Run(async () => {
-                    long total = 0;
-                    var sw = Stopwatch.StartNew();
-                    using (var cli = new System.Net.Sockets.TcpClient()) {
-                        await cli.ConnectAsync(ip, 52345);
-                        var s = new YASocket(cli.Client);
-                        var buf = new byte[BufSize];
-                        int read;
-                        while ((read = await s.ReadAsyncR(new BytesSegment(buf, 0, BufSize))) > 0) {
+            Task.Run(async () => {
+                long total = 0;
+                var sw = Stopwatch.StartNew();
+                using (var cli = new System.Net.Sockets.TcpClient()) {
+                    await cli.ConnectAsync(ip, 52345);
+                    var s = createStream(cli.Client);
+                    var buf = new byte[BufSize];
+                    int read;
+                    while (true) {
+                        if (useR)
+                            read = await s.ReadAsyncR(new BytesSegment(buf, 0, BufSize));
+                        else
+                            read = await s.ReadAsync(new BytesSegment(buf, 0, BufSize));
+                        if (read > 0)
                             total += read;
-                        }
+                        else
+                            break;
                     }
-                    var ms = sw.ElapsedMilliseconds;
-                    command.WriteLine($"Transferred {total:N0} bytes in {ms:N0} ms.");
-                    command.WriteLine("Speed: " + (total / 1024 / 1024 * 1000 / ms) + " MiB/s");
-                }).Wait();
-            });
+                }
+                var ms = sw.ElapsedMilliseconds;
+                command.WriteLine($"Transferred {total:N0} bytes in {ms:N0} ms.");
+                command.WriteLine("Speed: " + (total / 1024 / 1024 * 1000 / ms) + " MiB/s");
+            }).Wait();
         }
 
         static byte[] sampleKey(int bytesCount) => NaiveProtocol.GetRealKeyFromString("testtttt", bytesCount);
