@@ -18,6 +18,7 @@ using Android.Views;
 using Android.Widget;
 using Naive.HttpSvr;
 using NaiveSocks;
+using R = NaiveSocksAndroid.Resource;
 
 namespace NaiveSocksAndroid
 {
@@ -113,16 +114,12 @@ namespace NaiveSocksAndroid
 
             builder = new NotificationCompat.Builder(this, chId)
                         .SetContentIntent(BuildIntentToShowMainActivity())
-                        //.SetContentTitle("NaiveSocks")
-                        //.SetSubText("running")
-                        //.SetStyle(bigText)
-                        .AddAction(BuildServiceAction(Actions.KILL, "Kill", Android.Resource.Drawable.StarOff, 1))
-                        .AddAction(BuildServiceAction(Actions.RELOAD, "Reload", Android.Resource.Drawable.StarOff, 2))
-                        .AddAction(BuildServiceAction(Actions.GC, "GC", Android.Resource.Drawable.StarOff, 3))
-                        .AddAction(BuildServiceAction(Actions.GC_0, "GC(gen0)", Android.Resource.Drawable.StarOff, 5))
+                        .AddAction(BuildServiceAction(Actions.KILL, R.String.kill, Android.Resource.Drawable.StarOff, 1))
+                        .AddAction(BuildServiceAction(Actions.RELOAD, R.String.reload, Android.Resource.Drawable.StarOff, 2))
+                        .AddAction(BuildServiceAction(Actions.GC, R.String.gc, Android.Resource.Drawable.StarOff, 3))
                         .SetSmallIcon(Resource.Drawable.N)
                         .SetColor(unchecked((int)0xFF2196F3))
-                        //.SetShowWhen(false)
+                        .SetUsesChronometer(true)
                         .SetOngoing(true);
 
             if (!isO) {
@@ -135,10 +132,8 @@ namespace NaiveSocksAndroid
             }
 
             restartBuilder = new NotificationCompat.Builder(this, chId)
-                        //.SetContentIntent(BuildServicePendingIntent("start!", 10086))
                         .SetContentTitle("NaiveSocks service is stopped")
-                        //.SetContentText("touch here to restart")
-                        .AddAction(BuildServiceAction(Actions.START, "Start", Android.Resource.Drawable.StarOff, 6))
+                        .AddAction(BuildServiceAction(Actions.START, R.String.start, Android.Resource.Drawable.StarOff, 6))
                         .SetSmallIcon(Resource.Drawable.N)
                         .SetColor(unchecked((int)0xFF2196F3))
                         .SetAutoCancel(true)
@@ -200,10 +195,7 @@ namespace NaiveSocksAndroid
                     Controller.LoadConfigFileFromMultiPaths(paths);
                     Controller.Start();
                     Logger.info("controller started.");
-                    if (currentConfig?.vpn?.Enabled == true) {
-                        Logging.info("Starting VPN");
-                        StartVpn();
-                    }
+                    CheckVPN();
                 } catch (System.Exception e) {
                     Logger.exception(e, Logging.Level.Error, "loading/starting controller");
                     ShowToast("starting error: " + e.Message);
@@ -214,23 +206,34 @@ namespace NaiveSocksAndroid
             updateNotif(true);
         }
 
+        private void CheckVPN()
+        {
+            if (currentConfig?.vpn?.Enabled == true) {
+                Logging.info("Starting VPN");
+                StartVpn();
+            } else {
+                vpnHelper = null;
+            }
+        }
+
         BgServiceVpnHelper vpnHelper;
 
         private void StartVpn()
         {
             if (VpnService.Prepare(this) != null) {
                 var activity = ShowingActivity;
-                if (activity == null) {
+                if (activity?.Handler.Post(activity.VpnServicePrepare) == true) {
+                    Logging.info("Using showing activity to request VPN permission.");
+                } else {
                     Logging.info("Starting activity to request VPN permission.");
                     StartActivity(new Intent(this, typeof(MainActivity)).SetAction("PREP_VPN").SetFlags(ActivityFlags.NewTask));
-                } else {
-                    Logging.info("Using showing activity to request VPN permission.");
-                    activity.VpnServicePrepare();
                 }
             } else {
                 // continue starting vpn service
                 try {
-                    vpnHelper = new BgServiceVpnHelper(this, currentConfig.vpn);
+                    if (vpnHelper == null)
+                        vpnHelper = new BgServiceVpnHelper(this, currentConfig.vpn);
+                    // else it may be reloading
                     vpnHelper.StartVpn();
                 } catch (Exception e) {
                     Logging.exception(e, Logging.Level.Error, "Starting VPN");
@@ -262,7 +265,8 @@ namespace NaiveSocksAndroid
                 if (action == Actions.TOGGLE) {
                     Logger.info("toggling controller...");
                     action = IsForegroundRunning ? Actions.STOP : Actions.START;
-                    var msg = "NaiveSocks " + (IsForegroundRunning ? "stopping" : "starting");
+                    var msg = string.Format(Resources.GetString(IsForegroundRunning ? R.String.format_stopping : R.String.format_starting),
+                        Resources.GetString(R.String.app_name));
                     ShowToast(msg);
                 }
                 switch (action) {
@@ -320,7 +324,7 @@ namespace NaiveSocksAndroid
             }
             vpnHelper?.Stop();
             Controller.Reload();
-            vpnHelper?.StartVpn();
+            CheckVPN();
         }
 
         public override IBinder OnBind(Intent intent)
@@ -463,6 +467,9 @@ namespace NaiveSocksAndroid
                                      .SetFlags(ActivityFlags.ReorderToFront);
             return PendingIntent.GetActivity(this, 0, notificationIntent, PendingIntentFlags.UpdateCurrent);
         }
+
+        NotificationCompat.Action BuildServiceAction(string action, int textResId, int icon, int requestCode)
+            => BuildServiceAction(action, Resources.GetString(textResId), icon, requestCode);
 
         NotificationCompat.Action BuildServiceAction(string action, string text, int icon, int requestCode)
         {

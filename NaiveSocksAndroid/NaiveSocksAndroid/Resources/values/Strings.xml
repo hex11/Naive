@@ -11,13 +11,23 @@
   <string name="start">Start</string>
   <string name="stop">Stop</string>
   <string name="reload">Reload</string>
+  <string name="gc">GC</string>
   <string name="autostart">Autostart</string>
-  <string name="openconfig">Open configuation file...</string>
+  <string name="editconfig">Edit configuration...</string>
   <string name="submenu_restart_kill">Restart/Kill</string>
   <string name="restart">Restart</string>
   <string name="kill">Kill!</string>
   <string name="autoscroll">Autoscroll</string>
   <string name="format_enabled">{0} is enabled</string>
   <string name="format_disable">{0} is disabled</string>
+  <string name="format_starting">{0} is starting</string>
+  <string name="format_stopping">{0} is stopping</string>
   <string name="no_config">No configuation file</string>
+  <string name="config_editor">Config Editor</string>
+  <string name="open">Open</string>
+  <string name="save">Save</string>
+  <string name="file_saved">File saved</string>
+  <string name="press_again_to_quit">Press again to quit, or...</string>
+  <string name="save_and_quit">Save and quit</string>
+  <string name="saveing_error">Error: </string>
 </resources>

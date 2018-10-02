@@ -30,16 +30,15 @@ using System.Threading;
 namespace NaiveSocksAndroid
 {
     [Android.App.Activity(
-        Label = "NaiveSocks",
+        Label = "@string/app_name",
         Name = "naive.NaiveSocksAndroid.MainActivity",
         MainLauncher = true,
         Exported = true,
         LaunchMode = LaunchMode.SingleTask,
         ConfigurationChanges = ConfigChanges.Orientation | ConfigChanges.ScreenSize | ConfigChanges.ScreenLayout)]
     [Android.App.MetaData("android.app.shortcuts", Resource = "@xml/shortcuts")]
-    public class MainActivity : AppCompatActivity
+    public class MainActivity : ActivityWithToolBar
     {
-        private CoordinatorLayout topView;
         private NavigationView navigationView;
         private DrawerLayout drawer;
         private Intent serviceStartIntent;
@@ -51,11 +50,8 @@ namespace NaiveSocksAndroid
 
         public BgService Service => bgServiceConn?.Value;
 
-        public Toolbar toolbar;
         private string AppName;
         private Java.Lang.ICharSequence JavaAppName;
-
-        public Handler Handler { get; private set; }
 
         private const int REQ_VPN = 1;
 
@@ -71,9 +67,6 @@ namespace NaiveSocksAndroid
 
         protected override void OnCreate(Bundle savedInstanceState)
         {
-            CrashHandler.CheckInit();
-            AppConfig.Init(ApplicationContext);
-            Handler = new Handler(ApplicationContext.MainLooper);
             DebugEvent("OnCreate");
             DebugEvent("Intent: " + Intent?.ToUri(IntentUriType.None) ?? "(null)");
             //if (savedInstanceState != null) {
@@ -86,8 +79,6 @@ namespace NaiveSocksAndroid
 
             AppName = Resources.GetString(R.String.app_name);
             JavaAppName = new Java.Lang.String(AppName);
-
-            SetTheme(R.Style.MyTheme_Light);
 
             base.OnCreate(savedInstanceState);
 
@@ -126,13 +117,8 @@ namespace NaiveSocksAndroid
                 });
 
             // Set our view from the "main" layout resource
-            SetContentView(R.Layout.Main);
+            SetRealContentView(R.Layout.Main);
 
-            topView = FindViewById<CoordinatorLayout>(R.Id.topview);
-
-            toolbar = FindViewById<Toolbar>(R.Id.toolbar);
-            SetSupportActionBar(toolbar);
-            SupportActionBar.SetHomeButtonEnabled(true);
             toolbar.TitleFormatted = JavaAppName;
 
             navigationView = FindViewById<NavigationView>(R.Id.nvView);
@@ -238,7 +224,7 @@ namespace NaiveSocksAndroid
             base.OnStop();
             if (isConnected)
                 UnbindService();
-            AsyncHelper.SetTimeout(100, () => GC.Collect(0));
+            AsyncHelper.SetTimeout(100, () => GC.Collect());
         }
 
         private void UnbindService()
@@ -386,7 +372,7 @@ namespace NaiveSocksAndroid
                 .SetCheckable(true)
                 .SetChecked(AppConfig.Current.Autostart)
                 .SetShowAsActionFlags(ShowAsAction.Never);
-            menu.Add(R.String.openconfig)
+            menu.Add(R.String.editconfig)
                 .SetShowAsActionFlags(ShowAsAction.Never);
 
             return true;
@@ -409,29 +395,8 @@ namespace NaiveSocksAndroid
                 bool EqualsId(string str, int strId) => str == GetString(strId);
                 if (EqualsId(title, R.String.autostart)) {
                     setAutostart(!item.IsChecked);
-                } else if (EqualsId(title, R.String.openconfig)) {
-                    var paths = AppConfig.GetNaiveSocksConfigPaths(this);
-                    var found = paths.FirstOrDefault(x => File.Exists(x));
-                    if (found == null) {
-                        MakeSnackbar(GetString(R.String.no_config), Snackbar.LengthLong).Show();
-                    } else {
-                        var intent = new Intent(Intent.ActionEdit);
-                        Android.Net.Uri fileUri;
-                        if (Build.VERSION.SdkInt >= BuildVersionCodes.N) {
-                            fileUri = FileProvider.GetUriForFile(this, "naive.NaiveSocksAndroid.fp", new Java.IO.File(found));
-                            intent.AddFlags(ActivityFlags.GrantReadUriPermission);
-                            intent.AddFlags(ActivityFlags.GrantWriteUriPermission);
-                        } else {
-                            fileUri = Android.Net.Uri.FromFile(new Java.IO.File(found));
-                        }
-                        intent.SetDataAndType(fileUri, "text/plain");
-                        intent.AddFlags(ActivityFlags.NewTask);
-                        try {
-                            StartActivity(intent);
-                        } catch (ActivityNotFoundException) {
-                            MakeSnackbar("No activity to handle", Snackbar.LengthLong).Show();
-                        }
-                    }
+                } else if (EqualsId(title, R.String.editconfig)) {
+                    StartActivity(new Intent(this, typeof(EditorActivity)).AddFlags(ActivityFlags.NewTask));
                 } else if (EqualsId(title, R.String.submenu_restart_kill)) {
                     // nothing to do
                 } else if (EqualsId(title, R.String.restart)) {
@@ -473,11 +438,6 @@ namespace NaiveSocksAndroid
         public static string FormatSwitchString(Context context, int what, bool enabled)
         {
             return String.Format(context.GetString(enabled ? R.String.format_enabled : R.String.format_disable), context.GetString(what));
-        }
-
-        public Snackbar MakeSnackbar(string text, int duration)
-        {
-            return Snackbar.Make(topView, text, duration);
         }
     }
 
