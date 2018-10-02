@@ -182,8 +182,7 @@ namespace NaiveSocksAndroid
                             if (config.socket_impl != null) {
                                 MyStream.SetSocketImpl(config.socket_impl);
                             } else {
-                                // YASocket (epoll) can't work on Android currently.
-                                //MyStream.CurrentSocketImpl = MyStream.SocketImpl.YASocket;
+                                MyStream.CurrentSocketImpl = MyStream.SocketImpl.YASocket;
                             }
                             MyStream.Copier.TryReadSync = config.copier_sync_r;
                             MyStream.Copier.TryWriteSync = config.copier_sync_w;

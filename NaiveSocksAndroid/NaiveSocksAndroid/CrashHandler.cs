@@ -39,7 +39,6 @@ namespace NaiveSocksAndroid
                 }
                 nullOnInit = null;
             }
-
             new LogFileWriter(Path.Combine(Android.App.Application.Context.CacheDir.AbsolutePath, "log.txt"), Logging.RootLogger).Start();
             string sdcard = Android.OS.Environment.ExternalStorageDirectory.AbsolutePath;
             CrashLogFile = Path.Combine(sdcard, "NaiveUnhandledException.txt");
@@ -48,6 +47,10 @@ namespace NaiveSocksAndroid
             Logging.CustomRunningTimeImpl = AndroidGetRunningTime;
             Logging.Logged += Logging_Logged;
             Logging.info("Process PID=" + Android.OS.Process.MyPid());
+
+            var osArch = Java.Lang.JavaSystem.GetProperty("os.arch");
+            Logging.info("os.arch = " + osArch);
+            NaiveSocks.YASocket.isX86 = (osArch.StartsWith("x86") || osArch == "amd64");
         }
 
         static long processStartTime = -1;

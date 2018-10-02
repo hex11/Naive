@@ -12,6 +12,8 @@ namespace NaiveSocks
 {
     public class YASocket : SocketStream, IEpollHandler
     {
+        public static bool isX86 = true;
+
         private const EPOLL_EVENTS PollInEvents = EPOLL_EVENTS.IN | EPOLL_EVENTS.RDHUP | EPOLL_EVENTS.ONESHOT | EPOLL_EVENTS.ET;
 
         public YASocket(Socket socket) : base(socket)
@@ -204,7 +206,7 @@ namespace NaiveSocks
             mapLock.EnterWriteLock();
             try {
                 unsafe {
-                    if (LinuxNative.epoll_ctl(ep, EPOLL_CTL.ADD, fd, ref ev) != 0) {
+                    if (LinuxNative.epoll_ctl(ep, EPOLL_CTL.ADD, fd, ev) != 0) {
                         LinuxNative.ThrowWithErrno(nameof(LinuxNative.epoll_ctl));
                     }
                 }
@@ -224,7 +226,7 @@ namespace NaiveSocks
                     events = events,
                     u32a = fd
                 };
-                if (LinuxNative.epoll_ctl(ep, EPOLL_CTL.MOD, fd, ref ev) != 0) {
+                if (LinuxNative.epoll_ctl(ep, EPOLL_CTL.MOD, fd, ev) != 0) {
                     LinuxNative.ThrowWithErrno(nameof(LinuxNative.epoll_ctl));
                 }
             }
@@ -239,7 +241,7 @@ namespace NaiveSocks
                     events = events,
                     u32a = fd
                 };
-                if (LinuxNative.epoll_ctl(ep, EPOLL_CTL.MOD, fd, ref ev) != 0) {
+                if (LinuxNative.epoll_ctl(ep, EPOLL_CTL.MOD, fd, ev) != 0) {
                     return LinuxNative.GetErrno();
                 }
             }
@@ -254,7 +256,7 @@ namespace NaiveSocks
             try {
                 unsafe {
                     var ev = default(epoll_event);
-                    if (LinuxNative.epoll_ctl(ep, EPOLL_CTL.DEL, fd, ref ev) != 0) {
+                    if (LinuxNative.epoll_ctl(ep, EPOLL_CTL.DEL, fd, ev) != 0) {
                         LinuxNative.ThrowWithErrno(nameof(LinuxNative.epoll_ctl));
                     }
                 }
@@ -273,7 +275,7 @@ namespace NaiveSocks
             try {
                 unsafe {
                     var ev = default(epoll_event);
-                    if (LinuxNative.epoll_ctl(ep, EPOLL_CTL.DEL, fd, ref ev) != 0) {
+                    if (LinuxNative.epoll_ctl(ep, EPOLL_CTL.DEL, fd, ev) != 0) {
                         var errno = LinuxNative.GetErrno();
                         Logger.warning("RemoveFdNotThrows " + fd + " error " + errno + " " + LinuxNative.GetErrString(errno));
                         return errno;
@@ -292,8 +294,42 @@ namespace NaiveSocks
             if (ep < 0)
                 throw new Exception("epoll fd does not exist.");
             Logger.debug("PollLoop running");
+            if (YASocket.isX86)
+                PollLoop_x86(ep);
+            else
+                PollLoop_nonx86(ep);
+        }
 
+        private unsafe void PollLoop_x86(int ep)
+        {
             fixed (epoll_event* events = new epoll_event[MAX_EVENTS])
+                while (true) {
+                    var eventCount = LinuxNative.epoll_wait(ep, events, MAX_EVENTS, -1);
+                    if (eventCount < 0) {
+                        var errno = LinuxNative.GetErrno();
+                        if (errno == 4) // Interrupted system call
+                            continue;
+                        LinuxNative.ThrowWithErrno(nameof(LinuxNative.epoll_wait), errno);
+                    }
+                    Logger.debug("eventcount " + eventCount);
+                    for (int i = 0; i < eventCount; i++) {
+                        var e = events[i];
+                        var eventType = e.events;
+                        mapLock.EnterReadLock();
+                        bool ok = mapFdToHandler.TryGetValue(e.u32a, out var handler);
+                        mapLock.ExitReadLock();
+                        if (!ok) {
+                            Logger.warning($"EpollHandler not found! event({i}/{eventCount})=[{eventType}] u64=[{e.u64:X}]");
+                            continue;
+                        }
+                        handler.HandleEvent(this, eventType);
+                    }
+                }
+        }
+
+        private unsafe void PollLoop_nonx86(int ep)
+        {
+            fixed (epoll_event_nonx86* events = new epoll_event_nonx86[MAX_EVENTS])
                 while (true) {
                     var eventCount = LinuxNative.epoll_wait(ep, events, MAX_EVENTS, -1);
                     if (eventCount < 0) {
@@ -355,10 +391,20 @@ namespace NaiveSocks
         public static extern int epoll_create([In]int size);
 
         [DllImport(LIBC, SetLastError = true)]
-        public unsafe static extern int epoll_wait(int fileDescriptor, epoll_event* events, int maxevents, int timeout);
+        public unsafe static extern int epoll_wait(int fileDescriptor, void* events, int maxevents, int timeout);
 
         [DllImport(LIBC, SetLastError = true)]
-        public unsafe static extern int epoll_ctl(int epFd, EPOLL_CTL op, int fd, ref epoll_event ev);
+        public unsafe static extern int epoll_ctl(int epFd, EPOLL_CTL op, int fd, void* ev);
+
+        public unsafe static int epoll_ctl(int epFd, EPOLL_CTL op, int fd, epoll_event ev)
+        {
+            if (YASocket.isX86) {
+                return epoll_ctl(epFd, op, fd, &ev);
+            } else {
+                epoll_event_nonx86 evnx86 = new epoll_event_nonx86 { events = ev.events, u64 = ev.u64 };
+                return epoll_ctl(epFd, op, fd, &evnx86);
+            }
+        }
 
         [DllImport(LIBC, SetLastError = true)]
         public unsafe static extern sbyte* strerror([In]int errnum);
@@ -428,7 +474,7 @@ namespace NaiveSocks
     }
 
     [StructLayout(LayoutKind.Explicit, Pack = 1, Size = 12)]
-    internal struct epoll_event
+    internal struct epoll_event // for x86 and x86-64
     {
         [FieldOffset(0)]
         public EPOLL_EVENTS events;      /* Epoll events */
@@ -437,6 +483,19 @@ namespace NaiveSocks
         [FieldOffset(4)]
         public int u32a;
         [FieldOffset(8)]
+        public int u32b;
+    }
+
+    [StructLayout(LayoutKind.Explicit, Pack = 1, Size = 16)]
+    internal struct epoll_event_nonx86
+    {
+        [FieldOffset(0)]
+        public EPOLL_EVENTS events;
+        [FieldOffset(8)]
+        public long u64;
+        [FieldOffset(8)]
+        public int u32a;
+        [FieldOffset(12)]
         public int u32b;
     }
 
