@@ -19,6 +19,7 @@ using Naive.HttpSvr;
 using ARSoft.Tools.Net.Dns;
 using System.Net;
 using NaiveSocks;
+using System.Net.Sockets;
 
 namespace NaiveSocksAndroid
 {
@@ -63,7 +64,7 @@ namespace NaiveSocksAndroid
         Dictionary<long, string> mapIpHost = new Dictionary<long, string>();
         ReaderWriterLockSlim mapLock = new ReaderWriterLockSlim();
 
-        Dictionary<string, long> mapHostIp = new Dictionary<string, long>();
+        Dictionary<string, long[]> mapHostIp = new Dictionary<string, long[]>();
 
         IDnsProvider dnsResolver;
         SocksInAdapter socksInAdapter;
@@ -238,39 +239,66 @@ namespace NaiveSocksAndroid
                         strName = strName.Substring(0, strName.Length - 1); // remove the trailing '.'
                         IPAddress ip;
                         mapLock.EnterReadLock();
-                        bool v = mapHostIp.TryGetValue(strName, out var ipLong);
+                        bool exist = mapHostIp.TryGetValue(strName, out var ipLongs);
                         mapLock.ExitReadLock();
-                        if (v) {
-                            ip = new IPAddress(ipLong);
+                        if (exist) {
+                            ip = new IPAddress(ipLongs[NaiveUtils.Random.Next(ipLongs.Length)]);
                         } else {
                             if (dnsResolver == null) {
                                 ip = IPAddress.Parse(ipPrefix + Interlocked.Increment(ref lastIp));
+                                ipLongs = new long[] { ip.Address };
                                 Logging.info("Fake DNS: " + ip.ToString() + " -> " + strName);
                             } else {
+                                IPAddress[] ips;
                                 try {
-                                    var dnsResult = await dnsResolver.ResolveName(strName);
-                                    ip = dnsResult.First(x => x.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork);
+                                    ips = await dnsResolver.ResolveName(strName);
+                                    ipLongs = ipv4Filter(ips);
+                                    ip = ips.First(x => x.AddressFamily == AddressFamily.InterNetwork);
                                 } catch (Exception e) {
                                     Logging.warning("DNS resolving: " + strName + ": " + e.Message);
                                     continue;
                                 }
-                                Logging.info("DNS: " + ip.ToString() + " -> " + strName);
+                                Logging.info("DNS: " + strName + " -> " + string.Join("|", ips.Where(x => x.AddressFamily == AddressFamily.InterNetwork)));
                             }
-                            ipLong = ip.Address;
                             mapLock.EnterWriteLock();
-                            mapIpHost[ipLong] = strName;
-                            mapHostIp[strName] = ipLong;
+                            mapHostIp[strName] = ipLongs;
+                            foreach (var ipLong in ipLongs) {
+                                mapIpHost[ipLong] = strName;
+                            }
                             mapLock.ExitWriteLock();
                         }
-                        r.AnswerRecords.Add(new ARecord(item.Name, 120, ip));
+                        r.AnswerRecords.Add(new ARecord(item.Name, 30, ip));
                         r.ReturnCode = ReturnCode.NoError;
                     } else {
-                        Logging.warning("Notsupported DNS record: " + item);
+                        Logging.warning("Unsupported DNS record: " + item);
                     }
                 }
             } catch (Exception e) {
                 Logging.exception(e, Logging.Level.Error, "DNS server");
             }
+        }
+
+        private static long[] ipv4Filter(IPAddress[] ips)
+        {
+            long[] ipLongs;
+            int count = 0;
+            for (int i = 0; i < ips.Length; i++) {
+                var cur = ips[i];
+                if (cur.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+                    count++;
+            }
+            if (count == 0)
+                throw new Exception("No ipv4 address found.");
+            ipLongs = new long[count];
+            int ipLongsCur = 0;
+            for (int i = 0; i < ips.Length; i++) {
+                var cur = ips[i];
+                if (cur.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork) {
+                    ipLongs[ipLongsCur++] = cur.Address;
+                }
+            }
+
+            return ipLongs;
         }
 
         private void StopDnsServer()
