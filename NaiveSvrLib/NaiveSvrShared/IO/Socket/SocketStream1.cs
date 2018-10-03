@@ -111,11 +111,6 @@ namespace NaiveSocks
             if (raW == null)
                 raW = ReusableAwaiter<VoidType>.FromBeginEnd(this, WriteBeginMethod, WriteEndMethod, out raW_start);
             raW_start(bs);
-            if (raW.IsCompleted) {
-                Interlocked.Increment(ref ctr.Wsync);
-            } else {
-                Interlocked.Increment(ref ctr.Wasync);
-            }
             return new AwaitableWrapper(raW);
         }
 
@@ -128,11 +123,6 @@ namespace NaiveSocks
                 raWm = ReusableAwaiter<VoidType>.FromBeginEnd(this, WriteMultipleBegin, WriteMultipleEnd, out raWm_start);
             ArraySegment<byte>[] bufList = PrepareWriteMultiple(bv);
             raWm_start(bufList);
-            if (raWm.IsCompleted) {
-                Interlocked.Increment(ref ctr.Wsync);
-            } else {
-                Interlocked.Increment(ref ctr.Wasync);
-            }
             return new AwaitableWrapper(raWm);
         }
     }

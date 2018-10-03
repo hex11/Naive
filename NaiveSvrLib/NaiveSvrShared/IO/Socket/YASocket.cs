@@ -21,36 +21,47 @@ namespace NaiveSocks
         }
 
         private int fd => Fd.ToInt32();
-        private int fdR;
+        private int fdR = -1;
 
-        public void HandleEvent(Epoller s, EPOLL_EVENTS e)
+        private static bool HasFlag(EPOLL_EVENTS t, EPOLL_EVENTS flag) => (t & flag) != 0;
+
+        public void HandleEvent(Epoller s, int eFd, EPOLL_EVENTS e)
         {
             try {
-                Logging.debug(this + ": fd " + fd + "/" + fdR + " event " + e);
+                Logging.debug(this + ": fd " + fd + "/" + fdR + " event on fd " + eFd + ": " + e);
                 if (s == GlobalEpoller) {
-                    GlobalEpoller.RemoveFdNotThrows(fdR);
-                    if (LinuxNative.close(fdR) != 0)
-                        throw LinuxNative.GetExceptionWithErrno("close");
-                    fdR = fd;
                     int r;
+                    int errno = 0;
                     var bs = bufRead;
                     bufRead.ResetSelf();
-                    if (bs.Bytes != null) {
-                        r = LinuxNative.ReadToBs(fdR, bs);
-                    } else {
-                        throw new Exception("should not happen: bs.Bytes == null");
+                    lock (raRead) {
+                        if (bs.Bytes != null) {
+                            if (fdR == -1) {
+                                raRead.TrySetException(GetClosedException());
+                                return;
+                            }
+                            r = LinuxNative.ReadToBs(fdR, bs);
+                        } else {
+                            throw new Exception("should not happen: bs.Bytes == null");
+                        }
+                        if (r < 0) {
+                            errno = LinuxNative.GetErrno();
+                            fdR_TryCloseAndRemove();
+                            if (HasFlag(e, EPOLL_EVENTS.ERR))
+                                State |= MyStreamState.Closed;
+                            else
+                                State |= MyStreamState.RemoteShutdown;
+                        } else {
+                            if (r == 0) {
+                                State |= MyStreamState.RemoteShutdown;
+                                fdR_TryCloseAndRemove();
+                            }
+                        }
                     }
                     if (r < 0) {
-                        var ex = LinuxNative.GetExceptionWithErrno(nameof(LinuxNative.read));
-                        if ((e & EPOLL_EVENTS.ERR) != 0)
-                            State |= MyStreamState.Closed;
-                        else
-                            State |= MyStreamState.RemoteShutdown;
+                        var ex = LinuxNative.GetExceptionWithErrno(nameof(LinuxNative.read), errno);
                         raRead.TrySetException(ex);
                     } else {
-                        if (r == 0) {
-                            State |= MyStreamState.RemoteShutdown;
-                        }
                         raRead.TrySetResult(r);
                     }
                 } else if (s == GlobalEpollerW) {
@@ -58,10 +69,12 @@ namespace NaiveSocks
                     int r;
                     var bs = bufWrite;
                     bufWrite.ResetSelf();
-                    unsafe {
-                        fixed (byte* buf = &bs.Bytes[bs.Offset]) {
-                            r = LinuxNative.write(fd, buf, bs.Len);
+                    lock (raWrite) {
+                        if (State.HasShutdown) {
+                            raWrite.SetException(GetStateException());
+                            return;
                         }
+                        r = LinuxNative.WriteFromBs(fd, bs);
                     }
                     if (r < 0) {
                         var ex = LinuxNative.GetExceptionWithErrno(nameof(LinuxNative.write));
@@ -77,6 +90,23 @@ namespace NaiveSocks
             }
         }
 
+        void fdR_TryCloseAndRemove()
+        {
+            lock (raRead) {
+                fdR_TryCloseAndRemove_NoLock();
+            }
+        }
+
+        void fdR_TryCloseAndRemove_NoLock()
+        {
+            if (fdR == -1)
+                return;
+            GlobalEpoller.RemoveFdNotThrows(fdR);
+            if (LinuxNative.close(fdR) != 0)
+                throw LinuxNative.GetExceptionWithErrno("close");
+            fdR = -1;
+        }
+
         public override async Task WriteAsyncImpl(BytesSegment bs)
         {
             await WriteAsyncRImpl(bs);
@@ -88,9 +118,13 @@ namespace NaiveSocks
         public override AwaitableWrapper WriteAsyncRImpl(BytesSegment bs)
         {
             bs.CheckAsParameter();
-            raWrite.Reset();
-            bufWrite = bs;
-            GlobalEpollerW.AddFd(fd, EPOLL_EVENTS.OUT, this);
+            lock (raWrite) {
+                if (State.HasShutdown)
+                    throw GetStateException();
+                raWrite.Reset();
+                bufWrite = bs;
+                GlobalEpollerW.AddFd(fd, EPOLL_EVENTS.OUT, this);
+            }
             return new AwaitableWrapper(raWrite);
         }
 
@@ -102,20 +136,40 @@ namespace NaiveSocks
         private ReusableAwaiter<int> raRead = new ReusableAwaiter<int>();
         private BytesSegment bufRead;
 
+        protected override unsafe int TryReadSync(BytesSegment bs)
+        {
+            pollfd pfd = new pollfd {
+                fd = fd,
+                events = POLL_EVENTS.IN | POLL_EVENTS.ERR | POLL_EVENTS.HUP
+            };
+            lock (raRead) {
+                if (State.HasRemoteShutdown)
+                    throw GetStateException();
+                if (LinuxNative.poll(&pfd, 1, 0) == 1) {
+                    bs.CheckAsParameter();
+                    return ReadFdSafeThrows_NoLock(bs);
+                }
+            }
+            return 0;
+        }
+
         protected override AwaitableWrapper<int> ReadAsyncRImpl(BytesSegment bs)
         {
             bs.CheckAsParameter();
             lock (raRead) {
+                if (State.HasRemoteShutdown)
+                    throw GetStateException();
                 if (raRead.Exception != null)
                     throw raRead.Exception;
                 raRead.Reset();
+                bufRead = bs;
+                if (fdR == -1) {
+                    fdR = LinuxNative.dup(fd);
+                    GlobalEpoller.AddFd(fdR, PollInEvents, this);
+                } else {
+                    GlobalEpoller.ModifyFd(fdR, PollInEvents);
+                }
             }
-            if (Socket.Poll(0, SelectMode.SelectRead)) {
-                return new AwaitableWrapper<int>(LinuxNative.ReadToBsThrows(fd, bs));
-            }
-            bufRead = bs;
-            fdR = LinuxNative.dup(fd);
-            GlobalEpoller.AddFd(fdR, PollInEvents, this);
             return new AwaitableWrapper<int>(raRead);
         }
 
@@ -133,15 +187,44 @@ namespace NaiveSocks
 
         protected override int SocketReadImpl(BytesSegment bs)
         {
+            lock (raRead)
+                return ReadFdSafeThrows_NoLock(bs);
+        }
+
+        private int ReadFdSafeThrows_NoLock(BytesSegment bs)
+        {
+            if (State.HasRemoteShutdown)
+                throw GetStateException();
             return LinuxNative.ReadToBsThrows(fd, bs);
+        }
+
+        public override Task Shutdown(SocketShutdown direction)
+        {
+            lock (raWrite) {
+                State |= MyStreamState.LocalShutdown;
+            }
+            return base.Shutdown(direction);
         }
 
         public override Task Close()
         {
-            GlobalEpoller.RemoveFdNotThrows(fdR);
-            lock (raRead)
-                raRead.TrySetException(new Exception("socket closed"));
+            lock (raWrite)
+                lock (raRead) {
+                    State = MyStreamState.Closed;
+                    fdR_TryCloseAndRemove_NoLock();
+                    raRead.TrySetException(GetClosedException());
+                }
             return base.Close();
+        }
+
+        private static Exception GetClosedException()
+        {
+            return new Exception("Socket closed");
+        }
+
+        private Exception GetStateException()
+        {
+            return new Exception("Socket state: " + State);
         }
 
         public static Epoller GlobalEpoller => LazyGlobalEpoller.Value;
@@ -165,7 +248,7 @@ namespace NaiveSocks
 
     public interface IEpollHandler
     {
-        void HandleEvent(Epoller s, EPOLL_EVENTS e);
+        void HandleEvent(Epoller s, int fd, EPOLL_EVENTS e);
     }
 
     public class Epoller
@@ -316,13 +399,14 @@ namespace NaiveSocks
                         var e = events[i];
                         var eventType = e.events;
                         mapLock.EnterReadLock();
-                        bool ok = mapFdToHandler.TryGetValue(e.u32a, out var handler);
+                        var fd = e.u32a;
+                        bool ok = mapFdToHandler.TryGetValue(fd, out var handler);
                         mapLock.ExitReadLock();
                         if (!ok) {
                             Logger.warning($"EpollHandler not found! event({i}/{eventCount})=[{eventType}] u64=[{e.u64:X}]");
                             continue;
                         }
-                        handler.HandleEvent(this, eventType);
+                        handler.HandleEvent(this, fd, eventType);
                     }
                 }
         }
@@ -343,13 +427,14 @@ namespace NaiveSocks
                         var e = events[i];
                         var eventType = e.events;
                         mapLock.EnterReadLock();
-                        bool ok = mapFdToHandler.TryGetValue(e.u32a, out var handler);
+                        var fd = e.u32a;
+                        bool ok = mapFdToHandler.TryGetValue(fd, out var handler);
                         mapLock.ExitReadLock();
                         if (!ok) {
                             Logger.warning($"EpollHandler not found! event({i}/{eventCount})=[{eventType}] u64=[{e.u64:X}]");
                             continue;
                         }
-                        handler.HandleEvent(this, eventType);
+                        handler.HandleEvent(this, fd, eventType);
                     }
                 }
         }
@@ -386,6 +471,9 @@ namespace NaiveSocks
 
         [DllImport(LIBC, SetLastError = true)]
         public unsafe static extern int ioctl([In]int fd, [In]uint request, void* ptr);
+
+        [DllImport(LIBC, SetLastError = true)]
+        public unsafe static extern int poll(pollfd* fds, uint nfd, int timeout);
 
         [DllImport(LIBC, SetLastError = true)]
         public static extern int epoll_create([In]int size);
@@ -452,6 +540,13 @@ namespace NaiveSocks
             return r;
         }
 
+        public static unsafe int WriteFromBs(int fd, BytesSegment bs)
+        {
+            fixed (byte* buf = &bs.Bytes[bs.Offset]) {
+                return write(fd, buf, bs.Len);
+            }
+        }
+
         public static void ThrowWithErrno(string funcName)
         {
             throw GetExceptionWithErrno(funcName);
@@ -478,10 +573,13 @@ namespace NaiveSocks
     {
         [FieldOffset(0)]
         public EPOLL_EVENTS events;      /* Epoll events */
+
         [FieldOffset(4)]
         public long u64;      /* User data variable */
+
         [FieldOffset(4)]
         public int u32a;
+
         [FieldOffset(8)]
         public int u32b;
     }
@@ -491,10 +589,13 @@ namespace NaiveSocks
     {
         [FieldOffset(0)]
         public EPOLL_EVENTS events;
+
         [FieldOffset(8)]
         public long u64;
+
         [FieldOffset(8)]
         public int u32a;
+
         [FieldOffset(12)]
         public int u32b;
     }
@@ -524,5 +625,23 @@ namespace NaiveSocks
         WAKEUP = 1u << 29,
         ONESHOT = 1u << 30,
         ET = 1u << 31
+    }
+
+    struct pollfd
+    {
+        public int fd;         /* file descriptor */
+        public POLL_EVENTS events;   /* requested events */
+        public POLL_EVENTS revents;  /* returned events */
+    }
+
+    [Flags]
+    public enum POLL_EVENTS : uint
+    {
+        IN = 0x0001,
+        PRI = 0x0002,
+        OUT = 0x0004,
+        ERR = 0x0008,
+        HUP = 0x0010,
+        NVAL = 0x0020
     }
 }

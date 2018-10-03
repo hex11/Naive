@@ -126,6 +126,10 @@ namespace NaiveSocks
             var ret = PreReadAsync(ref bs, full);
             if (ret > 0)
                 return NaiveUtils.GetCachedTaskInt(ret);
+            if ((ret = TryReadSync(bs)) > 0) {
+                Interlocked.Increment(ref ctr.Rsync);
+                return NaiveUtils.GetCachedTaskInt(ret);
+            }
             Interlocked.Increment(ref ctr.Rasync);
             return ReadAsyncImpl(bs);
         }
@@ -165,6 +169,11 @@ namespace NaiveSocks
                     return (read);
                 }
             }
+            return 0;
+        }
+
+        protected virtual int TryReadSync(BytesSegment bs)
+        {
             return 0;
         }
 
@@ -287,7 +296,7 @@ namespace NaiveSocks
             return new AwaitableWrapper(WriteAsyncImpl(bs));
         }
 
-        private bool TryWriteSync(BytesSegment bs)
+        protected virtual bool TryWriteSync(BytesSegment bs)
         {
             if (Socket.Poll(0, SelectMode.SelectWrite)) {
                 if (Socket.Send(bs.Bytes, bs.Offset, bs.Len, SocketFlags.None) != bs.Len)
@@ -347,6 +356,10 @@ namespace NaiveSocks
             var ret = PreReadAsync(ref bs, false);
             if (ret > 0)
                 return new AwaitableWrapper<int>(ret);
+            if ((ret = TryReadSync(bs)) > 0) {
+                Interlocked.Increment(ref ctr.Rsync);
+                return new AwaitableWrapper<int>(ret);
+            }
             Interlocked.Increment(ref ctr.Rasync);
             return ReadAsyncRImpl(bs);
         }

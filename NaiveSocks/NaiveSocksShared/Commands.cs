@@ -486,6 +486,8 @@ namespace NaiveSocks
                             }
                         }
                     }
+                } catch (Exception ex) {
+                    command.WriteLine("Writer error: " + ex);
                 } finally {
                     listener.Stop();
                 }
@@ -499,15 +501,19 @@ namespace NaiveSocks
                     var s = createStream(cli.Client);
                     var buf = new byte[BufSize];
                     int read;
-                    while (true) {
-                        if (useR)
-                            read = await s.ReadAsyncR(new BytesSegment(buf, 0, BufSize));
-                        else
-                            read = await s.ReadAsync(new BytesSegment(buf, 0, BufSize));
-                        if (read > 0)
-                            total += read;
-                        else
-                            break;
+                    try {
+                        while (true) {
+                            if (useR)
+                                read = await s.ReadAsyncR(new BytesSegment(buf, 0, BufSize));
+                            else
+                                read = await s.ReadAsync(new BytesSegment(buf, 0, BufSize));
+                            if (read > 0)
+                                total += read;
+                            else
+                                break;
+                        }
+                    } catch (Exception ex) {
+                        command.WriteLine("Reader error: " + ex);
                     }
                 }
                 var ms = sw.ElapsedMilliseconds;
