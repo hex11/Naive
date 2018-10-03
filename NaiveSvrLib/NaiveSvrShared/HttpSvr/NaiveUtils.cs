@@ -468,8 +468,8 @@ namespace Naive.HttpSvr
 
         public static void ConfigureSocket(Socket socket)
         {
-            socket.SendBufferSize = 128 * 1024;
-            socket.ReceiveBufferSize = 128 * 1024;
+            //socket.SendBufferSize = 128 * 1024;
+            //socket.ReceiveBufferSize = 128 * 1024;
             socket.NoDelay = true;
         }
 
