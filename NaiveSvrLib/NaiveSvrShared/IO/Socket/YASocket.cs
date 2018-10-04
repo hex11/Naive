@@ -14,14 +14,37 @@ namespace NaiveSocks
     {
         public static bool isX86 = true;
 
-        private const EPOLL_EVENTS PollInEvents = EPOLL_EVENTS.IN | EPOLL_EVENTS.RDHUP | EPOLL_EVENTS.ONESHOT | EPOLL_EVENTS.ET;
+        private const EPOLL_EVENTS PollInEvents = EPOLL_EVENTS.IN | EPOLL_EVENTS.RDHUP | EPOLL_EVENTS.ONESHOT;
 
         public YASocket(Socket socket) : base(socket)
         {
+            CreateFdR();
         }
 
         private int fd => Fd.ToInt32();
-        private int fdR = -1;
+        private int fdR; // -1 after close
+        private bool fdRAdded;
+
+        private void CreateFdR()
+        {
+            fdR = LinuxNative.dup(fd);
+            if (fdR < 0)
+                throw LinuxNative.GetExceptionWithErrno(nameof(LinuxNative.dup));
+            //const int F_GETFL = 4;
+            //const int F_SETFL = 4;
+            //const int O_NONBLOCK = 0x0800; // 00004000
+            //unsafe {
+            //    int flags = LinuxNative.fcntl(fdR, F_GETFL);
+            //    if (flags < 0)
+            //        throw LinuxNative.GetExceptionWithErrno("fcntl getfl");
+            //    if (LinuxNative.fcntl(fdR, F_SETFL, flags | O_NONBLOCK) < 0)
+            //        throw LinuxNative.GetExceptionWithErrno("fcntl setfl");
+            //    flags = LinuxNative.fcntl(fdR, F_GETFL);
+            //    if (flags < 0)
+            //        throw LinuxNative.GetExceptionWithErrno("fcntl getfl");
+            //    Logging.debugForce(this + " fdR flags: " + flags.ToString("X"));
+            //}
+        }
 
         private static bool HasFlag(EPOLL_EVENTS t, EPOLL_EVENTS flag) => (t & flag) != 0;
 
@@ -101,7 +124,10 @@ namespace NaiveSocks
         {
             if (fdR == -1)
                 return;
-            GlobalEpoller.RemoveFdNotThrows(fdR);
+            if (fdRAdded) {
+                fdRAdded = false;
+                GlobalEpoller.RemoveFdNotThrows(fdR);
+            }
             if (LinuxNative.close(fdR) != 0)
                 throw LinuxNative.GetExceptionWithErrno("close");
             fdR = -1;
@@ -136,22 +162,24 @@ namespace NaiveSocks
         private ReusableAwaiter<int> raRead = new ReusableAwaiter<int>();
         private BytesSegment bufRead;
 
-        protected override unsafe int TryReadSync(BytesSegment bs)
-        {
-            pollfd pfd = new pollfd {
-                fd = fd,
-                events = POLL_EVENTS.IN | POLL_EVENTS.ERR | POLL_EVENTS.HUP
-            };
-            lock (raRead) {
-                if (State.HasRemoteShutdown)
-                    throw GetStateException();
-                if (LinuxNative.poll(&pfd, 1, 0) == 1) {
-                    bs.CheckAsParameter();
-                    return ReadFdSafeThrows_NoLock(bs);
-                }
-            }
-            return 0;
-        }
+        //protected override unsafe int TryReadSync(BytesSegment bs)
+        //{
+        //    pollfd pfd = new pollfd {
+        //        fd = fd,
+        //        events = POLL_EVENTS.IN | POLL_EVENTS.ERR
+        //    };
+        //    lock (raRead) {
+        //        if (fdR == -1)
+        //            throw GetClosedException();
+        //        var startTime = Logging.getRuntime();
+        //        var r = LinuxNative.ReadToBs(fdR, bs);
+        //        Logging.debugForce(this + ": read() = " + r + " time=" + (Logging.getRuntime() - startTime));
+        //        if (r > 0) {
+        //            return r;
+        //        }
+        //    }
+        //    return 0;
+        //}
 
         protected override AwaitableWrapper<int> ReadAsyncRImpl(BytesSegment bs)
         {
@@ -163,8 +191,8 @@ namespace NaiveSocks
                     throw raRead.Exception;
                 raRead.Reset();
                 bufRead = bs;
-                if (fdR == -1) {
-                    fdR = LinuxNative.dup(fd);
+                if (!fdRAdded) {
+                    fdRAdded = true;
                     GlobalEpoller.AddFd(fdR, PollInEvents, this);
                 } else {
                     GlobalEpoller.ModifyFd(fdR, PollInEvents);
@@ -185,11 +213,11 @@ namespace NaiveSocks
             }
         }
 
-        protected override int SocketReadImpl(BytesSegment bs)
-        {
-            lock (raRead)
-                return ReadFdSafeThrows_NoLock(bs);
-        }
+        //protected override int SocketReadImpl(BytesSegment bs)
+        //{
+        //    lock (raRead)
+        //        return ReadFdSafeThrows_NoLock(bs);
+        //}
 
         private int ReadFdSafeThrows_NoLock(BytesSegment bs)
         {
@@ -471,6 +499,9 @@ namespace NaiveSocks
 
         [DllImport(LIBC, SetLastError = true)]
         public unsafe static extern int ioctl([In]int fd, [In]uint request, void* ptr);
+
+        [DllImport(LIBC, SetLastError = true)]
+        public unsafe static extern int fcntl(int fd, int cmd, void* arg);
 
         [DllImport(LIBC, SetLastError = true)]
         public unsafe static extern int poll(pollfd* fds, uint nfd, int timeout);

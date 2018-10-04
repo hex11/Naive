@@ -250,15 +250,17 @@ namespace NaiveSocksAndroid
                                 Logging.info("Fake DNS: " + ip.ToString() + " -> " + strName);
                             } else {
                                 IPAddress[] ips;
+                                var startTime = Logging.getRuntime();
                                 try {
                                     ips = await dnsResolver.ResolveName(strName);
                                     ipLongs = ipv4Filter(ips);
                                     ip = ips.First(x => x.AddressFamily == AddressFamily.InterNetwork);
                                 } catch (Exception e) {
-                                    Logging.warning("DNS resolving: " + strName + ": " + e.Message);
+                                    Logging.warning("DNS resolving: " + strName + ": " + e.Message + " (" + (Logging.getRuntime() - startTime) + " ms)");
                                     continue;
                                 }
-                                Logging.info("DNS: " + strName + " -> " + string.Join("|", ips.Where(x => x.AddressFamily == AddressFamily.InterNetwork)));
+                                Logging.info("DNS: " + strName + " -> " + string.Join("|", ips.Where(x => x.AddressFamily == AddressFamily.InterNetwork))
+                                    + " (" + (Logging.getRuntime() - startTime) + " ms)");
                             }
                             mapLock.EnterWriteLock();
                             mapHostIp[strName] = ipLongs;
