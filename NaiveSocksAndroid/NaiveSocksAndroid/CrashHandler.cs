@@ -47,6 +47,7 @@ namespace NaiveSocksAndroid
             Logging.CustomRunningTimeImpl = AndroidGetRunningTime;
             Logging.Logged += Logging_Logged;
             Logging.info("Process PID=" + Android.OS.Process.MyPid());
+            NaiveUtils.NoAsyncOnFileStream = true;
 
             var osArch = Java.Lang.JavaSystem.GetProperty("os.arch");
             Logging.info("os.arch = " + osArch);

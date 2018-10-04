@@ -123,9 +123,18 @@ namespace Naive.HttpSvr
             ReadStream(from, (state, buf, len) => state.Write(buf, 0, len), to, size, bs);
         }
 
+        public static bool NoAsyncOnFileStream = false;
+
         public static Task StreamCopyAsync(Stream from, Stream to, long size = -1, int bs = 16 * 1024)
         {
-            return ReadStreamAsync(from, (state, buf, len) => state.WriteAsync(buf, 0, len), to, size, bs);
+            return ReadStreamAsync(from, (state, buf, len) => {
+                if (NoAsyncOnFileStream && state is FileStream) {
+                    state.Write(buf, 0, len);
+                    return NaiveUtils.CompletedTask;
+                } else {
+                    return state.WriteAsync(buf, 0, len);
+                }
+            }, to, size, bs);
         }
 
         public static void ReadStream(Stream from, Action<byte[], int> action, long size = -1, int bs = 16 * 1024)
@@ -176,19 +185,30 @@ namespace Naive.HttpSvr
                 return;
             if (size < -1)
                 throw new ArgumentOutOfRangeException(nameof(size));
+            bool syncRead = NoAsyncOnFileStream && from is FileStream;
             int bufferSize = (int)(size == -1 ? bs :
                 size < bs ? size : bs);
             byte[] buffer = new byte[bufferSize];
             if (size == -1) {
                 while (true) {
-                    int read = await @from.ReadAsync(buffer, 0, bufferSize);
+                    int read;
+                    if (syncRead) {
+                        read = from.Read(buffer, 0, bufferSize);
+                    } else {
+                        read = await @from.ReadAsync(buffer, 0, bufferSize);
+                    }
                     if (read == 0)
                         break;
                     await action(state, buffer, read);
                 }
             } else {
                 while (true) {
-                    int read = await @from.ReadAsync(buffer, 0, (int)(size > bufferSize ? bufferSize : size));
+                    int read;
+                    if (syncRead) {
+                        read = from.Read(buffer, 0, (int)(size > bufferSize ? bufferSize : size));
+                    } else {
+                        read = await @from.ReadAsync(buffer, 0, (int)(size > bufferSize ? bufferSize : size));
+                    }
                     if (read == 0)
                         throw new EndOfStreamException();
                     await action(state, buffer, read);
