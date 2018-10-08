@@ -383,7 +383,7 @@ namespace NaiveSocks
 
         protected override void OnStop()
         {
-            listener.Stop();
+            listener?.Stop();
         }
 
         public abstract void OnNewConnection(TcpClient client);

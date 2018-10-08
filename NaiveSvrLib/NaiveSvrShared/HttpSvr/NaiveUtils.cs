@@ -329,10 +329,15 @@ namespace Naive.HttpSvr
 
         public static unsafe void XorBytesUnsafe(byte* src, byte* dst, int count)
         {
-            if (IntPtr.Size == 4) {
+            if (IntPtr.Size == 8) {
+                XorBytes64Unsafe(src, dst, count);
+            } else {
                 XorBytes32Unsafe(src, dst, count);
-                return;
             }
+        }
+
+        private static unsafe void XorBytes64Unsafe(byte* src, byte* dst, int count)
+        {
             const int BLOCK_SIZE = 8;
             int blockCount = count / BLOCK_SIZE;
             if (blockCount > 0) {

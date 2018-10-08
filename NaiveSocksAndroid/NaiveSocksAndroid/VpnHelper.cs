@@ -84,7 +84,7 @@ namespace NaiveSocksAndroid
             } else {
                 var existVpn = controller.FindAdapter<NaiveSocks.Adapter>("VPN");
                 if (existVpn != null) {
-                    throw new Exception("adapter 'VPN' is already exist.");
+                    throw new Exception("adapter 'VPN' already exists.");
                 } else {
                     var handlerRef = controller.AdapterRefFromName(vpnConfig.Handler);
                     if (handlerRef.Adapter == null) {
