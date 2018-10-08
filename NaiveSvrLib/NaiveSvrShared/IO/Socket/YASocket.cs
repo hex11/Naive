@@ -13,6 +13,7 @@ namespace NaiveSocks
     public class YASocket : SocketStream, IEpollHandler
     {
         public static bool isX86 = true;
+        public static bool Debug = false;
 
         private const EPOLL_EVENTS PollInEvents = EPOLL_EVENTS.IN | EPOLL_EVENTS.RDHUP | EPOLL_EVENTS.ONESHOT;
 
@@ -51,7 +52,8 @@ namespace NaiveSocks
         public void HandleEvent(Epoller s, int eFd, EPOLL_EVENTS e)
         {
             try {
-                Logging.debug(this + ": fd " + fd + "/" + fdR + " event on fd " + eFd + ": " + e);
+                if (Debug)
+                    Logging.debugForce(this + ": fd " + fd + "/" + fdR + " event on fd " + eFd + ": " + e);
                 if (s == GlobalEpoller) {
                     int r;
                     int errno = 0;
@@ -63,12 +65,18 @@ namespace NaiveSocks
                                 raRead.TrySetException(GetClosedException());
                                 return;
                             }
+                            var startTime = Logging.getRuntime();
                             r = LinuxNative.ReadToBs(fdR, bs);
+                            if (r < 0)
+                                errno = LinuxNative.GetErrno();
+                            long duration = Logging.getRuntime() - startTime;
+                            if (duration > 100) {
+                                Logging.warning(this + " blocking read?: fd " + fdR + " event " + e + " spent " + duration);
+                            }
                         } else {
                             throw new Exception("should not happen: bs.Bytes == null");
                         }
                         if (r < 0) {
-                            errno = LinuxNative.GetErrno();
                             fdR_TryCloseAndRemove();
                             if (HasFlag(e, EPOLL_EVENTS.ERR))
                                 State |= MyStreamState.Closed;
@@ -90,6 +98,7 @@ namespace NaiveSocks
                 } else if (s == GlobalEpollerW) {
                     GlobalEpollerW.RemoveFd(fd);
                     int r;
+                    int errno = 0;
                     var bs = bufWrite;
                     bufWrite.ResetSelf();
                     lock (raWrite) {
@@ -97,10 +106,17 @@ namespace NaiveSocks
                             raWrite.SetException(GetStateException());
                             return;
                         }
+                        var startTime = Logging.getRuntime();
                         r = LinuxNative.WriteFromBs(fd, bs);
+                        if (r < 0)
+                            errno = LinuxNative.GetErrno();
+                        long duration = Logging.getRuntime() - startTime;
+                        if (duration > 100) {
+                            Logging.warning(this + " blocking write?: fd " + fdR + " event " + e + " spent " + duration);
+                        }
                     }
                     if (r < 0) {
-                        var ex = LinuxNative.GetExceptionWithErrno(nameof(LinuxNative.write));
+                        var ex = LinuxNative.GetExceptionWithErrno(nameof(LinuxNative.write), errno);
                         raWrite.SetException(ex);
                     } else {
                         raWrite.SetResult(0);
@@ -285,7 +301,7 @@ namespace NaiveSocks
 
         private int ep;
         private Dictionary<int, IEpollHandler> mapFdToHandler = new Dictionary<int, IEpollHandler>();
-        private System.Threading.ReaderWriterLockSlim mapLock = new System.Threading.ReaderWriterLockSlim();
+        private ReaderWriterLockSlim mapLock = new ReaderWriterLockSlim(LockRecursionPolicy.NoRecursion);
         private Logger Logger = new Logger() { ParentLogger = Logging.RootLogger };
 
         public int[] GetFds() => mapFdToHandler.Keys.ToArray();
@@ -316,15 +332,15 @@ namespace NaiveSocks
             };
             mapLock.EnterWriteLock();
             try {
-                unsafe {
-                    if (LinuxNative.epoll_ctl(ep, EPOLL_CTL.ADD, fd, ev) != 0) {
-                        LinuxNative.ThrowWithErrno(nameof(LinuxNative.epoll_ctl));
-                    }
-                }
                 mapFdToHandler.Add(fd, handler);
                 //mapFdToHandler[fd] = handler;
             } finally {
                 mapLock.ExitWriteLock();
+            }
+            unsafe {
+                if (LinuxNative.epoll_ctl(ep, EPOLL_CTL.ADD, fd, ev) != 0) {
+                    LinuxNative.ThrowWithErrno(nameof(LinuxNative.epoll_ctl));
+                }
             }
         }
 
@@ -413,58 +429,59 @@ namespace NaiveSocks
 
         private unsafe void PollLoop_x86(int ep)
         {
-            fixed (epoll_event* events = new epoll_event[MAX_EVENTS])
-                while (true) {
-                    var eventCount = LinuxNative.epoll_wait(ep, events, MAX_EVENTS, -1);
-                    if (eventCount < 0) {
-                        var errno = LinuxNative.GetErrno();
-                        if (errno == 4) // Interrupted system call
-                            continue;
-                        LinuxNative.ThrowWithErrno(nameof(LinuxNative.epoll_wait), errno);
-                    }
-                    Logger.debug("eventcount " + eventCount);
-                    for (int i = 0; i < eventCount; i++) {
-                        var e = events[i];
-                        var eventType = e.events;
-                        mapLock.EnterReadLock();
-                        var fd = e.u32a;
-                        bool ok = mapFdToHandler.TryGetValue(fd, out var handler);
-                        mapLock.ExitReadLock();
-                        if (!ok) {
-                            Logger.warning($"EpollHandler not found! event({i}/{eventCount})=[{eventType}] u64=[{e.u64:X}]");
-                            continue;
-                        }
-                        handler.HandleEvent(this, fd, eventType);
-                    }
+            epoll_event_nonx86* events = stackalloc epoll_event_nonx86[MAX_EVENTS];
+            while (true) {
+                var eventCount = LinuxNative.epoll_wait(ep, events, MAX_EVENTS, -1);
+                if (eventCount < 0) {
+                    var errno = LinuxNative.GetErrno();
+                    if (errno == 4) // Interrupted system call
+                        continue;
+                    LinuxNative.ThrowWithErrno(nameof(LinuxNative.epoll_wait), errno);
                 }
+                Logger.debug("eventcount " + eventCount);
+                for (int i = 0; i < eventCount; i++) {
+                    var e = events[i];
+                    var eventType = e.events;
+                    mapLock.EnterReadLock();
+                    var fd = e.u32a;
+                    bool ok = mapFdToHandler.TryGetValue(fd, out var handler);
+                    mapLock.ExitReadLock();
+                    if (!ok) {
+                        Logger.warning($"EpollHandler not found! event({i}/{eventCount})=[{eventType}] u64=[{e.u64:X}]");
+                        continue;
+                    }
+                    handler.HandleEvent(this, fd, eventType);
+                }
+            }
         }
 
         private unsafe void PollLoop_nonx86(int ep)
         {
-            fixed (epoll_event_nonx86* events = new epoll_event_nonx86[MAX_EVENTS])
-                while (true) {
-                    var eventCount = LinuxNative.epoll_wait(ep, events, MAX_EVENTS, -1);
-                    if (eventCount < 0) {
-                        var errno = LinuxNative.GetErrno();
-                        if (errno == 4) // Interrupted system call
-                            continue;
-                        LinuxNative.ThrowWithErrno(nameof(LinuxNative.epoll_wait), errno);
-                    }
-                    Logger.debug("eventcount " + eventCount);
-                    for (int i = 0; i < eventCount; i++) {
-                        var e = events[i];
-                        var eventType = e.events;
-                        mapLock.EnterReadLock();
-                        var fd = e.u32a;
-                        bool ok = mapFdToHandler.TryGetValue(fd, out var handler);
-                        mapLock.ExitReadLock();
-                        if (!ok) {
-                            Logger.warning($"EpollHandler not found! event({i}/{eventCount})=[{eventType}] u64=[{e.u64:X}]");
-                            continue;
-                        }
-                        handler.HandleEvent(this, fd, eventType);
-                    }
+            epoll_event_nonx86* events = stackalloc epoll_event_nonx86[MAX_EVENTS];
+            while (true) {
+                var eventCount = LinuxNative.epoll_wait(ep, events, MAX_EVENTS, -1);
+                if (eventCount < 0) {
+                    var errno = LinuxNative.GetErrno();
+                    if (errno == 4) // Interrupted system call
+                        continue;
+                    LinuxNative.ThrowWithErrno(nameof(LinuxNative.epoll_wait), errno);
                 }
+                if (YASocket.Debug)
+                    Logger.debugForce("eventcount " + eventCount);
+                for (int i = 0; i < eventCount; i++) {
+                    var e = events[i];
+                    var eventType = e.events;
+                    mapLock.EnterReadLock();
+                    var fd = e.u32a;
+                    bool ok = mapFdToHandler.TryGetValue(fd, out var handler);
+                    mapLock.ExitReadLock();
+                    if (!ok) {
+                        Logger.warning($"EpollHandler not found! event({i}/{eventCount})=[{eventType}] u64=[{e.u64:X}]");
+                        continue;
+                    }
+                    handler.HandleEvent(this, fd, eventType);
+                }
+            }
         }
 
         private static int EpollCreate()
