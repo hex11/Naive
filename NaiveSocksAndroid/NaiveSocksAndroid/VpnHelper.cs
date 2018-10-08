@@ -46,9 +46,9 @@ namespace NaiveSocksAndroid
         public string[] RemoteDns { get; set; } = new[] { "8.8.8.8" };
     }
 
-    class BgServiceVpnHelper
+    class VpnHelper
     {
-        public BgServiceVpnHelper(BgService service, VpnConfig config)
+        public VpnHelper(BgService service, VpnConfig config)
         {
             Bg = service;
             vpnConfig = config;

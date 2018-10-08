@@ -215,7 +215,7 @@ namespace NaiveSocksAndroid
             }
         }
 
-        BgServiceVpnHelper vpnHelper;
+        VpnHelper vpnHelper;
 
         private void StartVpn()
         {
@@ -231,7 +231,7 @@ namespace NaiveSocksAndroid
                 // continue starting vpn service
                 try {
                     if (vpnHelper == null)
-                        vpnHelper = new BgServiceVpnHelper(this, currentConfig.vpn);
+                        vpnHelper = new VpnHelper(this, currentConfig.vpn);
                     // else it may be reloading
                     vpnHelper.StartVpn();
                 } catch (Exception e) {
