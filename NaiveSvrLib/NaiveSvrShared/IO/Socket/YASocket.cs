@@ -15,7 +15,7 @@ namespace NaiveSocks
         public static bool isX86 = true;
         public static bool Debug = false;
 
-        private const EPOLL_EVENTS PollInEvents = EPOLL_EVENTS.IN | EPOLL_EVENTS.RDHUP | EPOLL_EVENTS.ONESHOT;
+        private const EPOLL_EVENTS PollInEvents = EPOLL_EVENTS.IN | EPOLL_EVENTS.RDHUP | EPOLL_EVENTS.ET;
 
         public YASocket(Socket socket) : base(socket)
         {
@@ -55,12 +55,14 @@ namespace NaiveSocks
                 if (Debug)
                     Logging.debugForce(this + ": fd " + fd + "/" + fdR + " event on fd " + eFd + ": " + e);
                 if (s == GlobalEpoller) {
-                    int r;
+                    bool operating;
+                    int r = 0;
                     int errno = 0;
                     var bs = bufRead;
                     bufRead.ResetSelf();
                     lock (raRead) {
-                        if (bs.Bytes != null) {
+                        operating = bs.Bytes != null;
+                        if (operating) {
                             if (fdR == -1) {
                                 raRead.TrySetException(GetClosedException());
                                 return;
@@ -73,27 +75,30 @@ namespace NaiveSocks
                             if (duration > 100) {
                                 Logging.warning(this + " blocking read?: fd " + fdR + " event " + e + " spent " + duration);
                             }
-                        } else {
-                            throw new Exception("should not happen: bs.Bytes == null");
-                        }
-                        if (r < 0) {
-                            fdR_TryCloseAndRemove();
-                            if (HasFlag(e, EPOLL_EVENTS.ERR))
-                                State |= MyStreamState.Closed;
-                            else
-                                State |= MyStreamState.RemoteShutdown;
-                        } else {
-                            if (r == 0) {
-                                State |= MyStreamState.RemoteShutdown;
+                            if (r < 0) {
                                 fdR_TryCloseAndRemove();
+                                if (HasFlag(e, EPOLL_EVENTS.ERR))
+                                    State |= MyStreamState.Closed;
+                                else
+                                    State |= MyStreamState.RemoteShutdown;
+                            } else {
+                                if (r == 0) {
+                                    State |= MyStreamState.RemoteShutdown;
+                                    fdR_TryCloseAndRemove();
+                                }
                             }
+                        } else {
+                            //throw new Exception("should not happen: bs.Bytes == null");
+                            canRead = true;
                         }
                     }
-                    if (r < 0) {
-                        var ex = LinuxNative.GetExceptionWithErrno(nameof(LinuxNative.read), errno);
-                        raRead.TrySetException(ex);
-                    } else {
-                        raRead.TrySetResult(r);
+                    if (operating) {
+                        if (r < 0) {
+                            var ex = LinuxNative.GetExceptionWithErrno(nameof(LinuxNative.read), errno);
+                            raRead.TrySetException(ex);
+                        } else {
+                            raRead.TrySetResult(r);
+                        }
                     }
                 } else if (s == GlobalEpollerW) {
                     GlobalEpollerW.RemoveFd(fd);
@@ -197,10 +202,17 @@ namespace NaiveSocks
         //    return 0;
         //}
 
+        bool canRead;
+
         protected override AwaitableWrapper<int> ReadAsyncRImpl(BytesSegment bs)
         {
             bs.CheckAsParameter();
             lock (raRead) {
+                if (canRead) {
+                    var ret = new AwaitableWrapper<int>(ReadFdSafeThrows_NoLock(bs));
+                    canRead = GetAvailable() > 0;
+                    return ret;
+                }
                 if (State.HasRemoteShutdown)
                     throw GetStateException();
                 if (raRead.Exception != null)
@@ -210,8 +222,6 @@ namespace NaiveSocks
                 if (!fdRAdded) {
                     fdRAdded = true;
                     GlobalEpoller.AddFd(fdR, PollInEvents, this);
-                } else {
-                    GlobalEpoller.ModifyFd(fdR, PollInEvents);
                 }
             }
             return new AwaitableWrapper<int>(raRead);
