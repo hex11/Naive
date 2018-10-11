@@ -19,6 +19,7 @@ namespace NaiveSocks
 
         public YASocket(Socket socket) : base(socket)
         {
+            EnableReadaheadBuffer = false;
             CreateFdR();
         }
 
@@ -26,25 +27,20 @@ namespace NaiveSocks
         private int fdR; // -1 after close
         private bool fdRAdded;
 
+        private EPOLL_EVENTS lastReadEvents;
+
+        public override string GetAdditionalString()
+        {
+            var ava = 0; //GetAvailable();
+            return " fd=" + fd + "/" + fdR + (ava > 0 ? " avail=" + ava : null) + " lastEv=" + lastReadEvents;
+        }
+
         private void CreateFdR()
         {
             fdR = LinuxNative.dup(fd);
             if (fdR < 0)
                 throw LinuxNative.GetExceptionWithErrno(nameof(LinuxNative.dup));
-            //const int F_GETFL = 4;
-            //const int F_SETFL = 4;
-            //const int O_NONBLOCK = 0x0800; // 00004000
-            //unsafe {
-            //    int flags = LinuxNative.fcntl(fdR, F_GETFL);
-            //    if (flags < 0)
-            //        throw LinuxNative.GetExceptionWithErrno("fcntl getfl");
-            //    if (LinuxNative.fcntl(fdR, F_SETFL, flags | O_NONBLOCK) < 0)
-            //        throw LinuxNative.GetExceptionWithErrno("fcntl setfl");
-            //    flags = LinuxNative.fcntl(fdR, F_GETFL);
-            //    if (flags < 0)
-            //        throw LinuxNative.GetExceptionWithErrno("fcntl getfl");
-            //    Logging.debugForce(this + " fdR flags: " + flags.ToString("X"));
-            //}
+            SetNonblockingOnFd(fdR);
         }
 
         private static bool HasFlag(EPOLL_EVENTS t, EPOLL_EVENTS flag) => (t & flag) != 0;
@@ -53,29 +49,38 @@ namespace NaiveSocks
         {
             try {
                 if (Debug)
-                    Logging.debugForce(this + ": fd " + fd + "/" + fdR + " event on fd " + eFd + ": " + e);
+                    Logging.debugForce(this + ": event " + e);
                 if (s == GlobalEpoller) {
+                    lastReadEvents = e;
                     bool operating;
                     int r = 0;
                     int errno = 0;
-                    var bs = bufRead;
-                    bufRead.ResetSelf();
                     lock (raRead) {
+                        var bs = bufRead;
+                        bufRead.ResetSelf();
                         operating = bs.Bytes != null;
+                        canRead = true;
                         if (operating) {
                             if (fdR == -1) {
                                 raRead.TrySetException(GetClosedException());
                                 return;
                             }
-                            var startTime = Logging.getRuntime();
-                            r = LinuxNative.ReadToBs(fdR, bs);
-                            if (r < 0)
-                                errno = LinuxNative.GetErrno();
-                            long duration = Logging.getRuntime() - startTime;
-                            if (duration > 100) {
-                                Logging.warning(this + " blocking read?: fd " + fdR + " event " + e + " spent " + duration);
-                            }
+                            int retry = 0;
+                            AGAIN:
+                            r = fdR_ReadWithBlockingCheck(bs, e, out errno);
                             if (r < 0) {
+                                if (errno == 11) {
+                                    if (retry++ < 10) {
+                                        Logging.warning(this + ": EAGAIN after event " + e + " retying " + retry);
+                                        goto AGAIN;
+                                    } else {
+                                        Logging.warning(this + ": EAGAIN after event " + e + " gived up after " + retry + " tries");
+                                        return;
+                                    }
+                                } else {
+                                    if (Debug)
+                                        Logging.warning(this + ": read() error " + errno);
+                                }
                                 fdR_TryCloseAndRemove();
                                 if (HasFlag(e, EPOLL_EVENTS.ERR))
                                     State |= MyStreamState.Closed;
@@ -89,14 +94,17 @@ namespace NaiveSocks
                             }
                         } else {
                             //throw new Exception("should not happen: bs.Bytes == null");
-                            canRead = true;
                         }
                     }
                     if (operating) {
                         if (r < 0) {
                             var ex = LinuxNative.GetExceptionWithErrno(nameof(LinuxNative.read), errno);
+                            if (Debug)
+                                Logging.debugForce(this + ": read() async throws " + ex.Message);
                             raRead.TrySetException(ex);
                         } else {
+                            if (Debug)
+                                Logging.debugForce(this + ": read() async " + r);
                             raRead.TrySetResult(r);
                         }
                     }
@@ -104,9 +112,9 @@ namespace NaiveSocks
                     GlobalEpollerW.RemoveFd(fd);
                     int r;
                     int errno = 0;
-                    var bs = bufWrite;
-                    bufWrite.ResetSelf();
                     lock (raWrite) {
+                        var bs = bufWrite;
+                        bufWrite.ResetSelf();
                         if (State.HasShutdown) {
                             raWrite.SetException(GetStateException());
                             return;
@@ -132,6 +140,20 @@ namespace NaiveSocks
             } catch (Exception ex) {
                 throw new Exception(this + " fd " + fd + " exception with EPOLL_EVENTS: " + e, ex);
             }
+        }
+
+        private int fdR_ReadWithBlockingCheck(BytesSegment bs, EPOLL_EVENTS e, out int errno)
+        {
+            int r;
+            var startTime = Logging.getRuntime();
+            r = LinuxNative.ReadToBs(fdR, bs);
+            errno = r < 0 ? LinuxNative.GetErrno() : 0;
+            long duration = Logging.getRuntime() - startTime;
+            if (duration > 100) {
+                Logging.warning(this + " blocking read?: fd " + fdR + " event " + e + " spent " + duration);
+            }
+
+            return r;
         }
 
         void fdR_TryCloseAndRemove()
@@ -202,48 +224,62 @@ namespace NaiveSocks
         //    return 0;
         //}
 
-        bool canRead;
+        bool canRead = true;
 
         protected override AwaitableWrapper<int> ReadAsyncRImpl(BytesSegment bs)
         {
+            if (Debug)
+                Logging.debugForce(this + ": ReadAsyncRImpl()");
             bs.CheckAsParameter();
             lock (raRead) {
-                if (canRead) {
-                    var ret = new AwaitableWrapper<int>(ReadFdSafeThrows_NoLock(bs));
-                    canRead = GetAvailable() > 0;
-                    return ret;
-                }
                 if (State.HasRemoteShutdown)
                     throw GetStateException();
                 if (raRead.Exception != null)
                     throw raRead.Exception;
-                raRead.Reset();
-                bufRead = bs;
+                AGAIN:
+                if (true || canRead) {
+                    var r = fdR_ReadWithBlockingCheck(bs, 0, out var errno);
+                    if (errno == 0) {
+                        if (Debug)
+                            Logging.debugForce(this + ": read() " + r);
+                        return new AwaitableWrapper<int>(r);
+                    } else if (errno == 11) { // EAGAIN
+                        if (Debug)
+                            Logging.debugForce(this + ": EAGAIN");
+                        canRead = false;
+                    } else {
+                        if (Debug)
+                            Logging.debugForce(this + ": read() throws " + errno);
+                        throw LinuxNative.GetExceptionWithErrno("read", errno);
+                    }
+                }
                 if (!fdRAdded) {
                     fdRAdded = true;
                     GlobalEpoller.AddFd(fdR, PollInEvents, this);
+                    goto AGAIN;
                 }
+                raRead.Reset();
+                bufRead = bs;
+                if (Debug)
+                    Logging.debugForce(this + ": wait for epoll");
             }
             return new AwaitableWrapper<int>(raRead);
         }
 
-        private const int FIONBIO = 0x5421;
-
-        public override int GetAvailable()
+        private static unsafe void SetNonblockingOnFd(int fd)
         {
-            unsafe {
-                var a = 0;
-                if (LinuxNative.ioctl(fd, FIONBIO, &a) != 0)
-                    return 0;
-                return a;
-            }
+            const int FIONBIO = 0x5421;
+            int a = 1;
+            if (LinuxNative.ioctl(fd, FIONBIO, &a) != 0)
+                LinuxNative.ThrowWithErrno(nameof(LinuxNative.ioctl));
         }
 
-        //protected override int SocketReadImpl(BytesSegment bs)
-        //{
-        //    lock (raRead)
-        //        return ReadFdSafeThrows_NoLock(bs);
-        //}
+        protected override int SocketReadImpl(BytesSegment bs)
+        {
+            lock (raRead) {
+                return fdR_ReadWithBlockingCheck(bs, 0, out _);
+            }
+        }
 
         private int ReadFdSafeThrows_NoLock(BytesSegment bs)
         {
@@ -307,11 +343,15 @@ namespace NaiveSocks
 
     public class Epoller
     {
+        static bool Debug => YASocket.Debug;
         private const int MAX_EVENTS = 16;
 
         private int ep;
-        private Dictionary<int, IEpollHandler> mapFdToHandler = new Dictionary<int, IEpollHandler>();
+
         private ReaderWriterLockSlim mapLock = new ReaderWriterLockSlim(LockRecursionPolicy.NoRecursion);
+        private Dictionary<int, IEpollHandler> mapFdToHandler = new Dictionary<int, IEpollHandler>();
+        private HashSet<int> fdCleanupList = new HashSet<int>();
+
         private Logger Logger = new Logger() { ParentLogger = Logging.RootLogger };
 
         public int[] GetFds() => mapFdToHandler.Keys.ToArray();
@@ -334,7 +374,8 @@ namespace NaiveSocks
         {
             if (handler == null)
                 throw new ArgumentNullException(nameof(handler));
-            Logger.debug("AddFd " + fd + " " + events);
+            if (Debug)
+                Logger.debugForce("AddFd " + fd + " " + events);
 
             var ev = new epoll_event {
                 events = events,
@@ -356,7 +397,8 @@ namespace NaiveSocks
 
         public void ModifyFd(int fd, EPOLL_EVENTS events)
         {
-            Logger.debug("ModifyFd " + fd + " " + events);
+            if (Debug)
+                Logger.debugForce("ModifyFd " + fd + " " + events);
 
             unsafe {
                 var ev = new epoll_event {
@@ -371,7 +413,8 @@ namespace NaiveSocks
 
         public int ModifyFdNotThrows(int fd, EPOLL_EVENTS events)
         {
-            Logger.debug("ModifyFd " + fd + " " + events);
+            if (Debug)
+                Logger.debugForce("ModifyFd " + fd + " " + events);
 
             unsafe {
                 var ev = new epoll_event {
@@ -387,7 +430,8 @@ namespace NaiveSocks
 
         public void RemoveFd(int fd)
         {
-            Logger.debug("RemoveFd " + fd);
+            if (Debug)
+                Logger.debugForce("RemoveFd " + fd);
 
             mapLock.EnterWriteLock();
             try {
@@ -399,6 +443,7 @@ namespace NaiveSocks
                 }
 
                 mapFdToHandler.Remove(fd);
+                fdCleanupList.Add(fd);
             } finally {
                 mapLock.ExitWriteLock();
             }
@@ -406,7 +451,8 @@ namespace NaiveSocks
 
         public int RemoveFdNotThrows(int fd)
         {
-            Logger.debug("RemoveFdNotThrows " + fd);
+            if (Debug)
+                Logger.debugForce("RemoveFdNotThrows " + fd);
 
             mapLock.EnterWriteLock();
             try {
@@ -420,6 +466,7 @@ namespace NaiveSocks
                 }
 
                 mapFdToHandler.Remove(fd);
+                fdCleanupList.Add(fd);
             } finally {
                 mapLock.ExitWriteLock();
             }
@@ -430,16 +477,17 @@ namespace NaiveSocks
         {
             if (ep < 0)
                 throw new Exception("epoll fd does not exist.");
-            Logger.debug("PollLoop running");
+            if (Debug)
+                Logger.debugForce("PollLoop running");
             if (YASocket.isX86)
-                PollLoop_x86(ep);
+                PollLoop_size12(ep);
             else
-                PollLoop_nonx86(ep);
+                PollLoop_size16(ep);
         }
 
-        private unsafe void PollLoop_x86(int ep)
+        private unsafe void PollLoop_size12(int ep)
         {
-            epoll_event_nonx86* events = stackalloc epoll_event_nonx86[MAX_EVENTS];
+            var events = stackalloc epoll_event[MAX_EVENTS];
             while (true) {
                 var eventCount = LinuxNative.epoll_wait(ep, events, MAX_EVENTS, -1);
                 if (eventCount < 0) {
@@ -448,49 +496,64 @@ namespace NaiveSocks
                         continue;
                     LinuxNative.ThrowWithErrno(nameof(LinuxNative.epoll_wait), errno);
                 }
-                Logger.debug("eventcount " + eventCount);
-                for (int i = 0; i < eventCount; i++) {
-                    var e = events[i];
-                    var eventType = e.events;
-                    mapLock.EnterReadLock();
-                    var fd = e.u32a;
-                    bool ok = mapFdToHandler.TryGetValue(fd, out var handler);
-                    mapLock.ExitReadLock();
-                    if (!ok) {
-                        Logger.warning($"EpollHandler not found! event({i}/{eventCount})=[{eventType}] u64=[{e.u64:X}]");
-                        continue;
-                    }
-                    handler.HandleEvent(this, fd, eventType);
-                }
-            }
-        }
-
-        private unsafe void PollLoop_nonx86(int ep)
-        {
-            epoll_event_nonx86* events = stackalloc epoll_event_nonx86[MAX_EVENTS];
-            while (true) {
-                var eventCount = LinuxNative.epoll_wait(ep, events, MAX_EVENTS, -1);
-                if (eventCount < 0) {
-                    var errno = LinuxNative.GetErrno();
-                    if (errno == 4) // Interrupted system call
-                        continue;
-                    LinuxNative.ThrowWithErrno(nameof(LinuxNative.epoll_wait), errno);
-                }
-                if (YASocket.Debug)
+                if (Debug)
                     Logger.debugForce("eventcount " + eventCount);
                 for (int i = 0; i < eventCount; i++) {
                     var e = events[i];
                     var eventType = e.events;
+                    bool cleanedUp;
                     mapLock.EnterReadLock();
                     var fd = e.u32a;
                     bool ok = mapFdToHandler.TryGetValue(fd, out var handler);
+                    cleanedUp = fdCleanupList.Contains(fd);
                     mapLock.ExitReadLock();
-                    if (!ok) {
-                        Logger.warning($"EpollHandler not found! event({i}/{eventCount})=[{eventType}] u64=[{e.u64:X}]");
-                        continue;
+                    if (cleanedUp) {
+                        Logger.warning($"EpollHandler event after cleaned up: ({i}/{eventCount}) fd={fd} [{eventType}] u64=[{e.u64:X}]");
+                    } else if (!ok) {
+                        Logger.warning($"EpollHandler not found! event({i}/{eventCount}) fd={fd} [{eventType}] u64=[{e.u64:X}]");
+                    } else {
+                        handler.HandleEvent(this, fd, eventType);
                     }
-                    handler.HandleEvent(this, fd, eventType);
                 }
+                mapLock.EnterWriteLock();
+                fdCleanupList.Clear();
+                mapLock.ExitWriteLock();
+            }
+        }
+
+        private unsafe void PollLoop_size16(int ep)
+        {
+            var events = stackalloc epoll_event_16[MAX_EVENTS];
+            while (true) {
+                var eventCount = LinuxNative.epoll_wait(ep, events, MAX_EVENTS, -1);
+                if (eventCount < 0) {
+                    var errno = LinuxNative.GetErrno();
+                    if (errno == 4) // Interrupted system call
+                        continue;
+                    LinuxNative.ThrowWithErrno(nameof(LinuxNative.epoll_wait), errno);
+                }
+                if (Debug)
+                    Logger.debugForce("eventcount " + eventCount);
+                for (int i = 0; i < eventCount; i++) {
+                    var e = events[i];
+                    var eventType = e.events;
+                    bool cleanedUp;
+                    mapLock.EnterReadLock();
+                    var fd = e.u32a;
+                    bool ok = mapFdToHandler.TryGetValue(fd, out var handler);
+                    cleanedUp = fdCleanupList.Contains(fd);
+                    mapLock.ExitReadLock();
+                    if (cleanedUp) {
+                        Logger.warning($"EpollHandler event after cleaned up: ({i}/{eventCount}) fd={fd} [{eventType}] u64=[{e.u64:X}]");
+                    } else if (!ok) {
+                        Logger.warning($"EpollHandler not found! event({i}/{eventCount}) fd={fd} [{eventType}] u64=[{e.u64:X}]");
+                    } else {
+                        handler.HandleEvent(this, fd, eventType);
+                    }
+                }
+                mapLock.EnterWriteLock();
+                fdCleanupList.Clear();
+                mapLock.ExitWriteLock();
             }
         }
 
@@ -547,7 +610,7 @@ namespace NaiveSocks
             if (YASocket.isX86) {
                 return epoll_ctl(epFd, op, fd, &ev);
             } else {
-                epoll_event_nonx86 evnx86 = new epoll_event_nonx86 { events = ev.events, u64 = ev.u64 };
+                epoll_event_16 evnx86 = new epoll_event_16 { events = ev.events, u64 = ev.u64 };
                 return epoll_ctl(epFd, op, fd, &evnx86);
             }
         }
@@ -587,6 +650,15 @@ namespace NaiveSocks
             fixed (byte* buf = &bs.Bytes[bs.Offset]) {
                 return read(fd, buf, bs.Len);
             }
+        }
+
+        public static unsafe int ReadToBs(int fd, BytesSegment bs, out int errno)
+        {
+            errno = 0;
+            var r = ReadToBs(fd, bs);
+            if (r == -1)
+                errno = GetErrno();
+            return r;
         }
 
         public static unsafe int ReadToBsThrows(int fd, BytesSegment bs)
@@ -643,7 +715,7 @@ namespace NaiveSocks
     }
 
     [StructLayout(LayoutKind.Explicit, Pack = 1, Size = 16)]
-    internal struct epoll_event_nonx86
+    internal struct epoll_event_16
     {
         [FieldOffset(0)]
         public EPOLL_EVENTS events;

@@ -32,7 +32,9 @@ namespace NaiveSocks
 
         public EPPair EPPair { get; }
 
-        public override string ToString() => $"{{Socket {State.ToString()} {EPPair.ToString()}}}";
+        public override string ToString() => $"{{Socket {EPPair.ToString()} {State.ToString()}{GetAdditionalString()}}}";
+
+        public virtual string GetAdditionalString() => null;
 
         public override Task Close()
         {
@@ -134,6 +136,24 @@ namespace NaiveSocks
             return ReadAsyncImpl(bs);
         }
 
+        public AwaitableWrapper<int> ReadAsyncR(BytesSegment bs)
+        {
+            var ret = PreReadAsync(ref bs, false);
+            if (ret > 0)
+                return new AwaitableWrapper<int>(ret);
+            if ((ret = TryReadSync(bs)) > 0) {
+                Interlocked.Increment(ref ctr.Rsync);
+                return new AwaitableWrapper<int>(ret);
+            }
+            Interlocked.Increment(ref ctr.Rasync);
+            return ReadAsyncRImpl(bs);
+        }
+
+        protected virtual AwaitableWrapper<int> ReadAsyncRImpl(BytesSegment bs)
+        {
+            return new AwaitableWrapper<int>(ReadAsyncImpl(bs));
+        }
+
         private int PreReadAsync(ref BytesSegment bs, bool full)
         {
             var bufRead = TryReadInternalBuffer(bs);
@@ -202,8 +222,8 @@ namespace NaiveSocks
                 readaheadBuffer.Len = readBufferSize;
                 var read = ReadSocketDirectSync(readaheadBuffer);
                 readaheadBuffer.Len = read;
-                if (read == 0)
-                    throw new Exception("WTF! It should not happen: Socket.Receive() returns 0 when Socket.Available > 0.");
+                if (read <= 0)
+                    throw new Exception($"{this} should not happen: Socket.Receive() returns {read} when Socket.Available > 0.");
                 read = Math.Min(read, bs.Len);
                 readaheadBuffer.CopyTo(bs, read);
                 readaheadBuffer.SubSelf(read);
@@ -223,8 +243,8 @@ namespace NaiveSocks
         {
             Interlocked.Increment(ref ctr.Rsync);
             var read = ReadSocketDirectSync(bs);
-            if (read == 0)
-                throw new Exception("WTF! It should not happen: Socket.Receive() returns 0 when Socket.Available > 0.");
+            if (read <= 0)
+                throw new Exception($"{this} should not happen: Socket.Receive() returns {read} when Socket.Available > 0.");
             return read;
         }
 
@@ -269,7 +289,7 @@ namespace NaiveSocks
             if (r == 0)
                 State |= MyStreamState.RemoteShutdown;
             if (r < 0)
-                throw new Exception($"socket read() returned a unexpected value: {r} (underlyingcalls={EnableUnderlyingCalls}, {(underlyingReadImpl == null ? "no" : "have")} impl, platform={osPlatform})");
+                throw new Exception($"{this} read() returned a unexpected value: {r} (underlyingcalls={EnableUnderlyingCalls}, {(underlyingReadImpl == null ? "no" : "have")} impl, platform={osPlatform})");
             return r;
         }
 
@@ -350,24 +370,6 @@ namespace NaiveSocks
 
         [DllImport("Ws2_32", EntryPoint = "recv", SetLastError = true)]
         private unsafe static extern int win_recv([In]IntPtr s, [In]byte* buf, [In]int len, [In]int flags);
-
-        public AwaitableWrapper<int> ReadAsyncR(BytesSegment bs)
-        {
-            var ret = PreReadAsync(ref bs, false);
-            if (ret > 0)
-                return new AwaitableWrapper<int>(ret);
-            if ((ret = TryReadSync(bs)) > 0) {
-                Interlocked.Increment(ref ctr.Rsync);
-                return new AwaitableWrapper<int>(ret);
-            }
-            Interlocked.Increment(ref ctr.Rasync);
-            return ReadAsyncRImpl(bs);
-        }
-
-        protected virtual AwaitableWrapper<int> ReadAsyncRImpl(BytesSegment bs)
-        {
-            return new AwaitableWrapper<int>(ReadAsyncImpl(bs));
-        }
 
         //[System.Runtime.InteropServices.DllImport("Ws2_32", EntryPoint = "WSAGetLastError")]
         //private unsafe static extern int win_WSAGetLastError();
