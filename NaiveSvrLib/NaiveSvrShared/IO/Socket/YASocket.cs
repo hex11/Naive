@@ -31,8 +31,11 @@ namespace NaiveSocks
 
         public override string GetAdditionalString()
         {
-            var ava = 0; //GetAvailable();
-            return " fd=" + fd + "/" + fdR + (ava > 0 ? " avail=" + ava : null) + " lastEv=" + lastReadEvents;
+            var ava = GetAvailable();
+            var str = " fd=" + fd + "/" + fdR + (ava > 0 ? " avail=" + ava : null) + " lastEv=" + lastReadEvents;
+            if (ready)
+                str += " ready";
+            return str;
         }
 
         private void CreateFdR()
@@ -40,7 +43,6 @@ namespace NaiveSocks
             fdR = LinuxNative.dup(fd);
             if (fdR < 0)
                 throw LinuxNative.GetExceptionWithErrno(nameof(LinuxNative.dup));
-            SetNonblockingOnFd(fdR);
         }
 
         private static bool HasFlag(EPOLL_EVENTS t, EPOLL_EVENTS flag) => (t & flag) != 0;
@@ -59,7 +61,7 @@ namespace NaiveSocks
                         var bs = bufRead;
                         bufRead.ResetSelf();
                         operating = bs.Bytes != null;
-                        canRead = true;
+                        ready = true;
                         if (operating) {
                             if (fdR == -1) {
                                 raRead.TrySetException(GetClosedException());
@@ -67,19 +69,20 @@ namespace NaiveSocks
                             }
                             int retry = 0;
                             AGAIN:
-                            r = fdR_ReadWithBlockingCheck(bs, e, out errno);
+                            r = fdR_ReadNonblocking(bs, e, out errno);
                             if (r < 0) {
                                 if (errno == 11) {
                                     if (retry++ < 10) {
                                         Logging.warning(this + ": EAGAIN after event " + e + " retying " + retry);
                                         goto AGAIN;
                                     } else {
-                                        Logging.warning(this + ": EAGAIN after event " + e + " gived up after " + retry + " tries");
+                                        Logging.warning(this + ": EAGAIN after event " + e + " gived up after " + (retry - 1) + " tries");
+                                        bufRead = bs;
                                         return;
                                     }
                                 } else {
                                     if (Debug)
-                                        Logging.warning(this + ": read() error " + errno);
+                                        Logging.warning(this + ": recv() error " + errno);
                                 }
                                 fdR_TryCloseAndRemove();
                                 if (HasFlag(e, EPOLL_EVENTS.ERR))
@@ -98,13 +101,13 @@ namespace NaiveSocks
                     }
                     if (operating) {
                         if (r < 0) {
-                            var ex = LinuxNative.GetExceptionWithErrno(nameof(LinuxNative.read), errno);
+                            var ex = LinuxNative.GetExceptionWithErrno(nameof(LinuxNative.recv), errno);
                             if (Debug)
-                                Logging.debugForce(this + ": read() async throws " + ex.Message);
+                                Logging.debugForce(this + ": recv() async throws " + ex.Message);
                             raRead.TrySetException(ex);
                         } else {
                             if (Debug)
-                                Logging.debugForce(this + ": read() async " + r);
+                                Logging.debugForce(this + ": recv() async " + r);
                             raRead.TrySetResult(r);
                         }
                     }
@@ -142,17 +145,10 @@ namespace NaiveSocks
             }
         }
 
-        private int fdR_ReadWithBlockingCheck(BytesSegment bs, EPOLL_EVENTS e, out int errno)
+        private int fdR_ReadNonblocking(BytesSegment bs, EPOLL_EVENTS e, out int errno)
         {
-            int r;
-            var startTime = Logging.getRuntime();
-            r = LinuxNative.ReadToBs(fdR, bs);
+            int r = LinuxNative.RecvToBs(fdR, bs, MSG_FLAGS.DONTWAIT);
             errno = r < 0 ? LinuxNative.GetErrno() : 0;
-            long duration = Logging.getRuntime() - startTime;
-            if (duration > 100) {
-                Logging.warning(this + " blocking read?: fd " + fdR + " event " + e + " spent " + duration);
-            }
-
             return r;
         }
 
@@ -216,7 +212,7 @@ namespace NaiveSocks
         //            throw GetClosedException();
         //        var startTime = Logging.getRuntime();
         //        var r = LinuxNative.ReadToBs(fdR, bs);
-        //        Logging.debugForce(this + ": read() = " + r + " time=" + (Logging.getRuntime() - startTime));
+        //        Logging.debugForce(this + ": recv() = " + r + " time=" + (Logging.getRuntime() - startTime));
         //        if (r > 0) {
         //            return r;
         //        }
@@ -224,7 +220,7 @@ namespace NaiveSocks
         //    return 0;
         //}
 
-        bool canRead = true;
+        bool ready = true;
 
         protected override AwaitableWrapper<int> ReadAsyncRImpl(BytesSegment bs)
         {
@@ -237,20 +233,20 @@ namespace NaiveSocks
                 if (raRead.Exception != null)
                     throw raRead.Exception;
                 AGAIN:
-                if (true || canRead) {
-                    var r = fdR_ReadWithBlockingCheck(bs, 0, out var errno);
+                if (true || ready) {
+                    var r = fdR_ReadNonblocking(bs, 0, out var errno);
                     if (errno == 0) {
                         if (Debug)
-                            Logging.debugForce(this + ": read() " + r);
+                            Logging.debugForce(this + ": recv() " + r);
                         return new AwaitableWrapper<int>(r);
                     } else if (errno == 11) { // EAGAIN
                         if (Debug)
                             Logging.debugForce(this + ": EAGAIN");
-                        canRead = false;
+                        ready = false;
                     } else {
                         if (Debug)
-                            Logging.debugForce(this + ": read() throws " + errno);
-                        throw LinuxNative.GetExceptionWithErrno("read", errno);
+                            Logging.debugForce(this + ": recv() throws " + errno);
+                        throw LinuxNative.GetExceptionWithErrno("recv", errno);
                     }
                 }
                 if (!fdRAdded) {
@@ -266,26 +262,18 @@ namespace NaiveSocks
             return new AwaitableWrapper<int>(raRead);
         }
 
-        private static unsafe void SetNonblockingOnFd(int fd)
-        {
-            const int FIONBIO = 0x5421;
-            int a = 1;
-            if (LinuxNative.ioctl(fd, FIONBIO, &a) != 0)
-                LinuxNative.ThrowWithErrno(nameof(LinuxNative.ioctl));
-        }
-
         protected override int SocketReadImpl(BytesSegment bs)
         {
             lock (raRead) {
-                return fdR_ReadWithBlockingCheck(bs, 0, out _);
+                return fdR_ReadNonblocking(bs, 0, out _);
             }
         }
 
-        private int ReadFdSafeThrows_NoLock(BytesSegment bs)
+        private int ReadFdSafeThrows_NoLock(BytesSegment bs, MSG_FLAGS flags)
         {
             if (State.HasRemoteShutdown)
                 throw GetStateException();
-            return LinuxNative.ReadToBsThrows(fd, bs);
+            return LinuxNative.RecvToBsThrows(fd, bs, flags);
         }
 
         public override Task Shutdown(SocketShutdown direction)
@@ -572,8 +560,11 @@ namespace NaiveSocks
     {
         private const string LIBC = "libc";
 
+        //[DllImport(LIBC, SetLastError = true)]
+        //public unsafe static extern int read([In]int fd, [In]byte* buf, [In]int count);
+
         [DllImport(LIBC, SetLastError = true)]
-        public unsafe static extern int read([In]int fd, [In]byte* buf, [In]int count);
+        public unsafe static extern int recv(int sockfd, byte* buf, int count, int flags);
 
         [DllImport(LIBC, SetLastError = true)]
         public unsafe static extern int write([In]int fd, [In]byte* buf, [In]int count);
@@ -645,27 +636,27 @@ namespace NaiveSocks
             }
         }
 
-        public static unsafe int ReadToBs(int fd, BytesSegment bs)
+        public static unsafe int RecvToBs(int fd, BytesSegment bs, MSG_FLAGS flags)
         {
             fixed (byte* buf = &bs.Bytes[bs.Offset]) {
-                return read(fd, buf, bs.Len);
+                return recv(fd, buf, bs.Len, (int)flags);
             }
         }
 
-        public static unsafe int ReadToBs(int fd, BytesSegment bs, out int errno)
+        public static unsafe int RecvToBs(int fd, BytesSegment bs, MSG_FLAGS flags, out int errno)
         {
             errno = 0;
-            var r = ReadToBs(fd, bs);
+            var r = RecvToBs(fd, bs, flags);
             if (r == -1)
                 errno = GetErrno();
             return r;
         }
 
-        public static unsafe int ReadToBsThrows(int fd, BytesSegment bs)
+        public static unsafe int RecvToBsThrows(int fd, BytesSegment bs, MSG_FLAGS flags)
         {
-            var r = ReadToBs(fd, bs);
+            var r = RecvToBs(fd, bs, flags);
             if (r < 0) {
-                ThrowWithErrno("read");
+                ThrowWithErrno("recv");
             }
             return r;
         }
@@ -773,5 +764,37 @@ namespace NaiveSocks
         ERR = 0x0008,
         HUP = 0x0010,
         NVAL = 0x0020
+    }
+
+    [Flags]
+    public enum MSG_FLAGS : int
+    {
+        OOB = 1,
+        PEEK = 2,
+        DONTROUTE = 4,
+        TRYHARD = 4,       /* Synonym for MSG_DONTROUTE for DECnet */
+        CTRUNC = 8,
+        PROBE = 0x10,   /* Do not send. Only probe path f.e. for MTU */
+        TRUNC = 0x20,
+        DONTWAIT = 0x40,    /* Nonblocking io		 */
+        EOR = 0x80, /* End of record */
+        WAITALL = 0x100,    /* Wait for a full request */
+        FIN = 0x200,
+        SYN = 0x400,
+        CONFIRM = 0x800,    /* Confirm path validity */
+        RST = 0x1000,
+        ERRQUEUE = 0x2000,  /* Fetch message from error queue */
+        NOSIGNAL = 0x4000,  /* Do not generate SIGPIPE */
+        MORE = 0x8000,  /* Sender will send more */
+        WAITFORONE = 0x10000,   /* recvmmsg(): block until 1+ packets avail */
+        SENDPAGE_NOTLAST = 0x20000, /* sendpage() internal : not the last page */
+        BATCH = 0x40000, /* sendmmsg(): more messages coming */
+        EOF = FIN,
+        NO_SHARED_FRAGS = 0x80000, /* sendpage() internal : page frags are not shared */
+        ZEROCOPY = 0x4000000,   /* Use user data in kernel path */
+        FASTOPEN = 0x20000000,  /* Send data in TCP SYN */
+        CMSG_CLOEXEC = 0x40000000,	/* Set close_on_exec for file
+					   descriptor received through
+					   SCM_RIGHTS */
     }
 }
