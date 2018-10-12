@@ -23,7 +23,7 @@ namespace NaiveSocksAndroid
         private ContextThemeWrapper logThemeWrapper;
         private LinearLayout outputParent;
         private NestedScrollView outputParentScroll;
-        
+
         private int menuItemId;
         private bool autoScroll = true;
 
@@ -88,6 +88,8 @@ namespace NaiveSocksAndroid
             }
         }
 
+        bool scrollingPending;
+
         private void putText(string text, bool autoScroll = true, Android.Graphics.Color? color = null)
         {
             var tv = new TextView(logThemeWrapper);
@@ -97,8 +99,12 @@ namespace NaiveSocksAndroid
             //autoScroll = autoScroll && !outputParentScroll.CanScrollVertically(0);
             outputParent.AddView(tv);
             tv.Dispose();
-            if (autoScroll) {
-                outputParentScroll.Post(() => outputParentScroll.FullScroll((int)FocusSearchDirection.Down));
+            if (autoScroll && !scrollingPending) {
+                scrollingPending = true;
+                outputParentScroll.Post(() => {
+                    scrollingPending = false;
+                    outputParentScroll.FullScroll((int)FocusSearchDirection.Down);
+                });
             }
         }
 

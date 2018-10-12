@@ -139,6 +139,7 @@
     <Compile Include="EditorActivity.cs" />
     <Compile Include="Fragments\FragmentAdapters.cs" />
     <Compile Include="Fragments\FragmentConnections.cs" />
+    <Compile Include="Fragments\FragmentConsole.cs" />
     <Compile Include="Fragments\FragmentHome.cs" />
     <Compile Include="Fragments\FragmentLogs.cs" />
     <Compile Include="Fragments\MyBaseFragment.cs" />

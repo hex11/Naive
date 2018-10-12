@@ -35,7 +35,9 @@ namespace NaiveSocksAndroid
         MainLauncher = true,
         Exported = true,
         LaunchMode = LaunchMode.SingleTask,
-        ConfigurationChanges = ConfigChanges.Orientation | ConfigChanges.ScreenSize | ConfigChanges.ScreenLayout)]
+        ConfigurationChanges = ConfigChanges.Orientation | ConfigChanges.ScreenSize | ConfigChanges.ScreenLayout,
+        WindowSoftInputMode = SoftInput.StateUnchanged | SoftInput.AdjustResize
+    )]
     [Android.App.MetaData("android.app.shortcuts", Resource = "@xml/shortcuts")]
     public class MainActivity : ActivityWithToolBar
     {
@@ -271,6 +273,9 @@ namespace NaiveSocksAndroid
                 break;
             case R.Id.nav_adapters:
                 frag = new FragmentAdapters();
+                break;
+            case R.Id.nav_console:
+                frag = new FragmentConsole();
                 break;
             }
             if (frag == null)

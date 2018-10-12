@@ -21,7 +21,7 @@ namespace NaiveSocksAndroid
     {
         public FragmentHome()
         {
-            TimerInterval = 1000;
+            TimerInterval = 2000;
         }
 
         protected override void OnUpdate()

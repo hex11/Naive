@@ -8,6 +8,7 @@
   <string name="logs">Logs</string>
   <string name="connections">Connections</string>
   <string name="adapters">Adapters</string>
+  <string name="console">Console</string>
   <string name="start">Start</string>
   <string name="stop">Stop</string>
   <string name="reload">Reload</string>
