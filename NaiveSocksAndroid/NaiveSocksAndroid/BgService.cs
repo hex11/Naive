@@ -59,6 +59,7 @@ namespace NaiveSocksAndroid
 
         NotificationCompat.Builder builder, restartBuilder;
         const int MainNotificationId = 1;
+        const string MainNotifChannelId = "nsocks_service";
 
         private Receiver receiverScreenState;
 
@@ -99,28 +100,40 @@ namespace NaiveSocksAndroid
 
             base.OnCreate();
 
-
             Logger.info("service is starting...");
 
             powerManager = (PowerManager)GetSystemService(Context.PowerService);
             notificationManager = (NotificationManager)GetSystemService(Context.NotificationService);
 
-            var chId = "nsocks_service";
+            restartBuilder = new NotificationCompat.Builder(this, MainNotifChannelId)
+                        .SetContentTitle("NaiveSocks service is stopped")
+                        .AddAction(BuildServiceAction(Actions.START, R.String.start, Android.Resource.Drawable.StarOff, 6))
+                        .SetSmallIcon(Resource.Drawable.N)
+                        .SetColor(unchecked((int)0xFF2196F3))
+                        .SetAutoCancel(true)
+                        .SetPriority((int)NotificationPriority.Min)
+                        .SetVisibility(NotificationCompat.VisibilitySecret)
+                        .SetShowWhen(false);
+        }
+
+        private void CreateNotifBuilder()
+        {
             if (isO) {
-                var chan = new NotificationChannel(chId, "NaiveSocks Service", NotificationImportance.Low);
+                var chan = new NotificationChannel(MainNotifChannelId, "NaiveSocks Service", NotificationImportance.Low);
                 chan.LockscreenVisibility = NotificationVisibility.Private;
                 notificationManager.CreateNotificationChannel(chan);
             }
 
-            builder = new NotificationCompat.Builder(this, chId)
-                        .SetContentIntent(BuildIntentToShowMainActivity())
-                        .AddAction(BuildServiceAction(Actions.KILL, R.String.kill, Android.Resource.Drawable.StarOff, 1))
-                        .AddAction(BuildServiceAction(Actions.RELOAD, R.String.reload, Android.Resource.Drawable.StarOff, 2))
-                        .AddAction(BuildServiceAction(Actions.GC, R.String.gc, Android.Resource.Drawable.StarOff, 3))
-                        .SetSmallIcon(Resource.Drawable.N)
-                        .SetColor(unchecked((int)0xFF2196F3))
-                        .SetUsesChronometer(true)
-                        .SetOngoing(true);
+            builder = new NotificationCompat.Builder(this, MainNotifChannelId)
+                                    .SetContentText("initializing...")
+                                    .SetContentIntent(BuildIntentToShowMainActivity())
+                                    .AddAction(BuildServiceAction(Actions.KILL, R.String.kill, Android.Resource.Drawable.StarOff, 1))
+                                    .AddAction(BuildServiceAction(Actions.RELOAD, R.String.reload, Android.Resource.Drawable.StarOff, 2))
+                                    .AddAction(BuildServiceAction(Actions.GC, R.String.gc, Android.Resource.Drawable.StarOff, 3))
+                                    .SetSmallIcon(R.Drawable.N)
+                                    .SetColor(unchecked((int)0xFF2196F3))
+                                    .SetUsesChronometer(true)
+                                    .SetOngoing(true);
 
             if (!isO) {
                 builder.SetPriority((int)NotificationPriority.Min)
@@ -130,17 +143,6 @@ namespace NaiveSocksAndroid
             if (!isN) {
                 builder.SetContentTitle("NaiveSocks");
             }
-
-            restartBuilder = new NotificationCompat.Builder(this, chId)
-                        .SetContentTitle("NaiveSocks service is stopped")
-                        .AddAction(BuildServiceAction(Actions.START, R.String.start, Android.Resource.Drawable.StarOff, 6))
-                        .SetSmallIcon(Resource.Drawable.N)
-                        .SetColor(unchecked((int)0xFF2196F3))
-                        .SetAutoCancel(true)
-                        .SetPriority((int)NotificationPriority.Min)
-                        .SetVisibility(NotificationCompat.VisibilitySecret)
-                        .SetShowWhen(false);
-            //StartForegroundService();
         }
 
         public event Action<BgService> ForegroundStateChanged;
@@ -152,6 +154,8 @@ namespace NaiveSocksAndroid
                 Logger.logWithStackTrace("RunForegound() while isForegroundRunning", Logging.Level.Warning);
                 return;
             }
+
+            CreateNotifBuilder();
 
             StartForeground(MainNotificationId, builder.Build());
 
@@ -173,7 +177,7 @@ namespace NaiveSocksAndroid
             }), filter);
 
             Task.Run(() => {
-                Logger.info("starting controller...");
+                Logger.info("load and start controller...");
                 try {
                     Controller.ConfigTomlLoaded += (t) => {
                         CrashHandler.CrashLogFile = Controller.ProcessFilePath("UnhandledException.txt");
@@ -191,13 +195,18 @@ namespace NaiveSocksAndroid
                         }
                     };
                     var paths = AppConfig.GetNaiveSocksConfigPaths(this);
-                    Controller.LoadConfigFileFromMultiPaths(paths);
+                    putLine("loading controller...");
+                    Controller.LoadConfigFileFromMultiPaths(paths, true);
+                    putLine("starting controller...");
                     Controller.Start();
                     Logger.info("controller started.");
+                    putLine("started.");
                     CheckVPN();
                 } catch (System.Exception e) {
                     Logger.exception(e, Logging.Level.Error, "loading/starting controller");
-                    ShowToast("starting error: " + e.Message);
+                    string msg = "starting error: " + e.Message;
+                    putLine(msg, 10000);
+                    ShowToast(msg);
                     StopSelf();
                 }
             });
@@ -253,7 +262,7 @@ namespace NaiveSocksAndroid
             ForegroundStateChanged?.Invoke(this);
             vpnHelper?.Stop();
             vpnHelper = null;
-            Controller.Stop();
+            Task.Run(() => Controller.Stop());
         }
 
         [return: GeneratedEnum]
@@ -288,13 +297,8 @@ namespace NaiveSocksAndroid
                     System.Diagnostics.Process.GetCurrentProcess().Kill();
                     break;
                 case Actions.RELOAD:
-                    try {
-                        Reload();
-                        putLine("controller reloaded");
-                    } catch (Exception e) {
-                        ShowToast("reloading error: " + e.Message);
-                        putLine("reloading error: " + e.ToString());
-                    }
+                    putLine("controller reloading...");
+                    Reload();
                     break;
                 case Actions.GC:
                 case Actions.GC_0:
@@ -316,14 +320,22 @@ namespace NaiveSocksAndroid
 
         public void Reload()
         {
-            if (!IsForegroundRunning) {
-                this.StopSelf();
-                Logging.warning("Reload() while !IsForegroundRunning");
-                return;
-            }
-            vpnHelper?.Stop();
-            Controller.Reload();
-            CheckVPN();
+            Task.Run(() => {
+                try {
+                    if (!IsForegroundRunning) {
+                        this.StopSelf();
+                        Logging.warning("Reload() while !IsForegroundRunning");
+                        return;
+                    }
+                    vpnHelper?.Stop();
+                    Controller.Reload();
+                    CheckVPN();
+                    putLine("controller reloaded");
+                } catch (Exception e) {
+                    ShowToast("reloading error: " + e.Message);
+                    putLine("reloading error: " + e.ToString());
+                }
+            });
         }
 
         public override IBinder OnBind(Intent intent)
@@ -536,7 +548,6 @@ namespace NaiveSocksAndroid
         public ServiceConnection()
         {
         }
-
 
         public ServiceConnection(Action<ComponentName, IBinder> connected, Action<ComponentName> disconnected) : base(connected, disconnected)
         {

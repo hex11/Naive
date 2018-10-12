@@ -334,17 +334,15 @@ namespace NaiveSocksAndroid
 
         private void reloadService()
         {
-            Task.Run(() => {
-                if (isServiceForegroundRunning) {
-                    try {
-                        service.Reload();
-                    } catch (Exception e) {
-                        Logging.exception(e, Logging.Level.Error, "reloading controller");
-                    }
-                } else {
-                    Logging.info("cannot reload: the service/controller is not running");
+            if (isServiceForegroundRunning) {
+                try {
+                    service.Reload();
+                } catch (Exception e) {
+                    Logging.exception(e, Logging.Level.Error, "reloading controller");
                 }
-            });
+            } else {
+                Logging.info("cannot reload: the service/controller is not running");
+            }
         }
 
         public override bool OnCreateOptionsMenu(IMenu menu)
