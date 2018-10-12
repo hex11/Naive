@@ -296,6 +296,7 @@ namespace NaiveSocks
         public override Task WriteAsync(BytesSegment bs)
         {
             if (TryWriteSync(bs)) {
+                Interlocked.Increment(ref ctr.Wsync);
                 return NaiveUtils.CompletedTask;
             }
             return WriteAsyncImpl(bs);
@@ -306,6 +307,7 @@ namespace NaiveSocks
         public AwaitableWrapper WriteAsyncR(BytesSegment bs)
         {
             if (TryWriteSync(bs)) {
+                Interlocked.Increment(ref ctr.Wsync);
                 return AwaitableWrapper.GetCompleted();
             }
             return WriteAsyncRImpl(bs);
@@ -321,7 +323,6 @@ namespace NaiveSocks
             if (Socket.Poll(0, SelectMode.SelectWrite)) {
                 if (Socket.Send(bs.Bytes, bs.Offset, bs.Len, SocketFlags.None) != bs.Len)
                     throw new Exception("should not happen: Socket.Send() != bs.Len");
-                Interlocked.Increment(ref ctr.Wsync);
                 return true;
             }
             return false;

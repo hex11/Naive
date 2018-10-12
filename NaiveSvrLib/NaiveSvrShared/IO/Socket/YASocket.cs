@@ -15,7 +15,7 @@ namespace NaiveSocks
         public static bool isX86 = true;
         public static bool Debug = false;
 
-        private const EPOLL_EVENTS PollInEvents = EPOLL_EVENTS.IN | EPOLL_EVENTS.RDHUP | EPOLL_EVENTS.ET;
+        private const EPOLL_EVENTS PollInEvents = EPOLL_EVENTS.IN | EPOLL_EVENTS.RDHUP | EPOLL_EVENTS.ET | EPOLL_EVENTS.ONESHOT;
 
         public YASocket(Socket socket) : base(socket)
         {
@@ -116,15 +116,11 @@ namespace NaiveSocks
                             raWrite.SetException(GetStateException());
                             return;
                         }
-                        var startTime = Logging.getRuntime();
                         r = LinuxNative.SendFromBs(fd, bs, MSG_FLAGS.DONTWAIT);
                         if (r < 0)
                             errno = LinuxNative.GetErrno();
-                        long duration = Logging.getRuntime() - startTime;
-                        if (duration > 100) {
-                            Logging.warning(this + " blocking write?: fd " + fdR + " event " + e + " spent " + duration);
-                        }
                     }
+                    Interlocked.Increment(ref ctr.Wasync);
                     if (r < 0) {
                         var ex = LinuxNative.GetExceptionWithErrno(nameof(LinuxNative.write), errno);
                         raWrite.SetException(ex);
@@ -210,7 +206,7 @@ namespace NaiveSocks
                     throw GetStateException();
                 raWrite.Reset();
                 bufWrite = bs;
-                GlobalEpollerW.AddFd(fd, EPOLL_EVENTS.OUT, this);
+                GlobalEpollerW.AddFd(fd, EPOLL_EVENTS.OUT | EPOLL_EVENTS.ONESHOT, this);
             }
             return new AwaitableWrapper(raWrite);
         }
@@ -263,6 +259,8 @@ namespace NaiveSocks
                     // ensure the socket is not ready to read, or the event may never raised:
                     ready = true;
                     goto READ_AGAIN;
+                } else {
+                    GlobalEpoller.ModifyFd(fdR, PollInEvents);
                 }
                 raRead.Reset();
                 bufRead = bs;
@@ -524,11 +522,14 @@ namespace NaiveSocks
                     bool ok = mapFdToHandler.TryGetValue(fd, out var handler);
                     cleanedUp = fdCleanupList.Contains(fd);
                     mapLock.ExitReadLock();
-                    if (cleanedUp) {
+                    if (cleanedUp & !ok) {
                         Logger.warning($"EpollHandler event after cleaned up: ({i}/{eventCount}) fd={fd} [{eventType}] u64=[{e.u64:X}]");
                     } else if (!ok) {
                         Logger.warning($"EpollHandler not found! event({i}/{eventCount}) fd={fd} [{eventType}] u64=[{e.u64:X}]");
-                    } else {
+                    } else { // ok
+                        if (cleanedUp) {
+                            Logger.warning($"EpollHandler cleaned up but handler found: ({i}/{eventCount}) fd={fd} [{eventType}] u64=[{e.u64:X}]");
+                        }
                         handler.HandleEvent(this, fd, eventType);
                     }
                 }
@@ -560,11 +561,14 @@ namespace NaiveSocks
                     bool ok = mapFdToHandler.TryGetValue(fd, out var handler);
                     cleanedUp = fdCleanupList.Contains(fd);
                     mapLock.ExitReadLock();
-                    if (cleanedUp) {
+                    if (cleanedUp & !ok) {
                         Logger.warning($"EpollHandler event after cleaned up: ({i}/{eventCount}) fd={fd} [{eventType}] u64=[{e.u64:X}]");
                     } else if (!ok) {
                         Logger.warning($"EpollHandler not found! event({i}/{eventCount}) fd={fd} [{eventType}] u64=[{e.u64:X}]");
-                    } else {
+                    } else { // ok
+                        if (cleanedUp) {
+                            Logger.warning($"EpollHandler cleaned up but handler found: ({i}/{eventCount}) fd={fd} [{eventType}] u64=[{e.u64:X}]");
+                        }
                         handler.HandleEvent(this, fd, eventType);
                     }
                 }
