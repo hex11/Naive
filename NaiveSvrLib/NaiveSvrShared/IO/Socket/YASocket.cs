@@ -67,19 +67,12 @@ namespace NaiveSocks
                                 raRead.TrySetException(GetClosedException());
                                 return;
                             }
-                            int retry = 0;
-                            AGAIN:
                             r = fdR_ReadNonblocking(bs, e, out errno);
                             if (r < 0) {
                                 if (errno == 11) {
-                                    if (retry++ < 10) {
-                                        Logging.warning(this + ": EAGAIN after event " + e + " retying " + retry);
-                                        goto AGAIN;
-                                    } else {
-                                        Logging.warning(this + ": EAGAIN after event " + e + " gived up after " + (retry - 1) + " tries");
-                                        bufRead = bs;
-                                        return;
-                                    }
+                                    Logging.warning(this + ": EAGAIN after event " + e + ", ignored.");
+                                    bufRead = bs;
+                                    return;
                                 } else {
                                     if (Debug)
                                         Logging.warning(this + ": recv() error " + errno);
@@ -115,15 +108,16 @@ namespace NaiveSocks
                     GlobalEpollerW.RemoveFd(fd);
                     int r;
                     int errno = 0;
+                    BytesSegment bs;
                     lock (raWrite) {
-                        var bs = bufWrite;
+                        bs = bufWrite;
                         bufWrite.ResetSelf();
                         if (State.HasShutdown) {
                             raWrite.SetException(GetStateException());
                             return;
                         }
                         var startTime = Logging.getRuntime();
-                        r = LinuxNative.WriteFromBs(fd, bs);
+                        r = LinuxNative.SendFromBs(fd, bs, MSG_FLAGS.DONTWAIT);
                         if (r < 0)
                             errno = LinuxNative.GetErrno();
                         long duration = Logging.getRuntime() - startTime;
@@ -134,6 +128,8 @@ namespace NaiveSocks
                     if (r < 0) {
                         var ex = LinuxNative.GetExceptionWithErrno(nameof(LinuxNative.write), errno);
                         raWrite.SetException(ex);
+                    } else if (bs.Len != r) {
+                        raWrite.SetException(GetNotAllSentException(r, bs));
                     } else {
                         raWrite.SetResult(0);
                     }
@@ -177,6 +173,32 @@ namespace NaiveSocks
             await WriteAsyncRImpl(bs);
         }
 
+        protected override bool TryWriteSync(BytesSegment bs)
+        {
+            bs.CheckAsParameter();
+            lock (raWrite) {
+                if (State.HasShutdown)
+                    throw GetStateException();
+                var r = LinuxNative.SendFromBs(fd, bs, MSG_FLAGS.DONTWAIT, out var errno);
+                if (errno == 0) {
+                    if (r != bs.Len) {
+                        throw GetNotAllSentException(r, bs);
+                    } else {
+                        return true;
+                    }
+                } else if (errno == 11) {
+                    return false;
+                } else {
+                    throw LinuxNative.GetExceptionWithErrno("send", errno);
+                }
+            }
+        }
+
+        private static Exception GetNotAllSentException(int r, BytesSegment bs)
+        {
+            return new Exception($"bs.Len != send() ({bs.Len} != {r})");
+        }
+
         private ReusableAwaiter<VoidType> raWrite = new ReusableAwaiter<VoidType>();
         private BytesSegment bufWrite;
 
@@ -201,24 +223,21 @@ namespace NaiveSocks
         private ReusableAwaiter<int> raRead = new ReusableAwaiter<int>();
         private BytesSegment bufRead;
 
-        //protected override unsafe int TryReadSync(BytesSegment bs)
-        //{
-        //    pollfd pfd = new pollfd {
-        //        fd = fd,
-        //        events = POLL_EVENTS.IN | POLL_EVENTS.ERR
-        //    };
-        //    lock (raRead) {
-        //        if (fdR == -1)
-        //            throw GetClosedException();
-        //        var startTime = Logging.getRuntime();
-        //        var r = LinuxNative.ReadToBs(fdR, bs);
-        //        Logging.debugForce(this + ": recv() = " + r + " time=" + (Logging.getRuntime() - startTime));
-        //        if (r > 0) {
-        //            return r;
-        //        }
-        //    }
-        //    return 0;
-        //}
+        protected override unsafe int TryReadSync(BytesSegment bs)
+        {
+            if (!ready)
+                return 0;
+            lock (raRead) {
+                if (fdR == -1)
+                    throw GetClosedException();
+                if (ready) { // double checking
+                    var r = ReadNonblocking(bs);
+                    if (r > 0)
+                        return r;
+                }
+            }
+            return 0;
+        }
 
         bool ready = true;
 
@@ -232,27 +251,18 @@ namespace NaiveSocks
                     throw GetStateException();
                 if (raRead.Exception != null)
                     throw raRead.Exception;
-                AGAIN:
-                if (true || ready) {
-                    var r = fdR_ReadNonblocking(bs, 0, out var errno);
-                    if (errno == 0) {
-                        if (Debug)
-                            Logging.debugForce(this + ": recv() " + r);
+                READ_AGAIN:
+                if (ready) {
+                    var r = ReadNonblocking(bs);
+                    if (r > 0)
                         return new AwaitableWrapper<int>(r);
-                    } else if (errno == 11) { // EAGAIN
-                        if (Debug)
-                            Logging.debugForce(this + ": EAGAIN");
-                        ready = false;
-                    } else {
-                        if (Debug)
-                            Logging.debugForce(this + ": recv() throws " + errno);
-                        throw LinuxNative.GetExceptionWithErrno("recv", errno);
-                    }
                 }
                 if (!fdRAdded) {
                     fdRAdded = true;
                     GlobalEpoller.AddFd(fdR, PollInEvents, this);
-                    goto AGAIN;
+                    // ensure the socket is not ready to read, or the event may never raised:
+                    ready = true;
+                    goto READ_AGAIN;
                 }
                 raRead.Reset();
                 bufRead = bs;
@@ -260,6 +270,25 @@ namespace NaiveSocks
                     Logging.debugForce(this + ": wait for epoll");
             }
             return new AwaitableWrapper<int>(raRead);
+        }
+
+        private int ReadNonblocking(BytesSegment bs)
+        {
+            var r = fdR_ReadNonblocking(bs, 0, out var errno);
+            if (errno == 0) {
+                if (Debug)
+                    Logging.debugForce(this + ": recv() " + r);
+                return r;
+            } else if (errno == 11) { // EAGAIN
+                if (Debug)
+                    Logging.debugForce(this + ": EAGAIN");
+                ready = false;
+                return 0;
+            } else {
+                if (Debug)
+                    Logging.debugForce(this + ": recv() throws " + errno);
+                throw LinuxNative.GetExceptionWithErrno("recv", errno);
+            }
         }
 
         protected override int SocketReadImpl(BytesSegment bs)
@@ -560,14 +589,17 @@ namespace NaiveSocks
     {
         private const string LIBC = "libc";
 
-        //[DllImport(LIBC, SetLastError = true)]
-        //public unsafe static extern int read([In]int fd, [In]byte* buf, [In]int count);
+        [DllImport(LIBC, SetLastError = true)]
+        public unsafe static extern int read([In]int fd, [In]byte* buf, [In]int count);
+
+        [DllImport(LIBC, SetLastError = true)]
+        public unsafe static extern int write([In]int fd, [In]byte* buf, [In]int count);
 
         [DllImport(LIBC, SetLastError = true)]
         public unsafe static extern int recv(int sockfd, byte* buf, int count, int flags);
 
         [DllImport(LIBC, SetLastError = true)]
-        public unsafe static extern int write([In]int fd, [In]byte* buf, [In]int count);
+        public unsafe static extern int send(int sockfd, byte* buf, int count, int flags);
 
         [DllImport(LIBC, SetLastError = true)]
         public static extern int dup([In]int fd);
@@ -661,10 +693,19 @@ namespace NaiveSocks
             return r;
         }
 
-        public static unsafe int WriteFromBs(int fd, BytesSegment bs)
+        public static unsafe int SendFromBs(int fd, BytesSegment bs, MSG_FLAGS flags, out int errno)
+        {
+            errno = 0;
+            var r = SendFromBs(fd, bs, flags);
+            if (r == -1)
+                errno = GetErrno();
+            return r;
+        }
+
+        public static unsafe int SendFromBs(int fd, BytesSegment bs, MSG_FLAGS flags)
         {
             fixed (byte* buf = &bs.Bytes[bs.Offset]) {
-                return write(fd, buf, bs.Len);
+                return send(fd, buf, bs.Len, (int)flags);
             }
         }
 
