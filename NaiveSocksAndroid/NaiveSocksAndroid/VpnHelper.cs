@@ -38,6 +38,7 @@ namespace NaiveSocksAndroid
         public string DnsResolver { get; set; }
         public int LocalDnsPort { get; set; } = 5333;
         public string FakeDnsPrefix { get; set; } = "1.";
+        public int DnsListenerCount { get; set; } = 32;
 
         public string DnsGw { get; set; }
 
@@ -221,7 +222,7 @@ namespace NaiveSocksAndroid
         private void StartDnsServer()
         {
             ipPrefix = vpnConfig.FakeDnsPrefix;
-            dnsServer = new DnsServer(new IPEndPoint(IPAddress.Any, vpnConfig.LocalDnsPort), 10, 0);
+            dnsServer = new DnsServer(new IPEndPoint(IPAddress.Any, vpnConfig.LocalDnsPort), vpnConfig.DnsListenerCount, 0);
             dnsServer.QueryReceived += DnsServer_QueryReceived;
             dnsServer.Start();
         }
