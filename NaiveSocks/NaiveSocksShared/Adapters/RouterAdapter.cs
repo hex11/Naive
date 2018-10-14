@@ -380,6 +380,9 @@ namespace NaiveSocks
             } else {
                 adapterRef = @default;
             }
+            if (adapterRef.Adapter is FailAdapter) {
+                return Task.FromResult<IPAddress[]>(null);
+            }
             var dnsProvider = adapterRef.Adapter as IDnsProvider;
             if (dnsProvider == null) {
                 Logger.error($"{adapterRef} is not a DNS resolver.");

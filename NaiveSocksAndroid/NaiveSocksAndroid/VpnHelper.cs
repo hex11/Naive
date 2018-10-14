@@ -38,7 +38,8 @@ namespace NaiveSocksAndroid
         public string DnsResolver { get; set; }
         public int LocalDnsPort { get; set; } = 5333;
         public string FakeDnsPrefix { get; set; } = "1.";
-        public int DnsListenerCount { get; set; } = 32;
+        public int DnsListenerCount { get; set; } = 1;
+        public int DnsTtl { get; set; } = 30;
 
         public string DnsGw { get; set; }
 
@@ -223,8 +224,15 @@ namespace NaiveSocksAndroid
         {
             ipPrefix = vpnConfig.FakeDnsPrefix;
             dnsServer = new DnsServer(new IPEndPoint(IPAddress.Any, vpnConfig.LocalDnsPort), vpnConfig.DnsListenerCount, 0);
+            dnsServer.ExceptionThrown += DnsServer_ExceptionThrown;
             dnsServer.QueryReceived += DnsServer_QueryReceived;
             dnsServer.Start();
+        }
+
+        private Task DnsServer_ExceptionThrown(object sender, ExceptionEventArgs eventArgs)
+        {
+            Logging.exception(eventArgs.Exception, Logging.Level.Error, "DnsServer exception");
+            return NaiveUtils.CompletedTask;
         }
 
         private async Task DnsServer_QueryReceived(object sender, QueryReceivedEventArgs eventArgs)
@@ -270,7 +278,7 @@ namespace NaiveSocksAndroid
                             }
                             mapLock.ExitWriteLock();
                         }
-                        r.AnswerRecords.Add(new ARecord(item.Name, 30, ip));
+                        r.AnswerRecords.Add(new ARecord(item.Name, vpnConfig.DnsTtl, ip));
                         r.ReturnCode = ReturnCode.NoError;
                     } else {
                         Logging.warning("Unsupported DNS record: " + item);
