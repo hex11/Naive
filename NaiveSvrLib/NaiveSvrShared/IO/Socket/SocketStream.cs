@@ -295,10 +295,12 @@ namespace NaiveSocks
 
         public override Task WriteAsync(BytesSegment bs)
         {
-            if (TryWriteSync(bs)) {
+            var rSync = TryWriteSync(bs);
+            if (rSync == bs.Len) {
                 Interlocked.Increment(ref ctr.Wsync);
                 return NaiveUtils.CompletedTask;
             }
+            bs.SubSelf(Math.Max(rSync, 0));
             return WriteAsyncImpl(bs);
         }
 
@@ -306,10 +308,12 @@ namespace NaiveSocks
 
         public AwaitableWrapper WriteAsyncR(BytesSegment bs)
         {
-            if (TryWriteSync(bs)) {
+            var rSync = TryWriteSync(bs);
+            if (rSync == bs.Len) {
                 Interlocked.Increment(ref ctr.Wsync);
                 return AwaitableWrapper.GetCompleted();
             }
+            bs.SubSelf(Math.Max(rSync, 0));
             return WriteAsyncRImpl(bs);
         }
 
@@ -318,14 +322,12 @@ namespace NaiveSocks
             return new AwaitableWrapper(WriteAsyncImpl(bs));
         }
 
-        protected virtual bool TryWriteSync(BytesSegment bs)
+        protected virtual int TryWriteSync(BytesSegment bs)
         {
             if (Socket.Poll(0, SelectMode.SelectWrite)) {
-                if (Socket.Send(bs.Bytes, bs.Offset, bs.Len, SocketFlags.None) != bs.Len)
-                    throw new Exception("should not happen: Socket.Send() != bs.Len");
-                return true;
+                return Socket.Send(bs.Bytes, bs.Offset, bs.Len, SocketFlags.None);
             }
-            return false;
+            return 0;
         }
 
         public static bool EnableUnderlyingCalls { get; set; } = false;

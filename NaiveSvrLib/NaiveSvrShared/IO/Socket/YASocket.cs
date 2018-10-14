@@ -125,7 +125,10 @@ namespace NaiveSocks
                         var ex = LinuxNative.GetExceptionWithErrno(nameof(LinuxNative.write), errno);
                         raWrite.SetException(ex);
                     } else if (bs.Len != r) {
-                        raWrite.SetException(GetNotAllSentException(r, bs));
+                        lock (raWrite) {
+                            bufWrite = bs.Sub(r);
+                            GlobalEpollerW.AddFd(fd, EPOLL_EVENTS.OUT | EPOLL_EVENTS.ONESHOT, this);
+                        }
                     } else {
                         raWrite.SetResult(0);
                     }
@@ -169,7 +172,7 @@ namespace NaiveSocks
             await WriteAsyncRImpl(bs);
         }
 
-        protected override bool TryWriteSync(BytesSegment bs)
+        protected override int TryWriteSync(BytesSegment bs)
         {
             bs.CheckAsParameter();
             lock (raWrite) {
@@ -177,13 +180,9 @@ namespace NaiveSocks
                     throw GetStateException();
                 var r = LinuxNative.SendFromBs(fd, bs, MSG_FLAGS.DONTWAIT, out var errno);
                 if (errno == 0) {
-                    if (r != bs.Len) {
-                        throw GetNotAllSentException(r, bs);
-                    } else {
-                        return true;
-                    }
+                    return r;
                 } else if (errno == 11) {
-                    return false;
+                    return 0;
                 } else {
                     throw LinuxNative.GetExceptionWithErrno("send", errno);
                 }
