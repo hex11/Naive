@@ -64,12 +64,6 @@
     </AndroidTlsProvider>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="ARSoft.Tools.Net, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\HolisticWare.ARSoft.Tools.Net.2.2.8.2\lib\MonoAndroid10\ARSoft.Tools.Net.dll</HintPath>
-    </Reference>
-    <Reference Include="BouncyCastle.Crypto, Version=1.8.1.0, Culture=neutral, PublicKeyToken=0e99375e54769942">
-      <HintPath>..\packages\BouncyCastle.Crypto.dll.1.8.1\lib\BouncyCastle.Crypto.dll</HintPath>
-    </Reference>
     <Reference Include="Mono.Posix" />
     <Reference Include="Nett, Version=0.8.0.0, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
@@ -189,6 +183,10 @@
     <ProjectReference Include="..\..\NaiveSvrLib\NaiveSvrLib\NaiveSvrLib.csproj">
       <Project>{b6fdce48-2582-4cbc-b1ed-4a6952e183d2}</Project>
       <Name>NaiveSvrLib</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\ARSoft.Tools.Net\ARSoft.Tools.Net\ARSoft.Tools.Net.csproj">
+      <Project>{65bfa748-c640-49b0-b506-34bbb165233a}</Project>
+      <Name>ARSoft.Tools.Net</Name>
     </ProjectReference>
     <ProjectReference Include="..\NaiveSocksCoreAndroid\NaiveSocksCoreAndroid.csproj">
       <Project>{96a734c4-93a7-4b3c-b1cc-f74ec533906a}</Project>

@@ -19,6 +19,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NaiveSocksCoreAndroid", "Na
 EndProject
 Project("{D954291E-2A0B-460D-934E-DC6B0785DB48}") = "NaiveSocksCliShared", "..\NaiveSocksCliShared\NaiveSocksCliShared.shproj", "{F8975733-0B83-4AF3-BF4E-8BCDAFEE4A70}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ARSoft.Tools.Net", "ARSoft.Tools.Net\ARSoft.Tools.Net\ARSoft.Tools.Net.csproj", "{65BFA748-C640-49B0-B506-34BBB165233A}"
+EndProject
 Global
 	GlobalSection(SharedMSBuildProjectFiles) = preSolution
 		..\NaiveSvrLib\NaiveSvrShared\NaiveSvrShared.projitems*{0b623dfc-5129-419c-bb03-823809f9178d}*SharedItemsImports = 13
@@ -57,6 +59,12 @@ Global
 		{96A734C4-93A7-4B3C-B1CC-F74EC533906A}.Release(Debug)|Any CPU.Build.0 = Release|Any CPU
 		{96A734C4-93A7-4B3C-B1CC-F74EC533906A}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{96A734C4-93A7-4B3C-B1CC-F74EC533906A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{65BFA748-C640-49B0-B506-34BBB165233A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{65BFA748-C640-49B0-B506-34BBB165233A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{65BFA748-C640-49B0-B506-34BBB165233A}.Release(Debug)|Any CPU.ActiveCfg = Release|Any CPU
+		{65BFA748-C640-49B0-B506-34BBB165233A}.Release(Debug)|Any CPU.Build.0 = Release|Any CPU
+		{65BFA748-C640-49B0-B506-34BBB165233A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{65BFA748-C640-49B0-B506-34BBB165233A}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -67,6 +75,7 @@ Global
 		{A92BC4FA-7794-4694-A814-74F3CED1CFAD} = {F0E6DC3F-2C8F-4D7F-B9C9-EAF98D4C5412}
 		{B6FDCE48-2582-4CBC-B1ED-4A6952E183D2} = {F0E6DC3F-2C8F-4D7F-B9C9-EAF98D4C5412}
 		{F8975733-0B83-4AF3-BF4E-8BCDAFEE4A70} = {F0E6DC3F-2C8F-4D7F-B9C9-EAF98D4C5412}
+		{65BFA748-C640-49B0-B506-34BBB165233A} = {F0E6DC3F-2C8F-4D7F-B9C9-EAF98D4C5412}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {A8D024E3-5A86-4B9D-81DB-F03EDD5D0E65}
