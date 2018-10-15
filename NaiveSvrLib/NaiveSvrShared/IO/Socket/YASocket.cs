@@ -15,7 +15,7 @@ namespace NaiveSocks
         public static bool isX86 = true;
         public static bool Debug = false;
 
-        private const EPOLL_EVENTS PollInEvents = EPOLL_EVENTS.IN | EPOLL_EVENTS.RDHUP | EPOLL_EVENTS.ET | EPOLL_EVENTS.ONESHOT;
+        private const EPOLL_EVENTS PollInEvents = EPOLL_EVENTS.IN | EPOLL_EVENTS.RDHUP | EPOLL_EVENTS.ET;
 
         public YASocket(Socket socket) : base(socket)
         {
@@ -24,15 +24,28 @@ namespace NaiveSocks
         }
 
         private int fd => Fd.ToInt32();
-        private int fdR; // -1 after close
+
+        // use two additional fd for thread-safe
+        private int fdR; // -1 when not exists
         private bool fdRAdded;
+
+        private int fdW; // -1 when not exists
 
         private EPOLL_EVENTS lastReadEvents;
 
         public override string GetAdditionalString()
         {
-            var ava = GetAvailable();
-            var str = " fd=" + fd + "/" + fdR + (ava > 0 ? " avail=" + ava : null) + " lastEv=" + lastReadEvents;
+            int ava;
+            try {
+                ava = GetAvailable();
+            } catch (Exception) {
+                ava = -114514;
+            }
+            var str = " fd=" + fd + "/" + fdR + (ava != 0 ? " avail=" + ava : null) + " lastEv=" + lastReadEvents;
+            if (raRead.IsBeingListening)
+                str += " recving";
+            if (raWrite.IsBeingListening)
+                str += " sending";
             if (ready)
                 str += " ready";
             return str;
@@ -40,9 +53,15 @@ namespace NaiveSocks
 
         private void CreateFdR()
         {
-            fdR = LinuxNative.dup(fd);
+            fdR = DupFdThrows(fd);
+        }
+
+        private int DupFdThrows(int fd)
+        {
+            var r = LinuxNative.dup(fd);
             if (fdR < 0)
                 throw LinuxNative.GetExceptionWithErrno(nameof(LinuxNative.dup));
+            return r;
         }
 
         private static bool HasFlag(EPOLL_EVENTS t, EPOLL_EVENTS flag) => (t & flag) != 0;
@@ -54,20 +73,20 @@ namespace NaiveSocks
                     Logging.debugForce(this + ": event " + e);
                 if (s == GlobalEpoller) {
                     lastReadEvents = e;
-                    bool operating;
+                    bool closing = false;
                     int r = 0;
                     int errno = 0;
                     lock (raRead) {
                         var bs = bufRead;
                         bufRead.ResetSelf();
-                        operating = bs.Bytes != null;
                         ready = true;
+                        bool operating = bs.Bytes != null;
                         if (operating) {
                             if (fdR == -1) {
                                 raRead.TrySetException(GetClosedException());
                                 return;
                             }
-                            r = fdR_ReadNonblocking(bs, e, out errno);
+                            r = ReadNonblocking(fdR, bs, out errno);
                             if (r < 0) {
                                 if (errno == 11) {
                                     Logging.warning(this + ": EAGAIN after event " + e + ", ignored.");
@@ -77,90 +96,92 @@ namespace NaiveSocks
                                     if (Debug)
                                         Logging.warning(this + ": recv() error " + errno);
                                 }
-                                fdR_TryCloseAndRemove();
+                                closing = true;
                                 if (HasFlag(e, EPOLL_EVENTS.ERR))
                                     State |= MyStreamState.Closed;
                                 else
                                     State |= MyStreamState.RemoteShutdown;
+                                var ex = LinuxNative.GetExceptionWithErrno(nameof(LinuxNative.recv), errno);
+                                if (Debug)
+                                    Logging.debugForce(this + ": recv() async throws " + ex.Message);
+                                raRead.TrySetException(ex);
                             } else {
                                 if (r == 0) {
                                     State |= MyStreamState.RemoteShutdown;
-                                    fdR_TryCloseAndRemove();
+                                    closing = true;
                                 }
+                                if (Debug)
+                                    Logging.debugForce(this + ": recv() async " + r);
+                                raRead.TrySetResult(r);
                             }
                         } else {
                             //throw new Exception("should not happen: bs.Bytes == null");
                         }
-                    }
-                    if (operating) {
-                        if (r < 0) {
-                            var ex = LinuxNative.GetExceptionWithErrno(nameof(LinuxNative.recv), errno);
-                            if (Debug)
-                                Logging.debugForce(this + ": recv() async throws " + ex.Message);
-                            raRead.TrySetException(ex);
-                        } else {
-                            if (Debug)
-                                Logging.debugForce(this + ": recv() async " + r);
-                            raRead.TrySetResult(r);
+                        if (HasFlag(e, EPOLL_EVENTS.ERR | EPOLL_EVENTS.HUP)) {
+                            closing = true;
+                        }
+                        if (closing) {
+                            GlobalEpoller.RemoveFd(fdR);
+                            fdRAdded = false;
+                            fdR_Close_NoLock();
+                        }
+                        if (State.IsClosed) {
+                            TryCleanUp_NoLock();
                         }
                     }
                 } else if (s == GlobalEpollerW) {
-                    GlobalEpollerW.RemoveFd(fd);
+                    GlobalEpollerW.RemoveFd(fdW);
+                    fdW_Close();
                     int r;
                     int errno = 0;
                     BytesSegment bs;
-                    lock (raWrite) {
+                    lock (raRead) {
                         bs = bufWrite;
                         bufWrite.ResetSelf();
                         if (State.HasShutdown) {
                             raWrite.SetException(GetStateException());
                             return;
                         }
+                        // fd should be usable because the state is checked
                         r = LinuxNative.SendFromBs(fd, bs, MSG_FLAGS.DONTWAIT);
                         if (r < 0)
                             errno = LinuxNative.GetErrno();
-                    }
-                    Interlocked.Increment(ref ctr.Wasync);
-                    if (r < 0) {
-                        var ex = LinuxNative.GetExceptionWithErrno(nameof(LinuxNative.write), errno);
-                        raWrite.SetException(ex);
-                    } else if (bs.Len != r) {
-                        lock (raWrite) {
-                            bufWrite = bs.Sub(r);
-                            GlobalEpollerW.AddFd(fd, EPOLL_EVENTS.OUT | EPOLL_EVENTS.ONESHOT, this);
+                        Interlocked.Increment(ref ctr.Wasync);
+                        if (r < 0) {
+                            var ex = LinuxNative.GetExceptionWithErrno(nameof(LinuxNative.write), errno);
+                            State = MyStreamState.Closed;
+                            TryCleanUp_NoLock();
+                            raWrite.SetException(ex);
+                        } else if (bs.Len != r) {
+                            if (r == 0) {
+                                raWrite.SetException(new Exception("send() returns 0, event: " + e));
+                            } else {
+                                bufWrite = bs.Sub(r);
+                                fdW = DupFdThrows(fd);
+                                GlobalEpollerW.AddFd(fdW, EPOLL_EVENTS.OUT | EPOLL_EVENTS.ONESHOT, this);
+                            }
+                        } else {
+                            raWrite.SetResult(0);
                         }
-                    } else {
-                        raWrite.SetResult(0);
+                        if (State.IsClosed) {
+                            TryCleanUp_NoLock();
+                        }
                     }
                 } else {
                     throw new Exception("unexpected source Epoller!");
                 }
             } catch (Exception ex) {
-                throw new Exception(this + " fd " + fd + " exception with EPOLL_EVENTS: " + e, ex);
+                var ex2 = new Exception(this + " exception with EPOLL_EVENTS: " + e, ex);
+                raRead.TrySetException(ex2);
+                raWrite.TrySetException(ex2);
+                throw ex2;
             }
         }
 
-        private int fdR_ReadNonblocking(BytesSegment bs, EPOLL_EVENTS e, out int errno)
+        void fdR_Close_NoLock()
         {
-            int r = LinuxNative.RecvToBs(fdR, bs, MSG_FLAGS.DONTWAIT);
-            errno = r < 0 ? LinuxNative.GetErrno() : 0;
-            return r;
-        }
-
-        void fdR_TryCloseAndRemove()
-        {
-            lock (raRead) {
-                fdR_TryCloseAndRemove_NoLock();
-            }
-        }
-
-        void fdR_TryCloseAndRemove_NoLock()
-        {
-            if (fdR == -1)
-                return;
             if (fdRAdded) {
-                fdRAdded = false;
-                GlobalEpoller.RemoveFdNotThrows(fdR);
+                throw new Exception("Should not close fdR when it's added to epoll.");
             }
             if (LinuxNative.close(fdR) != 0)
                 throw LinuxNative.GetExceptionWithErrno("close");
@@ -175,7 +196,7 @@ namespace NaiveSocks
         protected override int TryWriteSync(BytesSegment bs)
         {
             bs.CheckAsParameter();
-            lock (raWrite) {
+            lock (raRead) {
                 if (State.HasShutdown)
                     throw GetStateException();
                 var r = LinuxNative.SendFromBs(fd, bs, MSG_FLAGS.DONTWAIT, out var errno);
@@ -184,14 +205,11 @@ namespace NaiveSocks
                 } else if (errno == 11) {
                     return 0;
                 } else {
+                    State = MyStreamState.Closed;
+                    TryCleanUp_NoLock();
                     throw LinuxNative.GetExceptionWithErrno("send", errno);
                 }
             }
-        }
-
-        private static Exception GetNotAllSentException(int r, BytesSegment bs)
-        {
-            return new Exception($"bs.Len != send() ({bs.Len} != {r})");
         }
 
         private ReusableAwaiter<VoidType> raWrite = new ReusableAwaiter<VoidType>();
@@ -200,14 +218,24 @@ namespace NaiveSocks
         public override AwaitableWrapper WriteAsyncRImpl(BytesSegment bs)
         {
             bs.CheckAsParameter();
-            lock (raWrite) {
+            lock (raRead) {
                 if (State.HasShutdown)
                     throw GetStateException();
                 raWrite.Reset();
                 bufWrite = bs;
-                GlobalEpollerW.AddFd(fd, EPOLL_EVENTS.OUT | EPOLL_EVENTS.ONESHOT, this);
+                // Create fdW and add to epoll. fdW will be removed and closed by HandleEvent().
+                fdW = DupFdThrows(fd);
+                GlobalEpollerW.AddFd(fdW, EPOLL_EVENTS.OUT | EPOLL_EVENTS.ONESHOT, this);
             }
             return new AwaitableWrapper(raWrite);
+        }
+
+        void fdW_Close()
+        {
+            if (LinuxNative.close(fdW) == -1) {
+                throw LinuxNative.GetExceptionWithErrno("close");
+            }
+            fdW = -1;
         }
 
         protected override async Task<int> ReadAsyncImpl(BytesSegment bs)
@@ -223,8 +251,10 @@ namespace NaiveSocks
             if (!ready)
                 return 0;
             lock (raRead) {
-                if (fdR == -1)
-                    throw GetClosedException();
+                if (fdR == -1) {
+                    //throw GetClosedException();
+                    return base.SocketReadImpl(bs);
+                }
                 if (ready) { // double checking
                     var r = ReadNonblocking(bs);
                     if (r > 0)
@@ -242,6 +272,9 @@ namespace NaiveSocks
                 Logging.debugForce(this + ": ReadAsyncRImpl()");
             bs.CheckAsParameter();
             lock (raRead) {
+                if (fdR == -1) {
+                    return new AwaitableWrapper<int>(base.SocketReadImpl(bs));
+                }
                 if (State.HasRemoteShutdown)
                     throw GetStateException();
                 if (raRead.Exception != null)
@@ -255,11 +288,9 @@ namespace NaiveSocks
                 if (!fdRAdded) {
                     fdRAdded = true;
                     GlobalEpoller.AddFd(fdR, PollInEvents, this);
-                    // ensure the socket is not ready to read, or the event may never raised:
+                    // ensure the socket is not ready to read after AddFd, or events may never raise:
                     ready = true;
                     goto READ_AGAIN;
-                } else {
-                    GlobalEpoller.ModifyFd(fdR, PollInEvents);
                 }
                 raRead.Reset();
                 bufRead = bs;
@@ -271,7 +302,7 @@ namespace NaiveSocks
 
         private int ReadNonblocking(BytesSegment bs)
         {
-            var r = fdR_ReadNonblocking(bs, 0, out var errno);
+            var r = ReadNonblocking(fdR, bs, out var errno);
             if (errno == 0) {
                 if (Debug)
                     Logging.debugForce(this + ": recv() " + r);
@@ -288,37 +319,76 @@ namespace NaiveSocks
             }
         }
 
+        private static int ReadNonblocking(int fd, BytesSegment bs, out int errno)
+        {
+            int r = LinuxNative.RecvToBs(fd, bs, MSG_FLAGS.DONTWAIT);
+            errno = r < 0 ? LinuxNative.GetErrno() : 0;
+            return r;
+        }
+
         protected override int SocketReadImpl(BytesSegment bs)
         {
             lock (raRead) {
-                return fdR_ReadNonblocking(bs, 0, out _);
+                return ReadNonblocking(fdR, bs, out _);
             }
-        }
-
-        private int ReadFdSafeThrows_NoLock(BytesSegment bs, MSG_FLAGS flags)
-        {
-            if (State.HasRemoteShutdown)
-                throw GetStateException();
-            return LinuxNative.RecvToBsThrows(fd, bs, flags);
         }
 
         public override Task Shutdown(SocketShutdown direction)
         {
             lock (raWrite) {
-                State |= MyStreamState.LocalShutdown;
+                int how;
+                MyStreamState flag;
+                switch (direction) {
+                case SocketShutdown.Receive:
+                    how = 0;
+                    flag = MyStreamState.RemoteShutdown;
+                    break;
+                case SocketShutdown.Send:
+                    how = 1;
+                    flag = MyStreamState.LocalShutdown;
+                    break;
+                case SocketShutdown.Both:
+                    how = 2;
+                    flag = MyStreamState.Closed;
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(direction));
+                }
+                if ((State.Value | flag.Value) != State.Value) {
+                    State |= flag;
+                    if (LinuxNative.shutdown(fd, how) == -1)
+                        Logging.warning(this + ": shutdown(how=" + how + ") errno " + LinuxNative.GetErrno());
+                    TryCleanUp_NoLock();
+                }
             }
-            return base.Shutdown(direction);
+            return NaiveUtils.CompletedTask;
         }
 
         public override Task Close()
         {
-            lock (raWrite)
-                lock (raRead) {
-                    State = MyStreamState.Closed;
-                    fdR_TryCloseAndRemove_NoLock();
-                    raRead.TrySetException(GetClosedException());
-                }
+            lock (raRead) {
+                State = MyStreamState.Closed;
+                TryCleanUp_NoLock();
+            }
             return base.Close();
+        }
+
+        bool cleanedUp = false;
+
+        private void TryCleanUp_NoLock()
+        {
+            if (cleanedUp)
+                return;
+            cleanedUp = true;
+            if (!fdRAdded && fdR != -1)
+                fdR_Close_NoLock();
+            raRead.TrySetException(GetClosedException());
+            var r = LinuxNative.shutdown(fd, 2);
+            if (r == -1) {
+                int errno = LinuxNative.GetErrno();
+                if (errno != 107) // ENOTCONN
+                    Logging.warning(this + ": shutdown() errno " + errno);
+            }
         }
 
         private static Exception GetClosedException()
@@ -612,6 +682,9 @@ namespace NaiveSocks
 
         [DllImport(LIBC, SetLastError = true)]
         public static extern int close([In]int fd);
+
+        [DllImport(LIBC, SetLastError = true)]
+        public static extern int shutdown(int sockfd, int how);
 
         [DllImport(LIBC, SetLastError = true)]
         public unsafe static extern int ioctl([In]int fd, [In]uint request, void* ptr);

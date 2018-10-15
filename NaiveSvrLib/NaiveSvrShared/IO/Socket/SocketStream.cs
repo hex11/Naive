@@ -28,11 +28,20 @@ namespace NaiveSocks
 
         public Socket Socket { get; }
 
-        public IntPtr Fd { get; }
+        public IntPtr Fd { get; private set; }
 
         public EPPair EPPair { get; }
 
-        public override string ToString() => $"{{Socket {EPPair.ToString()} {State.ToString()}{GetAdditionalString()}}}";
+        public override string ToString()
+        {
+            string v;
+            try {
+                v = GetAdditionalString();
+            } catch (Exception) {
+                v = " ERROR_GETTING_ADDITIONAL_STRING";
+            }
+            return $"{{Socket {EPPair.ToString()} {base.State.ToString()}{v}}}";
+        }
 
         public virtual string GetAdditionalString() => null;
 
@@ -40,6 +49,7 @@ namespace NaiveSocks
         {
             Logging.debug($"{this}: close");
             this.State = MyStreamState.Closed;
+            Fd = new IntPtr(-1);
             Socket.Close();
             return NaiveUtils.CompletedTask;
         }

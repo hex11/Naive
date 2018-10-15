@@ -107,6 +107,8 @@ namespace NaiveSocks
 
         private readonly int state;
 
+        public int Value => state;
+
         public static readonly MyStreamState Open = new MyStreamState(OPEN);
         public static readonly MyStreamState LocalShutdown = new MyStreamState(LOCAL_SHUTDOWN);
         public static readonly MyStreamState RemoteShutdown = new MyStreamState(REMOTE_SHUTDOWN);
