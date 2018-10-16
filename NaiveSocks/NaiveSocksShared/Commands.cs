@@ -391,6 +391,9 @@ namespace NaiveSocks
             cmdHub.AddCmdHandler(prefix + "ya-ls", cmd => {
                 void lsEpoller(Command c, Epoller e)
                 {
+                    var running = e.RunningHandler;
+                    if (running != null)
+                        cmd.WriteLine("running -> " + running);
                     foreach (var item in e.GetMap()) {
                         cmd.WriteLine(item.Key + " -> " + item.Value);
                     }

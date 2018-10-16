@@ -432,6 +432,8 @@ namespace NaiveSocks
 
         private int ep;
 
+        public IEpollHandler RunningHandler { get; private set; }
+
         private ReaderWriterLockSlim mapLock = new ReaderWriterLockSlim(LockRecursionPolicy.NoRecursion);
         private Dictionary<int, IEpollHandler> mapFdToHandler = new Dictionary<int, IEpollHandler>();
         private HashSet<int> fdCleanupList = new HashSet<int>();
@@ -599,9 +601,11 @@ namespace NaiveSocks
                         if (cleanedUp) {
                             Logger.warning($"EpollHandler cleaned up but handler found: ({i}/{eventCount}) fd={fd} [{eventType}] u64=[{e.u64:X}]");
                         }
+                        RunningHandler = handler;
                         handler.HandleEvent(this, fd, eventType);
                     }
                 }
+                RunningHandler = null;
                 mapLock.EnterWriteLock();
                 fdCleanupList.Clear();
                 mapLock.ExitWriteLock();
@@ -638,9 +642,11 @@ namespace NaiveSocks
                         if (cleanedUp) {
                             Logger.warning($"EpollHandler cleaned up but handler found: ({i}/{eventCount}) fd={fd} [{eventType}] u64=[{e.u64:X}]");
                         }
+                        RunningHandler = handler;
                         handler.HandleEvent(this, fd, eventType);
                     }
                 }
+                RunningHandler = null;
                 mapLock.EnterWriteLock();
                 fdCleanupList.Clear();
                 mapLock.ExitWriteLock();

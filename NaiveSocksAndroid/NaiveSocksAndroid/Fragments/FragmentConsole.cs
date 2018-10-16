@@ -16,6 +16,8 @@ using Naive.HttpSvr;
 using Android.Content;
 using Android.Views.InputMethods;
 using Android.Graphics;
+using System.Collections.Concurrent;
+using Naive.Console;
 
 namespace NaiveSocksAndroid
 {
@@ -25,6 +27,12 @@ namespace NaiveSocksAndroid
         private ScrollView scrollView;
         private TextView textView;
         private EditText editText;
+
+        ConsoleHub consoleHub;
+
+        BlockingCollection<string> inputLinesBuffer;
+
+        ConsoleProxy proxy;
 
         public FragmentConsole()
         {
@@ -64,7 +72,26 @@ namespace NaiveSocksAndroid
             scrollView.AddView(textView);
             linearLayout.AddView(scrollView);
             linearLayout.AddView(editText);
+
+            StartConsole();
+
             return linearLayout;
+        }
+
+        private void StartConsole()
+        {
+            inputLinesBuffer = new BlockingCollection<string>();
+            proxy = new ConsoleProxy(this);
+
+            consoleHub = new ConsoleHub();
+            Commands.AddCommands(consoleHub.CommandHub, MainActivity.Service.Controller, "");
+            new System.Threading.Thread(() => {
+                try {
+                    consoleHub.CommandHub.CmdLoop(proxy);
+                } catch (System.Exception e) {
+                    Logging.exception(e, Logging.Level.Warning, "ConsoleCmdLoop thread");
+                }
+            }) { Name = "ConsoleCmdLoop" }.Start();
         }
 
         bool scrollingPending;
@@ -84,11 +111,56 @@ namespace NaiveSocksAndroid
         public bool OnEditorAction(TextView v, [GeneratedEnum] ImeAction actionId, KeyEvent e)
         {
             if (actionId == ImeAction.Send) {
-                appendText("input: " + v.Text + "\n");
+                inputLinesBuffer.Add(v.Text);
                 v.Text = "";
                 return true;
             }
             return false;
+        }
+
+        public override void OnDestroy()
+        {
+            inputLinesBuffer.Add(null);
+            base.OnDestroy();
+        }
+
+        class ConsoleProxy : Naive.Console.CmdConsole
+        {
+            bool readEOF = false;
+
+            public ConsoleProxy(FragmentConsole con)
+            {
+                Con = con;
+            }
+
+            public FragmentConsole Con { get; }
+
+            public override string ReadLine()
+            {
+                if (readEOF) {
+                    throw new System.Exception("EOF");
+                }
+                var r = Con.inputLinesBuffer.Take();
+                if (r == null) {
+                    readEOF = true;
+                } else {
+                    WriteLineImpl(r);
+                }
+                return r;
+            }
+
+            protected override void WriteImpl(string text)
+            {
+                Con.textView.Post(() => {
+                    if (!Con.IsDetached)
+                        Con.appendText(text);
+                });
+            }
+
+            protected override void WriteLineImpl(string text)
+            {
+                WriteImpl(text + "\n");
+            }
         }
     }
 }
