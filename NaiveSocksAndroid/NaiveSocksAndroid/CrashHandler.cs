@@ -3,6 +3,7 @@ using Android.Util;
 using Naive.HttpSvr;
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading;
 
 namespace NaiveSocksAndroid
@@ -39,7 +40,10 @@ namespace NaiveSocksAndroid
                 }
                 nullOnInit = null;
             }
-            new LogFileWriter(Path.Combine(Android.App.Application.Context.CacheDir.AbsolutePath, "log.txt"), Logging.RootLogger).Start();
+            var timestamp = DateTime.Now.ToString("yyyyMMddTHHmmss_fff");
+            string cacheDir = Android.App.Application.Context.CacheDir.AbsolutePath;
+            var logsDir = Path.Combine(cacheDir, "logs");
+            new LogFileWriter(Path.Combine(logsDir, timestamp + ".txt"), Logging.RootLogger).Start();
             string sdcard = Android.OS.Environment.ExternalStorageDirectory.AbsolutePath;
             CrashLogFile = Path.Combine(sdcard, "NaiveUnhandledException.txt");
             ThreadPool.SetMinThreads(1, 1);
@@ -47,11 +51,25 @@ namespace NaiveSocksAndroid
             Logging.CustomRunningTimeImpl = AndroidGetRunningTime;
             Logging.Logged += Logging_Logged;
             Logging.info("Process PID=" + Android.OS.Process.MyPid());
+            DeleteOldLogs(logsDir);
             NaiveUtils.NoAsyncOnFileStream = true;
 
             var osArch = Java.Lang.JavaSystem.GetProperty("os.arch");
             Logging.info("os.arch = " + osArch);
             NaiveSocks.YASocket.isX86 = (osArch.StartsWith("x86") || osArch == "amd64");
+        }
+
+        private static void DeleteOldLogs(string logsDir)
+        {
+            if (Directory.Exists(logsDir)) {
+                var files = Directory.GetFiles(logsDir);
+                if (files.Length > 10) {
+                    foreach (var item in files.Take(files.Length - 10)) {
+                        Logging.info("deleting: " + item);
+                        File.Delete(item);
+                    }
+                }
+            }
         }
 
         static long processStartTime = -1;
