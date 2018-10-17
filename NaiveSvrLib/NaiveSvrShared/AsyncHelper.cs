@@ -558,6 +558,19 @@ namespace Naive.HttpSvr
 
         public AwaitableWrapper<T> CAF() => this;
 
+        /// <summary>
+        /// Incr by 1 or reset to 0.
+        /// </summary>
+        public AwaitableWrapper<T> SyncCounter(ref int counter)
+        {
+            if (this.IsCompleted) {
+                counter++;
+            } else {
+                counter = 0;
+            }
+            return this;
+        }
+
         private Exception WrongAwaitableType()
         {
             return new Exception("should not happend! awaitable=" + awaitable);
@@ -643,6 +656,19 @@ namespace Naive.HttpSvr
         }
 
         public AwaitableWrapper CAF() => this;
+
+        /// <summary>
+        /// Incr by 1 or reset to 0.
+        /// </summary>
+        public AwaitableWrapper SyncCounter(ref int counter)
+        {
+            if (this.IsCompleted) {
+                counter++;
+            } else {
+                counter = 0;
+            }
+            return this;
+        }
 
         private Exception WrongAwaitableType()
         {

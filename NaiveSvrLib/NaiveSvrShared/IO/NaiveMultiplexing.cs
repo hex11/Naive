@@ -229,8 +229,13 @@ namespace NaiveSocks
 
         private async Task MainReadLoop()
         {
+            int syncCount = 0;
             while (true) {
-                var r = await BaseStream.RecvMsgR(null).CAF();
+                if (syncCount > 64) {
+                    syncCount = 0;
+                    await Task.Yield();
+                }
+                Msg r = await BaseStream.RecvMsgR(null).SyncCounter(ref syncCount);
                 if (r.IsEOF)
                     throw new DisconnectedException("EOF Msg.");
                 var frame = Frame.unpack(this, r.Data);

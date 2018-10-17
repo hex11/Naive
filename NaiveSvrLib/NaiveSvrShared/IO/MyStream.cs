@@ -605,16 +605,21 @@ namespace NaiveSocks
                     buf = new BytesSegment();
                 }
                 try {
+                    int syncCounter = 0;
                     while (true) {
+                        if (syncCounter > 64) {
+                            syncCounter = 0;
+                            await Task.Yield();
+                        }
                         int read;
                         if (msgStream == null) {
                             if (TryReadSync && From is IMyStreamSync fromSync)
                                 read = fromSync.Read(buf);
                             else
-                                read = await From.ReadAsyncR(buf);
+                                read = await From.ReadAsyncR(buf).SyncCounter(ref syncCounter);
                         } else {
                             // no buffer preallocated for IMsgStream
-                            var msg = await msgStream.RecvMsgR(null);
+                            var msg = await msgStream.RecvMsgR(null).SyncCounter(ref syncCounter);
                             lastMsg = msg;
                             if (msg.IsEOF) {
                                 read = 0;
@@ -637,7 +642,7 @@ namespace NaiveSocks
                         if (TryWriteSync && To is IMyStreamSync toSync)
                             toSync.Write(new BytesSegment(buf.Bytes, buf.Offset, read));
                         else
-                            await To.WriteAsyncR(new BytesSegment(buf.Bytes, buf.Offset, read));
+                            await To.WriteAsyncR(new BytesSegment(buf.Bytes, buf.Offset, read)).SyncCounter(ref syncCounter);
                         CounterW?.Add(read);
                         lastMsg.TryRecycle();
                     }
