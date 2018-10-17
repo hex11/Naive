@@ -167,6 +167,13 @@ namespace Naive.HttpSvr
 
         public object Tag;
 
+        public string GetContinuationInfo()
+        {
+            if (_continuation == null)
+                return "(no continuation)";
+            return "[" + _continuation + ", " + _continuation_2 + "]";
+        }
+
         public static ReusableAwaiter<T> NewCompleted(T result)
         {
             return new ReusableAwaiter<T>() { IsCompleted = true, _result = result };

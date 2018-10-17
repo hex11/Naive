@@ -796,7 +796,7 @@ namespace NaiveSocks
         private void Close_NoLock()
         {
             if (State == StateEnum.EOFReceived) {
-                Shutdown_NoLock();
+                EnterClosing(true);
             } else {
                 ThrowIfClosingOrClosed();
                 EnterClosing(false);
