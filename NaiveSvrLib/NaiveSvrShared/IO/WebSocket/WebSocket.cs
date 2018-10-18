@@ -738,20 +738,25 @@ namespace Naive.HttpSvr
         Action<IMyStream, BytesSegment> readFullR_start;
 
 
-        ReusableAwaiter<VoidType> _readBaseAsync(int count)
+        AwaitableWrapper _readBaseAsync(int count)
         {
             return _readBaseAsync(BaseStream, _read_buf, 0, count);
         }
 
-        private ReusableAwaiter<VoidType> _readBaseAsync(IMyStream stream, byte[] buf, int count)
+        private AwaitableWrapper _readBaseAsync(IMyStream stream, byte[] buf, int count)
         {
             return _readBaseAsync(stream, buf, 0, count);
         }
 
-        private ReusableAwaiter<VoidType> _readBaseAsync(IMyStream stream, byte[] buf, int offset, int count)
+        private AwaitableWrapper _readBaseAsync(IMyStream stream, byte[] buf, int offset, int count)
         {
-            readFullR_start(BaseStream, new BytesSegment(buf, offset, count));
-            return readFullR;
+            var bs = new BytesSegment(buf, offset, count);
+            if (BaseStream is IMyStreamReadFullR imsrfr) {
+                return imsrfr.ReadFullAsyncR(bs);
+            } else {
+                readFullR_start(BaseStream, bs);
+                return new AwaitableWrapper(readFullR);
+            }
         }
 
         private byte[] concatBytes(byte[] a, byte[] b)

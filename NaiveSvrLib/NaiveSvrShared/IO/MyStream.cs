@@ -47,6 +47,11 @@ namespace NaiveSocks
         Task ReadFullAsync(BytesSegment bs);
     }
 
+    public interface IMyStreamReadFullR : IMyStream
+    {
+        AwaitableWrapper ReadFullAsyncR(BytesSegment bs);
+    }
+
     public interface IMyStreamBeginEnd : IMyStream
     {
         IAsyncResult BeginWrite(byte[] buffer, int offset, int count, AsyncCallback callback, object state);

@@ -10,7 +10,7 @@ using Naive.HttpSvr;
 
 namespace NaiveSocks
 {
-    public class YASocket : SocketStream, IEpollHandler
+    public class YASocket : SocketStream, IEpollHandler, IMyStreamReadFullR
     {
         public static bool isX86 = true;
         public static bool Debug = false;
@@ -44,6 +44,8 @@ namespace NaiveSocks
             var str = " fd=" + fd + "/" + fdR + (ava != 0 ? " avail=" + ava : null) + " lastEv=" + lastReadEvents;
             if (raRead.IsBeingListening)
                 str += " recving";
+            if (raReadFull.IsBeingListening)
+                str += " recvingF";
             if (raWrite.IsBeingListening)
                 str += " sending";
             if (ready)
@@ -73,27 +75,34 @@ namespace NaiveSocks
                     Logging.debugForce(this + ": event " + e);
                 if (s == GlobalEpoller) {
                     lastReadEvents = e;
-                    bool closingFdR = false;
-                    int r = 0;
-                    int errno = 0;
                     BytesSegment bs;
-                    bool operating;
-                    Exception ex = null;
+                    int readFull;
                     lock (raRead) {
                         bs = bufRead;
+                        readFull = readFullCount;
                         bufRead.ResetSelf();
                         ready = true;
                     }
-                    operating = bs.Bytes != null;
+                    bool operating = bs.Bytes != null;
+                    int r = 0;
+                    Exception ex = null;
+                    bool closingFdR = false;
                     if (operating) {
                         if (fdR == -1) {
                             ex = GetClosedException();
                             goto CALLBACK;
                         }
-                        r = ReadNonblocking(fdR, bs, out errno);
+                        var notFirstReading = false;
+                        goto READ;
+                        READAGAIN:
+                        ex = null;
+                        notFirstReading = true;
+                        READ:
+                        r = ReadNonblocking(fdR, bs, out var errno);
                         if (r < 0) {
                             if (errno == 11) {
-                                Logging.warning(this + ": EAGAIN after event " + e + ", ignored.");
+                                if (!notFirstReading)
+                                    Logging.warning(this + ": EAGAIN after event " + e + ", ignored.");
                                 bufRead = bs;
                                 return;
                             }
@@ -113,6 +122,15 @@ namespace NaiveSocks
                                     State |= MyStreamState.RemoteShutdown;
                                     closingFdR = true;
                                 }
+                                if (readFull > 0)
+                                    ex = new Exception($"EOF when ReadFull() count={readFull} pos={readFull - bs.Len}");
+                            } else { // r > 0
+                                if (readFull > 0) {
+                                    bs.SubSelf(r);
+                                    if (bs.Len > 0) {
+                                        goto READAGAIN;
+                                    }
+                                }
                             }
                         }
                     } else {
@@ -121,14 +139,16 @@ namespace NaiveSocks
                     if (HasFlag(e, EPOLL_EVENTS.ERR | EPOLL_EVENTS.HUP)) {
                         closingFdR = true;
                     }
-                    lock (raRead) {
-                        if (closingFdR && fdR != -1) {
-                            GlobalEpoller.RemoveFd(fdR);
-                            fdRAdded = false;
-                            fdR_Close_NoLock();
-                        }
-                        if (State.IsClosed) {
-                            TryCleanUp_NoLock();
+                    if (closingFdR || State.IsClosed) {
+                        lock (raRead) {
+                            if (closingFdR && fdR != -1) {
+                                GlobalEpoller.RemoveFd(fdR);
+                                fdRAdded = false;
+                                fdR_Close_NoLock();
+                            }
+                            if (State.IsClosed) {
+                                TryCleanUp_NoLock();
+                            }
                         }
                     }
                     CALLBACK:
@@ -136,11 +156,17 @@ namespace NaiveSocks
                         if (ex != null) {
                             if (Debug)
                                 Logging.debugForce(this + ": recv() async throws " + ex.Message);
-                            raRead.TrySetException(ex);
+                            if (readFull == 0)
+                                raRead.TrySetException(ex);
+                            else
+                                raReadFull.TrySetException(ex);
                         } else {
                             if (Debug)
                                 Logging.debugForce(this + ": recv() async " + r);
-                            raRead.TrySetResult(r);
+                            if (readFull == 0)
+                                raRead.TrySetResult(r);
+                            else
+                                raReadFull.TrySetResult(0);
                         }
                     }
                 } else if (s == GlobalEpollerW) {
@@ -264,7 +290,9 @@ namespace NaiveSocks
         }
 
         private ReusableAwaiter<int> raRead = new ReusableAwaiter<int>();
+        private ReusableAwaiter<VoidType> raReadFull = new ReusableAwaiter<VoidType>();
         private BytesSegment bufRead;
+        private int readFullCount;
 
         protected override unsafe int TryReadSync(BytesSegment bs)
         {
@@ -290,15 +318,12 @@ namespace NaiveSocks
         {
             if (Debug)
                 Logging.debugForce(this + ": ReadAsyncRImpl()");
+            if (bs.Len <= 0)
+                throw new ArgumentOutOfRangeException("bs.Len");
             bs.CheckAsParameter();
             lock (raRead) {
-                if (fdR == -1) {
-                    return new AwaitableWrapper<int>(base.SocketReadImpl(bs));
-                }
                 if (State.HasRemoteShutdown)
                     throw GetStateException();
-                if (raRead.Exception != null)
-                    throw raRead.Exception;
                 READ_AGAIN:
                 if (ready) {
                     var r = ReadNonblocking(bs);
@@ -313,11 +338,51 @@ namespace NaiveSocks
                     goto READ_AGAIN;
                 }
                 raRead.Reset();
+                readFullCount = 0;
                 bufRead = bs;
                 if (Debug)
                     Logging.debugForce(this + ": wait for epoll");
             }
             return new AwaitableWrapper<int>(raRead);
+        }
+
+        public override async Task ReadFullAsyncImpl(BytesSegment bs)
+        {
+            await ReadFullAsyncR(bs);
+            return;
+        }
+
+        public AwaitableWrapper ReadFullAsyncR(BytesSegment bs)
+        {
+            if (Debug)
+                Logging.debugForce(this + ": ReadFullAsyncR()");
+            if (bs.Len <= 0)
+                throw new ArgumentOutOfRangeException("bs.Len");
+            bs.CheckAsParameter();
+            lock (raRead) {
+                if (State.HasRemoteShutdown)
+                    throw GetStateException();
+                int r = 0;
+                READ_AGAIN:
+                if (ready) {
+                    r += ReadNonblocking(bs);
+                    if (r == bs.Len)
+                        return AwaitableWrapper.GetCompleted();
+                }
+                if (!fdRAdded) {
+                    fdRAdded = true;
+                    GlobalEpoller.AddFd(fdR, PollInEvents, this);
+                    // ensure the socket is not ready to read after AddFd, or events may never raise:
+                    ready = true;
+                    goto READ_AGAIN;
+                }
+                raReadFull.Reset();
+                readFullCount = bs.Len;
+                bufRead = bs.Sub(r);
+                if (Debug)
+                    Logging.debugForce(this + ": wait for epoll");
+            }
+            return new AwaitableWrapper(raReadFull);
         }
 
         private int ReadNonblocking(BytesSegment bs)
