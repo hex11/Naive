@@ -28,9 +28,6 @@
       android:targetPackage="naive.NaiveSocksAndroid"
       android:targetClass="naive.NaiveSocksAndroid.MainActivity"
       android:data="connections"/>
-    <!-- If your shortcut is associated with multiple intents, include them
-         here. The last intent in the list is what the user sees when they
-         launch this shortcut. -->
   </shortcut>
   <shortcut
     android:shortcutId="logs"
@@ -44,9 +41,18 @@
       android:targetPackage="naive.NaiveSocksAndroid"
       android:targetClass="naive.NaiveSocksAndroid.MainActivity"
       android:data="logs"/>
-    <!-- If your shortcut is associated with multiple intents, include them
-         here. The last intent in the list is what the user sees when they
-         launch this shortcut. -->
   </shortcut>
-  <!-- Specify more shortcuts here. -->
+  <shortcut
+    android:shortcutId="console"
+    android:enabled="true"
+    android:icon="@drawable/N"
+    android:shortcutShortLabel="@string/console"
+    android:shortcutLongLabel="@string/console"
+    android:shortcutDisabledMessage="@string/console">
+    <intent
+      android:action="android.intent.action.MAIN"
+      android:targetPackage="naive.NaiveSocksAndroid"
+      android:targetClass="naive.NaiveSocksAndroid.MainActivity"
+      android:data="console"/>
+  </shortcut>
 </shortcuts>

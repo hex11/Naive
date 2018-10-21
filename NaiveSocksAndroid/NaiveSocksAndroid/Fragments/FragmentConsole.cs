@@ -50,7 +50,7 @@ namespace NaiveSocksAndroid
             };
 
             textView = new TextView(this.Context) {
-                Text = "(Console WIP)\n",
+                Text = "",
                 Gravity = GravityFlags.Top,
                 LayoutParameters = new ViewGroup.LayoutParams(-1, -2),
                 Typeface = Typeface.Monospace,

@@ -52,6 +52,8 @@ namespace NaiveSocksAndroid
 
         public BgService Service => bgServiceConn?.Value;
 
+        static readonly string[] fragmentStrings = { "home", "logs", "connections", "adapters", "console" };
+
         private string AppName;
         private Java.Lang.ICharSequence JavaAppName;
 
@@ -157,15 +159,9 @@ namespace NaiveSocksAndroid
 
             //drawer.OpenDrawer(GravityCompat.Start);
 
-            int initNavIndex = 0;
-
-            if (this.Intent.DataString == "logs") {
-                initNavIndex = 1;
-            } else if (this.Intent.DataString == "connections") {
-                initNavIndex = 2;
-            } else if (this.Intent.DataString == "adapters") {
-                initNavIndex = 3;
-            }
+            int initNavIndex = Array.IndexOf(fragmentStrings, Intent.DataString);
+            if (initNavIndex == -1)
+                initNavIndex = 0;
 
             topView.Post(() => {
                 // User may have exited from this activity.
