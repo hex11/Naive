@@ -15,14 +15,16 @@ using Android.Support.V4.Widget;
 using R = NaiveSocksAndroid.Resource;
 using Naive.HttpSvr;
 using Android.Content;
+using Android.Text;
+using Android.Text.Style;
 
 namespace NaiveSocksAndroid
 {
     public class FragmentLogs : MyBaseFragment, ICanHandleMenu
     {
-        private ContextThemeWrapper logThemeWrapper;
-        private LinearLayout outputParent;
+        private TextView textView;
         private NestedScrollView outputParentScroll;
+        private SpannableStringBuilder ssb;
 
         private int menuItemId;
         private bool autoScroll = true;
@@ -32,12 +34,12 @@ namespace NaiveSocksAndroid
             if (this.Context == null)
                 throw new Exception("this.Context == null");
 
-            logThemeWrapper = new ContextThemeWrapper(this.Context, R.Style.LogTextView);
-
             var View = inflater.Inflate(R.Layout.logs, container, false);
 
-            outputParent = View.FindViewById<LinearLayout>(R.Id.logparent);
+            textView = View.FindViewById<TextView>(R.Id.logparent);
             outputParentScroll = View.FindViewById<NestedScrollView>(R.Id.logparentScroll);
+
+            ssb = new SpannableStringBuilder();
 
             return View;
         }
@@ -51,7 +53,7 @@ namespace NaiveSocksAndroid
                 for (int i = 0; i < logs.Length; i++) {
                     putLog(logs[i], false);
                 }
-                putText("========== end of log history ==========", true);
+                putText("========== end of log history ==========\n", true);
             }
         }
 
@@ -59,17 +61,20 @@ namespace NaiveSocksAndroid
         {
             base.OnStop();
             Logging.Logged -= Logging_Logged;
-            outputParent.RemoveAllViews();
+            ssb.Clear();
+            textView.SetText(ssb, TextView.BufferType.Spannable);
         }
 
         private void Logging_Logged(Logging.Log log)
         {
-            outputParent.Post(() => putLog(log, autoScroll));
+            textView.Post(() => putLog(log, autoScroll));
         }
 
         private void putLog(Logging.Log log, bool autoScroll)
         {
-            putText("[" + log.time.ToString("HH:mm:ss.fff") + " " + log.levelStr + "] " + log.text, autoScroll, getColorFromLevel(log.level));
+            putText("[" + log.time.ToString("HH:mm:ss.fff") + " " + log.levelStr + "]", false, getColorFromLevel(log.level));
+            putText(log.text, false);
+            putText("\n", autoScroll);
         }
 
         private Color? getColorFromLevel(Logging.Level level)
@@ -77,34 +82,41 @@ namespace NaiveSocksAndroid
             switch (level) {
             case Logging.Level.None:
             case Logging.Level.Debug:
-                return null;
+                return Color.Argb(30, 0, 0, 0);
             case Logging.Level.Info:
-                return Color.Argb(30, 0, 255, 0);
+                return Color.Argb(50, 0, 255, 0);
             case Logging.Level.Warning:
-                return Color.Argb(30, 255, 255, 0);
+                return Color.Argb(50, 255, 255, 0);
             case Logging.Level.Error:
             default:
-                return Color.Argb(30, 255, 0, 0);
+                return Color.Argb(50, 255, 0, 0);
             }
         }
 
-        bool scrollingPending;
+        bool opsPending;
+        bool scrollPending;
 
         private void putText(string text, bool autoScroll = true, Android.Graphics.Color? color = null)
         {
-            var tv = new TextView(logThemeWrapper);
-            tv.Text = text;
-            if (color != null)
-                tv.SetBackgroundColor(color.Value);
-            //autoScroll = autoScroll && !outputParentScroll.CanScrollVertically(0);
-            outputParent.AddView(tv);
-            tv.Dispose();
-            if (autoScroll && !scrollingPending) {
-                scrollingPending = true;
-                outputParentScroll.Post(() => {
-                    scrollingPending = false;
-                    outputParentScroll.FullScroll((int)FocusSearchDirection.Down);
-                });
+            if (color != null) {
+                ssb.Append(text, new BackgroundColorSpan(color.Value), SpanTypes.ExclusiveExclusive);
+            } else {
+                ssb.Append(text);
+            }
+            scrollPending |= autoScroll;
+            if (!opsPending) {
+                opsPending = true;
+                outputParentScroll.PostDelayed(() => {
+                    opsPending = false;
+                    textView.SetText(ssb, TextView.BufferType.Spannable);
+                    textView.RequestLayout();
+                    if (scrollPending) {
+                        scrollPending = false;
+                        outputParentScroll.Post(() => {
+                            outputParentScroll.FullScroll((int)FocusSearchDirection.Down);
+                        });
+                    }
+                }, 10);
             }
         }
 

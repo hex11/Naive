@@ -7,6 +7,7 @@ using System.Threading;
 using Android.Support.V4.App;
 using Android.OS;
 using Android.Runtime;
+using Android.Text;
 using Android.Util;
 using Android.Views;
 using Android.Widget;
@@ -18,6 +19,7 @@ using Android.Views.InputMethods;
 using Android.Graphics;
 using System.Collections.Concurrent;
 using Naive.Console;
+using Android.Text.Style;
 
 namespace NaiveSocksAndroid
 {
@@ -27,6 +29,8 @@ namespace NaiveSocksAndroid
         private ScrollView scrollView;
         private TextView textView;
         private EditText editText;
+
+        private SpannableStringBuilder ssb = new SpannableStringBuilder();
 
         ConsoleHub consoleHub;
 
@@ -57,12 +61,14 @@ namespace NaiveSocksAndroid
                 TextSize = 12,
             };
             textView.SetPadding(16, 16, 16, 16);
+            textView.SetBackgroundColor(Color.Black);
+            textView.SetTextColor(Color.LightGray);
 
             editText = new EditText(this.Context) {
                 Background = null,
                 LayoutParameters = new LinearLayout.LayoutParams(-1, -2, 0f),
                 Hint = "Input here",
-                InputType = Android.Text.InputTypes.ClassText
+                InputType = InputTypes.ClassText
             };
             editText.SetSingleLine();
             editText.ImeOptions = ImeAction.Send;
@@ -83,8 +89,14 @@ namespace NaiveSocksAndroid
             inputLinesBuffer = new BlockingCollection<string>();
             proxy = new ConsoleProxy(this);
 
+            var controller = MainActivity.Service.Controller;
+            if (controller == null) {
+                appendText("Cannot initialize console: the controller is not running. Please start the service and try again.\n", Color.Red);
+                return;
+            }
+
             consoleHub = new ConsoleHub();
-            Commands.AddCommands(consoleHub.CommandHub, MainActivity.Service.Controller, "");
+            Commands.AddCommands(consoleHub.CommandHub, controller, "");
             new System.Threading.Thread(() => {
                 try {
                     consoleHub.CommandHub.CmdLoop(proxy);
@@ -94,17 +106,25 @@ namespace NaiveSocksAndroid
             }) { Name = "ConsoleCmdLoop" }.Start();
         }
 
-        bool scrollingPending;
+        bool opsPending;
 
-        void appendText(string text)
+        void appendText(string text, Color? color = null)
         {
-            textView.Append(text);
-            if (!scrollingPending) {
-                scrollingPending = true;
-                scrollView.Post(() => {
-                    scrollingPending = false;
-                    scrollView.FullScroll(FocusSearchDirection.Down);
-                });
+            if (color == null) {
+                ssb.Append(text);
+            } else {
+                ssb.Append(text, new ForegroundColorSpan(color.Value), SpanTypes.ExclusiveExclusive);
+            }
+            if (!opsPending) {
+                opsPending = true;
+                scrollView.PostDelayed(() => {
+                    opsPending = false;
+                    textView.SetText(ssb, TextView.BufferType.Spannable);
+                    textView.RequestLayout();
+                    scrollView.Post(() => {
+                        scrollView.FullScroll(FocusSearchDirection.Down);
+                    });
+                }, 10);
             }
         }
 
@@ -151,9 +171,12 @@ namespace NaiveSocksAndroid
 
             protected override void WriteImpl(string text)
             {
+                var c = this.ForegroundColor32;
+                var color = CustomColorEnabled ? new Color(c.R, c.G, c.B, c.A) : (Color?)null;
                 Con.textView.Post(() => {
-                    if (!Con.IsDetached)
-                        Con.appendText(text);
+                    if (!Con.IsDetached) {
+                        Con.appendText(text, color);
+                    }
                 });
             }
 

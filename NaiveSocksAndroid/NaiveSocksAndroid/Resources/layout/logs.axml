@@ -6,10 +6,11 @@
     android:layout_height="match_parent"
     android:layout_weight="1"
     android:scrollbars="vertical"
+	android:fillViewport="true"
     app:layout_behavior="@string/appbar_scrolling_view_behavior"
     android:id="@+id/logparentScroll">
-    <LinearLayout
-        android:orientation="vertical"
+    <TextView
+		style="@style/LogTextView"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:padding="2sp"

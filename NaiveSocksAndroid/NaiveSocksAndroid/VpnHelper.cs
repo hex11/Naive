@@ -40,6 +40,8 @@ namespace NaiveSocksAndroid
         public string FakeDnsPrefix { get; set; } = "1.";
         public int DnsListenerCount { get; set; } = 1;
         public int DnsTtl { get; set; } = 30;
+        public int DnsCacheTtl { get; set; } = 120;
+        public bool DnsDebug { get; set; } = false;
 
         public string DnsGw { get; set; }
 
@@ -66,7 +68,13 @@ namespace NaiveSocksAndroid
         Dictionary<long, string> mapIpHost = new Dictionary<long, string>();
         ReaderWriterLockSlim mapLock = new ReaderWriterLockSlim();
 
-        Dictionary<string, long[]> mapHostIp = new Dictionary<string, long[]>();
+        Dictionary<string, MapHostIpValue> mapHostIp = new Dictionary<string, MapHostIpValue>();
+
+        struct MapHostIpValue
+        {
+            public long expire;
+            public long[] ipLongs;
+        }
 
         IDnsProvider dnsResolver;
         SocksInAdapter socksInAdapter;
@@ -243,14 +251,17 @@ namespace NaiveSocksAndroid
                 eventArgs.Response = r;
                 r.ReturnCode = ReturnCode.ServerFailure;
                 foreach (var item in q.Questions) {
+                    if (vpnConfig.DnsDebug)
+                        Logging.debugForce("DNS query: " + item);
                     if (item.RecordType == RecordType.A) {
                         var strName = item.Name.ToString();
                         strName = strName.Substring(0, strName.Length - 1); // remove the trailing '.'
                         IPAddress ip;
                         mapLock.EnterReadLock();
-                        bool exist = mapHostIp.TryGetValue(strName, out var ipLongs);
+                        bool exist = mapHostIp.TryGetValue(strName, out var val);
+                        var ipLongs = val.ipLongs;
                         mapLock.ExitReadLock();
-                        if (exist) {
+                        if (exist && val.expire > Logging.getRuntime()) {
                             ip = new IPAddress(ipLongs[NaiveUtils.Random.Next(ipLongs.Length)]);
                         } else {
                             if (dnsResolver == null) {
@@ -272,7 +283,10 @@ namespace NaiveSocksAndroid
                                     + " (" + (Logging.getRuntime() - startTime) + " ms)");
                             }
                             mapLock.EnterWriteLock();
-                            mapHostIp[strName] = ipLongs;
+                            mapHostIp[strName] = new MapHostIpValue {
+                                ipLongs = ipLongs,
+                                expire = Logging.getRuntime() + vpnConfig.DnsCacheTtl * 1000
+                            };
                             foreach (var ipLong in ipLongs) {
                                 mapIpHost[ipLong] = strName;
                             }
