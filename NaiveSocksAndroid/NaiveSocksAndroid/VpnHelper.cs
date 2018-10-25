@@ -20,6 +20,7 @@ using ARSoft.Tools.Net.Dns;
 using System.Net;
 using NaiveSocks;
 using System.Net.Sockets;
+using LiteDB;
 
 namespace NaiveSocksAndroid
 {
@@ -42,6 +43,7 @@ namespace NaiveSocksAndroid
         public int DnsTtl { get; set; } = 30;
         public int DnsCacheTtl { get; set; } = 120;
         public bool DnsDebug { get; set; } = false;
+        public bool DnsDomainDb { get; set; } = false;
 
         public string DnsGw { get; set; }
 
@@ -65,12 +67,10 @@ namespace NaiveSocksAndroid
 
         ParcelFileDescriptor pfd;
 
-        Dictionary<long, string> mapIpHost = new Dictionary<long, string>();
-        ReaderWriterLockSlim mapLock = new ReaderWriterLockSlim();
+        ICacheDomain cacheDomain;
+        ICacheIp cacheIp = new SimpleCacheIp();
 
-        Dictionary<string, MapHostIpValue> mapHostIp = new Dictionary<string, MapHostIpValue>();
-
-        struct MapHostIpValue
+        struct IpRecord
         {
             public long expire;
             public long[] ipLongs;
@@ -122,22 +122,19 @@ namespace NaiveSocksAndroid
             if (dnsResolver == null) {
                 Logging.warning("Fake DNS is enabled because no valid DNS resolver specified.");
             }
-            socksInAdapter.AddrMap = (x) => {
-                if (IPAddress.TryParse(x.Host, out var ip)) {
+            socksInAdapter.ConnectionFilter = (x) => {
+                if (IPAddress.TryParse(x.Dest.Host, out var ip)) {
                     bool isFake = dnsResolver == null && ip.ToString().StartsWith(ipPrefix);
-                    mapLock.EnterReadLock();
-                    try {
-                        if (mapIpHost.TryGetValue(ip.Address, out var host)) {
-                            x.Host = host;
-                        } else {
-                            if (isFake)
-                                Logging.warning("Fake DNS not found: " + ip);
-                        }
-                    } finally {
-                        mapLock.ExitReadLock();
+                    var host = cacheDomain.TryGetDomain(ip.Address);
+                    if (host != null) {
+                        x.Dest.Host = host;
+                        x.DestIp = ip;
+                    } else {
+                        if (isFake)
+                            Logging.warning("Fake DNS not found: " + ip);
                     }
                 }
-                return x;
+                return true;
             };
             Logging.info("VPN connections handler: " + socksInAdapter.QuotedName);
 
@@ -230,6 +227,12 @@ namespace NaiveSocksAndroid
 
         private void StartDnsServer()
         {
+            if (vpnConfig.DnsDomainDb) {
+                string dbPath = Path.Combine(Application.Context.CacheDir.AbsolutePath, "cache_domain.litedb");
+                cacheDomain = new NoSqlCacheDomain(dbPath);
+            } else {
+                cacheDomain = new SimpleCacheDomain();
+            }
             ipPrefix = vpnConfig.FakeDnsPrefix;
             dnsServer = new DnsServer(new IPEndPoint(IPAddress.Any, vpnConfig.LocalDnsPort), vpnConfig.DnsListenerCount, 0);
             dnsServer.ExceptionThrown += DnsServer_ExceptionThrown;
@@ -257,10 +260,8 @@ namespace NaiveSocksAndroid
                         var strName = item.Name.ToString();
                         strName = strName.Substring(0, strName.Length - 1); // remove the trailing '.'
                         IPAddress ip;
-                        mapLock.EnterReadLock();
-                        bool exist = mapHostIp.TryGetValue(strName, out var val);
+                        bool exist = cacheIp.TryGetIp(strName, out var val);
                         var ipLongs = val.ipLongs;
-                        mapLock.ExitReadLock();
                         if (exist && val.expire > Logging.getRuntime()) {
                             ip = new IPAddress(ipLongs[NaiveUtils.Random.Next(ipLongs.Length)]);
                         } else {
@@ -282,15 +283,11 @@ namespace NaiveSocksAndroid
                                 Logging.info("DNS: " + strName + " -> " + string.Join("|", ips.Where(x => x.AddressFamily == AddressFamily.InterNetwork))
                                     + " (" + (Logging.getRuntime() - startTime) + " ms)");
                             }
-                            mapLock.EnterWriteLock();
-                            mapHostIp[strName] = new MapHostIpValue {
+                            cacheIp.Set(strName, new IpRecord {
                                 ipLongs = ipLongs,
                                 expire = Logging.getRuntime() + vpnConfig.DnsCacheTtl * 1000
-                            };
-                            foreach (var ipLong in ipLongs) {
-                                mapIpHost[ipLong] = strName;
-                            }
-                            mapLock.ExitWriteLock();
+                            });
+                            cacheDomain.Set(ipLongs, strName);
                         }
                         r.AnswerRecords.Add(new ARecord(item.Name, vpnConfig.DnsTtl, ip));
                         r.ReturnCode = ReturnCode.NoError;
@@ -371,6 +368,131 @@ namespace NaiveSocksAndroid
                 }
             }
             startedProcesses.Clear();
+        }
+
+        interface ICacheIp
+        {
+            bool TryGetIp(string domain, out IpRecord val);
+            void Set(string domain, IpRecord val);
+        }
+
+        interface ICacheDomain
+        {
+            string TryGetDomain(long ip);
+            void Set(long ip, string domain);
+            void Set(long[] ips, string domain);
+        }
+
+        class SimpleCacheIp : ICacheIp
+        {
+            ReaderWriterLockSlim mapLock = new ReaderWriterLockSlim();
+            Dictionary<string, IpRecord> mapHostIp = new Dictionary<string, IpRecord>();
+
+            public void Set(string domain, IpRecord val)
+            {
+                if (domain == null)
+                    throw new ArgumentNullException(nameof(domain));
+
+                mapLock.EnterWriteLock();
+                mapHostIp[domain] = val;
+                mapLock.ExitWriteLock();
+            }
+
+            public bool TryGetIp(string domain, out IpRecord val)
+            {
+                if (domain == null)
+                    throw new ArgumentNullException(nameof(domain));
+
+                mapLock.EnterReadLock();
+                try {
+                    return mapHostIp.TryGetValue(domain, out val);
+                } finally {
+                    mapLock.ExitReadLock();
+                }
+            }
+        }
+
+        class SimpleCacheDomain : ICacheDomain
+        {
+            ReaderWriterLockSlim mapLock = new ReaderWriterLockSlim();
+            Dictionary<long, string> mapIpHost = new Dictionary<long, string>();
+
+            public void Set(long ip, string domain)
+            {
+                if (domain == null)
+                    throw new ArgumentNullException(nameof(domain));
+
+                mapLock.EnterWriteLock();
+                mapIpHost[ip] = domain;
+                mapLock.ExitWriteLock();
+            }
+
+            public void Set(long[] ips, string domain)
+            {
+                if (domain == null)
+                    throw new ArgumentNullException(nameof(domain));
+
+                mapLock.EnterWriteLock();
+                foreach (var item in ips) {
+                    mapIpHost[item] = domain;
+                }
+                mapLock.ExitWriteLock();
+            }
+
+            public string TryGetDomain(long ip)
+            {
+                mapLock.EnterReadLock();
+                try {
+                    if (mapIpHost.TryGetValue(ip, out var host))
+                        return host;
+                    return null;
+                } finally {
+                    mapLock.ExitReadLock();
+                }
+            }
+        }
+
+        class NoSqlCacheDomain : ICacheDomain
+        {
+            LiteDatabase liteDb;
+            LiteCollection<Record> collection;
+
+            public NoSqlCacheDomain(string dbPath)
+            {
+                liteDb = new LiteDatabase(dbPath);
+                collection = liteDb.GetCollection<Record>("dns_records");
+                collection.EnsureIndex(x => x.ip);
+            }
+
+            public void Set(long ip, string domain)
+            {
+                if (domain == null)
+                    throw new ArgumentNullException(nameof(domain));
+
+                collection.Insert(new Record { ip = ip, domain = domain });
+            }
+
+            public void Set(long[] ips, string domain)
+            {
+                foreach (var ip in ips) {
+                    Set(ip, domain);
+                }
+            }
+
+            public string TryGetDomain(long ip)
+            {
+                var bsonVal = new BsonValue(ip);
+                foreach (var item in collection.Find(Query.EQ("ip", bsonVal))) {
+                    return item.domain;
+                }
+                return null;
+            }
+
+            class Record
+            {
+                public long ip { get; set; }
+                public string domain { get; set; }
+            }
         }
 
         static class Native

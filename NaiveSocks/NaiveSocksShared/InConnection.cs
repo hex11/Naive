@@ -121,7 +121,11 @@ namespace NaiveSocks
             var addition = ((flags & ToStringFlags.AdditionFields) != 0) ? GetInfoStr() : null;
             if (addition != null)
                 sb.Append(' ').Append(addition);
-            sb.Append(' ').Append("dest=").Append(Dest);
+            sb.Append(' ').Append("dest=").Append(Dest.Host);
+            if (DestIp != null) {
+                sb.Append('(').Append(DestIp).Append(')');
+            }
+            sb.Append(':').Append(Dest.Port);
             if (ConnectResult != null) {
                 if (ConnectResult.Result == ConnectResultEnum.Conneceted)
                     sb.Append(' ').Append("(OK)");

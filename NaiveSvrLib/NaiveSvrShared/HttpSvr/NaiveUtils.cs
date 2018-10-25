@@ -1152,8 +1152,19 @@ namespace Naive.HttpSvr
 
     public struct AddrPort
     {
-        public string Host;
+        public string Host
+        {
+            get {
+                return HostObject?.ToString();
+            }
+            set {
+                HostObject = value;
+            }
+        }
+
         public int Port;
+
+        public object HostObject;
 
         public bool IsDefault => Host == default(string) && Port == default(int);
 
@@ -1183,7 +1194,7 @@ namespace Naive.HttpSvr
 
         public AddrPort(string host, int port)
         {
-            Host = host;
+            HostObject = host;
             Port = port;
         }
 
@@ -1296,7 +1307,7 @@ namespace Naive.HttpSvr
             for (int i = 0; i < strlen; i++) {
                 strbuf[i] = (char)buf[offset++];
             }
-            result.Host = new string(strbuf);
+            result.HostObject = new string(strbuf);
             result.Port = buf[offset++] << 8
                           | buf[offset++];
             return result;

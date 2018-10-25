@@ -15,7 +15,7 @@ namespace NaiveSocks
 
         public User[] users { get; set; }
 
-        public Func<AddrPort, AddrPort> AddrMap { get; set; }
+        public Func<InConnection, bool> ConnectionFilter { get; set; }
 
         public struct User
         {
@@ -88,8 +88,11 @@ namespace NaiveSocks
                     this.Dest.Host = s.TargetAddr;
                     this.Dest.Port = s.TargetPort;
                     this.DataStream = s.Stream;
-                    if (adapter.AddrMap != null) {
-                        this.Dest = adapter.AddrMap(this.Dest);
+                    if (adapter.ConnectionFilter != null) {
+                        if (!adapter.ConnectionFilter(this)) {
+                            MyStream.CloseWithTimeout(_stream).Forget();
+                            return;
+                        }
                     }
                     if (adapter.fastreply)
                         await OnConnectionResult(new ConnectResult(null, ConnectResultEnum.Conneceted)).CAF();
