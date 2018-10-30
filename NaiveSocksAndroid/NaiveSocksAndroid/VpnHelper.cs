@@ -231,8 +231,11 @@ namespace NaiveSocksAndroid
                 string dbPath = Path.Combine(Application.Context.CacheDir.AbsolutePath, "cache_domain.litedb");
                 cacheDomain = new NoSqlCacheDomain(dbPath);
             } else {
-                cacheDomain = new SimpleCacheDomain();
+                if (!(cacheDomain is SimpleCacheDomain)) {
+                    cacheDomain = new SimpleCacheDomain();
+                }
             }
+
             ipPrefix = vpnConfig.FakeDnsPrefix;
             dnsServer = new DnsServer(new IPEndPoint(IPAddress.Any, vpnConfig.LocalDnsPort), vpnConfig.DnsListenerCount, 0);
             dnsServer.ExceptionThrown += DnsServer_ExceptionThrown;
@@ -461,7 +464,7 @@ namespace NaiveSocksAndroid
             {
                 liteDb = new LiteDatabase(dbPath);
                 collection = liteDb.GetCollection<Record>("dns_records");
-                collection.EnsureIndex(x => x.ip);
+                collection.EnsureIndex("Ip");
             }
 
             public void Set(long ip, string domain)
@@ -469,7 +472,7 @@ namespace NaiveSocksAndroid
                 if (domain == null)
                     throw new ArgumentNullException(nameof(domain));
 
-                collection.Insert(new Record { ip = ip, domain = domain });
+                collection.Insert(new Record { Ip = ip, Domain = domain });
             }
 
             public void Set(long[] ips, string domain)
@@ -483,15 +486,16 @@ namespace NaiveSocksAndroid
             {
                 var bsonVal = new BsonValue(ip);
                 foreach (var item in collection.Find(Query.EQ("ip", bsonVal))) {
-                    return item.domain;
+                    return item.Domain;
                 }
                 return null;
             }
 
             class Record
             {
-                public long ip { get; set; }
-                public string domain { get; set; }
+                public int Id { get; set; }
+                public long Ip { get; set; }
+                public string Domain { get; set; }
             }
         }
 
