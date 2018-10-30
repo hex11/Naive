@@ -1,1 +1,1 @@
-﻿MONO_GC_PARAMS=bridge-implementation=old
+﻿MONO_GC_PARAMS=bridge-implementation=new
