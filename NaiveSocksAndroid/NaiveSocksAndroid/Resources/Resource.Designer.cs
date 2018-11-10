@@ -3873,7 +3873,7 @@ namespace NaiveSocksAndroid
 			public const int save_and_quit = 2131558470;
 			
 			// aapt resource value: 0x7f0d0047
-			public const int saveing_error = 2131558471;
+			public const int saving_error = 2131558471;
 			
 			// aapt resource value: 0x7f0d0013
 			public const int search_menu_title = 2131558419;

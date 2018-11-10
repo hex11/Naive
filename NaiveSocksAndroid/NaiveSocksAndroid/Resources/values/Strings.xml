@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
   <string name="app_name">NaiveSocks</string>
+  <string name="naivesocksandroid">NaiveSocksAndroid</string>
   <string name="drawer_open">Open navigation drawer</string>
   <string name="drawer_close">Close navigation drawer</string>
   <string name="toggle">Toggle</string>
@@ -30,5 +31,5 @@
   <string name="file_saved">File saved</string>
   <string name="press_again_to_quit">Press again to quit, or...</string>
   <string name="save_and_quit">Save and quit</string>
-  <string name="saveing_error">Error: </string>
+  <string name="saving_error">Error: </string>
 </resources>

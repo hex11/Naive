@@ -1,0 +1,35 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="app_name">ナイーブソックス</string>
+  <string name="naivesocksandroid">ﾅｲｰﾌﾞｿｯｸｽｱﾝﾄﾞﾛｲﾄﾞ</string>
+  <string name="drawer_open">ナビゲーション・ドロワーを開く</string>
+  <string name="drawer_close">ナビゲーション・ドロワーを閉じる</string>
+  <string name="toggle">トグル</string>
+  <string name="home">ホーム</string>
+  <string name="logs">ログ</string>
+  <string name="connections">接続</string>
+  <string name="adapters">アダプター</string>
+  <string name="console">コンソール</string>
+  <string name="start">開始</string>
+  <string name="stop">停止</string>
+  <string name="reload">リロード</string>
+  <string name="gc">GC</string>
+  <string name="autostart">自動起動</string>
+  <string name="editconfig">設定を編集...</string>
+  <string name="submenu_restart_kill">再起動/キル</string>
+  <string name="restart">再起動</string>
+  <string name="kill">キル！</string>
+  <string name="autoscroll">自動スクロール</string>
+  <string name="format_enabled">{0}は有効です</string>
+  <string name="format_disable">{0}は無効です</string>
+  <string name="format_starting">{0}は起動しています</string>
+  <string name="format_stopping">{0}は停止しています</string>
+  <string name="no_config">設定ファイルがありません</string>
+  <string name="config_editor">設定エディタ</string>
+  <string name="open">開く</string>
+  <string name="save">保存する</string>
+  <string name="file_saved">ファイルが保存されました</string>
+  <string name="press_again_to_quit">もう一度押すて終了します。または...</string>
+  <string name="save_and_quit">保存して終了する</string>
+  <string name="saving_error">エラー：</string>
+</resources>

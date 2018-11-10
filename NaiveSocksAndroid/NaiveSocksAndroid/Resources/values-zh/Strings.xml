@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="app_name">NaiveSocks</string>
+  <string name="naivesocksandroid">NaiveSocksAndroid</string>
+  <string name="drawer_open">打开抽屉</string>
+  <string name="drawer_close">关闭抽屉</string>
+  <string name="toggle">切换</string>
+  <string name="home">主页</string>
+  <string name="logs">日志</string>
+  <string name="connections">连接</string>
+  <string name="adapters">适配器</string>
+  <string name="console">控制台</string>
+  <string name="start">启动</string>
+  <string name="stop">停止</string>
+  <string name="reload">重载</string>
+  <string name="gc">GC</string>
+  <string name="autostart">自动启动</string>
+  <string name="editconfig">编辑配置...</string>
+  <string name="submenu_restart_kill">重启/杀死</string>
+  <string name="restart">重启</string>
+  <string name="kill">我杀我自己!</string>
+  <string name="autoscroll">自动滚动</string>
+  <string name="format_enabled">{0} 已启用</string>
+  <string name="format_disable">{0} 已禁用</string>
+  <string name="format_starting">{0} 正在启动</string>
+  <string name="format_stopping">{0} 正在停止</string>
+  <string name="no_config">无配置文件</string>
+  <string name="config_editor">配置编辑器</string>
+  <string name="open">打开</string>
+  <string name="save">保存</string>
+  <string name="file_saved">文件已保存</string>
+  <string name="press_again_to_quit">再按一次返回，或者...</string>
+  <string name="save_and_quit">保存并关闭</string>
+  <string name="saving_error">错误: </string>
+</resources>

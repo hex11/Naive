@@ -65,7 +65,7 @@ namespace NaiveSocksAndroid
                     var fileContent = File.ReadAllText(currentFilePath, Encoding.UTF8);
                     editText.Text = fileContent;
                 } catch (Exception e) {
-                    MakeSnackbar(Resources.GetString(R.String.saveing_error) + e.Message, Snackbar.LengthLong).Show();
+                    MakeSnackbar(Resources.GetString(R.String.saving_error) + e.Message, Snackbar.LengthLong).Show();
                 }
             } else {
                 currentFilePath = paths[0];
@@ -119,7 +119,7 @@ namespace NaiveSocksAndroid
             try {
                 File.WriteAllText(currentFilePath, editText.Text, NaiveUtils.UTF8Encoding);
             } catch (Exception e) {
-                MakeSnackbar(Resources.GetString(R.String.saveing_error) + e.Message, Snackbar.LengthShort).Show();
+                MakeSnackbar(Resources.GetString(R.String.saving_error) + e.Message, Snackbar.LengthShort).Show();
                 return false;
             }
             unsavedChanges = false;

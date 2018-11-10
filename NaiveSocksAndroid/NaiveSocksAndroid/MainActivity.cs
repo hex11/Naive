@@ -138,7 +138,7 @@ namespace NaiveSocksAndroid
                     var sb = new StringBuilder(64);
                     var pkgInfo = PackageManager.GetPackageInfo(PackageName, 0);
                     sb.Append(tv.Text).Append(" ").Append(BuildInfo.CurrentVersion);
-                    sb.Append("\n").Append("NaiveSocksAndroid ").Append(pkgInfo.VersionName).Append(" (").Append(pkgInfo.VersionCode).Append(")");
+                    sb.Append("\n").Append(GetString(R.String.naivesocksandroid)).Append(" ").Append(pkgInfo.VersionName).Append(" (").Append(pkgInfo.VersionCode).Append(")");
                     if (BuildInfo.CurrentBuildText != null) {
                         sb.Append("\n").Append(BuildInfo.CurrentBuildText);
                     }
@@ -258,21 +258,21 @@ namespace NaiveSocksAndroid
             Fragment frag = null;
             int itemId = menuItem.ItemId;
             switch (itemId) {
-            case R.Id.nav_home:
-                frag = new FragmentHome();
-                break;
-            case R.Id.nav_logs:
-                frag = new FragmentLogs();
-                break;
-            case R.Id.nav_connections:
-                frag = new FragmentConnections();
-                break;
-            case R.Id.nav_adapters:
-                frag = new FragmentAdapters();
-                break;
-            case R.Id.nav_console:
-                frag = new FragmentConsole();
-                break;
+                case R.Id.nav_home:
+                    frag = new FragmentHome();
+                    break;
+                case R.Id.nav_logs:
+                    frag = new FragmentLogs();
+                    break;
+                case R.Id.nav_connections:
+                    frag = new FragmentConnections();
+                    break;
+                case R.Id.nav_adapters:
+                    frag = new FragmentAdapters();
+                    break;
+                case R.Id.nav_console:
+                    frag = new FragmentConsole();
+                    break;
             }
             if (frag == null)
                 return;
