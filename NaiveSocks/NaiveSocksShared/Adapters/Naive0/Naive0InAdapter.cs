@@ -13,7 +13,7 @@ namespace NaiveSocks
     class Naive0InAdapter : InAdapterWithListener
     {
         public string key { get; set; }
-        public int timeout { get; set; } = 10;
+        public int timeout { get; set; } = 60;
 
         public bool per_session_iv { get; set; } = true;
 

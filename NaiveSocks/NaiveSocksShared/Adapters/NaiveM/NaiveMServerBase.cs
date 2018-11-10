@@ -11,8 +11,7 @@ namespace NaiveSocks
         internal List<NaiveMChannels> nmsList = new List<NaiveMChannels>();
         Dictionary<string, ImuxSession> imuxSessions = new Dictionary<string, ImuxSession>();
 
-
-        public int timeout { get; set; } = 30;
+        public int timeout { get; set; } = 60;
 
         public bool fastopen { get; set; } = true;
 
@@ -109,7 +108,7 @@ namespace NaiveSocks
                             }
                             await imux.WhenEnd.Task;
                             return;
-                            NO_AWAIT:;
+                        NO_AWAIT:;
                         } else {
                             msgStream = await HandleWebsocket(p, realKey, encryptType);
                         }
