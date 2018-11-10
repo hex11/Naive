@@ -28,6 +28,7 @@
   <string name="config_editor">Config Editor</string>
   <string name="open">Open</string>
   <string name="save">Save</string>
+  <string name="encode_decode">Encode/decode</string>
   <string name="file_saved">File saved</string>
   <string name="press_again_to_quit">Press again to quit, or...</string>
   <string name="save_and_quit">Save and quit</string>

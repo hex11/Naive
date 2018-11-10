@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Text;
 
@@ -80,10 +81,12 @@ namespace NaiveSocksAndroid
         }
 
         const int id_save = 2331;
+        const int id_encode = 2332;
 
         public override bool OnCreateOptionsMenu(IMenu menu)
         {
             menu.Add(Menu.None, id_save, Menu.None, R.String.save).SetShowAsAction(ShowAsAction.IfRoom);
+            menu.Add(Menu.None, id_encode, Menu.None, R.String.encode_decode).SetShowAsAction(ShowAsAction.Never);
             return true;
         }
 
@@ -98,6 +101,12 @@ namespace NaiveSocksAndroid
         public override void OnBackPressed()
         {
             if (unsavedChanges && lastSnackbar?.IsShown != true) {
+                try {
+                    TryDecode(out _);
+                } catch (Exception e) {
+                    Logging.exception(e, Logging.Level.Error, "OnBackPressed() decoding");
+                    MakeSnackbar(Resources.GetString(R.String.saving_error) + e.Message, Snackbar.LengthShort).Show();
+                }
                 lastSnackbar = MakeSnackbar(R.String.press_again_to_quit, Snackbar.LengthShort);
                 lastSnackbar.SetAction(R.String.save_and_quit, (x) => { if (Save()) Finish(); })
                     .Show();
@@ -110,6 +119,17 @@ namespace NaiveSocksAndroid
         {
             if (item.ItemId == id_save) {
                 Save();
+                return true;
+            } else if (item.ItemId == id_encode) {
+                try {
+                    if (!TryDecode(out var text)) {
+                        Encode(text);
+                    }
+                } catch (Exception e) {
+                    Logging.exception(e, Logging.Level.Error, "config editor decoding/encoding");
+                    MakeSnackbar(Resources.GetString(R.String.saving_error) + e.Message, Snackbar.LengthShort).Show();
+                }
+                return true;
             }
             return base.OnOptionsItemSelected(item);
         }
@@ -117,14 +137,48 @@ namespace NaiveSocksAndroid
         private bool Save()
         {
             try {
-                File.WriteAllText(currentFilePath, editText.Text, NaiveUtils.UTF8Encoding);
+                TryDecode(out var text);
+                File.WriteAllText(currentFilePath, text, NaiveUtils.UTF8Encoding);
             } catch (Exception e) {
+                Logging.exception(e, Logging.Level.Error, "config editor saving");
                 MakeSnackbar(Resources.GetString(R.String.saving_error) + e.Message, Snackbar.LengthShort).Show();
                 return false;
             }
             unsavedChanges = false;
             MakeSnackbar(R.String.file_saved, Snackbar.LengthLong).Show();
             return true;
+        }
+
+        const string Base64GzTag = "#base64gz\n";
+
+        private bool TryDecode(out string result)
+        {
+            result = editText.Text;
+            if (result.StartsWith(Base64GzTag)) {
+                byte[] bytes = Convert.FromBase64String(result.Substring(Base64GzTag.Length));
+                using (var gz = new GZipStream(new MemoryStream(bytes, false), CompressionMode.Decompress)) {
+                    result = gz.ReadAllText();
+                }
+                editText.Text = result;
+                return true;
+            }
+            return false;
+        }
+
+        private void Encode(string text)
+        {
+            var srcBytes = NaiveUtils.GetUTF8Bytes_AllocFromPool(text);
+            byte[] gzBytes;
+            int len;
+            using (var ms = new MemoryStream()) {
+                using (var gz = new GZipStream(ms, CompressionLevel.Optimal, true)) {
+                    gz.Write(srcBytes);
+                    BufferPool.GlobalPut(srcBytes.Bytes);
+                }
+                gzBytes = ms.GetBuffer();
+                len = (int)ms.Length;
+            }
+            editText.Text = Base64GzTag + Convert.ToBase64String(gzBytes, 0, len);
         }
     }
 }

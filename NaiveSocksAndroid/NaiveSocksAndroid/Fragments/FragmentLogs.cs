@@ -122,7 +122,7 @@ namespace NaiveSocksAndroid
 
         public void OnCreateMenu(IMenu menu)
         {
-            var menuItem = menu.Add(0, menuItemId = 114514, 0, "Autoscroll");
+            var menuItem = menu.Add(0, menuItemId = 114514, 0, R.String.autoscroll);
             menuItem.SetCheckable(true);
             menuItem.SetShowAsAction(ShowAsAction.Always | ShowAsAction.WithText);
             menuItem.SetChecked(autoScroll);

@@ -3770,8 +3770,8 @@ namespace NaiveSocksAndroid
 			// aapt resource value: 0x7f0d0012
 			public const int abc_toolbar_collapse_description = 2131558418;
 			
-			// aapt resource value: 0x7f0d0030
-			public const int adapters = 2131558448;
+			// aapt resource value: 0x7f0d0031
+			public const int adapters = 2131558449;
 			
 			// aapt resource value: 0x7f0d0029
 			public const int app_name = 2131558441;
@@ -3779,11 +3779,11 @@ namespace NaiveSocksAndroid
 			// aapt resource value: 0x7f0d0020
 			public const int appbar_scrolling_view_behavior = 2131558432;
 			
-			// aapt resource value: 0x7f0d003b
-			public const int autoscroll = 2131558459;
+			// aapt resource value: 0x7f0d003c
+			public const int autoscroll = 2131558460;
 			
-			// aapt resource value: 0x7f0d0036
-			public const int autostart = 2131558454;
+			// aapt resource value: 0x7f0d0037
+			public const int autostart = 2131558455;
 			
 			// aapt resource value: 0x7f0d0021
 			public const int bottom_sheet_behavior = 2131558433;
@@ -3791,56 +3791,62 @@ namespace NaiveSocksAndroid
 			// aapt resource value: 0x7f0d0022
 			public const int character_counter_pattern = 2131558434;
 			
-			// aapt resource value: 0x7f0d0041
-			public const int config_editor = 2131558465;
+			// aapt resource value: 0x7f0d0042
+			public const int config_editor = 2131558466;
 			
-			// aapt resource value: 0x7f0d002f
-			public const int connections = 2131558447;
+			// aapt resource value: 0x7f0d0030
+			public const int connections = 2131558448;
 			
-			// aapt resource value: 0x7f0d0031
-			public const int console = 2131558449;
+			// aapt resource value: 0x7f0d0032
+			public const int console = 2131558450;
+			
+			// aapt resource value: 0x7f0d002c
+			public const int drawer_close = 2131558444;
 			
 			// aapt resource value: 0x7f0d002b
-			public const int drawer_close = 2131558443;
+			public const int drawer_open = 2131558443;
 			
-			// aapt resource value: 0x7f0d002a
-			public const int drawer_open = 2131558442;
+			// aapt resource value: 0x7f0d0038
+			public const int editconfig = 2131558456;
 			
-			// aapt resource value: 0x7f0d0037
-			public const int editconfig = 2131558455;
+			// aapt resource value: 0x7f0d0045
+			public const int encode_decode = 2131558469;
 			
-			// aapt resource value: 0x7f0d0044
-			public const int file_saved = 2131558468;
-			
-			// aapt resource value: 0x7f0d003d
-			public const int format_disable = 2131558461;
-			
-			// aapt resource value: 0x7f0d003c
-			public const int format_enabled = 2131558460;
+			// aapt resource value: 0x7f0d0046
+			public const int file_saved = 2131558470;
 			
 			// aapt resource value: 0x7f0d003e
-			public const int format_starting = 2131558462;
+			public const int format_disable = 2131558462;
+			
+			// aapt resource value: 0x7f0d003d
+			public const int format_enabled = 2131558461;
 			
 			// aapt resource value: 0x7f0d003f
-			public const int format_stopping = 2131558463;
-			
-			// aapt resource value: 0x7f0d0035
-			public const int gc = 2131558453;
-			
-			// aapt resource value: 0x7f0d002d
-			public const int home = 2131558445;
-			
-			// aapt resource value: 0x7f0d003a
-			public const int kill = 2131558458;
-			
-			// aapt resource value: 0x7f0d002e
-			public const int logs = 2131558446;
+			public const int format_starting = 2131558463;
 			
 			// aapt resource value: 0x7f0d0040
-			public const int no_config = 2131558464;
+			public const int format_stopping = 2131558464;
 			
-			// aapt resource value: 0x7f0d0042
-			public const int open = 2131558466;
+			// aapt resource value: 0x7f0d0036
+			public const int gc = 2131558454;
+			
+			// aapt resource value: 0x7f0d002e
+			public const int home = 2131558446;
+			
+			// aapt resource value: 0x7f0d003b
+			public const int kill = 2131558459;
+			
+			// aapt resource value: 0x7f0d002f
+			public const int logs = 2131558447;
+			
+			// aapt resource value: 0x7f0d002a
+			public const int naivesocksandroid = 2131558442;
+			
+			// aapt resource value: 0x7f0d0041
+			public const int no_config = 2131558465;
+			
+			// aapt resource value: 0x7f0d0043
+			public const int open = 2131558467;
 			
 			// aapt resource value: 0x7f0d0023
 			public const int password_toggle_content_description = 2131558435;
@@ -3857,41 +3863,41 @@ namespace NaiveSocksAndroid
 			// aapt resource value: 0x7f0d0027
 			public const int path_password_strike_through = 2131558439;
 			
-			// aapt resource value: 0x7f0d0045
-			public const int press_again_to_quit = 2131558469;
-			
-			// aapt resource value: 0x7f0d0034
-			public const int reload = 2131558452;
-			
-			// aapt resource value: 0x7f0d0039
-			public const int restart = 2131558457;
-			
-			// aapt resource value: 0x7f0d0043
-			public const int save = 2131558467;
-			
-			// aapt resource value: 0x7f0d0046
-			public const int save_and_quit = 2131558470;
-			
 			// aapt resource value: 0x7f0d0047
-			public const int saving_error = 2131558471;
+			public const int press_again_to_quit = 2131558471;
+			
+			// aapt resource value: 0x7f0d0035
+			public const int reload = 2131558453;
+			
+			// aapt resource value: 0x7f0d003a
+			public const int restart = 2131558458;
+			
+			// aapt resource value: 0x7f0d0044
+			public const int save = 2131558468;
+			
+			// aapt resource value: 0x7f0d0048
+			public const int save_and_quit = 2131558472;
+			
+			// aapt resource value: 0x7f0d0049
+			public const int saving_error = 2131558473;
 			
 			// aapt resource value: 0x7f0d0013
 			public const int search_menu_title = 2131558419;
 			
-			// aapt resource value: 0x7f0d0032
-			public const int start = 2131558450;
+			// aapt resource value: 0x7f0d0033
+			public const int start = 2131558451;
 			
 			// aapt resource value: 0x7f0d0028
 			public const int status_bar_notification_info_overflow = 2131558440;
 			
-			// aapt resource value: 0x7f0d0033
-			public const int stop = 2131558451;
+			// aapt resource value: 0x7f0d0034
+			public const int stop = 2131558452;
 			
-			// aapt resource value: 0x7f0d0038
-			public const int submenu_restart_kill = 2131558456;
+			// aapt resource value: 0x7f0d0039
+			public const int submenu_restart_kill = 2131558457;
 			
-			// aapt resource value: 0x7f0d002c
-			public const int toggle = 2131558444;
+			// aapt resource value: 0x7f0d002d
+			public const int toggle = 2131558445;
 			
 			// aapt resource value: 0x7f0d0000
 			public const int ws_action_drawer_content_description = 2131558400;
