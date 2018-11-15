@@ -159,6 +159,7 @@ namespace NaiveSocksAndroid
                     this.SetBackgroundColor(Color.Argb(conn.IsFinished ? 15 : 30, 255, 255, 0));
 
                 sb.Clear();
+                sb.Append('#').Append(conn.Id).Append(' ');
                 conn.ToString(sb, InConnection.ToStringFlags.None);
                 sb.AppendLine();
                 sb.Append(conn.GetInfoStr());
@@ -169,6 +170,10 @@ namespace NaiveSocksAndroid
                 var adap = conn.ConnectResult?.Adapter;
                 if (adap != null)
                     sb.Append(" -> '").Append(adap.Name).Append("'");
+                var outStream = conn.ConnectResult?.Stream;
+                if (outStream != null) {
+                    sb.Append("\n-> " + outStream.ToString());
+                }
                 tv2.Text = sb.ToString();
             }
 

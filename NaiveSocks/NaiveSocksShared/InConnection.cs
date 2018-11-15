@@ -74,7 +74,8 @@ namespace NaiveSocks
 
         public async Task HandleAndPutStream(IAdapter outAdapter, IMyStream stream, Task waitForReadFromStream = null)
         {
-            var thisStream = await HandleAndGetStream(outAdapter);
+            var result = new ConnectResult(outAdapter, ConnectResultEnum.Conneceted) { Stream = stream };
+            var thisStream = await HandleAndGetStream(result);
             var copier = new MyStream.TwoWayCopier(stream, thisStream) {
                 WhenCanReadFromLeft = waitForReadFromStream,
                 Logger = new Logger("->" + outAdapter.Name, InAdapter.GetAdapter().Logger)
@@ -101,7 +102,8 @@ namespace NaiveSocks
             Bytes = 4,
             OutAdapter = 8,
             Id = 16,
-            All = AdditionFields | Time | Bytes | OutAdapter | Id,
+            OutStream = 32,
+            All = AdditionFields | Time | Bytes | OutAdapter | Id | OutStream,
             Default = All
         }
 
@@ -127,12 +129,16 @@ namespace NaiveSocks
             }
             sb.Append(':').Append(Dest.Port);
             if (ConnectResult != null) {
-                if (ConnectResult.Result == ConnectResultEnum.Conneceted)
+                if (ConnectResult.Result == ConnectResultEnum.Conneceted) {
                     sb.Append(' ').Append("(OK)");
-                else if (ConnectResult.Result == ConnectResultEnum.Failed)
+                    if ((flags & ToStringFlags.OutStream) != 0 && ConnectResult.Stream != null) {
+                        sb.Append("->").Append(ConnectResult.Stream);
+                    }
+                } else if (ConnectResult.Result == ConnectResultEnum.Failed) {
                     sb.Append(' ').Append("(FAIL)");
-                else if (ConnectResult.IsRedirected)
+                } else if (ConnectResult.IsRedirected) {
                     sb.Append(' ').Append("(REDIR->'").Append(ConnectResult.Redirected.Adapter?.Name).Append("')");
+                }
             }
             if (IsStoppingRequested)
                 sb.Append(' ').Append("(STOPPING)");

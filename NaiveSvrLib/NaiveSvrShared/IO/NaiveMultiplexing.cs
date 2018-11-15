@@ -900,7 +900,7 @@ namespace NaiveSocks
         public override string ToString()
         {
             var chname = Id == NaiveMultiplexing.ReservedId ? "Rsv" : Id.ToString();
-            return "{{#" + Parent?.Id + "ch" + chname + " R/W=" + CounterR + "/" + CounterW + (queuedSize > 0 ? " queued=" + queuedSize : null) + " " + State + "}}";
+            return "{#" + Parent?.Id + "ch" + chname + " R/W=" + CounterR + "/" + CounterW + (queuedSize > 0 ? " queued=" + queuedSize : null) + " " + State + "}";
         }
 
         public void Dispose()

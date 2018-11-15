@@ -103,7 +103,12 @@ namespace NaiveSocks
                     foreach (var item in arr) {
                         if (item.IsHandled) {
                             sb.Clear();
-                            item.ToString(sb, InConnection.ToStringFlags.Default & ~InConnection.ToStringFlags.Bytes & ~InConnection.ToStringFlags.AdditionFields & ~InConnection.ToStringFlags.OutAdapter);
+                            var flags = InConnection.ToStringFlags.Default
+                                & ~InConnection.ToStringFlags.Bytes
+                                & ~InConnection.ToStringFlags.AdditionFields
+                                & ~InConnection.ToStringFlags.OutAdapter
+                                & ~InConnection.ToStringFlags.OutStream;
+                            item.ToString(sb, flags);
                             command.Write(sb.ToString());
                             if (item.ConnectResult?.Adapter != null) {
                                 con.Write(" -> '" + item.ConnectResult.Adapter.Name + "'", ConsoleColor.Cyan);
@@ -111,7 +116,11 @@ namespace NaiveSocks
                             var rw = item.BytesCountersRW;
                             con.Write("\n R=" + rw.R, ConsoleColor.Green);
                             con.Write(" W=" + rw.W + " ", ConsoleColor.Yellow);
-                            con.Write(item.GetInfoStr() + "\n", ConsoleColor.DarkGray);
+                            con.Write(item.GetInfoStr(), ConsoleColor.DarkGray);
+                            IMyStream outStream = item.ConnectResult?.Stream;
+                            if (outStream != null) {
+                                con.Write(" -> " + outStream.ToString() + "\n", ConsoleColor.Cyan);
+                            }
                         } else {
                             command.Console.Write(item + "\n", ConsoleColor.Yellow);
                         }
@@ -319,19 +328,19 @@ namespace NaiveSocks
                 var keep = true;
                 var pingEnabled = false;
                 switch (cmd.ArgOrNull(0)) {
-                case "start":
-                    pingEnabled = true;
-                    break;
-                case "stop":
-                    pingEnabled = false;
-                    break;
-                case null:
-                    keep = false;
-                    break;
-                default:
-                    cmd.WriteLine($"wrong argument '{cmd.ArgOrNull(0)}'");
-                    cmd.statusCode = 1;
-                    return;
+                    case "start":
+                        pingEnabled = true;
+                        break;
+                    case "stop":
+                        pingEnabled = false;
+                        break;
+                    case null:
+                        keep = false;
+                        break;
+                    default:
+                        cmd.WriteLine($"wrong argument '{cmd.ArgOrNull(0)}'");
+                        cmd.statusCode = 1;
+                        return;
                 }
                 if (keep) {
                     cmd.WriteLine(pingEnabled ? "start ping" : "stop ping");
@@ -792,19 +801,19 @@ namespace NaiveSocks
         {
             ConsoleColor color;
             switch (item.level) {
-            default:
-            case Logging.Level.None:
-                color = ConsoleColor.Gray;
-                break;
-            case Logging.Level.Info:
-                color = ConsoleColor.White;
-                break;
-            case Logging.Level.Warning:
-                color = ConsoleColor.Yellow;
-                break;
-            case Logging.Level.Error:
-                color = ConsoleColor.Red;
-                break;
+                default:
+                case Logging.Level.None:
+                    color = ConsoleColor.Gray;
+                    break;
+                case Logging.Level.Info:
+                    color = ConsoleColor.White;
+                    break;
+                case Logging.Level.Warning:
+                    color = ConsoleColor.Yellow;
+                    break;
+                case Logging.Level.Error:
+                    color = ConsoleColor.Red;
+                    break;
             }
             con.ForegroundColor = color;
             con.Write(item.timestamp);
