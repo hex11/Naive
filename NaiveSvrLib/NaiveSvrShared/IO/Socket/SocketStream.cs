@@ -347,18 +347,7 @@ namespace NaiveSocks
             if (osPlatform == PlatformID.Unix) {
                 underlyingReadImpl = (s, bs) => {
                     bs.CheckAsParameter();
-                    unsafe {
-                        int r;
-                        fixed (byte* ptr = bs.Bytes) {
-                            r = (int)unix_read((int)s.Fd, ptr + bs.Offset, (IntPtr)bs.Len);
-                            // TODO: Handle errors
-                        }
-                        if (r < 0) {
-                            var errCode = Marshal.GetLastWin32Error();
-                            throw new SocketException(errCode);
-                        }
-                        return r;
-                    }
+                    return LinuxNative.RecvToBsThrows((int)s.Fd, bs, 0);
                 };
             } else if (osPlatform == PlatformID.Win32NT) {
                 underlyingReadImpl = (s, bs) => {

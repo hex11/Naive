@@ -92,16 +92,16 @@ namespace NaiveSocks
                             ex = GetClosedException();
                             goto CALLBACK;
                         }
-                        var notFirstReading = false;
+                        var firstReading = true;
                         goto READ;
-                        READAGAIN:
+                    READAGAIN:
                         ex = null;
-                        notFirstReading = true;
-                        READ:
+                        firstReading = false;
+                    READ:
                         r = ReadNonblocking(fdR, bs, out var errno);
                         if (r < 0) {
                             if (errno == 11) {
-                                if (!notFirstReading)
+                                if (firstReading)
                                     Logging.warning(this + ": EAGAIN after event " + e + ", ignored.");
                                 bufRead = bs;
                                 return;
@@ -123,7 +123,7 @@ namespace NaiveSocks
                                     closingFdR = true;
                                 }
                                 if (readFull > 0)
-                                    ex = new Exception($"EOF when ReadFull() count={readFull} pos={readFull - bs.Len}");
+                                    ex = GetReadFullException(readFull, readFull - bs.Len);
                             } else { // r > 0
                                 if (readFull > 0) {
                                     bs.SubSelf(r);
@@ -151,7 +151,7 @@ namespace NaiveSocks
                             }
                         }
                     }
-                    CALLBACK:
+                CALLBACK:
                     if (operating) {
                         if (ex != null) {
                             if (Debug)
@@ -304,8 +304,9 @@ namespace NaiveSocks
                     return base.SocketReadImpl(bs);
                 }
                 if (ready) { // double checking
+                    bs.CheckAsParameter();
                     var r = ReadNonblocking(bs);
-                    if (r > 0)
+                    if (r >= 0)
                         return r;
                 }
             }
@@ -327,7 +328,7 @@ namespace NaiveSocks
                 READ_AGAIN:
                 if (ready) {
                     var r = ReadNonblocking(bs);
-                    if (r > 0)
+                    if (r != -1) // success or EOF.
                         return new AwaitableWrapper<int>(r);
                 }
                 if (!fdRAdded) {
@@ -363,9 +364,15 @@ namespace NaiveSocks
                 if (State.HasRemoteShutdown)
                     throw GetStateException();
                 int r = 0;
-                READ_AGAIN:
+            READ_AGAIN:
                 if (ready) {
-                    r += ReadNonblocking(bs);
+                    var syncR = ReadNonblocking(bs);
+                    if (syncR == 0) {
+                        throw GetReadFullException(bs.Len, r);
+                        // or it will hang.
+                    } else if (syncR > 0) {
+                        r += syncR;
+                    }
                     if (r == bs.Len)
                         return AwaitableWrapper.GetCompleted();
                 }
@@ -396,7 +403,7 @@ namespace NaiveSocks
                 if (Debug)
                     Logging.debugForce(this + ": EAGAIN");
                 ready = false;
-                return 0;
+                return -1;
             } else {
                 if (Debug)
                     Logging.debugForce(this + ": recv() throws " + errno);
@@ -413,6 +420,7 @@ namespace NaiveSocks
 
         protected override int SocketReadImpl(BytesSegment bs)
         {
+            bs.CheckAsParameter();
             int fdRsync;
             lock (raRead) {
                 var r = ReadNonblocking(fdR, bs, out var errno);
@@ -438,20 +446,20 @@ namespace NaiveSocks
                 int how;
                 MyStreamState flag;
                 switch (direction) {
-                case SocketShutdown.Receive:
-                    how = 0;
-                    flag = MyStreamState.RemoteShutdown;
-                    break;
-                case SocketShutdown.Send:
-                    how = 1;
-                    flag = MyStreamState.LocalShutdown;
-                    break;
-                case SocketShutdown.Both:
-                    how = 2;
-                    flag = MyStreamState.Closed;
-                    break;
-                default:
-                    throw new ArgumentOutOfRangeException(nameof(direction));
+                    case SocketShutdown.Receive:
+                        how = 0;
+                        flag = MyStreamState.RemoteShutdown;
+                        break;
+                    case SocketShutdown.Send:
+                        how = 1;
+                        flag = MyStreamState.LocalShutdown;
+                        break;
+                    case SocketShutdown.Both:
+                        how = 2;
+                        flag = MyStreamState.Closed;
+                        break;
+                    default:
+                        throw new ArgumentOutOfRangeException(nameof(direction));
                 }
                 if ((State.Value | flag.Value) != State.Value) {
                     State |= flag;
@@ -497,6 +505,11 @@ namespace NaiveSocks
         private Exception GetStateException()
         {
             return new Exception("Socket state: " + State);
+        }
+
+        private static Exception GetReadFullException(int count, int pos)
+        {
+            return new Exception($"EOF when ReadFull() count={count} pos={pos}");
         }
 
         public static Epoller GlobalEpoller => LazyGlobalEpoller.Value;
