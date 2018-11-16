@@ -59,11 +59,17 @@ namespace NaiveSocksAndroid
             var controller = Controller;
             if (controller != null) {
                 lock (controller.InConnectionsLock) {
+                    MainActivity.SetTitle(GetString(R.String.connections)
+                        + " [" + controller.RunningConnections
+                        + "/" + controller.TotalFailedConnections
+                        + "/" + controller.TotalHandledConnections
+                        + "]");
                     var conns = controller.InConnections;
                     CheckListChanges(conns);
                     UpdateItemViews();
                 }
             } else {
+                MainActivity.SetTitle(GetString(R.String.connections) + " [no controller]");
                 Clear();
             }
         }

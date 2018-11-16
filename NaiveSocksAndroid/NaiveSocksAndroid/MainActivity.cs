@@ -279,8 +279,18 @@ namespace NaiveSocksAndroid
             ReplaceFragment(frag);
 
             menuItem.SetChecked(true);
-            TitleFormatted = itemId == R.Id.nav_home ? JavaAppName : menuItem.TitleFormatted;
+            SetTitle(itemId == R.Id.nav_home ? JavaAppName : menuItem.TitleFormatted);
             drawer.CloseDrawers();
+        }
+
+        public void SetTitle(string title)
+        {
+            SetTitle(new Java.Lang.String(title));
+        }
+
+        public void SetTitle(Java.Lang.ICharSequence title)
+        {
+            TitleFormatted = title;
         }
 
         private void ReplaceFragment(Fragment frag)
