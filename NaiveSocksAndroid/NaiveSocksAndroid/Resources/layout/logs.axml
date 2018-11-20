@@ -1,18 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<android.support.v4.widget.NestedScrollView
+<android.support.v7.widget.RecyclerView
 	xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+	style="@style/LogTextView"
+	android:scrollbars="vertical"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:layout_weight="1"
-    android:scrollbars="vertical"
-	android:fillViewport="true"
-    app:layout_behavior="@string/appbar_scrolling_view_behavior"
-    android:id="@+id/logparentScroll">
-    <TextView
-		style="@style/LogTextView"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:padding="2sp"
-        android:id="@+id/logparent" />
-</android.support.v4.widget.NestedScrollView>
+    android:id="@+id/logparent" />

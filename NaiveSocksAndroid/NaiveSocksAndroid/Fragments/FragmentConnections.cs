@@ -178,7 +178,7 @@ namespace NaiveSocksAndroid
                     sb.Append(" -> '").Append(adap.Name).Append("'");
                 var outStream = conn.ConnectResult?.Stream;
                 if (outStream != null) {
-                    sb.Append("\n-> " + outStream.ToString());
+                    sb.Append("\n-> ").Append(outStream.ToString());
                 }
                 tv2.Text = sb.ToString();
             }

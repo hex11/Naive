@@ -73,19 +73,19 @@ namespace Naive.HttpSvr
             {
                 System.Console.ForegroundColor = ConsoleColor.Black;
                 switch (this.level) {
-                default:
-                case Level.None:
-                    System.Console.BackgroundColor = ConsoleColor.DarkGray;
-                    break;
-                case Level.Info:
-                    System.Console.BackgroundColor = ConsoleColor.Gray;
-                    break;
-                case Level.Warning:
-                    System.Console.BackgroundColor = ConsoleColor.Yellow;
-                    break;
-                case Level.Error:
-                    System.Console.BackgroundColor = ConsoleColor.Red;
-                    break;
+                    default:
+                    case Level.None:
+                        System.Console.BackgroundColor = ConsoleColor.DarkGray;
+                        break;
+                    case Level.Info:
+                        System.Console.BackgroundColor = ConsoleColor.Gray;
+                        break;
+                    case Level.Warning:
+                        System.Console.BackgroundColor = ConsoleColor.Yellow;
+                        break;
+                    case Level.Error:
+                        System.Console.BackgroundColor = ConsoleColor.Red;
+                        break;
                 }
                 string stamp = (WriteLogToConsoleWithTime) ? this.timestamp : "[" + this.levelStr + "] ";
                 System.Console.Write(stamp);
@@ -183,9 +183,13 @@ namespace Naive.HttpSvr
         public static void log(string text, Level level)
         {
             try {
-                var runningTime = getRuntime();
-                log(new Log() { id = IncrLogId(), time = DateTime.Now, runningTime = runningTime, text = text, level = level });
+                log(CreateLog(level, text));
             } catch (Exception) { }
+        }
+
+        public static Log CreateLog(Level level, string text)
+        {
+            return new Log() { id = IncrLogId(), time = DateTime.Now, runningTime = getRuntime(), text = text, level = level };
         }
 
         public static void logWithStackTrace(string text, Level level)
