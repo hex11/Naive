@@ -20,7 +20,6 @@ using ARSoft.Tools.Net.Dns;
 using System.Net;
 using NaiveSocks;
 using System.Net.Sockets;
-using LiteDB;
 
 namespace NaiveSocksAndroid
 {
