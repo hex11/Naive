@@ -64,10 +64,48 @@ namespace NaiveSocksAndroid
                 }
 
                 ipPrefix = vpnConfig.FakeDnsPrefix;
-                dnsServer = new DnsServer(new IPEndPoint(IPAddress.Any, vpnConfig.LocalDnsPort), vpnConfig.DnsListenerCount, 0);
+                dnsServer = new DnsServer(new IPEndPoint(IPAddress.Loopback, vpnConfig.LocalDnsPort), 0, 0);
                 dnsServer.ExceptionThrown += DnsServer_ExceptionThrown;
                 dnsServer.QueryReceived += DnsServer_QueryReceived;
-                dnsServer.Start();
+
+                //dnsServer.Start();
+                UDPListen().Forget();
+            }
+
+            UdpClient udpClient;
+
+            private async Task UDPListen()
+            {
+                try {
+                    udpClient = new UdpClient(new IPEndPoint(IPAddress.Loopback, vpnConfig.LocalDnsPort));
+                    while (true) {
+                        var r = await udpClient.ReceiveAsync();
+                        Task.Run(async () => {
+                            if (vpnConfig.DnsDebug)
+                                Logging.debugForce("dns message received, length: " + r.Buffer.Length);
+                            var response = await dnsServer.HandleUdpMessage(r.RemoteEndPoint, r.Buffer);
+                            if (response.HasValue) {
+                                var resp = response.Value;
+                                if (vpnConfig.DnsDebug)
+                                    Logging.debugForce("dns message processed, length to send: " + resp.Count);
+                                try {
+                                    await udpClient.SendAsync(resp.Array, resp.Count, r.RemoteEndPoint);
+                                } catch (Exception e) {
+                                    Logging.exception(e, Logging.Level.Error, "dns server failed to send response to " + r.RemoteEndPoint);
+                                    return;
+                                }
+                            } else {
+                                if (vpnConfig.DnsDebug)
+                                    Logging.debugForce("dns message processed, result is null");
+                            }
+                        }).Forget();
+                    }
+                } catch (Exception e) {
+                    Logging.exception(e, Logging.Level.Warning, "DNS UDP listener stopped");
+                } finally {
+                    udpClient.Dispose();
+                    udpClient = null;
+                }
             }
 
             public void StopDnsServer()
@@ -76,6 +114,7 @@ namespace NaiveSocksAndroid
                     return;
                 dnsServer.Stop();
                 dnsServer = null;
+                udpClient?.Dispose();
             }
 
             private Task DnsServer_ExceptionThrown(object sender, ExceptionEventArgs eventArgs)
