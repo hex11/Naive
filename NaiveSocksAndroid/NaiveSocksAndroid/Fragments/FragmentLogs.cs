@@ -43,6 +43,7 @@ namespace NaiveSocksAndroid
 
             recycler = View.FindViewById<RecyclerView>(R.Id.logparent);
             recycler.SetLayoutManager(new LinearLayoutManager(this.Context) { StackFromEnd = true });
+            recycler.SetItemAnimator(null);
             dataset = new MyData() { Context = themeWrapper };
             recycler.SetAdapter(dataset);
 
@@ -55,11 +56,10 @@ namespace NaiveSocksAndroid
             if (!eventRegistered) {
                 Register();
                 var logs = Logging.getLogsHistoryArray();
-                if (logs.Length > 0) {
-                    dataset.Logs.AddRange(logs);
-                    dataset.Logs.Add(Logging.CreateLog(Logging.Level.None, "===== end of history log ====="));
-                    dataset.NotifyDataSetChanged();
-                }
+                dataset.Logs.Clear();
+                dataset.Logs.AddRange(logs);
+                dataset.Logs.Add(Logging.CreateLog(Logging.Level.None, "===== end of history log ====="));
+                dataset.NotifyDataSetChanged();
             }
         }
 
@@ -98,9 +98,40 @@ namespace NaiveSocksAndroid
             eventRegistered = false;
         }
 
+        Queue<Logging.Log> logQueue = new Queue<Logging.Log>();
+
         private void Logging_Logged(Logging.Log log)
         {
-            recycler.Post(() => putLog(log, autoScroll));
+            try {
+                bool post = false;
+                lock (logQueue) {
+                    if (logQueue.Count == 0) {
+                        post = true;
+                    }
+                    logQueue.Enqueue(log);
+                }
+                if (post) {
+                    recycler.Post(() => {
+                        if (dataset.Logs.Count > 10000) {
+                            dataset.Logs.RemoveRange(0, 100);
+                            dataset.NotifyItemRangeRemoved(0, 100);
+                        }
+                        var posStart = dataset.Logs.Count;
+                        lock (logQueue) {
+                            dataset.Logs.AddRange(logQueue);
+                            logQueue.Clear();
+                        }
+                        int count = dataset.Logs.Count;
+                        dataset.NotifyItemRangeInserted(posStart, count - posStart);
+                        if (autoScroll) {
+                            recycler.SmoothScrollToPosition(count - 1);
+                        }
+                    });
+                }
+            } catch (Exception e) {
+                Logging.Logged -= Logging_Logged;
+                Logging.exception(e, Logging.Level.Error, "Logging_Logged exception");
+            }
         }
 
         private void putLog(Logging.Log log, bool autoScroll)
@@ -190,7 +221,6 @@ namespace NaiveSocksAndroid
             {
                 Color color = getColorFromLevel(log.level) ?? Color.Black;
                 string timestamp = "[" + log.time.ToString("HH:mm:ss.fff") + " " + log.levelStr + "]";
-                ssb.Clear();
                 ssb.Append(timestamp, new BackgroundColorSpan(color), SpanTypes.ExclusiveExclusive);
                 ssb.Append(log.text);
                 textView.SetText(ssb, TextView.BufferType.Spannable);
@@ -199,7 +229,7 @@ namespace NaiveSocksAndroid
             public void Reset()
             {
                 ssb.Clear();
-                textView.SetText(ssb, TextView.BufferType.Spannable);
+                textView.Text = null;
             }
         }
     }
