@@ -82,12 +82,12 @@ namespace NaiveSocksAndroid
                         var r = await udpClient.ReceiveAsync();
                         Task.Run(async () => {
                             if (vpnConfig.DnsDebug)
-                                Logging.debugForce("dns message received, length: " + r.Buffer.Length);
+                                Logging.debugForce("DNS message received, length: " + r.Buffer.Length);
                             var response = await dnsServer.HandleUdpMessage(r.RemoteEndPoint, r.Buffer);
                             if (response.HasValue) {
                                 var resp = response.Value;
                                 if (vpnConfig.DnsDebug)
-                                    Logging.debugForce("dns message processed, length to send: " + resp.Count);
+                                    Logging.debugForce("DNS message processed, length to send: " + resp.Count);
                                 try {
                                     await udpClient.SendAsync(resp.Array, resp.Count, r.RemoteEndPoint);
                                 } catch (Exception e) {
@@ -96,7 +96,7 @@ namespace NaiveSocksAndroid
                                 }
                             } else {
                                 if (vpnConfig.DnsDebug)
-                                    Logging.debugForce("dns message processed, result is null");
+                                    Logging.debugForce("DNS message processed, result is null");
                             }
                         }).Forget();
                     }
@@ -130,9 +130,18 @@ namespace NaiveSocksAndroid
                     var r = q.CreateResponseInstance();
                     eventArgs.Response = r;
                     r.ReturnCode = ReturnCode.ServerFailure;
-                    foreach (var item in q.Questions) {
+                    List<DnsQuestion> questions = q.Questions;
+                    if (q.IsQuery == false) {
+                        Logging.warning($"DNS msg id {q.TransactionID} is not a query.");
+                    }
+                    if (questions.Count == 0) {
+                        Logging.warning($"DNS msg id {q.TransactionID} does not contain any questions." +
+                            $"\nAnswers: {string.Join(", ", q.AnswerRecords)}" +
+                            $"\nAdditionalRecords: {string.Join(", ", q.AdditionalRecords)}");
+                    }
+                    foreach (var item in questions) {
                         if (vpnConfig.DnsDebug)
-                            Logging.debugForce("DNS query: " + item);
+                            Logging.debugForce($"DNS id {q.TransactionID} query: {item}");
                         if (item.RecordType == RecordType.A) {
                             var strName = item.Name.ToString();
                             strName = strName.Substring(0, strName.Length - 1); // remove the trailing '.'
