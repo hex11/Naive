@@ -42,7 +42,7 @@ namespace NaiveSocksAndroid
         public int DnsTtl { get; set; } = 30;
         public int DnsCacheTtl { get; set; } = 120;
         public bool DnsDebug { get; set; } = false;
-        public bool DnsDomainDb { get; set; } = false;
+        public bool DnsDomainDb { get; set; } = true;
 
         public string DnsGw { get; set; }
 

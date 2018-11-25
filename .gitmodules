@@ -2,6 +2,6 @@
 	path = Nett
 	url = https://github.com/hex11/Nett
 
-	[submodule "dns"]
+[submodule "dns"]
 	path = NaiveSocksAndroid/dns
 	url = https://github.com/hex11/dns
