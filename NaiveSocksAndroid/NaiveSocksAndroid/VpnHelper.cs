@@ -19,6 +19,7 @@ using Naive.HttpSvr;
 using System.Net;
 using NaiveSocks;
 using System.Net.Sockets;
+using LiteDB;
 
 namespace NaiveSocksAndroid
 {

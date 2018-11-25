@@ -15,6 +15,7 @@ using Android.Views;
 using Android.Widget;
 using DNS.Protocol;
 using DNS.Protocol.ResourceRecords;
+using LiteDB;
 using Naive.HttpSvr;
 using NaiveSocks;
 
@@ -57,10 +58,13 @@ namespace NaiveSocksAndroid
 
             public void StartDnsServer()
             {
-                // TODO: vpnConfig.DnsDomainDb
-
-                if (!(cacheRDns is SimpleCacheRDns)) {
-                    cacheRDns = new SimpleCacheRDns();
+                if (vpnConfig.DnsDomainDb) {
+                    string dbPath = Path.Combine(Application.Context.CacheDir.AbsolutePath, "cache_domain.litedb");
+                    cacheRDns = new NoSqlCacheDomain(dbPath);
+                } else {
+                    if (!(cacheRDns is SimpleCacheDomain)) {
+                        cacheRDns = new SimpleCacheDomain();
+                    }
                 }
 
                 ipPrefix = vpnConfig.FakeDnsPrefix;
@@ -269,6 +273,50 @@ namespace NaiveSocksAndroid
                     } finally {
                         mapLock.ExitReadLock();
                     }
+                }
+            }
+
+            class NoSqlCacheDomain : ICacheReverseDns
+            {
+                LiteDatabase liteDb;
+                LiteCollection<Record> collection;
+
+                public NoSqlCacheDomain(string dbPath)
+                {
+                    liteDb = new LiteDatabase(dbPath);
+                    collection = liteDb.GetCollection<Record>("dns_records");
+                    collection.EnsureIndex("Ip");
+                }
+
+                public void Set(long ip, string domain)
+                {
+                    if (domain == null)
+                        throw new ArgumentNullException(nameof(domain));
+
+                    collection.Insert(new Record { Ip = ip, Domain = domain });
+                }
+
+                public void Set(long[] ips, string domain)
+                {
+                    foreach (var ip in ips) {
+                        Set(ip, domain);
+                    }
+                }
+
+                public string TryGetDomain(long ip)
+                {
+                    var bsonVal = new BsonValue(ip);
+                    foreach (var item in collection.Find(Query.EQ("ip", bsonVal))) {
+                        return item.Domain;
+                    }
+                    return null;
+                }
+
+                class Record
+                {
+                    public int Id { get; set; }
+                    public long Ip { get; set; }
+                    public string Domain { get; set; }
                 }
             }
         }
