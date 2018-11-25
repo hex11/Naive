@@ -89,7 +89,13 @@ namespace NaiveSocks
                     this.Dest.Port = s.TargetPort;
                     this.DataStream = s.Stream;
                     if (adapter.ConnectionFilter != null) {
-                        if (!adapter.ConnectionFilter(this)) {
+                        bool close = false;
+                        try {
+                            close = !adapter.ConnectionFilter(this);
+                        } catch (Exception e) {
+                            adapter.Logger.exception(e, Logging.Level.Error, "ConnectionFilter");
+                        }
+                        if (close) {
                             MyStream.CloseWithTimeout(_stream).Forget();
                             return;
                         }

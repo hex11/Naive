@@ -288,6 +288,15 @@ namespace NaiveSocksAndroid
                     liteDb = new LiteDatabase(dbPath);
                     collection = liteDb.GetCollection<Record>("rdns_records");
                     collection.EnsureIndex("Ip", false);
+                    Logging.info("rdns db: start shrinking...");
+                    var reduced = liteDb.Shrink();
+                    if (reduced > 0) {
+                        Logging.info("rdns db: shrinked and reduced " + reduced + " bytes.");
+                    } else if (reduced < 0) {
+                        Logging.info("rdns db: shrinked and \"reduced\" " + reduced + " bytes.");
+                    } else {
+                        Logging.info("rdns db: shrinked and nothing happended.");
+                    }
                 }
 
                 public void Set(long ip, string domain)
@@ -296,23 +305,49 @@ namespace NaiveSocksAndroid
                         throw new ArgumentNullException(nameof(domain));
 
                     lock (syncLock) {
-                        var docs = FindDocByIp(ip);
-                        Record doc;
-                        try {
-                            doc = docs.SingleOrDefault();
-                        } catch (Exception e) {
-                            Logging.exception(e, Logging.Level.Warning, $"rdns db (multiple 'Ip'?)");
-                            doc = docs.First();
-                        }
+                        Record doc = GetFirstOrNull(ip, FindDocByIp(ip));
                         if (doc == null) {
                             doc = new Record { Ip = ip, Domain = domain };
                         } else {
-                            Logging.warning($"rdns db: set [{ip}] = {domain} overriding {doc.Domain}");
+                            if (domain == doc.Domain)
+                                return;
+                            Logging.warning($"rdns db: set [{new IPAddress(ip)}] = {domain} overriding {doc.Domain}");
                             doc.Domain = domain;
                         }
 
                         collection.Upsert(doc);
                     }
+                }
+
+                private Record GetFirstOrNull(long ip, IEnumerable<Record> docs)
+                {
+                    Record doc;
+                    var e = docs.GetEnumerator();
+                    if (e.MoveNext()) {
+                        doc = e.Current;
+                        if (e.MoveNext()) {
+                            var docsList = docs.ToList();
+                            string domainsStr = string.Join("|", docsList.Select(x => x.Domain));
+                            Logging.warning($"rdns db: multiple domains ({domainsStr}) resovles to a ip address ({new IPAddress(ip)}).");
+                            for (int i = 0; i < docsList.Count; i++) {
+                                var d = docsList[i];
+                                if (d.Domain == null) // marked as deleted
+                                    continue;
+                                for (int j = i + 1; j < docsList.Count; j++) {
+                                    Record d2 = docsList[j];
+                                    if (d.Domain == d2.Domain) {
+                                        var ok = collection.Delete(d2.Id);
+                                        Logging.warning($"rdns db: {(ok ? "deleted" : "failed to delete")} duplicated " + d2);
+                                        d2.Domain = null;
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        doc = null;
+                    }
+
+                    return doc;
                 }
 
                 public void Set(long[] ips, string domain)
@@ -324,13 +359,13 @@ namespace NaiveSocksAndroid
 
                 public string TryGetDomain(long ip)
                 {
-                    var doc = FindDocByIp(ip).FirstOrDefault();
+                    var doc = GetFirstOrNull(ip, FindDocByIp(ip));
                     return doc?.Domain;
                 }
 
                 private IEnumerable<Record> FindDocByIp(long ip)
                 {
-                    return collection.Find(Query.EQ("ip", new BsonValue(ip)));
+                    return collection.Find(Query.EQ("Ip", new BsonValue(ip)));
                 }
 
                 class Record
@@ -338,6 +373,11 @@ namespace NaiveSocksAndroid
                     public int Id { get; set; }
                     public long Ip { get; set; }
                     public string Domain { get; set; }
+
+                    public override string ToString()
+                    {
+                        return $"{{Id={Id}, Ip={Ip}, Domain={Domain}}}";
+                    }
                 }
             }
         }
