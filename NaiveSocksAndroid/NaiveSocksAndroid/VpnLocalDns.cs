@@ -13,7 +13,8 @@ using Android.OS;
 using Android.Runtime;
 using Android.Views;
 using Android.Widget;
-using ARSoft.Tools.Net.Dns;
+using DNS.Protocol;
+using DNS.Protocol.ResourceRecords;
 using Naive.HttpSvr;
 using NaiveSocks;
 
@@ -27,10 +28,9 @@ namespace NaiveSocksAndroid
             VpnConfig vpnConfig => vpnHelper.vpnConfig;
             IDnsProvider dnsResolver => vpnHelper.dnsResolver;
 
-            ICacheDomain cacheDomain;
-            ICacheIp cacheIp = new SimpleCacheIp();
+            ICacheReverseDns cacheRDns;
+            ICacheDns cacheDns = new SimpleCacheDns();
 
-            DnsServer dnsServer;
             string ipPrefix;
             int lastIp;
 
@@ -43,7 +43,7 @@ namespace NaiveSocksAndroid
             {
                 if (IPAddress.TryParse(x.Dest.Host, out var ip)) {
                     bool isFake = dnsResolver == null && ip.ToString().StartsWith(ipPrefix);
-                    var host = cacheDomain.TryGetDomain(ip.Address);
+                    var host = cacheRDns.TryGetDomain(ip.Address);
                     if (host != null) {
                         x.Dest.Host = host;
                         x.DestIp = ip;
@@ -59,16 +59,12 @@ namespace NaiveSocksAndroid
             {
                 // TODO: vpnConfig.DnsDomainDb
 
-                if (!(cacheDomain is SimpleCacheDomain)) {
-                    cacheDomain = new SimpleCacheDomain();
+                if (!(cacheRDns is SimpleCacheRDns)) {
+                    cacheRDns = new SimpleCacheRDns();
                 }
 
                 ipPrefix = vpnConfig.FakeDnsPrefix;
-                dnsServer = new DnsServer(new IPEndPoint(IPAddress.Loopback, vpnConfig.LocalDnsPort), 0, 0);
-                dnsServer.ExceptionThrown += DnsServer_ExceptionThrown;
-                dnsServer.QueryReceived += DnsServer_QueryReceived;
 
-                //dnsServer.Start();
                 UDPListen().Forget();
             }
 
@@ -83,20 +79,20 @@ namespace NaiveSocksAndroid
                         Task.Run(async () => {
                             if (vpnConfig.DnsDebug)
                                 Logging.debugForce("DNS message received, length: " + r.Buffer.Length);
-                            var response = await dnsServer.HandleUdpMessage(r.RemoteEndPoint, r.Buffer);
-                            if (response.HasValue) {
-                                var resp = response.Value;
+                            try {
+                                var req = Request.FromArray(r.Buffer);
+                                var resp = await HandleDnsRequest(req);
+                                var respArray = resp.ToArray();
                                 if (vpnConfig.DnsDebug)
-                                    Logging.debugForce("DNS message processed, length to send: " + resp.Count);
+                                    Logging.debugForce("DNS message processed, length to send: " + respArray.Length);
                                 try {
-                                    await udpClient.SendAsync(resp.Array, resp.Count, r.RemoteEndPoint);
+                                    await udpClient.SendAsync(respArray, respArray.Length, r.RemoteEndPoint);
                                 } catch (Exception e) {
-                                    Logging.exception(e, Logging.Level.Error, "dns server failed to send response to " + r.RemoteEndPoint);
+                                    Logging.exception(e, Logging.Level.Error, "DNS server failed to send response to " + r.RemoteEndPoint);
                                     return;
                                 }
-                            } else {
-                                if (vpnConfig.DnsDebug)
-                                    Logging.debugForce("DNS message processed, result is null");
+                            } catch (Exception e) {
+                                Logging.exception(e, Logging.Level.Error, "DNS server processing msg from " + r.RemoteEndPoint);
                             }
                         }).Forget();
                     }
@@ -110,43 +106,27 @@ namespace NaiveSocksAndroid
 
             public void StopDnsServer()
             {
-                if (dnsServer == null)
-                    return;
-                dnsServer.Stop();
-                dnsServer = null;
                 udpClient?.Dispose();
             }
 
-            private Task DnsServer_ExceptionThrown(object sender, ExceptionEventArgs eventArgs)
+            private async Task<IResponse> HandleDnsRequest(IRequest request)
             {
-                Logging.exception(eventArgs.Exception, Logging.Level.Error, "DnsServer exception");
-                return NaiveUtils.CompletedTask;
-            }
-
-            private async Task DnsServer_QueryReceived(object sender, QueryReceivedEventArgs eventArgs)
-            {
+                var q = request;
+                var r = Response.FromRequest(request);
+                r.ResponseCode = ResponseCode.ServerFailure;
                 try {
-                    var q = eventArgs.Query as DnsMessage;
-                    var r = q.CreateResponseInstance();
-                    eventArgs.Response = r;
-                    r.ReturnCode = ReturnCode.ServerFailure;
-                    List<DnsQuestion> questions = q.Questions;
-                    if (q.IsQuery == false) {
-                        Logging.warning($"DNS msg id {q.TransactionID} is not a query.");
-                    }
+                    var questions = q.Questions;
                     if (questions.Count == 0) {
-                        Logging.warning($"DNS msg id {q.TransactionID} does not contain any questions." +
-                            $"\nAnswers: {string.Join(", ", q.AnswerRecords)}" +
+                        Logging.warning($"DNS msg id {q.Id} does not contain any questions." +
                             $"\nAdditionalRecords: {string.Join(", ", q.AdditionalRecords)}");
                     }
                     foreach (var item in questions) {
                         if (vpnConfig.DnsDebug)
-                            Logging.debugForce($"DNS id {q.TransactionID} query: {item}");
-                        if (item.RecordType == RecordType.A) {
+                            Logging.debugForce($"DNS id {q.Id} query: {item}");
+                        if (item.Type == RecordType.A) {
                             var strName = item.Name.ToString();
-                            strName = strName.Substring(0, strName.Length - 1); // remove the trailing '.'
                             IPAddress ip;
-                            bool exist = cacheIp.TryGetIp(strName, out var val);
+                            bool exist = cacheDns.TryGetIp(strName, out var val);
                             var ipLongs = val.ipLongs;
                             if (exist && val.expire > Logging.getRuntime()) {
                                 ip = new IPAddress(ipLongs[NaiveUtils.Random.Next(ipLongs.Length)]);
@@ -169,14 +149,14 @@ namespace NaiveSocksAndroid
                                     Logging.info("DNS: " + strName + " -> " + string.Join("|", ips.Where(x => x.AddressFamily == AddressFamily.InterNetwork))
                                         + " (" + (Logging.getRuntime() - startTime) + " ms)");
                                 }
-                                cacheIp.Set(strName, new IpRecord {
+                                cacheDns.Set(strName, new IpRecord {
                                     ipLongs = ipLongs,
                                     expire = Logging.getRuntime() + vpnConfig.DnsCacheTtl * 1000
                                 });
-                                cacheDomain.Set(ipLongs, strName);
+                                cacheRDns.Set(ipLongs, strName);
                             }
-                            r.AnswerRecords.Add(new ARecord(item.Name, vpnConfig.DnsTtl, ip));
-                            r.ReturnCode = ReturnCode.NoError;
+                            r.AnswerRecords.Add(new IPAddressResourceRecord(item.Name, ip, TimeSpan.FromSeconds(vpnConfig.DnsTtl)));
+                            r.ResponseCode = ResponseCode.NoError;
                         } else {
                             Logging.warning("Unsupported DNS record: " + item);
                         }
@@ -184,6 +164,7 @@ namespace NaiveSocksAndroid
                 } catch (Exception e) {
                     Logging.exception(e, Logging.Level.Error, "DNS server");
                 }
+                return r;
             }
 
             private static long[] ipv4Filter(IPAddress[] ips)
@@ -209,20 +190,20 @@ namespace NaiveSocksAndroid
                 return ipLongs;
             }
 
-            interface ICacheIp
+            interface ICacheDns
             {
                 bool TryGetIp(string domain, out IpRecord val);
                 void Set(string domain, IpRecord val);
             }
 
-            interface ICacheDomain
+            interface ICacheReverseDns
             {
                 string TryGetDomain(long ip);
                 void Set(long ip, string domain);
                 void Set(long[] ips, string domain);
             }
 
-            class SimpleCacheIp : ICacheIp
+            class SimpleCacheDns : ICacheDns
             {
                 ReaderWriterLockSlim mapLock = new ReaderWriterLockSlim();
                 Dictionary<string, IpRecord> mapHostIp = new Dictionary<string, IpRecord>();
@@ -251,7 +232,7 @@ namespace NaiveSocksAndroid
                 }
             }
 
-            class SimpleCacheDomain : ICacheDomain
+            class SimpleCacheRDns : ICacheReverseDns
             {
                 ReaderWriterLockSlim mapLock = new ReaderWriterLockSlim();
                 Dictionary<long, string> mapIpHost = new Dictionary<long, string>();

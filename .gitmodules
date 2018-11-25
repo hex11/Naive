@@ -2,6 +2,6 @@
 	path = Nett
 	url = https://github.com/hex11/Nett
 
-[submodule "ARSoft.Tools.Net"]
-	path = NaiveSocksAndroid/ARSoft.Tools.Net
-	url = https://github.com/hex11/ARSoft.Tools.Net
+	[submodule "dns"]
+	path = NaiveSocksAndroid/dns
+	url = https://github.com/hex11/dns

@@ -16,7 +16,6 @@ using Android.Widget;
 
 using Mono.Unix.Native;
 using Naive.HttpSvr;
-using ARSoft.Tools.Net.Dns;
 using System.Net;
 using NaiveSocks;
 using System.Net.Sockets;
