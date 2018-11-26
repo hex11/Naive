@@ -124,8 +124,8 @@ namespace NaiveSocks
             if (addition != null)
                 sb.Append(' ').Append(addition);
             sb.Append(' ').Append("dest=").Append(Dest.Host);
-            if (DestIp != null) {
-                sb.Append('(').Append(DestIp).Append(')');
+            if (DestOriginalName != null) {
+                sb.Append('(').Append(DestOriginalName).Append(')');
             }
             sb.Append(':').Append(Dest.Port);
             if (ConnectResult != null) {

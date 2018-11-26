@@ -15,7 +15,7 @@ namespace NaiveSocks
         public override Task<ConnectResult> ProtectedConnect(ConnectArgument arg)
         {
             var dest = force_dest.IsDefault ? arg.Dest : force_dest;
-            return ConnectHelper.Connect(this, arg.TryGetDestIpAsAddrPort(), connect_timeout);
+            return ConnectHelper.Connect(this, arg.Dest, connect_timeout);
         }
 
         public async Task<IPAddress[]> ResolveName(string name)

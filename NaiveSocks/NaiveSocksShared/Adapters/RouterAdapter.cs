@@ -95,26 +95,35 @@ namespace NaiveSocks
 
         private static bool HandleRule(ConnectArgument x, Rule r, out Match regexMatch)
         {
-            bool hit = false;
             regexMatch = null;
+            if (x.DestOriginalName != null && HandleRule(r, ref regexMatch, x.DestOriginalName, x.Dest.Port))
+                return true;
+            if (HandleRule(r, ref regexMatch, x.Dest.Host, x.Dest.Port))
+                return true;
+            return false;
+        }
+
+        private static bool HandleRule(Rule r, ref Match regexMatch, string host, int port)
+        {
+            bool hit = false;
             if (r.eq != null) {
-                hit |= r.eq == x.Dest.Host;
+                hit |= r.eq == host;
             }
             if (r.regex != null) {
-                var match = Regex.Match(x.Dest.Host, r.regex);
+                var match = Regex.Match(host, r.regex);
                 if (match.Success) {
                     regexMatch = match;
                     hit = true;
                 }
             }
             if (r.wildcard != null) {
-                hit |= Wildcard.IsMatch(x.Dest.Host, r.wildcard);
+                hit |= Wildcard.IsMatch(host, r.wildcard);
             }
             if (r.port != 0) {
-                hit |= r.port == x.Dest.Port;
+                hit |= r.port == port;
             }
             if (r.ip != null && !hit) {
-                hit = HandleIp(x.Dest.Host, r);
+                hit = HandleIp(host, r);
             }
             return hit;
         }
@@ -207,29 +216,29 @@ namespace NaiveSocks
 
                     sb.Clear();
                     switch (str[i]) {
-                    case 's':
-                        seconds += num;
-                        break;
-                    case 'm':
-                        seconds += num * 60;
-                        break;
-                    case 'h':
-                        seconds += num * 60 * 60;
-                        break;
-                    case 'd':
-                        seconds += num * 60 * 60 * 24;
-                        break;
-                    default:
-                        goto FAIL;
+                        case 's':
+                            seconds += num;
+                            break;
+                        case 'm':
+                            seconds += num * 60;
+                            break;
+                        case 'h':
+                            seconds += num * 60 * 60;
+                            break;
+                        case 'd':
+                            seconds += num * 60 * 60 * 24;
+                            break;
+                        default:
+                            goto FAIL;
                     }
                 }
             }
 
-            OK:
+        OK:
             timeSpan = TimeSpan.FromSeconds(seconds);
             return true;
 
-            FAIL:
+        FAIL:
             timeSpan = TimeSpan.Zero;
             return false;
         }
@@ -344,6 +353,7 @@ namespace NaiveSocks
                     }
                 }
                 connection.Dest = dest;
+                connection.DestOriginalName = null;
             }
             if (rule.to != null) {
                 redirect = rule.to;
@@ -362,7 +372,7 @@ namespace NaiveSocks
             }
             if (logging) {
                 var ms = sw.ElapsedMilliseconds;
-                var dest = connection.Dest.ToString();
+                var dest = connection.GetDestStringWithOriginalName();
                 if (log_uri && connection.Url != null) {
                     dest = connection.Url;
                 }
@@ -593,7 +603,7 @@ namespace NaiveSocks
                     goto WRONG;
                 }
                 continue;
-                WRONG:
+            WRONG:
                 RulesCount--;
                 Logg?.warning($"unsupported/wrong ABP filter at line {lineNum + 1}: {line.Get().Quoted()}");
             }
@@ -608,7 +618,7 @@ namespace NaiveSocks
 
         public bool Check(ConnectArgument conn)
         {
-            return Check(conn.Dest, conn.Url);
+            return Check(conn.TryGetDestWithOriginalName(), conn.Url);
         }
 
         public bool Check(AddrPort dest, string url)
@@ -661,7 +671,7 @@ namespace NaiveSocks
             }
             return false;
 
-            IF_HIT:
+        IF_HIT:
             foreach (var item in whiteDomainList) {
                 if (MatchDomain(host, bigString, item))
                     return false;
@@ -723,7 +733,7 @@ namespace NaiveSocks
                         goto WRONG;
                 }
                 return i;
-                WRONG:
+            WRONG:
                 ;
             }
             return -1;

@@ -28,11 +28,22 @@ namespace NaiveSocks
         public Controller Controller => InAdapter.Controller;
 
         public AddrPort Dest;
-        public IPAddress DestIp;
+        public string DestOriginalName;
         public string Url { get; set; }
         public CancellationToken CancellationToken { get; set; }
 
-        public AddrPort TryGetDestIpAsAddrPort() => new AddrPort { HostObject = DestIp ?? Dest.HostObject, Port = Dest.Port };
+        public AddrPort TryGetDestWithOriginalName()
+        {
+            return new AddrPort() { HostObject = DestOriginalName ?? Dest.HostObject, Port = Dest.Port };
+        }
+
+        public string GetDestStringWithOriginalName()
+        {
+            if (DestOriginalName == null)
+                return Dest.ToString();
+            else
+                return Dest.Host + "(" + DestOriginalName + "):" + Dest.Port;
+        }
 
         public int CreateTime { get; } = WebSocket.CurrentTime;
 
@@ -113,7 +124,7 @@ namespace NaiveSocks
                 }
             });
             newinc.Url = arg.Url;
-            newinc.DestIp = arg.DestIp;
+            newinc.DestOriginalName = arg.DestOriginalName;
             NaiveUtils.RunAsyncTask(async () => {
                 try {
                     await handler.HandleConnection(newinc).CAF();

@@ -46,8 +46,7 @@ namespace NaiveSocksAndroid
                     bool isFake = dnsResolver == null && ip.ToString().StartsWith(ipPrefix);
                     var host = cacheRDns.TryGetDomain(ip.Address);
                     if (host != null) {
-                        x.Dest.Host = host;
-                        x.DestIp = ip;
+                        x.DestOriginalName = host;
                     } else {
                         if (isFake)
                             Logging.warning("Fake DNS not found: " + ip);
