@@ -67,12 +67,6 @@ namespace NaiveSocksAndroid
 
         ParcelFileDescriptor pfd;
 
-        struct IpRecord
-        {
-            public long expire;
-            public long[] ipLongs;
-        }
-
         IDnsProvider dnsResolver;
         SocksInAdapter socksInAdapter;
         LocalDns localDns;

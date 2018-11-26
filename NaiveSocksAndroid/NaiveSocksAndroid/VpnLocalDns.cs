@@ -30,7 +30,7 @@ namespace NaiveSocksAndroid
             IDnsProvider dnsResolver => vpnHelper.dnsResolver;
 
             ICacheReverseDns cacheRDns;
-            ICacheDns cacheDns = new SimpleCacheDns();
+            ICacheDns cacheDns;
 
             string ipPrefix;
             int lastIp;
@@ -59,10 +59,15 @@ namespace NaiveSocksAndroid
             {
                 if (vpnConfig.DnsDomainDb) {
                     string dbPath = Path.Combine(Application.Context.CacheDir.AbsolutePath, "dns.litedb");
-                    cacheRDns = new NoSqlCacheRDns(dbPath);
+                    var dbcache = new NoSqlCache(dbPath);
+                    cacheRDns = dbcache;
+                    cacheDns = dbcache;
                 } else {
                     if (!(cacheRDns is SimpleCacheRDns)) {
                         cacheRDns = new SimpleCacheRDns();
+                    }
+                    if (!(cacheDns is SimpleCacheDns)) {
+                        cacheDns = new SimpleCacheDns();
                     }
                 }
 
@@ -131,7 +136,7 @@ namespace NaiveSocksAndroid
                             IPAddress ip;
                             bool exist = cacheDns.TryGetIp(strName, out var val);
                             var ipLongs = val.ipLongs;
-                            if (exist && val.expire > Logging.getRuntime()) {
+                            if (exist && val.expire > DateTime.UtcNow) {
                                 ip = new IPAddress(ipLongs[NaiveUtils.Random.Next(ipLongs.Length)]);
                             } else {
                                 if (dnsResolver == null) {
@@ -154,7 +159,7 @@ namespace NaiveSocksAndroid
                                 }
                                 cacheDns.Set(strName, new IpRecord {
                                     ipLongs = ipLongs,
-                                    expire = Logging.getRuntime() + vpnConfig.DnsCacheTtl * 1000
+                                    expire = DateTime.UtcNow.AddSeconds(vpnConfig.DnsCacheTtl)
                                 });
                                 cacheRDns.Set(ipLongs, strName);
                             }
@@ -197,6 +202,12 @@ namespace NaiveSocksAndroid
             {
                 bool TryGetIp(string domain, out IpRecord val);
                 void Set(string domain, IpRecord val);
+            }
+
+            struct IpRecord
+            {
+                public DateTime expire;
+                public long[] ipLongs;
             }
 
             interface ICacheReverseDns
@@ -275,107 +286,156 @@ namespace NaiveSocksAndroid
                 }
             }
 
-            class NoSqlCacheRDns : ICacheReverseDns
+            class NoSqlCache : ICacheReverseDns, ICacheDns
             {
                 LiteDatabase liteDb;
                 LiteCollection<Record> collection;
+                LiteCollection<BsonDocument> cfgCollection;
 
-                object syncLock = new object();
+                object syncRoot = new object();
 
-                public NoSqlCacheRDns(string dbPath)
+                public NoSqlCache(string dbPath)
                 {
                     liteDb = new LiteDatabase(dbPath);
-                    collection = liteDb.GetCollection<Record>("rdns_records");
-                    collection.EnsureIndex("Ip", false);
-                    Logging.info("rdns db: start shrinking...");
+                    cfgCollection = liteDb.GetCollection("meta");
+                    collection = liteDb.GetCollection<Record>("dns_records");
+                    collection.EnsureIndex("Ips", "$.Ips[*]", false);
+                    collection.EnsureIndex("Domain", false);
+                    Logging.info($"dns db: {collection.Count()} records.");
+                    CheckShrink();
+                }
+
+                BsonValue GetConfigValue(string name)
+                {
+                    return cfgCollection.FindOne(Query.EQ("Key", name))?["Value"];
+                }
+
+                void SetConfigValue(string name, BsonValue value)
+                {
+                    var doc = cfgCollection.FindOne(Query.EQ("Key", name));
+                    if (doc == null) {
+                        doc = new BsonDocument();
+                        doc.Add("Key", name);
+                    }
+                    doc["Value"] = value;
+                    cfgCollection.Upsert(doc);
+                }
+
+                private void CheckShrink()
+                {
+                    const string ls = "LastShrink";
+                    var lastShrink = GetConfigValue(ls);
+                    Logging.info("dns db: last shrink: " + (lastShrink?.AsDateTime.ToString() ?? "(null)"));
+                    if (lastShrink == null || DateTime.UtcNow - lastShrink.AsDateTime > TimeSpan.FromDays(1)) {
+                        SetConfigValue(ls, DateTime.UtcNow);
+                        Shrink();
+                    }
+                }
+
+                private void Shrink()
+                {
+                    Logging.info("dns db: start shrinking...");
                     var reduced = liteDb.Shrink();
                     if (reduced > 0) {
-                        Logging.info("rdns db: shrinked and reduced " + reduced + " bytes.");
+                        Logging.info("dns db: shrinked and reduced " + reduced + " bytes.");
                     } else if (reduced < 0) {
-                        Logging.info("rdns db: shrinked and \"reduced\" " + reduced + " bytes.");
+                        Logging.info("dns db: shrinked and \"reduced\" " + reduced + " bytes.");
                     } else {
-                        Logging.info("rdns db: shrinked and nothing happended.");
+                        Logging.info("dns db: shrinked and nothing happended.");
                     }
+                }
+
+                public void Set(string domain, IpRecord val)
+                {
+                    lock (syncRoot) {
+                        var r = FindDocByDomain(domain).SingleOrDefault();
+                        if (r == null)
+                            r = new Record() { Domain = domain };
+                        r.Ips = val.ipLongs;
+                        r.Date = DateTime.UtcNow;
+                        r.Expire = val.expire;
+                        collection.Upsert(r);
+                    }
+                }
+
+                public void Set(long[] ips, string domain)
+                {
+                    // done by Set(string, IpRecord)
                 }
 
                 public void Set(long ip, string domain)
                 {
-                    if (domain == null)
-                        throw new ArgumentNullException(nameof(domain));
-
-                    lock (syncLock) {
-                        Record doc = GetFirstOrNull(ip, FindDocByIp(ip));
-                        if (doc == null) {
-                            doc = new Record { Ip = ip, Domain = domain };
-                        } else {
-                            if (domain == doc.Domain)
-                                return;
-                            Logging.warning($"rdns db: set [{new IPAddress(ip)}] = {domain} overriding {doc.Domain}");
-                            doc.Domain = domain;
-                        }
-
-                        collection.Upsert(doc);
-                    }
                 }
 
-                private Record GetFirstOrNull(long ip, IEnumerable<Record> docs)
+                public string TryGetDomain(long ip)
+                {
+                    var docs = FindDocByIp(ip);
+                    var r = GetFirstOrNull(ip, docs, out var m);
+                    if (m) {
+                        var domainsSb = new StringBuilder();
+                        foreach (var item in docs) {
+                            if (domainsSb.Length != 0)
+                                domainsSb.Append('|');
+                            domainsSb.Append(item.Domain);
+                            if (r.Expire < item.Expire) {
+                                r = item;
+                            }
+                        }
+                        Logging.warning($"dns db: multiple domains ({domainsSb}) resovle to a ip address ({new IPAddress(ip)}).");
+                    }
+                    return r?.Domain;
+                }
+
+                public bool TryGetIp(string domain, out IpRecord val)
+                {
+                    var r = FindDocByDomain(domain).SingleOrDefault();
+                    if (r != null) {
+                        val = new IpRecord { ipLongs = r.Ips, expire = r.Expire };
+                        return true;
+                    }
+                    val = default(IpRecord);
+                    return false;
+                }
+
+
+                private IEnumerable<Record> FindDocByIp(long ip)
+                {
+                    return collection.Find(Query.EQ("Ips[*]", new BsonValue(ip)));
+                }
+
+                private IEnumerable<Record> FindDocByDomain(string domain)
+                {
+                    return collection.Find(Query.EQ("Domain", new BsonValue(domain)));
+                }
+
+                private Record GetFirstOrNull(long ip, IEnumerable<Record> docs, out bool multipleItems)
                 {
                     Record doc;
                     var e = docs.GetEnumerator();
                     if (e.MoveNext()) {
                         doc = e.Current;
                         if (e.MoveNext()) {
-                            var docsList = docs.ToList();
-                            string domainsStr = string.Join("|", docsList.Select(x => x.Domain));
-                            Logging.warning($"rdns db: multiple domains ({domainsStr}) resovles to a ip address ({new IPAddress(ip)}).");
-                            for (int i = 0; i < docsList.Count; i++) {
-                                var d = docsList[i];
-                                if (d.Domain == null) // marked as deleted
-                                    continue;
-                                for (int j = i + 1; j < docsList.Count; j++) {
-                                    Record d2 = docsList[j];
-                                    if (d.Domain == d2.Domain) {
-                                        var ok = collection.Delete(d2.Id);
-                                        Logging.warning($"rdns db: {(ok ? "deleted" : "failed to delete")} duplicated " + d2);
-                                        d2.Domain = null;
-                                    }
-                                }
-                            }
+                            multipleItems = true;
+                            return doc;
                         }
                     } else {
                         doc = null;
                     }
-
+                    multipleItems = false;
                     return doc;
-                }
-
-                public void Set(long[] ips, string domain)
-                {
-                    foreach (var ip in ips) {
-                        Set(ip, domain);
-                    }
-                }
-
-                public string TryGetDomain(long ip)
-                {
-                    var doc = GetFirstOrNull(ip, FindDocByIp(ip));
-                    return doc?.Domain;
-                }
-
-                private IEnumerable<Record> FindDocByIp(long ip)
-                {
-                    return collection.Find(Query.EQ("Ip", new BsonValue(ip)));
                 }
 
                 class Record
                 {
                     public int Id { get; set; }
-                    public long Ip { get; set; }
                     public string Domain { get; set; }
+                    public long[] Ips { get; set; }
+                    public DateTime Date { get; set; }
+                    public DateTime Expire { get; set; }
 
                     public override string ToString()
                     {
-                        return $"{{Id={Id}, Ip={Ip}, Domain={Domain}}}";
+                        return $"{{Id={Id}, Domain={Domain}, Ips={string.Join("|", Ips)}}}";
                     }
                 }
             }
