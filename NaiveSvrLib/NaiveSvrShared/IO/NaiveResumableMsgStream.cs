@@ -15,7 +15,7 @@ namespace NaiveSocks
         public IMsgStream BaseStream { get; private set; }
 
         public int ReceivedPacketsCount { get; private set; }
-        
+
         public int SentPacketsCount { get; private set; }
 
         public int AckedPacketsCount { get; private set; }
@@ -132,100 +132,17 @@ namespace NaiveSocks
                 throw new InvalidOperationException();
             BaseStream = null;
         }
-        
+
         private Task WaitBaseStream()
         {
             if (BaseStream != null)
                 return NaiveUtils.CompletedTask;
             throw new NotImplementedException();
         }
-        
+
         private void OnBaseStreamFailed()
         {
             throw new NotImplementedException();
-        }
-    }
-
-    public class MyQueue<T>
-    {
-        private T[] arr;
-        private int readIndex;
-        private int writeIndex;
-        private int count;
-
-        public int Count => count;
-
-        public MyQueue()
-        {
-        }
-
-        public MyQueue(int initialCapacity)
-        {
-            arr = new T[initialCapacity];
-        }
-
-        public void Enqueue(T val)
-        {
-            try {
-                if (arr.Length == count) {
-                    var newarr = new T[arr.Length * 4];
-                    for (int i = 0; i < count; i++) {
-                        var readI = (readIndex + i) % newarr.Length;
-                        newarr[i] = arr[readI];
-                    }
-                    arr = newarr;
-                    readIndex = 0;
-                    writeIndex = count;
-                }
-            } catch (NullReferenceException) {
-                arr = new T[4];
-            }
-            arr[writeIndex] = val;
-            writeIndex++;
-            if (writeIndex == arr.Length)
-                writeIndex = 0;
-            count++;
-        }
-
-        public T Dequeue()
-        {
-            if (!TryDequeue(out var val))
-                throw new InvalidOperationException("can not dequeue");
-            return val;
-        }
-
-        public T Peek()
-        {
-            if (!TryPeek(out var val))
-                throw new InvalidOperationException("can not peek");
-            return val;
-        }
-
-        public bool TryDequeue(out T val)
-        {
-            return TryDequeueImpl(false, out val);
-        }
-
-        public bool TryPeek(out T val)
-        {
-            return TryDequeueImpl(true, out val);
-        }
-
-        public bool TryDequeueImpl(bool peek, out T val)
-        {
-            if (count == 0) {
-                val = default(T);
-                return false;
-            }
-            val = arr[readIndex];
-            if (!peek) {
-                arr[readIndex] = default(T); // to release references
-                readIndex++;
-                if (readIndex == arr.Length)
-                    readIndex = 0;
-                count--;
-            }
-            return true;
         }
     }
 }

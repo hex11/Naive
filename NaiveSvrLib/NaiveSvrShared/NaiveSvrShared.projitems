@@ -33,6 +33,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)IO\Buffer\BytesSegment.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IO\Buffer\BytesView.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IO\FilterBase.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IO\MyQueue.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IO\NaiveResumableMsgStream.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IO\Socket\SocketStream.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IO\Socket\SocketStreamFa.cs" />
