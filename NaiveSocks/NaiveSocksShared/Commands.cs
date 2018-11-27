@@ -268,10 +268,8 @@ namespace NaiveSocks
                     }
                     PrintLogs(command.Console, logs);
                 } else if (cmd == "test") {
-                    var strs = Enumerable.Range(1, 9).Select(x => new string((char)('0' + x), x)).ToArray();
-                    for (int i = 0; i < 10_000; i++) {
-                        int num = NaiveUtils.Random.Next(0, 9);
-                        Logging.log(strs[num], Logging.Level.Debug);
+                    for (int i = 0; i < 10000; i++) {
+                        Logging.log("(Log test " + (i + 1) + " of 10000)", Logging.Level.Debug);
                     }
                 } else {
                     command.WriteLine("wrong arguments.");

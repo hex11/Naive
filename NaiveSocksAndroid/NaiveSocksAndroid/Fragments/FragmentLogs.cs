@@ -55,12 +55,22 @@ namespace NaiveSocksAndroid
             base.OnStart();
             if (!eventRegistered) {
                 Register();
-                var logs = Logging.getLogsHistoryArray();
-                dataset.Logs.Clear();
-                dataset.Logs.AddRange(logs);
-                dataset.Logs.Add(Logging.CreateLog(Logging.Level.None, "===== end of history log ====="));
+                UpdateDatasetRange();
                 dataset.NotifyDataSetChanged();
             }
+        }
+
+
+        private void UpdateDatasetRange() => UpdateDatasetRange(out _, out _);
+
+        private void UpdateDatasetRange(out int removed, out int appended)
+        {
+            var oldBegin = dataset.IndexBegin;
+            var oldEnd = dataset.IndexEnd;
+            dataset.IndexBegin = Logging.GetLogsMinIndex();
+            dataset.IndexEnd = dataset.IndexBegin + Logging.GetLogsCount();
+            removed = dataset.IndexBegin - oldBegin;
+            appended = dataset.IndexEnd - oldEnd;
         }
 
         public override void OnStop()
@@ -82,7 +92,7 @@ namespace NaiveSocksAndroid
 
         private void ClearDataset()
         {
-            dataset.Logs.Clear();
+            dataset.IndexBegin = dataset.IndexEnd = 0;
             dataset.NotifyDataSetChanged();
         }
 
@@ -98,49 +108,31 @@ namespace NaiveSocksAndroid
             eventRegistered = false;
         }
 
-        Queue<Logging.Log> logQueue = new Queue<Logging.Log>();
+        bool posting = false;
 
         private void Logging_Logged(Logging.Log log)
         {
             try {
-                bool post = false;
-                lock (logQueue) {
-                    if (logQueue.Count == 0) {
-                        post = true;
-                    }
-                    logQueue.Enqueue(log);
-                }
-                if (post) {
-                    recycler.Post(() => {
-                        if (dataset.Logs.Count > 10000) {
-                            dataset.Logs.RemoveRange(0, 100);
-                            dataset.NotifyItemRangeRemoved(0, 100);
+                if (!posting) {
+                    posting = true;
+                    recycler.PostDelayed(() => {
+                        posting = false;
+                        UpdateDatasetRange(out var removed, out var appended);
+                        if (removed > 0) {
+                            dataset.NotifyItemRangeRemoved(0, removed);
                         }
-                        var posStart = dataset.Logs.Count;
-                        lock (logQueue) {
-                            dataset.Logs.AddRange(logQueue);
-                            logQueue.Clear();
+                        if (appended > 0) {
+                            int count = dataset.IndexEnd - dataset.IndexBegin;
+                            dataset.NotifyItemRangeInserted(count - appended, appended);
+                            if (autoScroll) {
+                                recycler.SmoothScrollToPosition(count - 1);
+                            }
                         }
-                        int count = dataset.Logs.Count;
-                        dataset.NotifyItemRangeInserted(posStart, count - posStart);
-                        if (autoScroll) {
-                            recycler.SmoothScrollToPosition(count - 1);
-                        }
-                    });
+                    }, 50);
                 }
             } catch (Exception e) {
-                Logging.Logged -= Logging_Logged;
+                Unregister();
                 Logging.exception(e, Logging.Level.Error, "Logging_Logged exception");
-            }
-        }
-
-        private void putLog(Logging.Log log, bool autoScroll)
-        {
-            dataset.Logs.Add(log);
-            int pos = dataset.Logs.Count - 1;
-            dataset.NotifyItemInserted(pos);
-            if (autoScroll) {
-                recycler.SmoothScrollToPosition(pos);
             }
         }
 
@@ -183,11 +175,11 @@ namespace NaiveSocksAndroid
 
         class MyData : RecyclerView.Adapter
         {
-            public List<Logging.Log> Logs = new List<Logging.Log>();
-
             public Context Context;
 
-            public override int ItemCount => Logs.Count;
+            public int IndexBegin, IndexEnd; // excluding IndexEnd
+
+            public override int ItemCount => IndexEnd - IndexBegin;
 
             public override RecyclerView.ViewHolder OnCreateViewHolder(ViewGroup parent, int viewType)
             {
@@ -197,7 +189,11 @@ namespace NaiveSocksAndroid
             public override void OnBindViewHolder(RecyclerView.ViewHolder holder, int position)
             {
                 var myHolder = (MyViewHolder)holder;
-                var log = Logs[position];
+                var log = Logging.TryGetLog(IndexBegin + position) ?? new Logging.Log() {
+                    level = Logging.Level.None,
+                    runningTime = 0,
+                    text = " (Failed to fetch log index " + position + " (deleted))"
+                };
                 myHolder.Render(log);
             }
 
@@ -219,7 +215,7 @@ namespace NaiveSocksAndroid
 
             public void Render(Logging.Log log)
             {
-                Color color = getColorFromLevel(log.level) ?? Color.Black;
+                Color color = getColorFromLevel(log.level) ?? Color.LightGray;
                 string timestamp = "[" + log.time.ToString("HH:mm:ss.fff") + " " + log.levelStr + "]";
                 ssb.Append(timestamp, new BackgroundColorSpan(color), SpanTypes.ExclusiveExclusive);
                 ssb.Append(log.text);
