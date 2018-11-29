@@ -18,6 +18,7 @@ using Android.Content;
 using Android.Text;
 using Android.Text.Style;
 using Android.Support.V7.Widget;
+using ClipboardManager = Android.Content.ClipboardManager;
 
 namespace NaiveSocksAndroid
 {
@@ -204,10 +205,11 @@ namespace NaiveSocksAndroid
             }
         }
 
-        class MyViewHolder : RecyclerView.ViewHolder
+        class MyViewHolder : RecyclerView.ViewHolder, View.IOnLongClickListener
         {
             public MyViewHolder(Context context) : base(new TextView(context))
             {
+                textView.SetOnLongClickListener(this);
             }
 
             SpannableStringBuilder ssb = new SpannableStringBuilder();
@@ -226,6 +228,14 @@ namespace NaiveSocksAndroid
             {
                 ssb.Clear();
                 textView.Text = null;
+            }
+
+            public bool OnLongClick(View v)
+            {
+                var cs = textView.Context.GetSystemService(Context.ClipboardService) as ClipboardManager;
+                cs.PrimaryClip = ClipData.NewPlainText(new Java.Lang.String("log"), ssb);
+                Toast.MakeText(textView.Context, R.String.copied, ToastLength.Short).Show();
+                return true;
             }
         }
     }

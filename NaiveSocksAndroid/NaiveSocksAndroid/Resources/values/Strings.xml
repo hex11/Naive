@@ -33,4 +33,5 @@
   <string name="press_again_to_quit">Press again to quit, or...</string>
   <string name="save_and_quit">Save and quit</string>
   <string name="saving_error">Error: </string>
+  <string name="copied">Copied</string>
 </resources>
