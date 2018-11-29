@@ -43,16 +43,7 @@ namespace NaiveSocks
             if (consoleHub == null) {
                 consoleHub = new ConsoleHub();
                 var cmdHub = consoleHub.CommandHub;
-                Commands.AddCommands(cmdHub, Controller, "");
-                if (cmds != null) {
-                    foreach (var cmd in cmds) {
-                        if (cmd == "proc" && Environment.OSVersion.Platform == PlatformID.Unix) {
-                            cmdHub.AddCmdHandler("proc", (c) => {
-                                c.Write(File.ReadAllText("/proc/self/status"));
-                            });
-                        }
-                    }
-                }
+                Commands.AddCommands(cmdHub, Controller, "", cmds);
             }
         }
 

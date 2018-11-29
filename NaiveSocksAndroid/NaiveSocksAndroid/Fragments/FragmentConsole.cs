@@ -96,7 +96,7 @@ namespace NaiveSocksAndroid
             }
 
             consoleHub = new ConsoleHub();
-            Commands.AddCommands(consoleHub.CommandHub, controller, "");
+            Commands.AddCommands(consoleHub.CommandHub, controller, "", new[] { "all" });
             new System.Threading.Thread(() => {
                 try {
                     consoleHub.CommandHub.CmdLoop(proxy);

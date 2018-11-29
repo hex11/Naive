@@ -3797,6 +3797,9 @@ namespace NaiveSocksAndroid
 			// aapt resource value: 0x7f0d0032
 			public const int console = 2131558450;
 			
+			// aapt resource value: 0x7f0d004a
+			public const int copied = 2131558474;
+			
 			// aapt resource value: 0x7f0d002c
 			public const int drawer_close = 2131558444;
 			

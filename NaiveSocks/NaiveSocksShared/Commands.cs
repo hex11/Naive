@@ -16,6 +16,15 @@ namespace NaiveSocks
 {
     public class Commands
     {
+        static Commands()
+        {
+            if (Environment.OSVersion.Platform == PlatformID.Unix) {
+                AdditionalCommands.Add(new KeyValuePair<string, CommandHandler>("proc", (c) => {
+                    c.Write(File.ReadAllText("/proc/self/status"));
+                }));
+            }
+        }
+
         public static void loadController(Controller c, string configFilePath)
         {
             c.LoadConfigFileOrWarning(configFilePath);
@@ -92,7 +101,9 @@ namespace NaiveSocks
             }
         }
 
-        public static void AddCommands(CommandHub cmdHub, Controller controller, string prefix)
+        public static List<KeyValuePair<string, CommandHandler>> AdditionalCommands = new List<KeyValuePair<string, CommandHandler>>();
+
+        public static void AddCommands(CommandHub cmdHub, Controller controller, string prefix, string[] cmds = null)
         {
             cmdHub.AddCmdHandler(prefix + "c", command => {
                 var con = command.Console;
@@ -395,21 +406,37 @@ namespace NaiveSocks
                 ThreadPool.SetMaxThreads(cmd.ArgOrNull(2).ToInt(), cmd.ArgOrNull(3).ToInt());
             }, "workerMin portMin workerMax portMax");
             AddSocketTests(cmdHub, prefix);
-            cmdHub.AddCmdHandler(prefix + "ya-ls", cmd => {
-                void lsEpoller(Command c, Epoller e)
-                {
-                    var running = e.RunningHandler;
-                    if (running != null)
-                        cmd.WriteLine("running -> " + running);
-                    foreach (var item in e.GetMap()) {
-                        cmd.WriteLine(item.Key + " -> " + item.Value);
+            if (Environment.OSVersion.Platform == PlatformID.Unix) {
+                cmdHub.AddCmdHandler(prefix + "ya-ls", cmd => {
+                    void lsEpoller(Command c, Epoller e)
+                    {
+                        var running = e.RunningHandler;
+                        if (running != null)
+                            cmd.WriteLine("running -> " + running);
+                        foreach (var item in e.GetMap()) {
+                            cmd.WriteLine(item.Key + " -> " + item.Value);
+                        }
+                    }
+                    cmd.WriteLine("GlobalEpoller:");
+                    lsEpoller(cmd, YASocket.GlobalEpoller);
+                    cmd.WriteLine("GlobalEpollerW:");
+                    lsEpoller(cmd, YASocket.GlobalEpollerW);
+                });
+            }
+            if (cmds != null) {
+                if (cmds.Length == 1 && cmds[0] == "all") {
+                    foreach (var r in AdditionalCommands) {
+                        cmdHub.AddCmdHandler(prefix + r.Key, r.Value);
+                    }
+                } else {
+                    foreach (var cmd in cmds) {
+                        var r = AdditionalCommands.Find(x => x.Key == cmd);
+                        if (r.Value != null) {
+                            cmdHub.AddCmdHandler(prefix + r.Key, r.Value);
+                        }
                     }
                 }
-                cmd.WriteLine("GlobalEpoller:");
-                lsEpoller(cmd, YASocket.GlobalEpoller);
-                cmd.WriteLine("GlobalEpollerW:");
-                lsEpoller(cmd, YASocket.GlobalEpollerW);
-            });
+            }
         }
 
         private static void AddSocketTests(CommandHub cmdHub, string prefix)
