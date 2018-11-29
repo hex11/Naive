@@ -55,7 +55,7 @@ namespace NaiveSocksAndroid
             public void StartDnsServer()
             {
                 if (vpnConfig.DnsDomainDb) {
-                    var db = new DnsDb(CrashHandler.DnsDbFile);
+                    var db = new DnsDb(App.DnsDbFile);
                     cacheRDns = db;
                     cacheDns = db;
                 } else {

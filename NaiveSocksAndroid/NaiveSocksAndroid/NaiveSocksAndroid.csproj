@@ -132,7 +132,7 @@
     <Compile Include="ActivityWithToolBar.cs" />
     <Compile Include="BgService.cs" />
     <Compile Include="AppConfig.cs" />
-    <Compile Include="CrashHandler.cs" />
+    <Compile Include="App.cs" />
     <Compile Include="EditorActivity.cs" />
     <Compile Include="Fragments\FragmentAdapters.cs" />
     <Compile Include="Fragments\FragmentConnections.cs" />

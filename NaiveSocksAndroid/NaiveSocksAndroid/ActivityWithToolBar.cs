@@ -20,7 +20,7 @@ namespace NaiveSocksAndroid
 
         protected override void OnCreate(Bundle savedInstanceState)
         {
-            CrashHandler.CheckInit();
+            App.CheckInit();
             AppConfig.Init(ApplicationContext);
             Handler = new Handler(ApplicationContext.MainLooper);
 

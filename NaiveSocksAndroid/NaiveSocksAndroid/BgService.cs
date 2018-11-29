@@ -29,7 +29,7 @@ namespace NaiveSocksAndroid
     {
         public override void OnReceive(Context context, Intent intent)
         {
-            CrashHandler.CheckInit();
+            App.CheckInit();
             AppConfig.Init(Application.Context);
             if (AppConfig.Current.Autostart) {
                 Logging.info("Autostart...");
@@ -95,7 +95,7 @@ namespace NaiveSocksAndroid
 
         public override void OnCreate()
         {
-            CrashHandler.CheckInit();
+            App.CheckInit();
             AppConfig.Init(ApplicationContext);
 
             base.OnCreate();
@@ -180,7 +180,7 @@ namespace NaiveSocksAndroid
                 Logger.info("load and start controller...");
                 try {
                     Controller.ConfigTomlLoaded += (t) => {
-                        CrashHandler.CrashLogFile = Controller.ProcessFilePath("UnhandledException.txt");
+                        App.CrashLogFile = Controller.ProcessFilePath("UnhandledException.txt");
                         if (t.TryGetValue<Config>("android", out var config)) {
                             currentConfig = config;
                             if (config.socket_impl != null) {

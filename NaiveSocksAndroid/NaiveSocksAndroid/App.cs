@@ -11,9 +11,9 @@ using System.Threading;
 
 namespace NaiveSocksAndroid
 {
-    static class CrashHandler
+    static class App
     {
-        static CrashHandler()
+        static App()
         {
             AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
         }
@@ -74,14 +74,19 @@ namespace NaiveSocksAndroid
         {
             Commands.AdditionalCommands.Add(new KeyValuePair<string, CommandHandler>("dnsdb-dump", cmd => {
                 var db = new LiteDB.LiteDatabase(DnsDbFile);
+                int cols = 0;
                 foreach (var collName in db.GetCollectionNames()) {
                     cmd.Write("===== COLLECTION START (" + collName + ") =====\n");
+                    int docs = 0;
                     var coll = db.GetCollection(collName);
                     foreach (var item in coll.FindAll()) {
                         cmd.Write(item.ToString() + "\n");
+                        docs++;
                     }
-                    cmd.Write("===== COLLECTION END (" + collName + ") =====\n");
+                    cmd.Write("===== COLLECTION END (" + collName + ") " + docs + " documents =====\n");
+                    cols++;
                 }
+                cmd.Write("(" + cols + " collections)\n");
             }));
             Commands.AdditionalCommands.Add(new KeyValuePair<string, CommandHandler>("dnsdb-drop", cmd => {
                 cmd.Write("deleting: " + DnsDbFile + "\n");

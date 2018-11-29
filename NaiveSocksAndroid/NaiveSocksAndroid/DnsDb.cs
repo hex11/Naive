@@ -152,7 +152,7 @@ namespace NaiveSocksAndroid
                     return doc;
                 }
 
-                class Record
+                public class Record
                 {
                     public int Id { get; set; }
                     public string Domain { get; set; }
@@ -162,7 +162,7 @@ namespace NaiveSocksAndroid
 
                     public override string ToString()
                     {
-                        return $"{{Id={Id}, Domain={Domain}, Ips={string.Join("|", Ips)}}}";
+                        return $"{{Id={Id}, Domain={Domain}, Ips={string.Join("|", Ips)}, Date={Date}, Expire={Expire}}}";
                     }
                 }
             }
