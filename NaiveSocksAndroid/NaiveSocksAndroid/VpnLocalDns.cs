@@ -87,20 +87,33 @@ namespace NaiveSocksAndroid
                         Task.Run(async () => {
                             if (vpnConfig.DnsDebug)
                                 Logging.debugForce("DNS message received, length: " + r.Buffer.Length);
+                            byte[] respArray;
                             try {
                                 var req = Request.FromArray(r.Buffer);
                                 var resp = await HandleDnsRequest(req);
-                                var respArray = resp.ToArray();
+                                respArray = resp.ToArray();
                                 if (vpnConfig.DnsDebug)
                                     Logging.debugForce("DNS message processed, length to send: " + respArray.Length);
-                                try {
-                                    await udpClient.SendAsync(respArray, respArray.Length, r.RemoteEndPoint);
-                                } catch (Exception e) {
-                                    Logging.exception(e, Logging.Level.Error, "DNS server failed to send response to " + r.RemoteEndPoint);
-                                    return;
-                                }
                             } catch (Exception e) {
                                 Logging.exception(e, Logging.Level.Error, "DNS server processing msg from " + r.RemoteEndPoint);
+                                if (r.Buffer.Length < Header.SIZE)
+                                    return;
+                                try {
+                                    Header header = Header.FromArray(r.Buffer);
+                                    var resp = new Response();
+                                    resp.Id = header.Id;
+                                    resp.ResponseCode = ResponseCode.NotImplemented;
+                                    respArray = resp.ToArray();
+                                } catch (Exception e2) {
+                                    Logging.exception(e, Logging.Level.Error, "DNS server respond NotImplemented to " + r.RemoteEndPoint);
+                                    return;
+                                }
+                            }
+                            try {
+                                await udpClient.SendAsync(respArray, respArray.Length, r.RemoteEndPoint);
+                            } catch (Exception e) {
+                                Logging.exception(e, Logging.Level.Error, "DNS server failed to send response to " + r.RemoteEndPoint);
+                                return;
                             }
                         }).Forget();
                     }
