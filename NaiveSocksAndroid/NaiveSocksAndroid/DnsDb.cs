@@ -53,8 +53,8 @@ namespace NaiveSocksAndroid
                     const string ls = "LastShrink";
                     var lastShrink = GetConfigValue(ls);
                     Logging.info("dns db: last shrink: " + (lastShrink?.AsDateTime.ToString() ?? "(null)"));
-                    if (lastShrink == null || DateTime.UtcNow - lastShrink.AsDateTime > TimeSpan.FromDays(1)) {
-                        SetConfigValue(ls, DateTime.UtcNow);
+                    if (lastShrink == null || DateTime.Now - lastShrink.AsDateTime > TimeSpan.FromDays(1)) {
+                        SetConfigValue(ls, DateTime.Now);
                         Shrink();
                     }
                 }
@@ -79,7 +79,7 @@ namespace NaiveSocksAndroid
                         if (r == null)
                             r = new Record() { Domain = domain };
                         r.Ips = val.ipLongs;
-                        r.Date = DateTime.UtcNow;
+                        r.Date = DateTime.Now;
                         r.Expire = val.expire;
                         collection.Upsert(r);
                     }

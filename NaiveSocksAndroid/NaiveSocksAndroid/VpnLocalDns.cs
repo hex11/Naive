@@ -88,8 +88,6 @@ namespace NaiveSocksAndroid
                                 var req = Request.FromArray(r.Buffer);
                                 var resp = await HandleDnsRequest(req);
                                 respArray = resp.ToArray();
-                                if (vpnConfig.DnsDebug)
-                                    Logging.debugForce("DNS message processed, length to send: " + respArray.Length);
                             } catch (Exception e) {
                                 Logging.exception(e, Logging.Level.Error, "DNS server processing msg from " + r.RemoteEndPoint);
                                 if (r.Buffer.Length < Header.SIZE)
@@ -106,6 +104,8 @@ namespace NaiveSocksAndroid
                                 }
                             }
                             try {
+                                if (vpnConfig.DnsDebug)
+                                    Logging.debugForce("DNS message processed, length to send: " + respArray.Length);
                                 await udpClient.SendAsync(respArray, respArray.Length, r.RemoteEndPoint);
                             } catch (Exception e) {
                                 Logging.exception(e, Logging.Level.Error, "DNS server failed to send response to " + r.RemoteEndPoint);
@@ -145,7 +145,7 @@ namespace NaiveSocksAndroid
                             IPAddress ip;
                             bool exist = cacheDns.TryGetIp(strName, out var val);
                             var ipLongs = val.ipLongs;
-                            if (exist && val.expire > DateTime.UtcNow) {
+                            if (exist && val.expire > DateTime.Now) {
                                 ip = new IPAddress(ipLongs[NaiveUtils.Random.Next(ipLongs.Length)]);
                             } else {
                                 if (dnsResolver == null) {
@@ -168,7 +168,7 @@ namespace NaiveSocksAndroid
                                 }
                                 cacheDns.Set(strName, new IpRecord {
                                     ipLongs = ipLongs,
-                                    expire = DateTime.UtcNow.AddSeconds(vpnConfig.DnsCacheTtl)
+                                    expire = DateTime.Now.AddSeconds(vpnConfig.DnsCacheTtl)
                                 });
                                 cacheRDns.Set(ipLongs, strName);
                             }
