@@ -202,7 +202,7 @@ namespace NaiveSocks
                 command.WriteLine($"Connections: {controller.RunningConnections} running, {controller.TotalHandledConnections} handled, {controller.TotalFailedConnections} failed");
                 command.WriteLine($"MyStream Copied: {MyStream.TotalCopiedPackets:N0} packets, {MyStream.TotalCopiedBytes:N0} bytes");
                 command.WriteLine($"SocketStream: {SocketStream.GlobalCounters.StringRead};");
-                command.WriteLine($"               {SocketStream.GlobalCounters.StringWrite}.");
+                command.WriteLine($"              {SocketStream.GlobalCounters.StringWrite}.");
             });
             cmdHub.AddCmdHandler(prefix + "config", c => {
                 var con = c.Console;

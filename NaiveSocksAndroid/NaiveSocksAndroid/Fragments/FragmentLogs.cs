@@ -68,10 +68,12 @@ namespace NaiveSocksAndroid
         {
             var oldBegin = dataset.IndexBegin;
             var oldEnd = dataset.IndexEnd;
-            dataset.IndexBegin = Logging.GetLogsMinIndex();
-            dataset.IndexEnd = dataset.IndexBegin + Logging.GetLogsCount();
+            Logging.GetLogsStat(out var begin, out var count);
+            dataset.IndexBegin = begin;
+            dataset.IndexEnd = begin + count;
             removed = dataset.IndexBegin - oldBegin;
             appended = dataset.IndexEnd - oldEnd;
+            MainActivity.Title = Resources.GetString(R.String.logs) + " [" + dataset.IndexBegin + " - " + (dataset.IndexEnd - 1) + "]";
         }
 
         public override void OnStop()
@@ -222,18 +224,18 @@ namespace NaiveSocksAndroid
                 ssb.Append(timestamp, new BackgroundColorSpan(color), SpanTypes.ExclusiveExclusive);
                 ssb.Append(log.text);
                 textView.SetText(ssb, TextView.BufferType.Spannable);
+                ssb.Clear();
             }
 
             public void Reset()
             {
-                ssb.Clear();
                 textView.Text = null;
             }
 
             public bool OnLongClick(View v)
             {
                 var cs = textView.Context.GetSystemService(Context.ClipboardService) as ClipboardManager;
-                cs.PrimaryClip = ClipData.NewPlainText(new Java.Lang.String("log"), ssb);
+                cs.PrimaryClip = ClipData.NewPlainText(new Java.Lang.String("log"), textView.TextFormatted);
                 Toast.MakeText(textView.Context, R.String.copied, ToastLength.Short).Show();
                 return true;
             }
