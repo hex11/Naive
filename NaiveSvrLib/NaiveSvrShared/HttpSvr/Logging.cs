@@ -169,8 +169,11 @@ namespace Naive.HttpSvr
             return logBuffer.GetLastLogs(arrSeg);
         }
 
-        public static int GetLogsCount() => logBuffer.Count;
-        public static int GetLogsMinIndex() => logBuffer.MinIndex;
+        public static void GetLogsStat(out int minIndex, out int count)
+        {
+            minIndex = logBuffer.MinIndex;
+            count = logBuffer.Count;
+        }
 
         public static Logging.Log? TryGetLog(int index) => logBuffer.TryGetLog(index);
 

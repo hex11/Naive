@@ -63,6 +63,7 @@ namespace NaiveSocksAndroid
             textView.SetPadding(16, 16, 16, 16);
             textView.SetBackgroundColor(Color.Black);
             textView.SetTextColor(Color.LightGray);
+            textView.SetText(ssb, TextView.BufferType.Spannable);
 
             editText = new EditText(this.Context) {
                 Background = null,
@@ -119,7 +120,8 @@ namespace NaiveSocksAndroid
                 opsPending = true;
                 scrollView.PostDelayed(() => {
                     opsPending = false;
-                    textView.SetText(ssb, TextView.BufferType.Spannable);
+                    textView.Append(ssb);
+                    ssb.Clear();
                     textView.RequestLayout();
                     scrollView.Post(() => {
                         scrollView.FullScroll(FocusSearchDirection.Down);
