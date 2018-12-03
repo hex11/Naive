@@ -120,6 +120,8 @@ namespace NaiveSocksAndroid
                     posting = true;
                     recycler.PostDelayed(() => {
                         posting = false;
+                        if (!this.IsAdded)
+                            return;
                         UpdateDatasetRange(out var removed, out var appended);
                         if (removed > 0) {
                             dataset.NotifyItemRangeRemoved(0, removed);
