@@ -28,8 +28,20 @@
   <string name="config_editor">配置编辑器</string>
   <string name="open">打开</string>
   <string name="save">保存</string>
+  <string name="encode_decode">Encode/decode</string>
   <string name="file_saved">文件已保存</string>
   <string name="press_again_to_quit">再按一次返回，或者...</string>
   <string name="save_and_quit">保存并关闭</string>
   <string name="saving_error">错误: </string>
+  <string name="copied">已复制</string>
+  <string name="initializing">初始化...</string>
+  <string name="controller_loading">控制器加载中...</string>
+  <string name="controller_starting">控制器启动中...</string>
+  <string name="controller_started">控制器已启动.</string>
+  <string name="starting_error">启动错误: </string>
+  <string name="controller_reloading">控制器重载中...</string>
+  <string name="controller_reloaded">控制器已重载.</string>
+  <string name="reloading_error">重载错误: </string>
+  <string name="gc_done">GC 完毕</string>
+  <string name="service_is_stopped">NaiveSocks 服务已停止</string>
 </resources>

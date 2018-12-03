@@ -28,8 +28,20 @@
   <string name="config_editor">設定エディタ</string>
   <string name="open">開く</string>
   <string name="save">保存する</string>
+  <string name="encode_decode">Encode/decode</string>
   <string name="file_saved">ファイルが保存されました</string>
   <string name="press_again_to_quit">もう一度押して終了します。または...</string>
   <string name="save_and_quit">保存して終了する</string>
   <string name="saving_error">エラー：</string>
+  <string name="copied">コピーしました</string>
+  <string name="initializing">初期化しています...</string>
+  <string name="controller_loading">コントローラはロード中...</string>
+  <string name="controller_starting">コントローラは起動しています...</string>
+  <string name="controller_started">コントローラは起動しました</string>
+  <string name="starting_error">起動エラー: </string>
+  <string name="controller_reloading">コントローラはリロード中......</string>
+  <string name="controller_reloaded">コントローラはリロードされました</string>
+  <string name="reloading_error">リロードエラー: </string>
+  <string name="gc_done">GC 完了</string>
+  <string name="service_is_stopped">サービスは停止されました</string>
 </resources>

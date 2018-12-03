@@ -3797,6 +3797,21 @@ namespace NaiveSocksAndroid
 			// aapt resource value: 0x7f0d0032
 			public const int console = 2131558450;
 			
+			// aapt resource value: 0x7f0d004c
+			public const int controller_loading = 2131558476;
+			
+			// aapt resource value: 0x7f0d0051
+			public const int controller_reloaded = 2131558481;
+			
+			// aapt resource value: 0x7f0d0050
+			public const int controller_reloading = 2131558480;
+			
+			// aapt resource value: 0x7f0d004e
+			public const int controller_started = 2131558478;
+			
+			// aapt resource value: 0x7f0d004d
+			public const int controller_starting = 2131558477;
+			
 			// aapt resource value: 0x7f0d004a
 			public const int copied = 2131558474;
 			
@@ -3830,8 +3845,14 @@ namespace NaiveSocksAndroid
 			// aapt resource value: 0x7f0d0036
 			public const int gc = 2131558454;
 			
+			// aapt resource value: 0x7f0d0053
+			public const int gc_done = 2131558483;
+			
 			// aapt resource value: 0x7f0d002e
 			public const int home = 2131558446;
+			
+			// aapt resource value: 0x7f0d004b
+			public const int initializing = 2131558475;
 			
 			// aapt resource value: 0x7f0d003b
 			public const int kill = 2131558459;
@@ -3869,6 +3890,9 @@ namespace NaiveSocksAndroid
 			// aapt resource value: 0x7f0d0035
 			public const int reload = 2131558453;
 			
+			// aapt resource value: 0x7f0d0052
+			public const int reloading_error = 2131558482;
+			
 			// aapt resource value: 0x7f0d003a
 			public const int restart = 2131558458;
 			
@@ -3884,8 +3908,14 @@ namespace NaiveSocksAndroid
 			// aapt resource value: 0x7f0d0013
 			public const int search_menu_title = 2131558419;
 			
+			// aapt resource value: 0x7f0d0054
+			public const int service_is_stopped = 2131558484;
+			
 			// aapt resource value: 0x7f0d0033
 			public const int start = 2131558451;
+			
+			// aapt resource value: 0x7f0d004f
+			public const int starting_error = 2131558479;
 			
 			// aapt resource value: 0x7f0d0028
 			public const int status_bar_notification_info_overflow = 2131558440;

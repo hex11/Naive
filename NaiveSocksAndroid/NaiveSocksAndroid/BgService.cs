@@ -106,7 +106,7 @@ namespace NaiveSocksAndroid
             notificationManager = (NotificationManager)GetSystemService(Context.NotificationService);
 
             restartBuilder = new NotificationCompat.Builder(this, MainNotifChannelId)
-                        .SetContentTitle("NaiveSocks service is stopped")
+                        .SetContentTitle(GetString(R.String.service_is_stopped))
                         .AddAction(BuildServiceAction(Actions.START, R.String.start, Android.Resource.Drawable.StarOff, 6))
                         .SetSmallIcon(Resource.Drawable.N)
                         .SetColor(unchecked((int)0xFF2196F3))
@@ -125,7 +125,7 @@ namespace NaiveSocksAndroid
             }
 
             builder = new NotificationCompat.Builder(this, MainNotifChannelId)
-                                    .SetContentText("initializing...")
+                                    .SetContentText(GetString(R.String.initializing))
                                     .SetContentIntent(BuildIntentToShowMainActivity())
                                     .AddAction(BuildServiceAction(Actions.KILL, R.String.kill, Android.Resource.Drawable.StarOff, 1))
                                     .AddAction(BuildServiceAction(Actions.RELOAD, R.String.reload, Android.Resource.Drawable.StarOff, 2))
@@ -141,7 +141,7 @@ namespace NaiveSocksAndroid
             }
 
             if (!isN) {
-                builder.SetContentTitle("NaiveSocks");
+                builder.SetContentTitle(GetString(R.String.app_name));
             }
         }
 
@@ -195,16 +195,16 @@ namespace NaiveSocksAndroid
                         }
                     };
                     var paths = AppConfig.GetNaiveSocksConfigPaths(this);
-                    putLine("loading controller...");
+                    putLine(GetString(R.String.controller_loading));
                     Controller.LoadConfigFileFromMultiPaths(paths, true);
-                    putLine("starting controller...");
+                    putLine(GetString(R.String.controller_starting));
                     Controller.Start();
                     Logger.info("controller started.");
-                    putLine("started.");
+                    putLine(GetString(R.String.controller_started));
                     CheckVPN();
                 } catch (System.Exception e) {
                     Logger.exception(e, Logging.Level.Error, "loading/starting controller");
-                    string msg = "starting error: " + e.Message;
+                    string msg = GetString(R.String.starting_error) + e.Message;
                     putLine(msg, 10000);
                     ShowToast(msg);
                     StopSelf();
@@ -278,41 +278,41 @@ namespace NaiveSocksAndroid
                     ShowToast(msg);
                 }
                 switch (action) {
-                case Actions.START:
-                    this.ToForeground();
-                    break;
-                case Actions.START_VPN:
-                    StartVpn();
-                    break;
-                case Actions.STOP:
-                    if (IsForegroundRunning)
-                        ToBackground(true);
-                    this.StopSelf();
-                    break;
-                case Actions.KILL:
-                    if (IsForegroundRunning)
-                        ToBackground(false);
-                    this.StopSelf(startId);
-                    notificationManager.Notify(MainNotificationId, restartBuilder.Build());
-                    System.Diagnostics.Process.GetCurrentProcess().Kill();
-                    break;
-                case Actions.RELOAD:
-                    putLine("controller reloading...");
-                    Reload();
-                    break;
-                case Actions.GC:
-                case Actions.GC_0:
-                    var before = GC.GetTotalMemory(false);
-                    GC.Collect(action == Actions.GC ? GC.MaxGeneration : 0);
-                    putLine($"GC Done. {before:N0} -> {GC.GetTotalMemory(false):N0}");
-                    if (!IsForegroundRunning)
+                    case Actions.START:
+                        this.ToForeground();
+                        break;
+                    case Actions.START_VPN:
+                        StartVpn();
+                        break;
+                    case Actions.STOP:
+                        if (IsForegroundRunning)
+                            ToBackground(true);
                         this.StopSelf();
-                    break;
-                default:
-                    Logging.warning("Unknown intent.Action: " + action);
-                    if (!IsForegroundRunning)
-                        this.StopSelf();
-                    break;
+                        break;
+                    case Actions.KILL:
+                        if (IsForegroundRunning)
+                            ToBackground(false);
+                        this.StopSelf(startId);
+                        notificationManager.Notify(MainNotificationId, restartBuilder.Build());
+                        System.Diagnostics.Process.GetCurrentProcess().Kill();
+                        break;
+                    case Actions.RELOAD:
+                        putLine(GetString(R.String.controller_reloading));
+                        Reload();
+                        break;
+                    case Actions.GC:
+                    case Actions.GC_0:
+                        var before = GC.GetTotalMemory(false);
+                        GC.Collect(action == Actions.GC ? GC.MaxGeneration : 0);
+                        putLine($"{GetString(R.String.gc_done)} {before:N0} -> {GC.GetTotalMemory(false):N0}");
+                        if (!IsForegroundRunning)
+                            this.StopSelf();
+                        break;
+                    default:
+                        Logging.warning("Unknown intent.Action: " + action);
+                        if (!IsForegroundRunning)
+                            this.StopSelf();
+                        break;
                 }
             }
             return StartCommandResult.Sticky;
@@ -330,10 +330,12 @@ namespace NaiveSocksAndroid
                     vpnHelper?.Stop();
                     Controller.Reload();
                     CheckVPN();
-                    putLine("controller reloaded");
+                    putLine(GetString(R.String.controller_reloaded));
                 } catch (Exception e) {
-                    ShowToast("reloading error: " + e.Message);
-                    putLine("reloading error: " + e.ToString());
+                    Logging.exception(e, Logging.Level.Error, "BgService.Reload()");
+                    var errString = GetString(R.String.reloading_error);
+                    ShowToast(errString + e.Message);
+                    putLine(errString + e.ToString());
                 }
             });
         }
