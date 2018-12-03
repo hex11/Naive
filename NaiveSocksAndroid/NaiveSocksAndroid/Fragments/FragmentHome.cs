@@ -56,24 +56,27 @@ namespace NaiveSocksAndroid
         {
             System.Diagnostics.Process proc = null;
 
-            NewDataItem("TotalMemory", sb => {
+            NewDataItem("Memory", sb => {
                 proc = System.Diagnostics.Process.GetCurrentProcess();
-                sb.Append(GC.GetTotalMemory(false).ToString("N0"));
+                sb.Append("GC Memory: ").Append(GC.GetTotalMemory(false).ToString("N0"))
+                    .Append(" / WS: ").Append(proc.WorkingSet64.ToString("N0"));
             });
-            NewDataItem("CollectionCount", sb => sb.Append(string.Join(
-                ", ",
-                Enumerable.Range(0, GC.MaxGeneration + 1)
-                    .Select(x => $"({x}) {GC.CollectionCount(x)}"))));
 
-            NewDataItem("WorkingSet", sb => sb.Append(proc.WorkingSet64.ToString("N0")));
+            NewDataItem("CollectionCount", sb => {
+                int max = GC.MaxGeneration + 1;
+                for (int i = 0; i < max; i++) {
+                    if (i != 0)
+                        sb.Append(" / ");
+                    sb.Append("Gen").Append(i).Append(": ").Append(GC.CollectionCount(i));
+                }
+            });
 
-            NewDataItem("PrivateMemory", sb => sb.Append(proc.PrivateMemorySize64.ToString("N0")));
-
-            NewDataItem("CPU Time", sb => {
+            NewDataItem("Time", sb => {
                 var cpuTime = Android.OS.Process.ElapsedCpuTime;
                 var runTime = SystemClock.ElapsedRealtime() - Android.OS.Process.StartElapsedRealtime;
-                sb.Append(cpuTime.ToString("N0")).Append(" ms")
-                    .Append(" (").Append(((float)cpuTime / runTime * 100).ToString("N2")).Append("% since process started)");
+                sb.Append("Process running: ").Append(TimeSpan.FromMilliseconds(runTime).ToString(@"d\.hh\:mm\:ss"));
+                sb.Append(" / CPU used: ").Append(cpuTime.ToString("N0")).Append(" ms")
+                    .Append(" (").Append(((float)cpuTime / runTime * 100).ToString("N2")).Append("%)");
             });
 
             NewDataItem("Threads", sb => {
@@ -108,6 +111,7 @@ namespace NaiveSocksAndroid
             var t = new TextView(Context);
             t.SetPadding(16, 8, 16, 8);
             t.SetBackgroundColor(new Android.Graphics.Color(unchecked((int)0xFF6FBFFF)));
+            t.SetTextColor(Android.Graphics.Color.Black);
             t.Text = title;
 
             var c = new TextView(Context);

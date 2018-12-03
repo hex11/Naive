@@ -188,21 +188,38 @@ namespace NaiveSocks
             }, "Usage: reload [NEW_FILE]");
             cmdHub.AddCmdHandler(prefix + "stat", command => {
                 var proc = Process.GetCurrentProcess();
-                command.WriteLine($"TotalMemory: {GC.GetTotalMemory(command.args.Contains("gc")).ToString("N0")}");
-                command.WriteLine("CollectionCount: " + string.Join(
-                    ", ",
-                    Enumerable.Range(0, GC.MaxGeneration + 1)
-                        .Select(x => $"({x}) {GC.CollectionCount(x)}")));
-                command.WriteLine($"WorkingSet: {proc.WorkingSet64.ToString("N0")}");
-                command.WriteLine($"PrivateMemory: {proc.PrivateMemorySize64.ToString("N0")}");
-                command.WriteLine($"CPUTime: {proc.TotalProcessorTime.TotalMilliseconds.ToString("N0")} ms");
+                var sb = new StringBuilder();
+                var con = command.Console;
+
+                con.Write("[Memory] ", ConsoleColor.Cyan);
+                command.WriteLine(sb.Append("GC: ").Append(GC.GetTotalMemory(false).ToString("N0"))
+                    .Append(" / WS: ").Append(proc.WorkingSet64.ToString("N0"))
+                    .Append(" / Private: ").Append(proc.PrivateMemorySize64.ToString("N0")).ToString());
+                sb.Clear();
+
+                con.Write("[CollectionCount] ", ConsoleColor.Cyan);
+                int max = GC.MaxGeneration + 1;
+                for (int i = 0; i < max; i++) {
+                    if (i != 0)
+                        sb.Append(" / ");
+                    sb.Append("Gen").Append(i).Append(": ").Append(GC.CollectionCount(i));
+                }
+                command.WriteLine(sb.ToString());
+                sb.Clear();
+
+                con.Write("[CPU Time] ", ConsoleColor.Cyan);
+                command.WriteLine(proc.TotalProcessorTime.TotalMilliseconds.ToString("N0") + " ms");
                 ThreadPool.GetMinThreads(out var workersMin, out var portsMin);
                 ThreadPool.GetMaxThreads(out var workersMax, out var portsMax);
-                command.WriteLine($"Threads: {proc.Threads.Count} (workers: {workersMin}-{workersMax}, ports: {portsMin}-{portsMax})");
-                command.WriteLine($"Connections: {controller.RunningConnections} running, {controller.TotalHandledConnections} handled, {controller.TotalFailedConnections} failed");
-                command.WriteLine($"MyStream Copied: {MyStream.TotalCopiedPackets:N0} packets, {MyStream.TotalCopiedBytes:N0} bytes");
-                command.WriteLine($"SocketStream: {SocketStream.GlobalCounters.StringRead};");
-                command.WriteLine($"              {SocketStream.GlobalCounters.StringWrite}.");
+                con.Write("[Threads] ", ConsoleColor.Cyan);
+                command.WriteLine($"{proc.Threads.Count} (workers: {workersMin}-{workersMax}, ports: {portsMin}-{portsMax})");
+                con.Write("[Connections] ", ConsoleColor.Cyan);
+                command.WriteLine($"{controller.RunningConnections} running, {controller.TotalHandledConnections} handled, {controller.TotalFailedConnections} failed");
+                con.Write("[MyStream Copied] ", ConsoleColor.Cyan);
+                command.WriteLine($"{MyStream.TotalCopiedPackets:N0} packets, {MyStream.TotalCopiedBytes:N0} bytes");
+                con.Write("[SocketStream Counters]\n", ConsoleColor.Cyan);
+                command.WriteLine($"  {SocketStream.GlobalCounters.StringRead};");
+                command.WriteLine($"  {SocketStream.GlobalCounters.StringWrite}.");
             });
             cmdHub.AddCmdHandler(prefix + "config", c => {
                 var con = c.Console;
