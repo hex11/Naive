@@ -32,8 +32,20 @@ namespace NaiveSocksAndroid
         {
             linearLayout = new LinearLayout(Context);
             linearLayout.Orientation = Orientation.Vertical;
-            linearLayout.SetPadding(16, 16, 16, 16);
+            linearLayout.SetPadding(8, 8, 8, 8);
+
             CreateDataItems();
+
+            linearLayout.AddView(CreateDataTitleView("Log"));
+            var frame = new FrameLayout(Context);
+            frame.Id = 233;
+            var match_parent = ViewGroup.LayoutParams.MatchParent;
+            frame.LayoutParameters = new LinearLayout.LayoutParams(match_parent, 0, 1);
+            linearLayout.AddView(frame);
+            ChildFragmentManager.BeginTransaction()
+                .Replace(frame.Id, new FragmentLogs() { InHome = true })
+                .Commit();
+
             return linearLayout;
         }
 
@@ -108,11 +120,7 @@ namespace NaiveSocksAndroid
 
         void NewDataItem(string title, Action<StringBuilder> contentFunc)
         {
-            var t = new TextView(Context);
-            t.SetPadding(16, 8, 16, 8);
-            t.SetBackgroundColor(new Android.Graphics.Color(unchecked((int)0xFF6FBFFF)));
-            t.SetTextColor(Android.Graphics.Color.Black);
-            t.Text = title;
+            TextView t = CreateDataTitleView(title);
 
             var c = new TextView(Context);
             c.SetPadding(32, 8, 16, 8);
@@ -121,6 +129,16 @@ namespace NaiveSocksAndroid
             linearLayout.AddView(c);
 
             items.Add(new KeyValuePair<TextView, Action<StringBuilder>>(c, contentFunc));
+        }
+
+        private TextView CreateDataTitleView(string title)
+        {
+            var t = new TextView(Context);
+            t.SetPadding(16, 8, 16, 8);
+            t.SetBackgroundColor(new Android.Graphics.Color(unchecked((int)0xFF6FBFFF)));
+            t.SetTextColor(Android.Graphics.Color.Black);
+            t.Text = title;
+            return t;
         }
     }
 }

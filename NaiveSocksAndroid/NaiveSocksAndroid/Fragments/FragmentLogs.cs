@@ -25,6 +25,7 @@ namespace NaiveSocksAndroid
     public class FragmentLogs : MyBaseFragment, ICanHandleMenu
     {
         private RecyclerView recycler;
+        private LinearLayoutManager linearlayout;
         private MyData dataset;
 
         private ContextThemeWrapper themeWrapper;
@@ -32,6 +33,8 @@ namespace NaiveSocksAndroid
         private int menuItemId;
         private bool autoScroll = true;
         private bool eventRegistered = false;
+
+        public bool InHome = false;
 
         public override View OnCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState)
         {
@@ -43,8 +46,11 @@ namespace NaiveSocksAndroid
             var View = inflater.Inflate(R.Layout.logs, container, false);
 
             recycler = View.FindViewById<RecyclerView>(R.Id.logparent);
-            recycler.SetLayoutManager(new LinearLayoutManager(this.Context) { StackFromEnd = true });
+            recycler.SetPadding(0, 8, 0, 8);
+            linearlayout = new LinearLayoutManager(this.Context) { StackFromEnd = true };
+            recycler.SetLayoutManager(linearlayout);
             recycler.SetItemAnimator(null);
+            recycler.AddOnScrollListener(new ScrollListenr(this));
             dataset = new MyData() { Context = themeWrapper };
             recycler.SetAdapter(dataset);
 
@@ -73,7 +79,9 @@ namespace NaiveSocksAndroid
             dataset.IndexEnd = begin + count;
             removed = dataset.IndexBegin - oldBegin;
             appended = dataset.IndexEnd - oldEnd;
-            MainActivity.Title = Resources.GetString(R.String.logs) + " [" + dataset.IndexBegin + " - " + (dataset.IndexEnd - 1) + "]";
+            if (!InHome) {
+                MainActivity.Title = Resources.GetString(R.String.logs) + " [" + dataset.IndexBegin + " - " + (dataset.IndexEnd - 1) + "]";
+            }
         }
 
         public override void OnStop()
@@ -127,10 +135,9 @@ namespace NaiveSocksAndroid
                             dataset.NotifyItemRangeRemoved(0, removed);
                         }
                         if (appended > 0) {
-                            int count = dataset.IndexEnd - dataset.IndexBegin;
-                            dataset.NotifyItemRangeInserted(count - appended, appended);
+                            dataset.NotifyItemRangeInserted(dataset.Count - appended, appended);
                             if (autoScroll) {
-                                recycler.SmoothScrollToPosition(count - 1);
+                                AutoScroll();
                             }
                         }
                     }, 50);
@@ -139,6 +146,11 @@ namespace NaiveSocksAndroid
                 Unregister();
                 Logging.exception(e, Logging.Level.Error, "Logging_Logged exception");
             }
+        }
+
+        private void AutoScroll()
+        {
+            recycler.SmoothScrollToPosition(dataset.Count);
         }
 
         private static Color? getColorFromLevel(Logging.Level level)
@@ -168,13 +180,41 @@ namespace NaiveSocksAndroid
         public void OnMenuItemSelected(IMenuItem item)
         {
             if (item.ItemId == menuItemId) {
-                autoScroll = !item.IsChecked;
+                autoScroll = !autoScroll;
                 item.SetChecked(autoScroll);
+                if (autoScroll)
+                    AutoScroll();
                 MainActivity.MakeSnackbar(MainActivity.FormatSwitchString(this.Context, R.String.autoscroll, autoScroll),
                     Android.Support.Design.Widget.Snackbar.LengthShort).Show();
                 //mainActivity.InvalidateOptionsMenu();
             } else {
                 Logging.warning($"FragmentLogs.OnMenuItemSelected: unknown menuitem id={item.ItemId}, title={item.TitleFormatted}");
+            }
+        }
+
+        class ScrollListenr : RecyclerView.OnScrollListener
+        {
+            public ScrollListenr(FragmentLogs fragment)
+            {
+                Fragment = fragment;
+            }
+
+            public FragmentLogs Fragment { get; }
+
+            private int oldState;
+
+            public override void OnScrollStateChanged(RecyclerView recyclerView, int newState)
+            {
+                if (newState == RecyclerView.ScrollStateDragging) {
+                    Fragment.autoScroll = false;
+                } else if (newState == RecyclerView.ScrollStateIdle && !Fragment.autoScroll) {
+                    var pos = Fragment.linearlayout.FindLastCompletelyVisibleItemPosition();
+                    if (pos == Fragment.dataset.Count - 1) {
+                        Fragment.autoScroll = true;
+                    }
+                }
+                oldState = newState;
+                base.OnScrollStateChanged(recyclerView, newState);
             }
         }
 
@@ -184,7 +224,9 @@ namespace NaiveSocksAndroid
 
             public int IndexBegin, IndexEnd; // excluding IndexEnd
 
-            public override int ItemCount => IndexEnd - IndexBegin;
+            public int Count => IndexEnd - IndexBegin;
+
+            public override int ItemCount => Count;
 
             public override RecyclerView.ViewHolder OnCreateViewHolder(ViewGroup parent, int viewType)
             {
@@ -213,6 +255,7 @@ namespace NaiveSocksAndroid
         {
             public MyViewHolder(Context context) : base(new TextView(context))
             {
+                textView.SetPadding(8, 0, 8, 0);
                 textView.SetOnLongClickListener(this);
             }
 
