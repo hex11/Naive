@@ -53,17 +53,18 @@ namespace NaiveSocksAndroid
 
     partial class VpnHelper
     {
-        public VpnHelper(BgService service, VpnConfig config)
+        public VpnHelper(BgService service)
         {
             Bg = service;
-            vpnConfig = config;
             localDns = new LocalDns(this);
             Native.Init(service);
         }
 
         public BgService Bg { get; }
         public bool Running { get; private set; }
-        VpnConfig vpnConfig;
+        public VpnConfig VpnConfig { get; set; }
+
+        public DnsDb DnsDb => localDns.DnsDb;
 
         ParcelFileDescriptor pfd;
 
@@ -73,7 +74,7 @@ namespace NaiveSocksAndroid
 
         public void StartVpn()
         {
-            if ((vpnConfig.Handler == null) == (vpnConfig.Socks == null)) {
+            if ((VpnConfig.Handler == null) == (VpnConfig.Socks == null)) {
                 throw new Exception("Should specify (('Handler' and optional 'SocksPort') or 'Socks') and optional 'DnsResolver'");
             }
 
@@ -81,20 +82,20 @@ namespace NaiveSocksAndroid
             socksInAdapter = null;
 
             var controller = Bg.Controller;
-            if (vpnConfig.Handler == null) {
-                socksInAdapter = controller.FindAdapter<SocksInAdapter>(vpnConfig.Socks) ?? throw new Exception($"SocksInAdapter '{vpnConfig.Socks}' not found.");
+            if (VpnConfig.Handler == null) {
+                socksInAdapter = controller.FindAdapter<SocksInAdapter>(VpnConfig.Socks) ?? throw new Exception($"SocksInAdapter '{VpnConfig.Socks}' not found.");
             } else {
                 var existVpn = controller.FindAdapter<NaiveSocks.Adapter>("VPN");
                 if (existVpn != null) {
                     throw new Exception("adapter 'VPN' already exists.");
                 } else {
-                    var handlerRef = controller.AdapterRefFromName(vpnConfig.Handler);
+                    var handlerRef = controller.AdapterRefFromName(VpnConfig.Handler);
                     if (handlerRef.Adapter == null) {
                         throw new Exception("Handler not found.");
                     }
                     socksInAdapter = new SocksInAdapter() {
                         Name = "VPN",
-                        listen = NaiveUtils.ParseIPEndPoint("127.1:" + vpnConfig.SocksPort),
+                        listen = NaiveUtils.ParseIPEndPoint("127.1:" + VpnConfig.SocksPort),
                         @out = handlerRef
                     };
                     Logging.info("Automatically created adapter " + socksInAdapter);
@@ -103,13 +104,13 @@ namespace NaiveSocksAndroid
                     socksInAdapter.Start();
                 }
             }
-            if (vpnConfig.DnsResolver != null) {
-                dnsResolver = controller.FindAdapter<NaiveSocks.Adapter>(vpnConfig.DnsResolver) as IDnsProvider;
+            if (VpnConfig.DnsResolver != null) {
+                dnsResolver = controller.FindAdapter<NaiveSocks.Adapter>(VpnConfig.DnsResolver) as IDnsProvider;
                 if (dnsResolver == null) {
-                    Logging.warning($"'{vpnConfig.DnsResolver}' is not a DNS resolver!");
+                    Logging.warning($"'{VpnConfig.DnsResolver}' is not a DNS resolver!");
                 }
             } else {
-                dnsResolver = controller.FindAdapter<IDnsProvider>(vpnConfig.Handler);
+                dnsResolver = controller.FindAdapter<IDnsProvider>(VpnConfig.Handler);
             }
             if (dnsResolver == null) {
                 Logging.warning("Fake DNS is enabled because no valid DNS resolver specified.");
@@ -119,21 +120,21 @@ namespace NaiveSocksAndroid
 
             var builder = new VpnService.Builder(Bg)
                 .SetSession("NaiveSocks VPN bridge")
-                .SetMtu(vpnConfig.Mtu)
+                .SetMtu(VpnConfig.Mtu)
                 .AddAddress("172.31.1.1", 24);
-            foreach (var item in vpnConfig.RemoteDns) {
+            foreach (var item in VpnConfig.RemoteDns) {
                 builder.AddDnsServer(item);
             }
             var me = Bg.PackageName;
             bool isAnyAllowed = false;
-            if (vpnConfig.EnableAppFilter) {
-                if (!string.IsNullOrEmpty(vpnConfig.AppList))
-                    foreach (var item in from x in vpnConfig.AppList.Split('\n')
+            if (VpnConfig.EnableAppFilter) {
+                if (!string.IsNullOrEmpty(VpnConfig.AppList))
+                    foreach (var item in from x in VpnConfig.AppList.Split('\n')
                                          let y = x.Trim()
                                          where y.Length > 0 && y != me
                                          select y) {
                         try {
-                            if (vpnConfig.ByPass) {
+                            if (VpnConfig.ByPass) {
                                 builder.AddDisallowedApplication(item);
                             } else {
                                 builder.AddAllowedApplication(item);
@@ -152,20 +153,20 @@ namespace NaiveSocksAndroid
             Running = true;
             Logging.info("VPN established, fd=" + fd);
 
-            if (vpnConfig.LocalDnsPort > 0) {
-                Logging.info("Starting local DNS server at 127.0.0.1:" + vpnConfig.LocalDnsPort);
-                string strResolver = dnsResolver?.GetAdapter().QuotedName ?? $"(fake resolver, prefix='{vpnConfig.FakeDnsPrefix}')";
+            if (VpnConfig.LocalDnsPort > 0) {
+                Logging.info("Starting local DNS server at 127.0.0.1:" + VpnConfig.LocalDnsPort);
+                string strResolver = dnsResolver?.GetAdapter().QuotedName ?? $"(fake resolver, prefix='{VpnConfig.FakeDnsPrefix}')";
                 Logging.info("DNS resolver: " + strResolver);
                 localDns.StartDnsServer();
             }
 
             string dnsgw = null;
-            if (vpnConfig.DnsGw.IsNullOrEmpty() == false) {
-                dnsgw = vpnConfig.DnsGw;
-            } else if (vpnConfig.LocalDnsPort > 0) {
-                dnsgw = "127.0.0.1:" + vpnConfig.LocalDnsPort;
+            if (VpnConfig.DnsGw.IsNullOrEmpty() == false) {
+                dnsgw = VpnConfig.DnsGw;
+            } else if (VpnConfig.LocalDnsPort > 0) {
+                dnsgw = "127.0.0.1:" + VpnConfig.LocalDnsPort;
             }
-            StartTun2Socks(fd, "127.0.0.1:" + socksInAdapter.listen.Port, vpnConfig.Mtu, dnsgw);
+            StartTun2Socks(fd, "127.0.0.1:" + socksInAdapter.listen.Port, VpnConfig.Mtu, dnsgw);
         }
 
         private void StartTun2Socks(int fd, string socksAddr, int mtu, string dnsgw)

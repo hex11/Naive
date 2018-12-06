@@ -201,54 +201,12 @@ namespace NaiveSocks
             return rule;
         }
 
-        public bool TryParseTime(string str, out TimeSpan timeSpan)
-        {
-            if (double.TryParse(str, out var seconds))
-                goto OK;
-
-            var sb = new StringBuilder(3);
-            for (int i = 0; i < str.Length; i++) {
-                if (char.IsDigit(str[i]) || (str[i] == '-' || str[i] == '+' || str[i] == '.')) {
-                    sb.Append(str[i]);
-                } else {
-                    if (!double.TryParse(sb.ToString(), out var num))
-                        goto FAIL;
-
-                    sb.Clear();
-                    switch (str[i]) {
-                        case 's':
-                            seconds += num;
-                            break;
-                        case 'm':
-                            seconds += num * 60;
-                            break;
-                        case 'h':
-                            seconds += num * 60 * 60;
-                            break;
-                        case 'd':
-                            seconds += num * 60 * 60 * 24;
-                            break;
-                        default:
-                            goto FAIL;
-                    }
-                }
-            }
-
-        OK:
-            timeSpan = TimeSpan.FromSeconds(seconds);
-            return true;
-
-        FAIL:
-            timeSpan = TimeSpan.Zero;
-            return false;
-        }
-
         private void UpdateAbpFile(Rule rule, Action<Rule, string> load, bool ignoreMaxage = false)
         {
             var abpfile = rule.abpfile;
             var filepath = Controller.ProcessFilePath(abpfile); // returns null if abpfile is null
             var fi = filepath == null ? null : new FileInfo(filepath);
-            TryParseTime(rule.abpuri_maxage, out var maxage); // maxage is zero if failed
+            NaiveUtils.TryParseDuration(rule.abpuri_maxage, out var maxage); // maxage is zero if failed
             var uristr = rule.abpuri;
             var uri = new Uri(uristr);
             var tag = abpfile ?? uristr;

@@ -23,8 +23,10 @@ namespace NaiveSocksAndroid
         partial class LocalDns
         {
             public VpnHelper vpnHelper;
-            VpnConfig vpnConfig => vpnHelper.vpnConfig;
+            VpnConfig vpnConfig => vpnHelper.VpnConfig;
             IDnsProvider dnsResolver => vpnHelper.dnsResolver;
+
+            public DnsDb DnsDb => cacheDns as DnsDb;
 
             ICacheReverseDns cacheRDns;
             ICacheDns cacheDns;
@@ -41,7 +43,7 @@ namespace NaiveSocksAndroid
             {
                 if (IPAddress.TryParse(x.Dest.Host, out var ip)) {
                     bool isFake = dnsResolver == null && ip.ToString().StartsWith(ipPrefix);
-                    var host = cacheRDns.TryGetDomain(ip.Address);
+                    var host = cacheRDns.TryGetDomain((uint)ip.Address);
                     if (host != null) {
                         x.DestOriginalName = host;
                     } else {
@@ -163,7 +165,7 @@ namespace NaiveSocksAndroid
                             } else {
                                 if (dnsResolver == null) {
                                     ip = IPAddress.Parse(ipPrefix + Interlocked.Increment(ref lastIp));
-                                    ipLongs = new long[] { ip.Address };
+                                    ipLongs = new uint[] { (uint)ip.Address };
                                     Logging.info("Fake DNS: " + ip.ToString() + " -> " + strName);
                                 } else {
                                     IPAddress[] ips;
@@ -197,9 +199,9 @@ namespace NaiveSocksAndroid
                 return r;
             }
 
-            private static long[] ipv4Filter(IPAddress[] ips)
+            private static uint[] ipv4Filter(IPAddress[] ips)
             {
-                long[] ipLongs;
+                uint[] ipLongs;
                 int count = 0;
                 for (int i = 0; i < ips.Length; i++) {
                     var cur = ips[i];
@@ -208,35 +210,16 @@ namespace NaiveSocksAndroid
                 }
                 if (count == 0)
                     throw new Exception("No ipv4 address found.");
-                ipLongs = new long[count];
+                ipLongs = new uint[count];
                 int ipLongsCur = 0;
                 for (int i = 0; i < ips.Length; i++) {
                     var cur = ips[i];
                     if (cur.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork) {
-                        ipLongs[ipLongsCur++] = cur.Address;
+                        ipLongs[ipLongsCur++] = (uint)cur.Address;
                     }
                 }
 
                 return ipLongs;
-            }
-
-            interface ICacheDns
-            {
-                bool TryGetIp(string domain, out IpRecord val);
-                void Set(string domain, IpRecord val);
-            }
-
-            struct IpRecord
-            {
-                public DateTime expire;
-                public long[] ipLongs;
-            }
-
-            interface ICacheReverseDns
-            {
-                string TryGetDomain(long ip);
-                void Set(long ip, string domain);
-                void Set(long[] ips, string domain);
             }
 
             class SimpleCacheDns : ICacheDns
@@ -271,9 +254,9 @@ namespace NaiveSocksAndroid
             class SimpleCacheRDns : ICacheReverseDns
             {
                 ReaderWriterLockSlim mapLock = new ReaderWriterLockSlim();
-                Dictionary<long, string> mapIpHost = new Dictionary<long, string>();
+                Dictionary<uint, string> mapIpHost = new Dictionary<uint, string>();
 
-                public void Set(long ip, string domain)
+                public void Set(uint ip, string domain)
                 {
                     if (domain == null)
                         throw new ArgumentNullException(nameof(domain));
@@ -283,7 +266,7 @@ namespace NaiveSocksAndroid
                     mapLock.ExitWriteLock();
                 }
 
-                public void Set(long[] ips, string domain)
+                public void Set(uint[] ips, string domain)
                 {
                     if (domain == null)
                         throw new ArgumentNullException(nameof(domain));
@@ -295,7 +278,7 @@ namespace NaiveSocksAndroid
                     mapLock.ExitWriteLock();
                 }
 
-                public string TryGetDomain(long ip)
+                public string TryGetDomain(uint ip)
                 {
                     mapLock.EnterReadLock();
                     try {

@@ -7,6 +7,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Threading;
 
 namespace NaiveSocksAndroid
@@ -91,6 +92,50 @@ namespace NaiveSocksAndroid
             Commands.AdditionalCommands.Add(new KeyValuePair<string, CommandHandler>("dnsdb-drop", cmd => {
                 cmd.Write("deleting: " + DnsDbFile + "\n");
                 File.Delete(DnsDbFile);
+            }));
+            Commands.AdditionalCommands.Add(new KeyValuePair<string, CommandHandler>("dnsdb", cmd => {
+                var bg = BgService.Instance;
+                if (bg == null || !bg.TryGetTarget(out var t)) {
+                    cmd.WriteLine("Failed to get BgService.");
+                    cmd.statusCode = 1;
+                    return;
+                }
+                var db = t.DnsDb;
+                if (db == null) {
+                    cmd.WriteLine("Failed to get DnsDb.");
+                    cmd.statusCode = 1;
+                    return;
+                }
+                var subcmd = cmd.ArgOrNull(0);
+                if (subcmd == "stat") {
+                    cmd.WriteLine($"Count: {db.RecordCount():N0}");
+                    cmd.WriteLine($"Inserts: {db.inserts:N0} times in {db.insertTotalTime:N0} ms");
+                    cmd.WriteLine($"QueryByIp: {db.queryByIps:N0} times in {db.queryByIpTotalTime:N0} ms");
+                    cmd.WriteLine($"QueryByDomain: {db.queryByDomains:N0} times in {db.queryByDomainTotalTime:N0} ms");
+                } else if (subcmd == "ip") {
+                    var r = db.TryGetDomain((uint)IPAddress.Parse(cmd.ArgOrNull(1)).Address);
+                    cmd.WriteLine("Result: " + (r ?? "(null)"));
+                } else if (subcmd == "name") {
+                    if (db.TryGetIp(cmd.ArgOrNull(1), out var r)) {
+                        cmd.WriteLine("Result: " + r);
+                    } else {
+                        cmd.WriteLine("No result.");
+                    }
+                } else if (subcmd == "clean") {
+                    var time = DateTime.Now - NaiveUtils.ParseDuration(cmd.ArgOrNull(1));
+                    cmd.WriteLine($"Deleting records before {time}...");
+                    var r = db.Clean(time);
+                    cmd.WriteLine($"Deleted {r:N0}.");
+                } else if (subcmd == "shrink") {
+                    cmd.WriteLine($"Shrinking...");
+                    var delta = -db.Shrink();
+                    cmd.WriteLine($"Shrinked, delta: {delta:N0}.");
+                } else {
+                    cmd.WriteLine("Unknown sub-command.\n" +
+                        "Usage: dnsdb (stat|ip IP|name NAME|shrink|clean EXPIRED_BEFORE)\n" +
+                        "(EXPIRED_BEFORE format: 1d2h3m4s)");
+                    cmd.statusCode = 1;
+                }
             }));
             Commands.AdditionalCommands.Add(new KeyValuePair<string, CommandHandler>("logs-drop", cmd => {
                 var files = Directory.GetFiles(logsDir);

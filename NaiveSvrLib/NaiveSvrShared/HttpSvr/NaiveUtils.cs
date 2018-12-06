@@ -420,10 +420,10 @@ namespace Naive.HttpSvr
                 using (ct.Register(x => {
                     var originalState = Interlocked.Exchange(ref state, (int)ConnectingState.Canceled);
                     switch (originalState) {
-                    case (int)ConnectingState.Connecting:
-                    case (int)ConnectingState.Handshake:
-                        destTcp.Close();
-                        break;
+                        case (int)ConnectingState.Connecting:
+                        case (int)ConnectingState.Handshake:
+                            destTcp.Close();
+                            break;
                     }
                 }, false)) {
                     try {
@@ -452,14 +452,14 @@ namespace Naive.HttpSvr
                 if (await connectTask.WithTimeout(timeout)) { // if timed out
                     var originalState = Interlocked.Exchange(ref state, (int)ConnectingState.TimedOut);
                     switch (originalState) {
-                    case (int)ConnectingState.Connecting:
-                    case (int)ConnectingState.Handshake:
-                        destTcp.Close();
-                        break;
-                    case (int)ConnectingState.ConnectingError:
-                    case (int)ConnectingState.HandshakeError:
-                        await connectTask; // to throw the exception
-                        break;
+                        case (int)ConnectingState.Connecting:
+                        case (int)ConnectingState.Handshake:
+                            destTcp.Close();
+                            break;
+                        case (int)ConnectingState.ConnectingError:
+                        case (int)ConnectingState.HandshakeError:
+                            await connectTask; // to throw the exception
+                            break;
                     }
                     throw new DisconnectedException($"connecting timed out (timeout={timeout}, state={(ConnectingState)originalState})");
                 }
@@ -869,6 +869,55 @@ namespace Naive.HttpSvr
             public static int lastUnhitValue = 256;
             public static WeakReference<Task<int>> lastUnhitTask = new WeakReference<Task<int>>(Task.FromResult(256));
         }
+
+        public static TimeSpan ParseDuration(string str)
+        {
+            if (!TryParseDuration(str, out var r))
+                throw new Exception("Cannot parse time duration.");
+            return r;
+        }
+
+        public static bool TryParseDuration(string str, out TimeSpan timeSpan)
+        {
+            if (double.TryParse(str, out var seconds))
+                goto OK;
+
+            var sb = new StringBuilder(3);
+            for (int i = 0; i < str.Length; i++) {
+                if (char.IsDigit(str[i]) || (str[i] == '-' || str[i] == '+' || str[i] == '.')) {
+                    sb.Append(str[i]);
+                } else {
+                    if (!double.TryParse(sb.ToString(), out var num))
+                        goto FAIL;
+
+                    sb.Clear();
+                    switch (str[i]) {
+                        case 's':
+                            seconds += num;
+                            break;
+                        case 'm':
+                            seconds += num * 60;
+                            break;
+                        case 'h':
+                            seconds += num * 60 * 60;
+                            break;
+                        case 'd':
+                            seconds += num * 60 * 60 * 24;
+                            break;
+                        default:
+                            goto FAIL;
+                    }
+                }
+            }
+
+        OK:
+            timeSpan = TimeSpan.FromSeconds(seconds);
+            return true;
+
+        FAIL:
+            timeSpan = TimeSpan.Zero;
+            return false;
+        }
     }
 
     public struct EPPair
@@ -1242,29 +1291,29 @@ namespace Naive.HttpSvr
             var cur = 0;
             var addrType = bytes[cur++];
             switch (addrType) {
-            case 0x01:
-            case 0x04:
-                var addrLen = (addrType == 0x01) ? 4 : 16;
-                var ip = new IPAddress(bytes.GetBytes(cur, addrLen));
-                cur += addrLen;
-                dest.Host = ip.ToString();
-                break;
-            case 0x03:
-                var nameLen = bytes[cur++];
-                if (nameLen == 0)
-                    throw new Exception("length of domain name cannot be zero");
-                var p = stackalloc sbyte[nameLen];
-                for (int i = 0; i < nameLen; i++) {
-                    var b = bytes[cur++];
-                    if (b > 0x7f) {
-                        throw new Exception("domain name is not an ASCII string");
+                case 0x01:
+                case 0x04:
+                    var addrLen = (addrType == 0x01) ? 4 : 16;
+                    var ip = new IPAddress(bytes.GetBytes(cur, addrLen));
+                    cur += addrLen;
+                    dest.Host = ip.ToString();
+                    break;
+                case 0x03:
+                    var nameLen = bytes[cur++];
+                    if (nameLen == 0)
+                        throw new Exception("length of domain name cannot be zero");
+                    var p = stackalloc sbyte[nameLen];
+                    for (int i = 0; i < nameLen; i++) {
+                        var b = bytes[cur++];
+                        if (b > 0x7f) {
+                            throw new Exception("domain name is not an ASCII string");
+                        }
+                        p[i] = (sbyte)b;
                     }
-                    p[i] = (sbyte)b;
-                }
-                dest.Host = new String(p, 0, nameLen);
-                break;
-            default:
-                throw new Exception($"unknown addr type ({addrType})");
+                    dest.Host = new String(p, 0, nameLen);
+                    break;
+                default:
+                    throw new Exception($"unknown addr type ({addrType})");
             }
             dest.Port = bytes[cur++] << 8;
             dest.Port |= bytes[cur++];

@@ -73,6 +73,10 @@ namespace NaiveSocksAndroid
 
         Logger Logger = new Logger("Service", Logging.RootLogger);
 
+        public static WeakReference<BgService> Instance;
+
+        internal DnsDb DnsDb => vpnHelper?.DnsDb;
+
         class Config
         {
             public int manage_interval_screen_off { get; set; } = 30;
@@ -99,6 +103,8 @@ namespace NaiveSocksAndroid
             AppConfig.Init(ApplicationContext);
 
             base.OnCreate();
+
+            Instance = new WeakReference<BgService>(this);
 
             Logger.info("service is starting...");
 
@@ -240,8 +246,9 @@ namespace NaiveSocksAndroid
                 // continue starting vpn service
                 try {
                     if (vpnHelper == null)
-                        vpnHelper = new VpnHelper(this, currentConfig.vpn);
+                        vpnHelper = new VpnHelper(this);
                     // else it may be reloading
+                    vpnHelper.VpnConfig = currentConfig.vpn;
                     vpnHelper.StartVpn();
                 } catch (Exception e) {
                     Logging.exception(e, Logging.Level.Error, "Starting VPN");
