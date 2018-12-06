@@ -6,6 +6,7 @@ using Java.Lang;
 using Android.Content;
 using Naive.HttpSvr;
 using NaiveSocks;
+using System;
 
 namespace NaiveSocksAndroid
 {
@@ -32,6 +33,12 @@ namespace NaiveSocksAndroid
         public MainActivity MainActivity { get; private set; }
 
         public NaiveSocks.Controller Controller => MainActivity?.Service?.Controller;
+
+        public event Action<string> InfoStrChanged;
+
+        protected bool InfoStrSupport => InfoStrChanged != null;
+
+        protected void ChangeInfoStr(string str) => InfoStrChanged?.Invoke(str);
 
         public override void OnAttach(Context context)
         {

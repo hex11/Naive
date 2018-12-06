@@ -255,7 +255,7 @@ namespace NaiveSocksAndroid
                 drawer.CloseDrawers();
                 return;
             }
-            Fragment frag = null;
+            MyBaseFragment frag = null;
             int itemId = menuItem.ItemId;
             switch (itemId) {
                 case R.Id.nav_home:
@@ -276,19 +276,32 @@ namespace NaiveSocksAndroid
             }
             if (frag == null)
                 return;
+
+            var title = itemId == R.Id.nav_home ? JavaAppName : menuItem.TitleFormatted;
+            string titleClrString = null;
+            SetTitle(title);
+            frag.InfoStrChanged += (str) => {
+                if (str == null) {
+                    SetTitle(title);
+                } else {
+                    if (titleClrString == null)
+                        titleClrString = title.ToString();
+                    SetTitle(titleClrString + " " + str);
+                }
+            };
+
             ReplaceFragment(frag);
 
             menuItem.SetChecked(true);
-            SetTitle(itemId == R.Id.nav_home ? JavaAppName : menuItem.TitleFormatted);
             drawer.CloseDrawers();
         }
 
-        public void SetTitle(string title)
+        private void SetTitle(string title)
         {
             SetTitle(new Java.Lang.String(title));
         }
 
-        public void SetTitle(Java.Lang.ICharSequence title)
+        private void SetTitle(Java.Lang.ICharSequence title)
         {
             TitleFormatted = title;
         }

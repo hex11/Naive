@@ -67,7 +67,6 @@ namespace NaiveSocksAndroid
             }
         }
 
-
         private void UpdateDatasetRange() => UpdateDatasetRange(out _, out _);
 
         private void UpdateDatasetRange(out int removed, out int appended)
@@ -79,8 +78,8 @@ namespace NaiveSocksAndroid
             dataset.IndexEnd = begin + count;
             removed = dataset.IndexBegin - oldBegin;
             appended = dataset.IndexEnd - oldEnd;
-            if (!InHome) {
-                MainActivity.Title = Resources.GetString(R.String.logs) + " [" + dataset.IndexBegin + " - " + (dataset.IndexEnd - 1) + "]";
+            if (InfoStrSupport) {
+                ChangeInfoStr("[" + dataset.IndexBegin + " - " + (dataset.IndexEnd - 1) + "]");
             }
         }
 
@@ -169,23 +168,21 @@ namespace NaiveSocksAndroid
             }
         }
 
+        bool isAtMostBottom = true;
+
         public void OnCreateMenu(IMenu menu)
         {
-            var menuItem = menu.Add(0, menuItemId = 114514, 0, R.String.autoscroll);
-            menuItem.SetCheckable(true);
-            menuItem.SetShowAsAction(ShowAsAction.Always | ShowAsAction.WithText);
-            menuItem.SetChecked(autoScroll);
+            if (!isAtMostBottom) {
+                var menuItem = menu.Add(0, menuItemId = 114514, 0, R.String.autoscroll);
+                menuItem.SetShowAsAction(ShowAsAction.Always | ShowAsAction.WithText);
+            }
         }
 
         public void OnMenuItemSelected(IMenuItem item)
         {
             if (item.ItemId == menuItemId) {
-                autoScroll = !autoScroll;
-                item.SetChecked(autoScroll);
-                if (autoScroll)
-                    AutoScroll();
-                MainActivity.MakeSnackbar(MainActivity.FormatSwitchString(this.Context, R.String.autoscroll, autoScroll),
-                    Android.Support.Design.Widget.Snackbar.LengthShort).Show();
+                autoScroll = true;
+                AutoScroll();
                 //mainActivity.InvalidateOptionsMenu();
             } else {
                 Logging.warning($"FragmentLogs.OnMenuItemSelected: unknown menuitem id={item.ItemId}, title={item.TitleFormatted}");
@@ -205,13 +202,21 @@ namespace NaiveSocksAndroid
 
             public override void OnScrollStateChanged(RecyclerView recyclerView, int newState)
             {
+                var oldAMB = Fragment.isAtMostBottom;
                 if (newState == RecyclerView.ScrollStateDragging) {
+                    Fragment.isAtMostBottom = false;
                     Fragment.autoScroll = false;
-                } else if (newState == RecyclerView.ScrollStateIdle && !Fragment.autoScroll) {
+                } else if (newState == RecyclerView.ScrollStateIdle && !Fragment.isAtMostBottom) {
                     var pos = Fragment.linearlayout.FindLastCompletelyVisibleItemPosition();
                     if (pos == Fragment.dataset.Count - 1) {
+                        Fragment.isAtMostBottom = true;
                         Fragment.autoScroll = true;
+                    } else {
+                        Fragment.isAtMostBottom = false;
                     }
+                }
+                if (!Fragment.InHome && oldAMB != Fragment.isAtMostBottom) {
+                    Fragment.MainActivity.InvalidateOptionsMenu();
                 }
                 oldState = newState;
                 base.OnScrollStateChanged(recyclerView, newState);

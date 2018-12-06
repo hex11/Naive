@@ -36,14 +36,22 @@ namespace NaiveSocksAndroid
 
             CreateDataItems();
 
-            linearLayout.AddView(CreateDataTitleView("Log"));
+            TextView logTitleView = CreateDataTitleView("Log");
+            linearLayout.AddView(logTitleView);
             var frame = new FrameLayout(Context);
             frame.Id = 233;
             var match_parent = ViewGroup.LayoutParams.MatchParent;
             frame.LayoutParameters = new LinearLayout.LayoutParams(match_parent, 0, 1);
             linearLayout.AddView(frame);
+            var logView = new FragmentLogs() { InHome = true };
+            logView.InfoStrChanged += (str) => {
+                if (str == null)
+                    logTitleView.Text = "Log";
+                else
+                    logTitleView.Text = "Log " + str;
+            };
             ChildFragmentManager.BeginTransaction()
-                .Replace(frame.Id, new FragmentLogs() { InHome = true })
+                .Replace(frame.Id, logView)
                 .Commit();
 
             return linearLayout;
