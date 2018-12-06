@@ -157,11 +157,11 @@ namespace NaiveSocksAndroid
             switch (level) {
                 case Logging.Level.None:
                 case Logging.Level.Debug:
-                    return Color.Argb(30, 0, 0, 0);
+                    return Color.Argb(40, 0, 0, 0);
                 case Logging.Level.Info:
-                    return Color.Argb(50, 0, 255, 0);
+                    return Color.Argb(60, 0, 255, 0);
                 case Logging.Level.Warning:
-                    return Color.Argb(50, 255, 255, 0);
+                    return Color.Argb(80, 255, 255, 0);
                 case Logging.Level.Error:
                 default:
                     return Color.Argb(50, 255, 0, 0);
@@ -241,12 +241,13 @@ namespace NaiveSocksAndroid
             public override void OnBindViewHolder(RecyclerView.ViewHolder holder, int position)
             {
                 var myHolder = (MyViewHolder)holder;
-                var log = Logging.TryGetLog(IndexBegin + position) ?? new Logging.Log() {
+                int index = IndexBegin + position;
+                var log = Logging.TryGetLog(index) ?? new Logging.Log() {
                     level = Logging.Level.None,
                     runningTime = 0,
                     text = " (Failed to fetch log index " + position + " (deleted))"
                 };
-                myHolder.Render(log);
+                myHolder.Render(log, Logging.TryGetLog(index - 1, false));
             }
 
             public override void OnViewRecycled(Java.Lang.Object holder)
@@ -267,14 +268,28 @@ namespace NaiveSocksAndroid
             SpannableStringBuilder ssb = new SpannableStringBuilder();
             TextView textView => (TextView)ItemView;
 
-            public void Render(Logging.Log log)
+            public void Render(Logging.Log log, Logging.Log? prevLog)
             {
                 Color color = getColorFromLevel(log.level) ?? Color.LightGray;
                 string timestamp = "[" + log.time.ToString("HH:mm:ss.fff") + " " + log.levelStr + "]";
                 ssb.Append(timestamp, new BackgroundColorSpan(color), SpanTypes.ExclusiveExclusive);
                 ssb.Append(log.text);
+                color.A = (byte)(color.A / 2);
+                textView.SetBackgroundColor(color);
                 textView.SetText(ssb, TextView.BufferType.Spannable);
                 ssb.Clear();
+                int topMargin;
+                if (prevLog == null) {
+                    topMargin = 0;
+                } else {
+                    var delta = log.runningTime - prevLog.Value.runningTime;
+                    if (delta < 10) {
+                        topMargin = 0;
+                    } else {
+                        topMargin = (int)(Math.Log(delta / 10, 1.5) * 3);
+                    }
+                }
+                textView.LayoutParameters = new LinearLayout.LayoutParams(-1, -2) { TopMargin = topMargin };
             }
 
             public void Reset()

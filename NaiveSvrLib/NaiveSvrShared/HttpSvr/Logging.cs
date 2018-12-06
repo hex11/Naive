@@ -175,7 +175,8 @@ namespace Naive.HttpSvr
             count = logBuffer.Count;
         }
 
-        public static Logging.Log? TryGetLog(int index) => logBuffer.TryGetLog(index);
+        public static Logging.Log? TryGetLog(int index) => TryGetLog(index, true);
+        public static Logging.Log? TryGetLog(int index, bool withText) => logBuffer.TryGetLog(index, withText);
 
         public static void log(string text)
         {
@@ -600,12 +601,12 @@ namespace Naive.HttpSvr
             }
         }
 
-        public Logging.Log? TryGetLog(int index)
+        public Logging.Log? TryGetLog(int index, bool withText)
         {
             lock (logs) {
                 if (index < MinIndex || index >= MinIndex + Count)
                     return null;
-                return logs.PeekAt(index - MinIndex).GetLog(this);
+                return logs.PeekAt(index - MinIndex).GetLog(this, withText);
             }
         }
 
@@ -617,7 +618,7 @@ namespace Naive.HttpSvr
                     return new Logging.Log[0];
                 var ret = new Logging.Log[count];
                 for (int i = 0; i < count; i++) {
-                    ret[i] = logs.PeekAt(i).GetLog(this);
+                    ret[i] = logs.PeekAt(i).GetLog(this, true);
                 }
                 return ret;
             }
@@ -640,7 +641,7 @@ namespace Naive.HttpSvr
                 }
                 int arrIdx = 0;
                 for (int i = beginIdx; i < endIdx; i++) {
-                    arr[arrIdx++] = logs.PeekAt(i).GetLog(this);
+                    arr[arrIdx++] = logs.PeekAt(i).GetLog(this, true);
                 }
             }
         }
@@ -654,7 +655,7 @@ namespace Naive.HttpSvr
                 int beginIdx = logs.Count - count;
                 int arrayIdx = arrseg.Offset;
                 for (int i = 0; i < count; i++) {
-                    array[arrayIdx + i] = logs.PeekAt(beginIdx + i).GetLog(this);
+                    array[arrayIdx + i] = logs.PeekAt(beginIdx + i).GetLog(this, true);
                 }
                 return count;
             }
@@ -682,20 +683,22 @@ namespace Naive.HttpSvr
             int hash;
 #endif
 
-            public Logging.Log GetLog(LogBuffer logBuffer)
+            public Logging.Log GetLog(LogBuffer logBuffer, bool withText)
             {
                 var l = new Logging.Log {
                     level = this.level,
                     time = this.time,
                     runningTime = this.runningTime,
                 };
-                if (strLen == 0) {
-                    l.text = "";
-                } else {
-                    var str = new string('\0', strLen);
-                    fixed (char* pStr = str)
-                        Encoding.GetChars(logBuffer.buffer + bufOffset, bufLen, pStr, strLen);
-                    l.text = str;
+                if (withText) {
+                    if (strLen == 0) {
+                        l.text = "";
+                    } else {
+                        var str = new string('\0', strLen);
+                        fixed (char* pStr = str)
+                            Encoding.GetChars(logBuffer.buffer + bufOffset, bufLen, pStr, strLen);
+                        l.text = str;
+                    }
                 }
 #if DEBUG
                 if (l.text.GetHashCode() != hash) {
