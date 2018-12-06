@@ -52,6 +52,11 @@ namespace NaiveSocks
         AwaitableWrapper ReadFullAsyncR(BytesSegment bs);
     }
 
+    public interface IMyStreamNoBuffer
+    {
+        AwaitableWrapper<BytesSegment> ReadNBAsyncR(int maxSize);
+    }
+
     public interface IMyStreamBeginEnd : IMyStream
     {
         IAsyncResult BeginWrite(byte[] buffer, int offset, int count, AsyncCallback callback, object state);
@@ -97,16 +102,16 @@ namespace NaiveSocks
         public override string ToString()
         {
             switch (state) {
-            case OPEN:
-                return "OPEN";
-            case LOCAL_SHUTDOWN:
-                return "LOCAL_SHUTDOWN";
-            case REMOTE_SHUTDOWN:
-                return "REMOTE_SHUTDOWN";
-            case CLOSED:
-                return "CLOSED";
-            default:
-                return $"!!UNKNOWN({state})!!";
+                case OPEN:
+                    return "OPEN";
+                case LOCAL_SHUTDOWN:
+                    return "LOCAL_SHUTDOWN";
+                case REMOTE_SHUTDOWN:
+                    return "REMOTE_SHUTDOWN";
+                case CLOSED:
+                    return "CLOSED";
+                default:
+                    return $"!!UNKNOWN({state})!!";
             }
         }
 
@@ -603,11 +608,12 @@ namespace NaiveSocks
                 if (bs == -1) bs = defaultBufferSize;
                 Naive.HttpSvr.BytesSegment buf;
                 Msg lastMsg = new Msg();
+                BytesSegment tempBuf = new BytesSegment();
 
-                if (msgStream == null) {
-                    buf = BufferPool.GlobalGet(bs);
-                } else {
+                if (msgStream != null || (From is IMyStreamNoBuffer && !TryReadSync)) {
                     buf = new BytesSegment();
+                } else {
+                    buf = BufferPool.GlobalGet(bs);
                 }
                 try {
                     int syncCounter = 0;
@@ -617,12 +623,7 @@ namespace NaiveSocks
                             await Task.Yield();
                         }
                         int read;
-                        if (msgStream == null) {
-                            if (TryReadSync && From is IMyStreamSync fromSync)
-                                read = fromSync.Read(buf);
-                            else
-                                read = await From.ReadAsyncR(buf).SyncCounter(ref syncCounter);
-                        } else {
+                        if (msgStream != null) {
                             // no buffer preallocated for IMsgStream
                             var msg = await msgStream.RecvMsgR(null).SyncCounter(ref syncCounter);
                             lastMsg = msg;
@@ -636,6 +637,14 @@ namespace NaiveSocks
                                     buf = msg.Data.GetBytes();
                                 }
                             }
+                        } else if (TryReadSync && From is IMyStreamSync fromSync) {
+                            read = fromSync.Read(buf);
+                        } else if (From is IMyStreamNoBuffer nb) {
+                            tempBuf = await nb.ReadNBAsyncR(bs);
+                            buf = tempBuf;
+                            read = tempBuf.Len;
+                        } else {
+                            read = await From.ReadAsyncR(buf).SyncCounter(ref syncCounter);
                         }
                         if (read == 0) {
                             VerboseLogger?.debugForce($"SHUTDOWN: {From} -> {To}");
@@ -649,7 +658,15 @@ namespace NaiveSocks
                         else
                             await To.WriteAsyncR(new BytesSegment(buf.Bytes, buf.Offset, read)).SyncCounter(ref syncCounter);
                         CounterW?.Add(read);
-                        lastMsg.TryRecycle();
+                        if (lastMsg.Data != null) {
+                            lastMsg.TryRecycle();
+                            buf.ResetSelf();
+                        }
+                        if (tempBuf.Bytes != null) {
+                            BufferPool.GlobalPut(tempBuf.Bytes);
+                            tempBuf.ResetSelf();
+                            buf.ResetSelf();
+                        }
                     }
                 } finally {
                     VerboseLogger?.debugForce($"STOPPED: {From} -> {To}");
@@ -751,8 +768,8 @@ namespace NaiveSocks
                     throw new Exception();
                 }
 
-                //while (pos < bs.Len) {
-                WHILE:
+            //while (pos < bs.Len) {
+            WHILE:
                 try {
                     if (!(pos < bs.Len))
                         goto EWHILE;
@@ -767,7 +784,7 @@ namespace NaiveSocks
                     return;
                 }
                 return;
-                STEP1:
+            STEP1:
                 try {
                     var read = awaitable.GetResult();
                     if (read == 0)
@@ -779,8 +796,8 @@ namespace NaiveSocks
                     return;
                 }
                 goto WHILE;
-                //}
-                EWHILE:
+            //}
+            EWHILE:
                 step = -1;
                 ra.SetResult(VoidType.Void);
                 return;
