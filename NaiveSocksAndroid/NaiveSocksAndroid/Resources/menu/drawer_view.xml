@@ -1,20 +1,46 @@
 ﻿<menu xmlns:android="http://schemas.android.com/apk/res/android">
 
-  <group android:checkableBehavior="single">
+  <group android:id="@+id/nav_group_home" android:checkableBehavior="single">
     <item
         android:id="@+id/nav_home"
+        android:icon="@drawable/ic_home_black_24dp"
         android:title="@string/home" />
-    <item
-        android:id="@+id/nav_logs"
-        android:title="@string/logs" />
+  </group>
+
+  <group android:id="@+id/nav_group_info" android:checkableBehavior="single">
     <item
         android:id="@+id/nav_connections"
+        android:icon="@drawable/ic_swap_horiz_black_24dp"
         android:title="@string/connections" />
     <item
         android:id="@+id/nav_adapters"
+        android:icon="@drawable/ic_list_black_24dp"
         android:title="@string/adapters" />
+  </group>
+
+  <group android:id="@+id/nav_group_console" android:checkableBehavior="single">
+    <item
+        android:id="@+id/nav_logs"
+        android:icon="@drawable/ic_subject_black_24dp"
+        android:title="@string/logs" />
     <item
         android:id="@+id/nav_console"
+        android:icon="@drawable/ic_input_black_24dp"
         android:title="@string/console" />
+  </group>
+
+  <group android:id="@+id/nav_group_control" android:checkableBehavior="none">
+    <item
+        android:id="@+id/nav_start"
+        android:icon="@drawable/ic_play_arrow_black_24dp"
+        android:title="@string/start" />
+    <item
+        android:id="@+id/nav_stop"
+        android:icon="@drawable/ic_stop_black_24dp"
+        android:title="@string/stop" />
+    <item
+        android:id="@+id/nav_reload"
+        android:icon="@drawable/ic_refresh_black_24dp"
+        android:title="@string/reload" />
   </group>
 </menu>

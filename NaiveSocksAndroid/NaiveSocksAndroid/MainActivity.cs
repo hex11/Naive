@@ -26,6 +26,8 @@ using Android.Runtime;
 using System.Text;
 using Android.Support.V4.View;
 using System.Threading;
+using Android.Text;
+using Android.Text.Style;
 
 namespace NaiveSocksAndroid
 {
@@ -52,7 +54,8 @@ namespace NaiveSocksAndroid
 
         public BgService Service => bgServiceConn?.Value;
 
-        static readonly string[] fragmentStrings = { "home", "logs", "connections", "adapters", "console" };
+        static readonly string[] drawerStrings = { "home", "logs", "connections", "adapters", "console" };
+        static readonly int[] drawerIds = { R.Id.nav_home, R.Id.nav_logs, R.Id.nav_connections, R.Id.nav_adapters, R.Id.nav_console };
 
         private string AppName;
         private Java.Lang.ICharSequence JavaAppName;
@@ -139,10 +142,17 @@ namespace NaiveSocksAndroid
                     var pkgInfo = PackageManager.GetPackageInfo(PackageName, 0);
                     sb.Append(tv.Text).Append(" ").Append(BuildInfo.CurrentVersion);
                     sb.Append("\n").Append(GetString(R.String.naivesocksandroid)).Append(" ").Append(pkgInfo.VersionName).Append(" (").Append(pkgInfo.VersionCode).Append(")");
+                    var ssb = new SpannableStringBuilder();
+                    ssb.Append(sb.ToString());
                     if (BuildInfo.CurrentBuildText != null) {
-                        sb.Append("\n").Append(BuildInfo.CurrentBuildText);
+                        var start = ssb.Length();
+                        ssb.Append('\n');
+                        ssb.Append(BuildInfo.CurrentBuildText);
+                        var end = ssb.Length();
+                        ssb.SetSpan(new RelativeSizeSpan(0.7f), start, end, SpanTypes.ExclusiveExclusive);
+                        ssb.SetSpan(new ForegroundColorSpan(new Color(unchecked((int)0xbbffffff))), start, end, SpanTypes.ExclusiveExclusive);
                     }
-                    tv.Text = sb.ToString();
+                    tv.TextFormatted = ssb;
                 }
             }
 
@@ -159,14 +169,16 @@ namespace NaiveSocksAndroid
 
             //drawer.OpenDrawer(GravityCompat.Start);
 
-            int initNavIndex = Array.IndexOf(fragmentStrings, Intent.DataString);
+            int initNavIndex = Array.IndexOf(drawerStrings, Intent.DataString);
             if (initNavIndex == -1)
                 initNavIndex = 0;
 
             topView.Post(() => {
                 // User may have exited from this activity.
-                if (isActivityRunning)
-                    onNavigationItemSelected(navigationView.Menu.GetItem(initNavIndex));
+                if (isActivityRunning) {
+                    int menuItemId = drawerIds[initNavIndex];
+                    onNavigationItemSelected(navigationView.Menu.FindItem(menuItemId));
+                }
             });
         }
 
@@ -273,26 +285,34 @@ namespace NaiveSocksAndroid
                 case R.Id.nav_console:
                     frag = new FragmentConsole();
                     break;
+                case R.Id.nav_start:
+                    startService();
+                    break;
+                case R.Id.nav_stop:
+                    stopService();
+                    break;
+                case R.Id.nav_reload:
+                    reloadService();
+                    break;
             }
-            if (frag == null)
-                return;
+            if (frag != null) {
+                var title = itemId == R.Id.nav_home ? JavaAppName : menuItem.TitleFormatted;
+                string titleClrString = null;
+                SetTitle(title);
+                frag.InfoStrChanged += (str) => {
+                    if (str == null) {
+                        SetTitle(title);
+                    } else {
+                        if (titleClrString == null)
+                            titleClrString = title.ToString();
+                        SetTitle(titleClrString + " " + str);
+                    }
+                };
 
-            var title = itemId == R.Id.nav_home ? JavaAppName : menuItem.TitleFormatted;
-            string titleClrString = null;
-            SetTitle(title);
-            frag.InfoStrChanged += (str) => {
-                if (str == null) {
-                    SetTitle(title);
-                } else {
-                    if (titleClrString == null)
-                        titleClrString = title.ToString();
-                    SetTitle(titleClrString + " " + str);
-                }
-            };
+                ReplaceFragment(frag);
 
-            ReplaceFragment(frag);
-
-            menuItem.SetChecked(true);
+                menuItem.SetChecked(true);
+            }
             drawer.CloseDrawers();
         }
 
@@ -383,6 +403,10 @@ namespace NaiveSocksAndroid
                 menu.FindItem(R.Id.menu_stop).SetVisible(false);
                 menu.FindItem(R.Id.menu_reload).SetVisible(false);
             }
+
+            navigationView.Menu.FindItem(R.Id.nav_start).SetVisible(!isServiceForegroundRunning);
+            navigationView.Menu.FindItem(R.Id.nav_stop).SetVisible(isServiceForegroundRunning);
+            navigationView.Menu.FindItem(R.Id.nav_reload).SetVisible(isServiceForegroundRunning);
 
             var subMenu = menu.AddSubMenu(R.String.submenu_restart_kill);
             subMenu.Add(R.String.restart)
