@@ -5,3 +5,7 @@
 [submodule "dns"]
 	path = NaiveSocksAndroid/dns
 	url = https://github.com/hex11/dns
+
+[submodule "LiteDB"]
+	path = NaiveSocksAndroid/LiteDB
+	url = https://github.com/hex11/LiteDB

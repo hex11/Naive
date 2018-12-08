@@ -21,6 +21,8 @@ Project("{D954291E-2A0B-460D-934E-DC6B0785DB48}") = "NaiveSocksCliShared", "..\N
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DNS", "dns\DNS\DNS.csproj", "{0F8DC72A-3C56-47EE-8B13-5BE0923BEA76}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "LiteDB", "LiteDB\LiteDB\LiteDB.csproj", "{E2BFD430-81C5-4E0E-B8F2-99760B3A609C}"
+EndProject
 Global
 	GlobalSection(SharedMSBuildProjectFiles) = preSolution
 		..\NaiveSvrLib\NaiveSvrShared\NaiveSvrShared.projitems*{0b623dfc-5129-419c-bb03-823809f9178d}*SharedItemsImports = 13
@@ -65,6 +67,12 @@ Global
 		{0F8DC72A-3C56-47EE-8B13-5BE0923BEA76}.Release(Debug)|Any CPU.Build.0 = Release|Any CPU
 		{0F8DC72A-3C56-47EE-8B13-5BE0923BEA76}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{0F8DC72A-3C56-47EE-8B13-5BE0923BEA76}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E2BFD430-81C5-4E0E-B8F2-99760B3A609C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E2BFD430-81C5-4E0E-B8F2-99760B3A609C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E2BFD430-81C5-4E0E-B8F2-99760B3A609C}.Release(Debug)|Any CPU.ActiveCfg = Release|Any CPU
+		{E2BFD430-81C5-4E0E-B8F2-99760B3A609C}.Release(Debug)|Any CPU.Build.0 = Release|Any CPU
+		{E2BFD430-81C5-4E0E-B8F2-99760B3A609C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E2BFD430-81C5-4E0E-B8F2-99760B3A609C}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -76,6 +84,7 @@ Global
 		{B6FDCE48-2582-4CBC-B1ED-4A6952E183D2} = {F0E6DC3F-2C8F-4D7F-B9C9-EAF98D4C5412}
 		{F8975733-0B83-4AF3-BF4E-8BCDAFEE4A70} = {F0E6DC3F-2C8F-4D7F-B9C9-EAF98D4C5412}
 		{0F8DC72A-3C56-47EE-8B13-5BE0923BEA76} = {F0E6DC3F-2C8F-4D7F-B9C9-EAF98D4C5412}
+		{E2BFD430-81C5-4E0E-B8F2-99760B3A609C} = {F0E6DC3F-2C8F-4D7F-B9C9-EAF98D4C5412}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {A8D024E3-5A86-4B9D-81DB-F03EDD5D0E65}
