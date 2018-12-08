@@ -57,16 +57,18 @@ namespace NaiveSocksAndroid
 
             CheckVersion();
 
-            collection = liteDb.GetCollection<Record>("dns_records_v1");
-            collection.EnsureIndex("Ips", "$.Ips[*]", false);
-            collection.EnsureIndex("Domain", false);
+            collection = liteDb.GetCollection<Record>("dns_records_v2");
+            collection.EnsureIndex("idx_ips", "$.Ips[*]", false);
+            collection.EnsureIndex("idx_oldips", "$.OldIps[*]", false);
+            collection.EnsureIndex("Domain", true);
             Logging.info($"dns db: {collection.Count()} records.");
             CheckShrink();
         }
 
         private void CheckVersion()
         {
-            if (GetConfigValue("Version") == null) {
+            BsonValue ver = GetConfigValue("Version");
+            if (ver == null && liteDb.CollectionExists("dns_records")) {
                 Logging.info("dns db: upgrading from v0 to v1...");
                 var col = liteDb.GetCollection("dns_records");
                 var colNew = liteDb.GetCollection("dns_records_v1");
@@ -81,9 +83,27 @@ namespace NaiveSocksAndroid
                     doc["_id"] = new BsonValue(id++);
                     colNew.Insert(doc);
                 }
-                SetConfigValue("Version", 1);
+                ver = 1;
+                SetConfigValue("Version", ver);
                 liteDb.DropCollection("dns_records");
                 Logging.info("dns db: finished upgrade.");
+            }
+            if (ver == null) {
+                ver = 2;
+                SetConfigValue("Version", ver);
+                return;
+            }
+            if (ver == 1) {
+                Logging.info("dns db: upgrading from v1 to v2...");
+                var col = liteDb.GetCollection("dns_records_v1");
+                col.DropIndex("Ips");
+                liteDb.RenameCollection("dns_records_v1", "dns_records_v2");
+                ver = 2;
+                SetConfigValue("Version", ver);
+                Logging.info("dns db: finished upgrade.");
+            }
+            if (ver != 2) {
+                throw new Exception("dns db version " + GetConfigValue("Version").AsInt32 + " is not supported.");
             }
         }
 
@@ -139,9 +159,16 @@ namespace NaiveSocksAndroid
                 var r = FindDocByDomain(domain).SingleOrDefault();
                 if (r == null)
                     r = new Record() { Domain = domain };
-                var ipints = new int[val.ipLongs.Length];
+                int[] ipints = new int[val.ipLongs.Length];
                 for (int i = 0; i < ipints.Length; i++) {
                     ipints[i] = (int)val.ipLongs[i];
+                }
+                if (r.Ips != null && r.Ips.Length > 0) {
+                    if (r.OldIps != null) {
+                        r.OldIps = r.OldIps.Union(r.Ips).Except(ipints).ToArray();
+                    } else {
+                        r.OldIps = r.Ips.Except(ipints).ToArray();
+                    }
                 }
                 r.Ips = ipints;
                 r.Date = DateTime.Now;
@@ -177,7 +204,24 @@ namespace NaiveSocksAndroid
                             r = item;
                         }
                     }
-                    Logging.warning($"dns db: multiple domains ({domainsSb}) resovle to a ip address ({new IPAddress(ip)}).");
+                    Logging.warning($"dns db: multiple domains ({domainsSb}) resolve to a ip address ({new IPAddress(ip)}).");
+                } else if (r == null) {
+                    docs = FindDocByOldIp(ip);
+                    r = GetFirstOrNull(ip, docs, out m);
+                    if (m) {
+                        var domainsSb = new StringBuilder();
+                        foreach (var item in docs) {
+                            if (domainsSb.Length != 0)
+                                domainsSb.Append('|');
+                            domainsSb.Append(item.Domain);
+                            if (r.Expire < item.Expire) {
+                                r = item;
+                            }
+                        }
+                        Logging.warning($"dns db: multiple domains ({domainsSb}) were (but not now) resolving to a ip address ({new IPAddress(ip)}).");
+                    } else if (r != null) {
+                        Logging.warning($"dns db: domain ({r.Domain}) was (but not now) resolving to ip ({new IPAddress(ip)}).");
+                    }
                 }
                 return r?.Domain;
             } finally {
@@ -217,7 +261,14 @@ namespace NaiveSocksAndroid
 
         private IEnumerable<Record> FindDocByIp(uint ip)
         {
-            return collection.Find(Query.EQ("$.Ips[*]", new BsonValue((int)ip)));
+            int ipInt = (int)ip;
+            return collection.Find(Query.EQ("idx_ips", ipInt));
+        }
+
+        private IEnumerable<Record> FindDocByOldIp(uint ip)
+        {
+            int ipInt = (int)ip;
+            return collection.Find(Query.EQ("idx_oldips", ipInt));
         }
 
         private IEnumerable<Record> FindDocByDomain(string domain)
@@ -228,15 +279,16 @@ namespace NaiveSocksAndroid
         private Record GetFirstOrNull(uint ip, IEnumerable<Record> docs, out bool multipleItems)
         {
             Record doc;
-            var e = docs.GetEnumerator();
-            if (e.MoveNext()) {
-                doc = e.Current;
+            using (var e = docs.GetEnumerator()) {
                 if (e.MoveNext()) {
-                    multipleItems = true;
-                    return doc;
+                    doc = e.Current;
+                    if (e.MoveNext()) {
+                        multipleItems = true;
+                        return doc;
+                    }
+                } else {
+                    doc = null;
                 }
-            } else {
-                doc = null;
             }
             multipleItems = false;
             return doc;
@@ -247,12 +299,13 @@ namespace NaiveSocksAndroid
             public int Id { get; set; }
             public string Domain { get; set; }
             public int[] Ips { get; set; }
+            public int[] OldIps { get; set; }
             public DateTime Date { get; set; }
             public DateTime Expire { get; set; }
 
             public override string ToString()
             {
-                return $"{{Id={Id}, Domain={Domain}, Ips={string.Join("|", Ips)}, Date={Date}, Expire={Expire}}}";
+                return $"{{Id={Id}, Domain={Domain}, Ips={string.Join("|", Ips)}, OldIps={string.Join("|", OldIps)}, Date={Date}, Expire={Expire}}}";
             }
         }
     }

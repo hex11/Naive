@@ -79,12 +79,17 @@ namespace NaiveSocksAndroid
                 foreach (var collName in db.GetCollectionNames()) {
                     cmd.Write("===== COLLECTION START (" + collName + ") =====\n");
                     int docs = 0;
+                    int idxs = 0;
                     var coll = db.GetCollection(collName);
                     foreach (var item in coll.FindAll()) {
-                        cmd.Write(item.ToString() + "\n");
+                        cmd.Write("Doc: " + item.ToString() + "\n");
                         docs++;
                     }
-                    cmd.Write("===== COLLECTION END (" + collName + ") " + docs + " documents =====\n");
+                    foreach (var idx in coll.GetIndexes()) {
+                        cmd.Write($"Idx [{idx.Field}] experssion [{idx.Expression}] unique [{idx.Unique}] slot [{idx.Slot}] maxLevel [{idx.MaxLevel}]\n");
+                        idxs++;
+                    }
+                    cmd.Write("===== COLLECTION END (" + collName + ") " + docs + " documents " + idxs + " indexes =====\n");
                     cols++;
                 }
                 cmd.Write("(" + cols + " collections)\n");
