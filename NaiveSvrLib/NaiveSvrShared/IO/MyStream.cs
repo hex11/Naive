@@ -608,7 +608,6 @@ namespace NaiveSocks
                 if (bs == -1) bs = defaultBufferSize;
                 Naive.HttpSvr.BytesSegment buf;
                 Msg lastMsg = new Msg();
-                BytesSegment tempBuf = new BytesSegment();
 
                 if (msgStream != null || (From is IMyStreamNoBuffer && !TryReadSync)) {
                     buf = new BytesSegment();
@@ -618,6 +617,7 @@ namespace NaiveSocks
                 try {
                     int syncCounter = 0;
                     while (true) {
+                        BytesSegment tempBuf = new BytesSegment();
                         if (syncCounter > 64) {
                             syncCounter = 0;
                             await Task.Yield();

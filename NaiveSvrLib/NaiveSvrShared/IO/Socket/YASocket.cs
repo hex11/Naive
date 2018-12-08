@@ -42,12 +42,8 @@ namespace NaiveSocks
                 ava = -114514;
             }
             var str = " fd=" + fd + "/" + fdR + (ava != 0 ? " avail=" + ava : null) + " lastEv=" + lastReadEvents;
-            if (raRead.IsBeingListening)
-                str += " recving";
-            if (raReadNB.IsBeingListening)
-                str += " recvingNB";
-            if (raReadFull.IsBeingListening)
-                str += " recvingF";
+            if (readState > 0)
+                str += " recving(" + readState + ", " + readArg + ")";
             if (raWrite.IsBeingListening)
                 str += " sending";
             if (ready)
@@ -78,16 +74,15 @@ namespace NaiveSocks
                 if (s == GlobalEpoller) {
                     lastReadEvents = e;
                     BytesSegment bs;
-                    int readFull;
-                    int readNB;
+                    int mode;
+                    int arg;
                     lock (raRead) {
                         bs = bufRead;
-                        readFull = readFullCount;
-                        readNB = readNBMaxSize;
-                        bufRead.ResetSelf();
+                        mode = readState;
+                        arg = readArg;
                         ready = true;
                     }
-                    bool operating = bs.Bytes != null || readNB > 0;
+                    bool operating = mode != 0;
                     int r = 0;
                     Exception ex = null;
                     bool closingFdR = false;
@@ -96,8 +91,8 @@ namespace NaiveSocks
                             ex = GetClosedException();
                             goto CALLBACK;
                         }
-                        if (readNB > 0) {
-                            bs = BufferPool.GlobalGet(readNB);
+                        if (mode == 3) {
+                            bs = BufferPool.GlobalGet(arg);
                         }
                         var firstReading = true;
                         goto READ;
@@ -107,14 +102,14 @@ namespace NaiveSocks
                     READ:
                         r = ReadNonblocking(fdR, bs, out var errno);
                         if (r < 0) {
-                            if (readNB > 0) {
+                            if (mode == 3) {
                                 BufferPool.GlobalPut(bs.Bytes);
                                 bs.ResetSelf();
                             }
                             if (errno == 11) {
                                 if (firstReading)
                                     Logging.warning(this + ": EAGAIN after event " + e + ", ignored.");
-                                if (readNB == 0)
+                                if (mode == 2)
                                     bufRead = bs;
                                 return;
                             }
@@ -130,7 +125,7 @@ namespace NaiveSocks
                             ex = LinuxNative.GetExceptionWithErrno(nameof(LinuxNative.recv), errno);
                         } else {
                             if (r == 0) {
-                                if (readNB > 0) {
+                                if (mode == 3) {
                                     BufferPool.GlobalPut(bs.Bytes);
                                     bs.ResetSelf();
                                 }
@@ -138,13 +133,13 @@ namespace NaiveSocks
                                     State |= MyStreamState.RemoteShutdown;
                                     closingFdR = true;
                                 }
-                                if (readFull > 0)
-                                    ex = GetReadFullException(readFull, readFull - bs.Len);
+                                if (mode == 2)
+                                    ex = GetReadFullException(arg, arg - bs.Len);
                             } else { // r > 0
-                                if (readNB > 0) {
+                                if (mode == 3) {
                                     bs.Len = r;
                                     // and return to async caller
-                                } else if (readFull > 0) {
+                                } else if (mode == 2) {
                                     bs.SubSelf(r);
                                     if (bs.Len > 0) {
                                         goto READAGAIN;
@@ -172,24 +167,37 @@ namespace NaiveSocks
                     }
                 CALLBACK:
                     if (operating) {
+                        bufRead.ResetSelf();
+                        readState = 0;
+                        readArg = 0;
                         if (ex != null) {
                             if (Debug)
                                 Logging.debugForce(this + ": recv() async throws " + ex.Message);
-                            if (readNBMaxSize != 0)
-                                raReadNB.TrySetException(ex);
-                            else if (readFull != 0)
-                                raReadFull.TrySetException(ex);
-                            else
-                                raRead.TrySetException(ex);
+                            switch (mode) {
+                                case 3:
+                                    raReadNB.TrySetException(ex);
+                                    break;
+                                case 2:
+                                    raReadFull.TrySetException(ex);
+                                    break;
+                                case 1:
+                                    raRead.TrySetException(ex);
+                                    break;
+                            }
                         } else {
                             if (Debug)
                                 Logging.debugForce(this + ": recv() async " + r);
-                            if (readNBMaxSize != 0)
-                                raReadNB.TrySetResult(bs);
-                            else if (readFull != 0)
-                                raReadFull.TrySetResult(0);
-                            else
-                                raRead.TrySetResult(r);
+                            switch (mode) {
+                                case 3:
+                                    raReadNB.TrySetResult(bs);
+                                    break;
+                                case 2:
+                                    raReadFull.TrySetResult(0);
+                                    break;
+                                case 1:
+                                    raRead.TrySetResult(r);
+                                    break;
+                            }
                         }
                     }
                 } else if (s == GlobalEpollerW) {
@@ -316,8 +324,14 @@ namespace NaiveSocks
         private ReusableAwaiter<VoidType> raReadFull = new ReusableAwaiter<VoidType>();
         private ReusableAwaiter<BytesSegment> raReadNB = new ReusableAwaiter<BytesSegment>();
         private BytesSegment bufRead;
-        private int readFullCount;
-        private int readNBMaxSize;
+
+        private int readState;
+        // 0. None
+        // 1. ReadAsyncR
+        // 2. ReadFullAsyncR
+        // 3. ReadNBAsyncR
+
+        private int readArg;
 
         protected override unsafe int TryReadSync(BytesSegment bs)
         {
@@ -348,6 +362,8 @@ namespace NaiveSocks
                 throw new ArgumentOutOfRangeException("bs.Len");
             bs.CheckAsParameter();
             lock (raRead) {
+                if (readState != 0)
+                    throw GetReadingInProgressException();
                 if (State.HasRemoteShutdown)
                     throw GetStateException();
                 READ_AGAIN:
@@ -364,15 +380,13 @@ namespace NaiveSocks
                     goto READ_AGAIN;
                 }
                 raRead.Reset();
-                readFullCount = 0;
+                readState = 1;
                 bufRead = bs;
                 if (Debug)
                     Logging.debugForce(this + ": wait for epoll");
             }
             return new AwaitableWrapper<int>(raRead);
         }
-
-
 
         public AwaitableWrapper<BytesSegment> ReadNBAsyncR(int maxSize)
         {
@@ -381,6 +395,8 @@ namespace NaiveSocks
             if (maxSize <= 0)
                 throw new ArgumentOutOfRangeException(nameof(maxSize));
             lock (raRead) {
+                if (readState != 0)
+                    throw GetReadingInProgressException();
                 if (State.HasRemoteShutdown)
                     throw GetStateException();
                 READ_AGAIN:
@@ -402,7 +418,8 @@ namespace NaiveSocks
                     goto READ_AGAIN;
                 }
                 raReadNB.Reset();
-                readNBMaxSize = maxSize;
+                readState = 3;
+                readArg = maxSize;
                 if (Debug)
                     Logging.debugForce(this + ": wait for epoll");
             }
@@ -423,6 +440,8 @@ namespace NaiveSocks
                 throw new ArgumentOutOfRangeException("bs.Len");
             bs.CheckAsParameter();
             lock (raRead) {
+                if (readState != 0)
+                    throw GetReadingInProgressException();
                 if (State.HasRemoteShutdown)
                     throw GetStateException();
                 int r = 0;
@@ -446,7 +465,8 @@ namespace NaiveSocks
                     goto READ_AGAIN;
                 }
                 raReadFull.Reset();
-                readFullCount = bs.Len;
+                readState = 2;
+                readArg = bs.Len;
                 bufRead = bs.Sub(r);
                 if (Debug)
                     Logging.debugForce(this + ": wait for epoll");
@@ -572,6 +592,11 @@ namespace NaiveSocks
         private static Exception GetReadFullException(int count, int pos)
         {
             return new Exception($"EOF when ReadFull() count={count} pos={pos}");
+        }
+
+        private Exception GetReadingInProgressException()
+        {
+            return new Exception($"A reading task is in progress. (mode={readState})");
         }
 
         public static Epoller GlobalEpoller => LazyGlobalEpoller.Value;
