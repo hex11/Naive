@@ -52,17 +52,30 @@ namespace NaiveSocksAndroid
         public DnsDb(string dbPath)
         {
             Logging.info($"dns db: initializing...");
-            liteDb = new LiteDatabase(dbPath);
-            cfgCollection = liteDb.GetCollection("meta");
+            bool retrying = false;
+        BEGIN:
+            try {
+                liteDb = new LiteDatabase(dbPath);
+                cfgCollection = liteDb.GetCollection("meta");
 
-            CheckVersion();
+                CheckVersion();
 
-            collection = liteDb.GetCollection<Record>("dns_records_v2");
-            collection.EnsureIndex("idx_ips", "$.Ips[*]", false);
-            collection.EnsureIndex("idx_oldips", "$.OldIps[*]", false);
-            collection.EnsureIndex("Domain", true);
-            Logging.info($"dns db: {collection.Count()} records.");
-            CheckShrink();
+                collection = liteDb.GetCollection<Record>("dns_records_v2");
+                collection.EnsureIndex("idx_ips", "$.Ips[*]", false);
+                collection.EnsureIndex("idx_oldips", "$.OldIps[*]", false);
+                collection.EnsureIndex("Domain", true);
+                Logging.info($"dns db: {collection.Count()} records.");
+                CheckShrink();
+            } catch (Exception e) {
+                Logging.exception(e, Logging.Level.Error, "dns db: failed to initialize");
+                if (!retrying) {
+                    retrying = true;
+                    Logging.info("dns db: delete current db file and retry...");
+                    liteDb.Dispose();
+                    System.IO.File.Delete(dbPath);
+                    goto BEGIN;
+                }
+            }
         }
 
         private void CheckVersion()
@@ -248,6 +261,16 @@ namespace NaiveSocksAndroid
                 return false;
             } finally {
                 Interlocked.Add(ref queryByDomainTotalTime, (int)(Logging.getRuntime() - begin));
+            }
+        }
+
+        public bool Delete(string domain)
+        {
+            lock (syncRoot) {
+                var r = FindDocByDomain(domain).SingleOrDefault();
+                if (r == null)
+                    return false;
+                return collection.Delete(r.Id);
             }
         }
 

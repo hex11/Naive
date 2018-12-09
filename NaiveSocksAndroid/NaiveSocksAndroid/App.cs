@@ -120,9 +120,16 @@ namespace NaiveSocksAndroid
                 } else if (subcmd == "ip") {
                     var r = db.TryGetDomain((uint)IPAddress.Parse(cmd.ArgOrNull(1)).Address);
                     cmd.WriteLine("Result: " + (r ?? "(null)"));
+                    if (r != null && cmd.ArgOrNull(2) == "del") {
+                        cmd.WriteLine($"Deleted {(db.Delete(r) ? "1" : "0")} records");
+                    }
                 } else if (subcmd == "name") {
-                    if (db.TryGetIp(cmd.ArgOrNull(1), out var r)) {
+                    var name = cmd.ArgOrNull(1);
+                    if (db.TryGetIp(name, out var r)) {
                         cmd.WriteLine("Result: " + r);
+                        if (cmd.ArgOrNull(2) == "del") {
+                            cmd.WriteLine($"Deleted {(db.Delete(name) ? "1" : "0")} records");
+                        }
                     } else {
                         cmd.WriteLine("No result.");
                     }
@@ -132,12 +139,12 @@ namespace NaiveSocksAndroid
                     var r = db.Clean(time);
                     cmd.WriteLine($"Deleted {r:N0}.");
                 } else if (subcmd == "shrink") {
-                    cmd.WriteLine($"Shrinking...");
+                    cmd.WriteLine("Shrinking...");
                     var delta = -db.Shrink();
                     cmd.WriteLine($"Shrinked, delta: {delta:N0}.");
                 } else {
                     cmd.WriteLine("Unknown sub-command.\n" +
-                        "Usage: dnsdb (stat|ip IP|name NAME|shrink|clean EXPIRED_BEFORE)\n" +
+                        "Usage: dnsdb (stat|ip IP [del]|name NAME [del]|shrink|clean EXPIRED_BEFORE)\n" +
                         "(EXPIRED_BEFORE format: 1d2h3m4s)");
                     cmd.statusCode = 1;
                 }
