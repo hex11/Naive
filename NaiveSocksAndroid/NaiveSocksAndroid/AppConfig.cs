@@ -55,6 +55,8 @@ namespace NaiveSocksAndroid
         }
 
         public const string start_on_boot = "start_on_boot";
+        public const string tip_cxn = "tip_cxn";
+        public const string log_dynamic_margin = "log_dynamic_margin";
 
         public bool Autostart { get => GetBool(start_on_boot, false); set => Set(start_on_boot, value); }
 

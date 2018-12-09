@@ -326,13 +326,12 @@ namespace NaiveSocksAndroid
             TitleFormatted = title;
         }
 
-        private void ReplaceFragment(Fragment frag)
+        private void ReplaceFragment(MyBaseFragment frag)
         {
             DebugEvent("ReplaceFragment");
             var fm = SupportFragmentManager;
             fm.BeginTransaction().Replace(R.Id.flContent, frag).Commit();
             curFrag = frag;
-            InvalidateOptionsMenu();
         }
 
         public override void OnRequestPermissionsResult(int requestCode, string[] permissions, [GeneratedEnum] Permission[] grantResults)
@@ -408,17 +407,20 @@ namespace NaiveSocksAndroid
             navigationView.Menu.FindItem(R.Id.nav_stop).SetVisible(isServiceForegroundRunning);
             navigationView.Menu.FindItem(R.Id.nav_reload).SetVisible(isServiceForegroundRunning);
 
-            var subMenu = menu.AddSubMenu(R.String.submenu_restart_kill);
-            subMenu.Add(R.String.restart)
+            const int group = 0;
+            const int order = 150;
+
+            var subMenu = menu.AddSubMenu(group, 0, order, R.String.submenu_restart_kill);
+            subMenu.Add(0, 0, 0, R.String.restart)
                 .SetShowAsActionFlags(ShowAsAction.Never);
-            subMenu.Add(R.String.kill)
+            subMenu.Add(0, 0, 0, R.String.kill)
                 .SetShowAsActionFlags(ShowAsAction.Never);
 
-            menu.Add(R.String.autostart)
+            menu.Add(group, 0, order, R.String.autostart)
                 .SetCheckable(true)
                 .SetChecked(AppConfig.Current.Autostart)
                 .SetShowAsActionFlags(ShowAsAction.Never);
-            menu.Add(R.String.editconfig)
+            menu.Add(group, 0, order, R.String.editconfig)
                 .SetShowAsActionFlags(ShowAsAction.Never);
 
             return true;

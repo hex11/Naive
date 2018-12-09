@@ -44,4 +44,7 @@
   <string name="reloading_error">重载错误: </string>
   <string name="gc_done">GC 完毕</string>
   <string name="service_is_stopped">NaiveSocks 服务已停止</string>
+  <string name="long_press_cxn_to_stop">长按以停止连接</string>
+  <string name="got_it">知道了</string>
+  <string name="log_dynamic_margin">动态间隔</string>
 </resources>

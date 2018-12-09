@@ -3893,6 +3893,9 @@ namespace NaiveSocksAndroid
 			// aapt resource value: 0x7f0d0053
 			public const int gc_done = 2131558483;
 			
+			// aapt resource value: 0x7f0d0056
+			public const int got_it = 2131558486;
+			
 			// aapt resource value: 0x7f0d002e
 			public const int home = 2131558446;
 			
@@ -3902,8 +3905,14 @@ namespace NaiveSocksAndroid
 			// aapt resource value: 0x7f0d003b
 			public const int kill = 2131558459;
 			
+			// aapt resource value: 0x7f0d0057
+			public const int log_dynamic_margin = 2131558487;
+			
 			// aapt resource value: 0x7f0d002f
 			public const int logs = 2131558447;
+			
+			// aapt resource value: 0x7f0d0055
+			public const int long_press_cxn_to_stop = 2131558485;
 			
 			// aapt resource value: 0x7f0d002a
 			public const int naivesocksandroid = 2131558442;

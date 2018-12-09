@@ -30,11 +30,14 @@ namespace NaiveSocksAndroid
 
         private ContextThemeWrapper themeWrapper;
 
-        private int menuItemId;
+        private int menuItemId_AutoScroll;
+        private int menuItemId_DynMargin;
         private bool autoScroll = true;
         private bool eventRegistered = false;
 
         public bool InHome = false;
+
+        private bool dynamicMargin = true;
 
         public override View OnCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState)
         {
@@ -54,7 +57,20 @@ namespace NaiveSocksAndroid
             dataset = new MyData() { Context = themeWrapper };
             recycler.SetAdapter(dataset);
 
+            ReadConfig();
+            dataset.DynamicMargin = dynamicMargin;
+
             return View;
+        }
+
+        private void ReadConfig()
+        {
+            dynamicMargin = AppConfig.Current.GetBool(AppConfig.log_dynamic_margin, dynamicMargin);
+        }
+
+        private void UpdateConfig()
+        {
+            AppConfig.Current.Set(AppConfig.log_dynamic_margin, dynamicMargin);
         }
 
         public override void OnStart()
@@ -173,17 +189,28 @@ namespace NaiveSocksAndroid
         public void OnCreateMenu(IMenu menu)
         {
             if (!isAtMostBottom) {
-                var menuItem = menu.Add(0, menuItemId = 114514, 0, R.String.autoscroll);
+                var menuItem = menu.Add(0, menuItemId_AutoScroll = 114514, 99, R.String.autoscroll);
                 menuItem.SetShowAsAction(ShowAsAction.Always | ShowAsAction.WithText);
+            }
+            {
+                var menuItem = menu.Add(200, menuItemId_DynMargin = 114514 + 1, 200, R.String.log_dynamic_margin);
+                menuItem.SetShowAsAction(ShowAsAction.Never);
+                menuItem.SetCheckable(true);
+                menuItem.SetChecked(dynamicMargin);
             }
         }
 
         public void OnMenuItemSelected(IMenuItem item)
         {
-            if (item.ItemId == menuItemId) {
+            if (item.ItemId == menuItemId_AutoScroll) {
                 autoScroll = true;
                 AutoScroll();
-                //mainActivity.InvalidateOptionsMenu();
+            } else if (item.ItemId == menuItemId_DynMargin) {
+                dynamicMargin ^= true;
+                UpdateConfig();
+                dataset.DynamicMargin = dynamicMargin;
+                dataset.NotifyDataSetChanged();
+                MainActivity.InvalidateOptionsMenu();
             } else {
                 Logging.warning($"FragmentLogs.OnMenuItemSelected: unknown menuitem id={item.ItemId}, title={item.TitleFormatted}");
             }
@@ -233,9 +260,11 @@ namespace NaiveSocksAndroid
 
             public override int ItemCount => Count;
 
+            public bool DynamicMargin;
+
             public override RecyclerView.ViewHolder OnCreateViewHolder(ViewGroup parent, int viewType)
             {
-                return new MyViewHolder(Context);
+                return new MyViewHolder(this);
             }
 
             public override void OnBindViewHolder(RecyclerView.ViewHolder holder, int position)
@@ -259,8 +288,11 @@ namespace NaiveSocksAndroid
 
         class MyViewHolder : RecyclerView.ViewHolder, View.IOnLongClickListener
         {
-            public MyViewHolder(Context context) : base(new TextView(context))
+            MyData MyData;
+
+            public MyViewHolder(MyData myData) : base(new TextView(myData.Context))
             {
+                MyData = myData;
                 textView.SetPadding(8, 0, 8, 0);
                 textView.SetOnLongClickListener(this);
             }
@@ -279,7 +311,7 @@ namespace NaiveSocksAndroid
                 textView.SetText(ssb, TextView.BufferType.Spannable);
                 ssb.Clear();
                 int topMargin;
-                if (prevLog == null) {
+                if (MyData.DynamicMargin == false || prevLog == null) {
                     topMargin = 0;
                 } else {
                     var delta = log.runningTime - prevLog.Value.runningTime;

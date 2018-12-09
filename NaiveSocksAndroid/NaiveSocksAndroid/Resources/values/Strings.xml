@@ -44,4 +44,7 @@
   <string name="reloading_error">reloading error: </string>
   <string name="gc_done">GC Done.</string>
   <string name="service_is_stopped">NaiveSocks service is stopped</string>
+  <string name="long_press_cxn_to_stop">Long press on a connection to stop it</string>
+  <string name="got_it">Got it</string>
+  <string name="log_dynamic_margin">Dynamic Margin</string>
 </resources>

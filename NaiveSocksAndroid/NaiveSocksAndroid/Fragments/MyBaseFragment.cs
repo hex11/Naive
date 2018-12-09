@@ -51,6 +51,7 @@ namespace NaiveSocksAndroid
         public override void OnCreate(Bundle savedInstanceState)
         {
             DebugEvent("OnCreate");
+            MainActivity.InvalidateOptionsMenu();
             base.OnCreate(savedInstanceState);
         }
 

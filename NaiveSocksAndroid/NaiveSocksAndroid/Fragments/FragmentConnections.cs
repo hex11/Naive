@@ -18,6 +18,7 @@ using NaiveSocks;
 using System.Threading;
 using System.Threading.Tasks;
 using Android.Content;
+using Android.Animation;
 
 namespace NaiveSocksAndroid
 {
@@ -43,6 +44,14 @@ namespace NaiveSocksAndroid
             var view = inflater.CloneInContext(themeWrapper).Inflate(R.Layout.connections, container, false);
 
             connParent = view.FindViewById<LinearLayout>(R.Id.connparent);
+
+            if (AppConfig.Current.GetBool(AppConfig.tip_cxn, true)) {
+                MainActivity.MakeSnackbar(R.String.long_press_cxn_to_stop, Android.Support.Design.Widget.Snackbar.LengthLong)
+                    .SetAction(R.String.got_it, v => {
+                        AppConfig.Current.Set(AppConfig.tip_cxn, false);
+                    })
+                    .Show();
+            }
 
             return view;
         }
@@ -139,6 +148,8 @@ namespace NaiveSocksAndroid
                 tv2.Gravity = GravityFlags.End;
                 tv2.SetBackgroundColor(Color.Argb(30, 128, 128, 128));
 
+                this.LayoutParameters = new LinearLayout.LayoutParams(-1, -2) { BottomMargin = 8 };
+
                 this.AddView(tv1);
                 this.AddView(tv2);
 
@@ -149,7 +160,8 @@ namespace NaiveSocksAndroid
             public InConnection Connection { get; set; }
             public bool pendingRemoving = false;
 
-            bool stopping = false;
+            long lastTotalBytes = -1;
+
 
             public void Update(StringBuilder sb)
             {
@@ -161,10 +173,34 @@ namespace NaiveSocksAndroid
                     return;
                 }
 
-                if (conn.ConnectResult?.Ok == true)
-                    this.SetBackgroundColor(Color.Argb(conn.IsFinished ? 15 : 30, 0, 255, 0));
-                else
-                    this.SetBackgroundColor(Color.Argb(conn.IsFinished ? 15 : 30, 255, 255, 0));
+                var ctr = conn.BytesCountersRW;
+
+                if (conn.ConnectResult?.Ok == true) {
+                    var totalBytes = ctr.TotalValue.Bytes;
+                    int blue;
+                    if (totalBytes > 1000) {
+                        blue = (int)Math.Log((double)totalBytes / 10, 1.1);
+                        if (blue > 255)
+                            blue = 255;
+                    } else {
+                        blue = 0;
+                    }
+                    Color color = new Color();
+                    if (lastTotalBytes != -1 && lastTotalBytes != totalBytes) {
+                        var anim = ValueAnimator.OfInt(0, 50, 0);
+                        anim.SetDuration(300);
+                        anim.Update += (s, e) => {
+                            var animColor = color;
+                            animColor.A += (byte)(int)e.Animation.AnimatedValue;
+                            this.SetBackgroundColor(animColor);
+                        };
+                        anim.Start();
+                    }
+                    lastTotalBytes = totalBytes;
+                    this.SetBackgroundColor(color = Color.Argb((conn.IsFinished ? 30 : 50) + (blue / 5), 0, 255, blue));
+                } else {
+                    this.SetBackgroundColor(Color.Argb((conn.IsFinished ? 40 : 80), 255, 255, 0));
+                }
 
                 sb.Clear();
                 sb.Append('#').Append(conn.Id).Append(' ');
@@ -174,7 +210,7 @@ namespace NaiveSocksAndroid
                 tv1.Text = sb.ToString();
 
                 sb.Clear();
-                sb.Append(conn.BytesCountersRW.ToString()).Append(" T=").Append(WebSocket.CurrentTime - conn.CreateTime);
+                sb.Append(ctr.ToString()).Append(" T=").Append(WebSocket.CurrentTime - conn.CreateTime);
                 var adap = conn.ConnectResult?.Adapter;
                 if (adap != null)
                     sb.Append(" -> '").Append(adap.Name).Append("'");
@@ -187,7 +223,6 @@ namespace NaiveSocksAndroid
 
             public bool OnLongClick(View v)
             {
-                stopping = true;
                 Task.Run(() => {
                     Connection?.Stop();
                     this.Post(() => {
