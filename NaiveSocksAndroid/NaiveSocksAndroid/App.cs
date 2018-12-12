@@ -113,6 +113,13 @@ namespace NaiveSocksAndroid
                 }
                 var subcmd = cmd.ArgOrNull(0);
                 if (subcmd == "stat") {
+                    var fileSize = "error: ";
+                    try {
+                        fileSize = (new FileInfo(db.FilePath).Length / 1024).ToString("N0") + " KB";
+                    } catch (Exception e) {
+                        fileSize += e.Message;
+                    }
+                    cmd.WriteLine($"FileSize: {fileSize}");
                     cmd.WriteLine($"Count: {db.RecordCount():N0}");
                     cmd.WriteLine($"Inserts: {db.inserts:N0} times in {db.insertTotalTime:N0} ms");
                     cmd.WriteLine($"QueryByIp: {db.queryByIps:N0} times in {db.queryByIpTotalTime:N0} ms");
@@ -134,7 +141,7 @@ namespace NaiveSocksAndroid
                         cmd.WriteLine("No result.");
                     }
                 } else if (subcmd == "clean") {
-                    var time = DateTime.Now - NaiveUtils.ParseDuration(cmd.ArgOrNull(1));
+                    var time = DateTime.Now - NaiveUtils.ParseDuration(cmd.ArgOrNull(1) ?? "3d");
                     cmd.WriteLine($"Deleting records before {time}...");
                     var r = db.Clean(time);
                     cmd.WriteLine($"Deleted {r:N0}.");
@@ -144,8 +151,8 @@ namespace NaiveSocksAndroid
                     cmd.WriteLine($"Shrinked, delta: {delta:N0}.");
                 } else {
                     cmd.WriteLine("Unknown sub-command.\n" +
-                        "Usage: dnsdb (stat|ip IP [del]|name NAME [del]|shrink|clean EXPIRED_BEFORE)\n" +
-                        "(EXPIRED_BEFORE format: 1d2h3m4s)");
+                        "Usage: dnsdb (stat|ip IP [del]|name NAME [del]|shrink|clean [EXPIRED_BEFORE])\n" +
+                        "(EXPIRED_BEFORE default: 3d)");
                     cmd.statusCode = 1;
                 }
             }));

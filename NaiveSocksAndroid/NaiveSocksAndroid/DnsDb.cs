@@ -36,9 +36,13 @@ namespace NaiveSocksAndroid
 
     internal class DnsDb : ICacheReverseDns, ICacheDns
     {
+        const string LogStamp = "DnsDb: ";
+
         LiteDatabase liteDb;
         LiteCollection<Record> collection;
         LiteCollection<BsonDocument> cfgCollection;
+
+        public string FilePath { get; }
 
         object syncRoot = new object();
 
@@ -51,7 +55,8 @@ namespace NaiveSocksAndroid
 
         public DnsDb(string dbPath)
         {
-            Logging.info($"dns db: initializing...");
+            FilePath = dbPath;
+            Logging.info(LogStamp + "initializing...");
             bool retrying = false;
         BEGIN:
             try {
@@ -64,13 +69,13 @@ namespace NaiveSocksAndroid
                 collection.EnsureIndex("idx_ips", "$.Ips[*]", false);
                 collection.EnsureIndex("idx_oldips", "$.OldIps[*]", false);
                 collection.EnsureIndex("Domain", true);
-                Logging.info($"dns db: {collection.Count()} records.");
+                Logging.info(LogStamp + $"{collection.Count()} records.");
                 CheckShrink();
             } catch (Exception e) {
-                Logging.exception(e, Logging.Level.Error, "dns db: failed to initialize");
+                Logging.exception(e, Logging.Level.Error, LogStamp + "failed to initialize");
                 if (!retrying) {
                     retrying = true;
-                    Logging.info("dns db: delete current db file and retry...");
+                    Logging.info(LogStamp + "delete current db file and retry...");
                     liteDb.Dispose();
                     System.IO.File.Delete(dbPath);
                     goto BEGIN;
@@ -82,7 +87,7 @@ namespace NaiveSocksAndroid
         {
             BsonValue ver = GetConfigValue("Version");
             if (ver == null && liteDb.CollectionExists("dns_records")) {
-                Logging.info("dns db: upgrading from v0 to v1...");
+                Logging.info(LogStamp + "upgrading from v0 to v1...");
                 var col = liteDb.GetCollection("dns_records");
                 var colNew = liteDb.GetCollection("dns_records_v1");
                 int id = 1;
@@ -99,7 +104,7 @@ namespace NaiveSocksAndroid
                 ver = 1;
                 SetConfigValue("Version", ver);
                 liteDb.DropCollection("dns_records");
-                Logging.info("dns db: finished upgrade.");
+                Logging.info(LogStamp + "finished upgrade.");
             }
             if (ver == null) {
                 ver = 2;
@@ -107,16 +112,16 @@ namespace NaiveSocksAndroid
                 return;
             }
             if (ver == 1) {
-                Logging.info("dns db: upgrading from v1 to v2...");
+                Logging.info(LogStamp + "upgrading from v1 to v2...");
                 var col = liteDb.GetCollection("dns_records_v1");
                 col.DropIndex("Ips");
                 liteDb.RenameCollection("dns_records_v1", "dns_records_v2");
                 ver = 2;
                 SetConfigValue("Version", ver);
-                Logging.info("dns db: finished upgrade.");
+                Logging.info(LogStamp + "finished upgrade.");
             }
             if (ver != 2) {
-                throw new Exception("dns db version " + GetConfigValue("Version").AsInt32 + " is not supported.");
+                throw new Exception(LogStamp + "db version " + GetConfigValue("Version").AsInt32 + " is not supported.");
             }
         }
 
@@ -140,7 +145,7 @@ namespace NaiveSocksAndroid
         {
             const string ls = "LastShrink";
             var lastShrink = GetConfigValue(ls);
-            Logging.info("dns db: last shrink: " + (lastShrink?.AsDateTime.ToString() ?? "(null)"));
+            Logging.info(LogStamp + "last shrink: " + (lastShrink?.AsDateTime.ToString() ?? "(null)"));
             if (lastShrink == null || DateTime.Now - lastShrink.AsDateTime > TimeSpan.FromDays(1)) {
                 SetConfigValue(ls, DateTime.Now);
                 Clean(DateTime.Now.AddDays(-3));
@@ -152,14 +157,14 @@ namespace NaiveSocksAndroid
 
         public long Shrink()
         {
-            Logging.info("dns db: start shrinking...");
+            Logging.info(LogStamp + "start shrinking...");
             var reduced = liteDb.Shrink();
             if (reduced > 0) {
-                Logging.info("dns db: shrinked and reduced " + reduced + " bytes.");
+                Logging.info(LogStamp + "shrinked and reduced " + reduced + " bytes.");
             } else if (reduced < 0) {
-                Logging.info("dns db: shrinked and \"reduced\" " + reduced + " bytes.");
+                Logging.info(LogStamp + "shrinked and \"reduced\" " + reduced + " bytes.");
             } else {
-                Logging.info("dns db: shrinked and nothing happended.");
+                Logging.info(LogStamp + "shrinked and nothing happended.");
             }
             return reduced;
         }
@@ -217,7 +222,7 @@ namespace NaiveSocksAndroid
                             r = item;
                         }
                     }
-                    Logging.warning($"dns db: multiple domains ({domainsSb}) resolve to a ip address ({new IPAddress(ip)}).");
+                    Logging.warning($"{LogStamp}multiple domains ({domainsSb}) resolve to a ip address ({new IPAddress(ip)}).");
                 } else if (r == null) {
                     docs = FindDocByOldIp(ip);
                     r = GetFirstOrNull(ip, docs, out m);
@@ -231,9 +236,9 @@ namespace NaiveSocksAndroid
                                 r = item;
                             }
                         }
-                        Logging.warning($"dns db: multiple domains ({domainsSb}) were (but not now) resolving to a ip address ({new IPAddress(ip)}).");
+                        Logging.warning($"{LogStamp}multiple domains ({domainsSb}) were (but not now) resolving to a ip address ({new IPAddress(ip)}).");
                     } else if (r != null) {
-                        Logging.warning($"dns db: domain ({r.Domain}) was (but not now) resolving to ip ({new IPAddress(ip)}).");
+                        Logging.warning($"{LogStamp}domain ({r.Domain}) was (but not now) resolving to ip ({new IPAddress(ip)}).");
                     }
                 }
                 return r?.Domain;
@@ -276,9 +281,9 @@ namespace NaiveSocksAndroid
 
         public int Clean(DateTime expiredBefore)
         {
-            Logging.info($"dns db: deleting records expired before {expiredBefore}...");
+            Logging.info($"{LogStamp}deleting records expired before {expiredBefore}...");
             var r = collection.Delete(Query.LT("Expire", expiredBefore));
-            Logging.info($"dns db: deleted {r}.");
+            Logging.info($"{LogStamp}deleted {r}.");
             return r;
         }
 
