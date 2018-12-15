@@ -364,20 +364,7 @@ namespace Naive.HttpSvr
 
         private static UTF8Encoding UTF8Encoding => NaiveUtils.UTF8Encoding;
 
-        public void RecvLoop() => recvLoop();
         public Task RecvLoopAsync() => recvLoopAsync();
-
-        //private readonly SemaphoreSlim _sendLock = new SemaphoreSlim(1, 1);
-        protected void recvLoop()
-        {
-            try {
-                _recvLoop();
-            } catch (DisconnectedException) {
-
-            } finally {
-                Close();
-            }
-        }
 
         protected async Task recvLoopAsync()
         {
@@ -390,15 +377,6 @@ namespace Naive.HttpSvr
 
             } finally {
                 Close();
-            }
-        }
-
-        private void _recvLoop()
-        {
-            Connected?.Invoke(this);
-            while (ConnectionState == States.Open) {
-                var frame = _read();
-                processFrame(frame);
             }
         }
 
@@ -486,7 +464,7 @@ namespace Naive.HttpSvr
                 throw new DisconnectedException("read on closed connection");
             }
             try {
-                return _readAsync().GetAwaiter().GetResult();
+                return _readAsync().RunSync();
             } catch (Exception) {
                 throwIfTimeout();
                 Close();
@@ -658,42 +636,7 @@ namespace Naive.HttpSvr
         }
 
         private WebSocketMsg _unfin;
-        private void processFrame(FrameValue wf) => processFrame(wf, wf.fin, wf.opcode, wf.payload, wf.len);
-        private void processFrame(FrameValue wf, bool fin, int opcode, byte[] buf, int len)
-        {
-            WebSocketMsg msg;
-            if (_unfin == null) {
-                msg = new WebSocketMsg();
-                msg.server = this;
-                msg.opcode = opcode;
-            } else {
-                msg = _unfin;
-                opcode = msg.opcode;
-            }
-            switch (opcode) {
-                case 0x1: // string msg
-                    msg.data = msg.data as string + Encoding.UTF8.GetString(buf, 0, len);
-                    break;
-                case 0x2: // bytes msg
-                    if (msg.data == null) {
-                        msg.data = wf.bv;
-                    } else {
-                        (msg.data as BytesView).lastNode.nextNode = wf.bv;
-                    }
-                    if (fin)
-                        msg.data = (msg.data as BytesView).GetBytes();
-                    break;
-                default:
-                    return;
-            }
-            if (fin) {
-                _unfin = null;
-                Received?.Invoke(msg);
-                ReceivedAsync.InvokeAsync(msg).RunSync();
-            } else {
-                _unfin = msg;
-            }
-        }
+        private int _unfin_Len;
 
         private Task processFrameAsync(FrameValue wf) => processFrameAsync(wf, wf.fin, wf.opcode, wf.payload, wf.len);
         private Task processFrameAsync(FrameValue wf, bool fin, int opcode, byte[] buf, int len)
@@ -706,6 +649,8 @@ namespace Naive.HttpSvr
             } else {
                 msg = _unfin;
                 opcode = msg.opcode;
+                if (_unfin_Len + len > MaxMessageLength)
+                    throw new Exception($"message length limit exceeded ({_unfin_Len + len} > {MaxMessageLength})");
             }
             switch (opcode) {
                 case 0x1: // string msg
@@ -725,10 +670,12 @@ namespace Naive.HttpSvr
             }
             if (fin) {
                 _unfin = null;
+                _unfin_Len = 0;
                 Received?.Invoke(msg);
                 return ReceivedAsync.InvokeAsync(msg);
             } else {
                 _unfin = msg;
+                _unfin_Len += len;
             }
             return NaiveUtils.CompletedTask;
         }
@@ -863,23 +810,24 @@ namespace Naive.HttpSvr
         private readonly object _lockLatestSendTask = new object();
         private Task _latestSendTask;
 
-        public Task SendMsgAsync(byte opcode, BytesView bv)
+        public Task SendMsgAsync(byte opcode, BytesView bv) => SendMsgAsync(opcode, bv, true);
+        public Task SendMsgAsync(byte opcode, BytesView bv, bool fin)
         {
             lock (_lockLatestSendTask) {
                 if (_latestSendTask == null || _latestSendTask.IsCompleted) {
-                    return _latestSendTask = _sendMsgAsync(opcode, bv);
+                    return _latestSendTask = _sendMsgAsync(opcode, bv, fin);
                 } else {
-                    return _latestSendTask = _sendMsgAsyncQueued(_latestSendTask, opcode, bv);
+                    return _latestSendTask = _sendMsgAsyncQueued(_latestSendTask, opcode, bv, fin);
                 }
             }
         }
 
-        private async Task _sendMsgAsyncQueued(Task taskToWait, byte opcode, BytesView bv)
+        private async Task _sendMsgAsyncQueued(Task taskToWait, byte opcode, BytesView bv, bool fin)
         {
             try {
                 await taskToWait;
             } catch (Exception) { }
-            await _sendMsgAsync(opcode, bv);
+            await _sendMsgAsync(opcode, bv, fin);
         }
 
         public Task SendMsgAsync(byte opcode, byte[] buf, int begin, int len) => SendMsgAsync(opcode, new BytesView(buf, begin, len));
@@ -965,56 +913,7 @@ namespace Naive.HttpSvr
 
         private void _sendMsg(byte opcode, byte[] buf, int begin, int len, bool fin = true)
         {
-            if (buf == null && len > 0)
-                throw new ArgumentNullException(nameof(buf));
-
-            BytesView bv = new BytesView(buf, begin, len);
-            if (HaveWriteFilter && len > 0) {
-                OnWrite(bv);
-                buf = bv.bytes;
-                begin = bv.offset;
-                len = bv.tlen;
-            }
-            {
-                int bufcur = 0;
-                var isMasked = IsClient;
-                var sendMsgBuf = BufferPool.GlobalGet(Math.Min(calcFrameHeaderSize(len, isMasked) + len, SendBufSizeMax));
-                var curSendBufSize = sendMsgBuf.Length;
-                buildFrameHeader(opcode, bv.tlen, fin, sendMsgBuf, ref bufcur, isMasked);
-                var stream = BaseStream;
-                if (buf != null) {
-                    var curbv = bv;
-                    int maskIndex = 0;
-                    do {
-                        int cur = curbv.offset;
-                        int end = cur + curbv.len;
-                        var bytes = curbv.bytes;
-                        if (isMasked) {
-                            for (; cur < end; cur++) {
-                                sendMsgBuf[bufcur++] = (byte)(bytes[cur] ^ maskbytes[maskIndex++ % 4]);
-                                if (bufcur >= curSendBufSize) {
-                                    stream.Write(sendMsgBuf, 0, bufcur);
-                                    bufcur = 0;
-                                }
-                            }
-                        } else {
-                            while (cur < end) {
-                                var toCopy = Math.Min(curSendBufSize - bufcur, end - cur);
-                                Buffer.BlockCopy(bytes, cur, sendMsgBuf, bufcur, toCopy);
-                                cur += toCopy;
-                                bufcur += toCopy;
-                                if (bufcur == curSendBufSize) {
-                                    stream.Write(sendMsgBuf, 0, bufcur);
-                                    bufcur = 0;
-                                }
-                            }
-                        }
-                    } while ((curbv = curbv.nextNode) != null);
-                }
-                if (bufcur > 0)
-                    stream.Write(sendMsgBuf, 0, bufcur);
-                BufferPool.GlobalPut(sendMsgBuf);
-            }
+            SendMsgAsync(opcode, new BytesView(buf, begin, len), fin).RunSync();
         }
 
         private int calcFrameHeaderSize(int len, bool ismasked)

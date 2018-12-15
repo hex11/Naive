@@ -36,42 +36,6 @@ namespace Naive.HttpSvr
                                             : $"{{WsSvr on {epPair}}}";
         }
 
-        public void HandleRequest() => HandleRequest(true);
-
-        public void HandleRequest(bool enterRecvLoop)
-        {
-            if (p.Method == "GET"
-                && p.GetReqHeader("Upgrade") == "websocket"
-                && p.GetReqHeaderSplits("Connection").Contains("Upgrade")) {
-                p.Handled = true;
-                var wskey = p.GetReqHeader("Sec-WebSocket-Key");
-                if (wskey == null) {
-                    p.ResponseStatusCode = "400 Bad Request";
-                    p.keepAlive = false;
-                    p.EndResponse();
-                    return;
-                }
-                if (p.GetReqHeader("Sec-WebSocket-Version") != "13") {
-                    p.ResponseStatusCode = "400 Bad Request";
-                    p.setHeader("Sec-WebSocket-Version", "13");
-                    p.EndResponse();
-                    return;
-                }
-
-                p.ResponseStatusCode = "101 Switching Protocols";
-                p.setHeader("Upgrade", "websocket");
-                p.setHeader("Connection", "Upgrade");
-                p.setHeader("Sec-WebSocket-Accept", GetWebsocketAcceptKey(wskey));
-                p.keepAlive = false;
-                p.EndResponse();
-
-                p.SwitchProtocol();
-                ConnectionState = States.Open;
-                if (enterRecvLoop)
-                    recvLoop();
-            }
-        }
-
         public Task<WsHandleRequestResult> HandleRequestAsync() => HandleRequestAsync(true);
 
         public async Task<WsHandleRequestResult> HandleRequestAsync(bool enterRecvLoop)

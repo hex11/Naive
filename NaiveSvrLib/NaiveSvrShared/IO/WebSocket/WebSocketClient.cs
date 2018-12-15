@@ -79,44 +79,6 @@ namespace Naive.HttpSvr
             }
         }
 
-        public static WebSocketClient ConnectTo(string host, int port, string path)
-        {
-            return ConnectToAsync(host, port, path).RunSync();
-        }
-
-        public void Start() => Start(true);
-        public void Start(bool enterRecvLoop)
-        {
-            var stream = this.BaseStream.ToStream();
-            var sw = new StreamWriter(stream, Encoding.ASCII);
-            var sr = new StreamReader(stream, Encoding.ASCII);
-            var wskey = WebSocket.GenerateSecWebSocketKey();
-            var headers = new Dictionary<string, string> {
-                ["Upgrade"] = "websocket",
-                ["Connection"] = "Upgrade",
-                ["Sec-WebSocket-Version"] = "13",
-                ["Sec-WebSocket-Key"] = wskey
-            };
-            if (Host != null)
-                headers.Add("Host", Host);
-            HttpClient.WriteHttpRequestHeader(sw, "GET", Path, headers);
-            sw.Flush();
-            stream.Flush();
-            var response = HttpClient.ReadHttpResponseHeader(sr);
-            var statusCode = response.StatusCode.Split(' ')[0];
-            if (statusCode == "101"
-                && response.TestHeader("Connection", "Upgrade")
-                && response.TestHeader("Upgrade", "websocket")
-                && response.TestHeader("Sec-WebSocket-Accept", WebSocket.GetWebsocketAcceptKey(wskey))
-            ) {
-                ConnectionState = States.Open;
-                if (enterRecvLoop)
-                    recvLoop();
-            } else {
-                throw new Exception($"websocket handshake failed ({response.StatusCode})");
-            }
-        }
-
         public Task HandshakeAsync(bool enterRecvLoop)
             => HandshakeAsync(enterRecvLoop, null);
         public async Task HandshakeAsync(bool enterRecvLoop, Dictionary<string, string> addHeaders)
