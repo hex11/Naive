@@ -535,7 +535,8 @@ namespace NaiveSocks
                         try {
                             await whenCanReadFromLeft.CAF();
                         } catch (Exception e) {
-                            throw new Exception("awaiting WhenCanReadFromLeft", e);
+                            Logger?.exception(e, Logging.Level.Warning, $"awaiting WhenCanReadFromLeft ({left.SafeToStr()} <-> {right.SafeToStr()})");
+                            return;
                         }
                     }
                     var readFromLeft = CopierFromLeft.CopyAndShutdown();
@@ -564,7 +565,7 @@ namespace NaiveSocks
                 } finally {
                     var t1 = MyStream.CloseWithTimeout(left, forceCloseTimeout);
                     var t2 = MyStream.CloseWithTimeout(right, forceCloseTimeout);
-                    await t1; await t2;
+                    //await t1; await t2;
                 }
             }
         }
@@ -576,7 +577,7 @@ namespace NaiveSocks
             public static bool TryReadSync = false;
             public static bool TryWriteSync = false;
 
-            private const int defaultBufferSize = 64 * 1024;
+            private const int defaultBufferSize = 32 * 1024;
 
             private Logger _verboseLogger;
 
