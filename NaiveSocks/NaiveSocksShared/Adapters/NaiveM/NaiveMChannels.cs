@@ -387,11 +387,21 @@ namespace NaiveSocks
                     } catch (Exception) {
                     }
                 } else if (cmd == "upload") {
+                    long downloadedBytes = 0;
+                    long lastReportMs = 0;
+                    Stopwatch sw = Stopwatch.StartNew();
                     while (true) {
                         var msg = await ch.RecvMsgR(null);
-                        msg.TryRecycle();
                         if (msg.IsEOF)
                             break;
+                        var len = msg.Data.tlen;
+                        msg.TryRecycle();
+                        downloadedBytes += len;
+                        var ms = sw.ElapsedMilliseconds;
+                        if (ms - lastReportMs >= 1000) {
+                            await ch.SendString(ms + "|" + downloadedBytes);
+                        }
+                        lastReportMs = ms;
                     }
                     return;
                 } else if (cmd == "ping") {
@@ -434,22 +444,23 @@ namespace NaiveSocks
                     BufferPool.GlobalPut(BufferPool.GlobalGet(64 * 1024));
                     while (true) {
                         var msg = await ch.RecvMsgR(null);
-                        msg.TryRecycle();
+                        if (msg.IsEOF)
+                            break;
                         if (downloadedBytes == -1) {
+                            msg.TryRecycle();
                             log(" Started download.");
                             downloadedBytes = 0;
                             sw.Restart();
                             continue;
                         }
-                        if (msg.IsEOF)
-                            break;
                         downloadedBytes += msg.Data.tlen;
-                        if (sw.ElapsedMilliseconds - lastReportMs >= 1000) {
+                        msg.TryRecycle();
+                        var curMs = sw.ElapsedMilliseconds;
+                        if (curMs - lastReportMs >= 1000) {
                             var deltaBytes = downloadedBytes - lastReportBytes;
                             lastReportBytes = downloadedBytes;
-                            var curMs = sw.ElapsedMilliseconds;
                             var deltaMs = curMs - lastReportMs;
-                            log($" {lastReportMs:N0} ms - {curMs:N0} ms speed: {toKiBps(deltaBytes, (int)deltaMs):N0} KiB/s, {toMbps(deltaBytes, (int)deltaMs):N2} Mbps");
+                            log($" {lastReportMs:N0} ms - {curMs:N0} ms speed: {toKiBps(deltaBytes, deltaMs):N0} KiB/s, {toMbps(deltaBytes, deltaMs):N2} Mbps");
                             lastReportMs = curMs;
                         }
                         if (sw.ElapsedMilliseconds >= 10000) {
@@ -457,7 +468,7 @@ namespace NaiveSocks
                             break;
                         }
                     }
-                    var totalMs = sw.ElapsedMilliseconds;
+                    var totalMs = Math.Max(1, sw.ElapsedMilliseconds);
                     var avgKiBps = toKiBps(downloadedBytes, totalMs);
                     log($" Done. Downloaded {downloadedBytes / 1024:N0} KiB in {totalMs:N0} ms." +
                         $" Avg speed: {avgKiBps:N0} KiB/s, {toMbps(downloadedBytes, totalMs):N2} Mbps.");
