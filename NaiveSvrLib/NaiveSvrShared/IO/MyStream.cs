@@ -751,71 +751,6 @@ namespace NaiveSocks
             }
         }
 
-        public static ReusableAwaiter<VoidType> NewReadFullRStateMachine(out Action<IMyStream, BytesSegment> reuseableStart)
-        {
-            var ra = new ReusableAwaiter<VoidType>();
-            IMyStream myStream = null;
-            var bs = default(BytesSegment);
-            int step = -1;
-            int pos = 0;
-            var awaitable = default(AwaitableWrapper<int>);
-            Action moveNext = null;
-            moveNext = () => {
-                if (step == 0) {
-
-                } else if (step == 1) {
-                    goto STEP1;
-                } else {
-                    throw new Exception();
-                }
-
-            //while (pos < bs.Len) {
-            WHILE:
-                try {
-                    if (!(pos < bs.Len))
-                        goto EWHILE;
-                    awaitable = myStream.ReadAsyncR(bs.Sub(pos));
-                    step = 1;
-                    if (awaitable.IsCompleted)
-                        goto STEP1;
-                    awaitable.UnsafeOnCompleted(moveNext);
-                } catch (Exception e) {
-                    step = -1;
-                    ra.SetException(e);
-                    return;
-                }
-                return;
-            STEP1:
-                try {
-                    var read = awaitable.GetResult();
-                    if (read == 0)
-                        throw new DisconnectedException($"unexpected EOF while ReadFull() (count={bs.Len}, pos={pos})");
-                    pos += read;
-                } catch (Exception e) {
-                    step = -1;
-                    ra.SetException(e);
-                    return;
-                }
-                goto WHILE;
-            //}
-            EWHILE:
-                step = -1;
-                ra.SetResult(VoidType.Void);
-                return;
-            };
-            reuseableStart = (m, b) => {
-                if (step != -1)
-                    throw new Exception("state machine is running");
-                ra.Reset();
-                step = 0;
-                myStream = m;
-                bs = b;
-                pos = 0;
-                moveNext();
-            };
-            return ra;
-        }
-
         public static AwaitableWrapper<int> ReadAsyncR(this IMyStream myStream, BytesSegment bs)
         {
             if (myStream is IMyStreamReadR myStreamReuse) {
@@ -845,6 +780,88 @@ namespace NaiveSocks
         public static IMyStream ToMyStream(this Stream stream)
         {
             return MyStream.FromStream(stream);
+        }
+    }
+
+    public class ReadFullRStateMachine
+    {
+        Action _moveNext;
+
+        ReusableAwaiter<VoidType> ra;
+        IMyStream myStream = null;
+        BytesSegment bs;
+        int step = -1;
+        int pos = 0;
+        AwaitableWrapper<int> awaitable;
+
+        private void MoveNext()
+        {
+            if (step == 0) {
+
+            } else if (step == 1) {
+                goto STEP1;
+            } else {
+                throw new Exception();
+            }
+
+        //while (pos < bs.Len) {
+        WHILE:
+            try {
+                if (!(pos < bs.Len))
+                    goto EWHILE;
+                awaitable = myStream.ReadAsyncR(bs.Sub(pos));
+                step = 1;
+                if (awaitable.IsCompleted)
+                    goto STEP1;
+                awaitable.UnsafeOnCompleted(_moveNext);
+            } catch (Exception e) {
+                ResetState();
+                ra.SetException(e);
+                return;
+            }
+            return;
+        STEP1:
+            try {
+                var read = awaitable.GetResult();
+                if (read == 0)
+                    throw new DisconnectedException($"unexpected EOF while ReadFull() (count={bs.Len}, pos={pos})");
+                pos += read;
+            } catch (Exception e) {
+                ResetState();
+                ra.SetException(e);
+                return;
+            }
+            goto WHILE;
+        //}
+        EWHILE:
+            ResetState();
+            ra.SetResult(VoidType.Void);
+            return;
+        }
+
+        private void ResetState()
+        {
+            step = -1;
+            myStream = null;
+            bs.ResetSelf();
+            pos = 0;
+        }
+
+        public ReusableAwaiter<VoidType> Start(IMyStream stream, BytesSegment bytes)
+        {
+            if (step != -1)
+                throw new Exception("state machine is already running");
+            if (_moveNext == null) {
+                _moveNext = MoveNext;
+                ra = new ReusableAwaiter<VoidType>();
+            }
+            ra.Reset();
+            step = 0;
+            myStream = stream;
+            bs = bytes;
+            pos = 0;
+            MoveNext();
+            return ra;
         }
     }
 

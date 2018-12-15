@@ -20,7 +20,6 @@ namespace Naive.HttpSvr
             IsClient = isClient;
             PongReceived += WebSocket_PongReceived;
             Activated += _activated;
-            readFullR = MyStreamExt.NewReadFullRStateMachine(out readFullR_start);
         }
 
         public WebSocket(IMyStream BaseStream, bool isClient, bool isOpen) : this(BaseStream, isClient)
@@ -76,16 +75,16 @@ namespace Naive.HttpSvr
         public async Task Close(CloseOpt opt)
         {
             switch (opt.CloseType) {
-            case CloseType.Close:
-                State = MsgStreamStatus.Close;
-                Close();
-                break;
-            case CloseType.Shutdown:
-                State = MsgStreamStatus.Shutdown;
-                await SendBytesAsync(null, 0, 0).CAF();
-                break;
-            default:
-                throw new ArgumentOutOfRangeException();
+                case CloseType.Close:
+                    State = MsgStreamStatus.Close;
+                    Close();
+                    break;
+                case CloseType.Shutdown:
+                    State = MsgStreamStatus.Shutdown;
+                    await SendBytesAsync(null, 0, 0).CAF();
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException();
             }
         }
 
@@ -551,7 +550,7 @@ namespace Naive.HttpSvr
 
         private async Task _loopR()
         {
-            START:
+        START:
             var optionalBuffer = await _loopR_request;
 
             try {
@@ -559,7 +558,7 @@ namespace Naive.HttpSvr
                 BytesView bv = new BytesView();
                 var wf = new FrameValue();
 
-                REREAD:
+            REREAD:
 
                 var stream = BaseStream;
                 var buf = _read_buf;
@@ -627,26 +626,26 @@ namespace Naive.HttpSvr
                 if (wf.opcode != 0x8)
                     Activated?.Invoke(this);
                 switch (wf.opcode) {
-                case 0x8: // close
-                    try {
-                        ConnectionState = States.Closing;
-                        SendMsg(0x8, null, 0, 0);
-                    } catch (Exception) { }
-                    break;
-                case 0x9: // ping
-                    Logging.debug($"ping received on {this}");
-                    PingReceived?.Invoke(this);
-                    var b = bv.GetBytes();
-                    await SendMsgAsync(0xA, b, 0, b.Length).CAF();
-                    break;
-                case 0xA: // pong
-                    Logging.debug($"pong received on {this}");
-                    PongReceived?.Invoke(this);
-                    break;
-                default:
-                    _loopR_request.Reset();
-                    _loopR_result.SetResult(wf);
-                    goto START;
+                    case 0x8: // close
+                        try {
+                            ConnectionState = States.Closing;
+                            SendMsg(0x8, null, 0, 0);
+                        } catch (Exception) { }
+                        break;
+                    case 0x9: // ping
+                        Logging.debug($"ping received on {this}");
+                        PingReceived?.Invoke(this);
+                        var b = bv.GetBytes();
+                        await SendMsgAsync(0xA, b, 0, b.Length).CAF();
+                        break;
+                    case 0xA: // pong
+                        Logging.debug($"pong received on {this}");
+                        PongReceived?.Invoke(this);
+                        break;
+                    default:
+                        _loopR_request.Reset();
+                        _loopR_result.SetResult(wf);
+                        goto START;
                 }
 
                 goto REREAD;
@@ -672,20 +671,20 @@ namespace Naive.HttpSvr
                 opcode = msg.opcode;
             }
             switch (opcode) {
-            case 0x1: // string msg
-                msg.data = msg.data as string + Encoding.UTF8.GetString(buf, 0, len);
-                break;
-            case 0x2: // bytes msg
-                if (msg.data == null) {
-                    msg.data = wf.bv;
-                } else {
-                    (msg.data as BytesView).lastNode.nextNode = wf.bv;
-                }
-                if (fin)
-                    msg.data = (msg.data as BytesView).GetBytes();
-                break;
-            default:
-                return;
+                case 0x1: // string msg
+                    msg.data = msg.data as string + Encoding.UTF8.GetString(buf, 0, len);
+                    break;
+                case 0x2: // bytes msg
+                    if (msg.data == null) {
+                        msg.data = wf.bv;
+                    } else {
+                        (msg.data as BytesView).lastNode.nextNode = wf.bv;
+                    }
+                    if (fin)
+                        msg.data = (msg.data as BytesView).GetBytes();
+                    break;
+                default:
+                    return;
             }
             if (fin) {
                 _unfin = null;
@@ -709,20 +708,20 @@ namespace Naive.HttpSvr
                 opcode = msg.opcode;
             }
             switch (opcode) {
-            case 0x1: // string msg
-                msg.data = msg.data as string + Encoding.UTF8.GetString(buf, 0, len);
-                break;
-            case 0x2: // bytes msg
-                if (msg.data == null) {
-                    msg.data = wf.bv;
-                } else {
-                    (msg.data as BytesView).lastNode.nextNode = wf.bv;
-                }
-                if (fin)
-                    msg.data = (msg.data as BytesView).GetBytes();
-                break;
-            default:
-                return NaiveUtils.CompletedTask;
+                case 0x1: // string msg
+                    msg.data = msg.data as string + Encoding.UTF8.GetString(buf, 0, len);
+                    break;
+                case 0x2: // bytes msg
+                    if (msg.data == null) {
+                        msg.data = wf.bv;
+                    } else {
+                        (msg.data as BytesView).lastNode.nextNode = wf.bv;
+                    }
+                    if (fin)
+                        msg.data = (msg.data as BytesView).GetBytes();
+                    break;
+                default:
+                    return NaiveUtils.CompletedTask;
             }
             if (fin) {
                 _unfin = null;
@@ -734,8 +733,7 @@ namespace Naive.HttpSvr
             return NaiveUtils.CompletedTask;
         }
 
-        ReusableAwaiter<VoidType> readFullR;
-        Action<IMyStream, BytesSegment> readFullR_start;
+        ReadFullRStateMachine readFullR;
 
 
         AwaitableWrapper _readBaseAsync(int count)
@@ -754,8 +752,9 @@ namespace Naive.HttpSvr
             if (BaseStream is IMyStreamReadFullR imsrfr) {
                 return imsrfr.ReadFullAsyncR(bs);
             } else {
-                readFullR_start(BaseStream, bs);
-                return new AwaitableWrapper(readFullR);
+                if (readFullR == null)
+                    readFullR = new ReadFullRStateMachine();
+                return new AwaitableWrapper(readFullR.Start(BaseStream, bs));
             }
         }
 
