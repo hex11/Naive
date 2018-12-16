@@ -69,6 +69,8 @@ namespace NaiveSocksAndroid
             DnsDbFile = Path.Combine(cacheDir, "dns.litedb");
 
             AddCommands();
+
+            AppConfig.Init(Android.App.Application.Context);
         }
 
         private static void AddCommands()

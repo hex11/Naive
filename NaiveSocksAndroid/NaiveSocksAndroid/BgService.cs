@@ -30,7 +30,6 @@ namespace NaiveSocksAndroid
         public override void OnReceive(Context context, Intent intent)
         {
             App.CheckInit();
-            AppConfig.Init(Application.Context);
             if (AppConfig.Current.Autostart) {
                 Logging.info("Autostart...");
                 Intent serviceIntent = new Intent(context, typeof(BgService));
@@ -100,7 +99,6 @@ namespace NaiveSocksAndroid
         public override void OnCreate()
         {
             App.CheckInit();
-            AppConfig.Init(ApplicationContext);
 
             base.OnCreate();
 
@@ -153,6 +151,13 @@ namespace NaiveSocksAndroid
 
         public event Action<BgService> ForegroundStateChanged;
 
+        private void SetForegroundState(bool isForeground)
+        {
+            IsForegroundRunning = isForeground;
+            AppConfig.Current.Set(AppConfig.service_running, isForeground);
+            ForegroundStateChanged?.Invoke(this);
+        }
+
         private void ToForeground()
         {
             Logger.info("ToForeground()");
@@ -168,8 +173,7 @@ namespace NaiveSocksAndroid
             Controller = new Controller();
             Controller.Logger.ParentLogger = Logging.RootLogger;
 
-            IsForegroundRunning = true;
-            ForegroundStateChanged?.Invoke(this);
+            SetForegroundState(true);
 
             onScreen(powerManager.IsInteractive);
             var filter = new IntentFilter(Intent.ActionScreenOff);
@@ -265,8 +269,7 @@ namespace NaiveSocksAndroid
             UnregisterReceiver(receiverScreenState);
             receiverScreenState = null;
             onScreen(false);
-            IsForegroundRunning = false;
-            ForegroundStateChanged?.Invoke(this);
+            SetForegroundState(false);
             vpnHelper?.Stop();
             vpnHelper = null;
             Task.Run(() => Controller.Stop());
@@ -275,52 +278,57 @@ namespace NaiveSocksAndroid
         [return: GeneratedEnum]
         public override StartCommandResult OnStartCommand(Intent intent, [GeneratedEnum] StartCommandFlags flags, int startId)
         {
-            if (intent != null) {
-                string action = intent.Action;
-                if (action == Actions.TOGGLE) {
-                    Logger.info("toggling controller...");
-                    action = IsForegroundRunning ? Actions.STOP : Actions.START;
-                    var msg = string.Format(Resources.GetString(IsForegroundRunning ? R.String.format_stopping : R.String.format_starting),
-                        Resources.GetString(R.String.app_name));
-                    ShowToast(msg);
-                }
-                switch (action) {
-                    case Actions.START:
-                        this.ToForeground();
-                        break;
-                    case Actions.START_VPN:
-                        StartVpn();
-                        break;
-                    case Actions.STOP:
-                        if (IsForegroundRunning)
-                            ToBackground(true);
+            string action;
+            if (intent == null) {
+                bool wasRunning = AppConfig.Current.GetBool(AppConfig.service_running, false);
+                action = wasRunning ? Actions.START : Actions.STOP;
+                Logger.warning("The service has been killed and now it's being restarted by OS. last running state: " + wasRunning);
+            } else {
+                action = intent.Action;
+            }
+            if (action == Actions.TOGGLE) {
+                Logger.info("toggling controller...");
+                action = IsForegroundRunning ? Actions.STOP : Actions.START;
+                var msg = string.Format(Resources.GetString(IsForegroundRunning ? R.String.format_stopping : R.String.format_starting),
+                    Resources.GetString(R.String.app_name));
+                ShowToast(msg);
+            }
+            switch (action) {
+                case Actions.START:
+                    this.ToForeground();
+                    break;
+                case Actions.START_VPN:
+                    StartVpn();
+                    break;
+                case Actions.STOP:
+                    if (IsForegroundRunning)
+                        ToBackground(true);
+                    this.StopSelf();
+                    break;
+                case Actions.KILL:
+                    if (IsForegroundRunning)
+                        ToBackground(false);
+                    this.StopSelf(startId);
+                    notificationManager.Notify(MainNotificationId, restartBuilder.Build());
+                    System.Diagnostics.Process.GetCurrentProcess().Kill();
+                    break;
+                case Actions.RELOAD:
+                    putLine(GetString(R.String.controller_reloading));
+                    Reload();
+                    break;
+                case Actions.GC:
+                case Actions.GC_0:
+                    var before = GC.GetTotalMemory(false);
+                    GC.Collect(action == Actions.GC ? GC.MaxGeneration : 0);
+                    putLine($"{GetString(R.String.gc_done)} {before:N0} -> {GC.GetTotalMemory(false):N0}");
+                    if (!IsForegroundRunning)
                         this.StopSelf();
-                        break;
-                    case Actions.KILL:
-                        if (IsForegroundRunning)
-                            ToBackground(false);
-                        this.StopSelf(startId);
-                        notificationManager.Notify(MainNotificationId, restartBuilder.Build());
-                        System.Diagnostics.Process.GetCurrentProcess().Kill();
-                        break;
-                    case Actions.RELOAD:
-                        putLine(GetString(R.String.controller_reloading));
-                        Reload();
-                        break;
-                    case Actions.GC:
-                    case Actions.GC_0:
-                        var before = GC.GetTotalMemory(false);
-                        GC.Collect(action == Actions.GC ? GC.MaxGeneration : 0);
-                        putLine($"{GetString(R.String.gc_done)} {before:N0} -> {GC.GetTotalMemory(false):N0}");
-                        if (!IsForegroundRunning)
-                            this.StopSelf();
-                        break;
-                    default:
-                        Logging.warning("Unknown intent.Action: " + action);
-                        if (!IsForegroundRunning)
-                            this.StopSelf();
-                        break;
-                }
+                    break;
+                default:
+                    Logging.warning("Unknown intent.Action: " + action);
+                    if (!IsForegroundRunning)
+                        this.StopSelf();
+                    break;
             }
             return StartCommandResult.Sticky;
         }

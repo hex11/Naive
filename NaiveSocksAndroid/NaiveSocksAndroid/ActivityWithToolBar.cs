@@ -21,7 +21,6 @@ namespace NaiveSocksAndroid
         protected override void OnCreate(Bundle savedInstanceState)
         {
             App.CheckInit();
-            AppConfig.Init(ApplicationContext);
             Handler = new Handler(ApplicationContext.MainLooper);
 
             SetTheme(R.Style.MyTheme_Light);
