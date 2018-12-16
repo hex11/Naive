@@ -64,7 +64,8 @@ namespace NaiveSocksAndroid
 
         bool isScreenOn;
 
-        public bool IsForegroundRunning { private set; get; }
+        public bool IsForegroundRunning { get; private set; }
+        public bool IsInOperation { get; private set; }
 
         public MainActivity ShowingActivity;
 
@@ -151,9 +152,10 @@ namespace NaiveSocksAndroid
 
         public event Action<BgService> ForegroundStateChanged;
 
-        private void SetForegroundState(bool isForeground)
+        private void SetRunningState(bool isForeground, bool inOperation)
         {
             IsForegroundRunning = isForeground;
+            IsInOperation = inOperation;
             AppConfig.Current.Set(AppConfig.service_running, isForeground);
             ForegroundStateChanged?.Invoke(this);
         }
@@ -173,7 +175,7 @@ namespace NaiveSocksAndroid
             Controller = new Controller();
             Controller.Logger.ParentLogger = Logging.RootLogger;
 
-            SetForegroundState(true);
+            SetRunningState(true, true);
 
             onScreen(powerManager.IsInteractive);
             var filter = new IntentFilter(Intent.ActionScreenOff);
@@ -218,6 +220,8 @@ namespace NaiveSocksAndroid
                     putLine(msg, 10000);
                     ShowToast(msg);
                     StopSelf();
+                } finally {
+                    SetRunningState(true, false);
                 }
             });
 
@@ -269,10 +273,16 @@ namespace NaiveSocksAndroid
             UnregisterReceiver(receiverScreenState);
             receiverScreenState = null;
             onScreen(false);
-            SetForegroundState(false);
+            SetRunningState(false, true);
             vpnHelper?.Stop();
             vpnHelper = null;
-            Task.Run(() => Controller.Stop());
+            Task.Run(() => {
+                try {
+                    Controller.Stop();
+                } finally {
+                    SetRunningState(false, false);
+                }
+            });
         }
 
         [return: GeneratedEnum]
@@ -337,6 +347,7 @@ namespace NaiveSocksAndroid
         {
             Task.Run(() => {
                 try {
+                    SetRunningState(true, true);
                     if (!IsForegroundRunning) {
                         this.StopSelf();
                         Logging.warning("Reload() while !IsForegroundRunning");
@@ -351,6 +362,8 @@ namespace NaiveSocksAndroid
                     var errString = GetString(R.String.reloading_error);
                     ShowToast(errString + e.Message);
                     putLine(errString + e.ToString());
+                } finally {
+                    SetRunningState(true, false);
                 }
             });
         }

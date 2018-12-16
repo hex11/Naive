@@ -49,6 +49,7 @@ namespace NaiveSocksAndroid
 
         private bool isConnected => bgServiceConn?.IsConnected ?? false;
         private bool isServiceForegroundRunning => isConnected && service.IsForegroundRunning;
+        private bool isServiceInOperation => isConnected && service.IsInOperation;
         private BgService service => bgServiceConn?.Value;
         private ServiceConnection<BgService> bgServiceConn;
 
@@ -357,14 +358,15 @@ namespace NaiveSocksAndroid
 
         private Task startService()
         {
-            return Task.Run(() => {
-                if (Service.IsForegroundRunning == false) {
+            if (Service.IsForegroundRunning == false) {
+                return Task.Run(() => {
                     Logging.info("starting controller...");
                     StartServiceWithAction(BgService.Actions.START);
-                } else {
-                    Logging.info("cannot start controller: the controller is already running.");
-                }
-            });
+                });
+            } else {
+                Logging.info("cannot start controller: the controller is already running.");
+                return NaiveUtils.CompletedTask;
+            }
         }
 
         private Task stopService()
@@ -396,16 +398,23 @@ namespace NaiveSocksAndroid
                 ichm.OnCreateMenu(menu);
             }
 
-            if (isServiceForegroundRunning) {
+            bool running = isServiceForegroundRunning;
+            bool inOperation = isServiceInOperation;
+
+            menu.FindItem(R.Id.menu_operating).SetVisible(inOperation);
+
+            if (inOperation || running) {
                 menu.FindItem(R.Id.menu_start).SetVisible(false);
-            } else {
+            }
+            if (inOperation || !running) {
                 menu.FindItem(R.Id.menu_stop).SetVisible(false);
                 menu.FindItem(R.Id.menu_reload).SetVisible(false);
             }
 
-            navigationView.Menu.FindItem(R.Id.nav_start).SetVisible(!isServiceForegroundRunning);
-            navigationView.Menu.FindItem(R.Id.nav_stop).SetVisible(isServiceForegroundRunning);
-            navigationView.Menu.FindItem(R.Id.nav_reload).SetVisible(isServiceForegroundRunning);
+            navigationView.Menu.FindItem(R.Id.nav_operating).SetVisible(inOperation);
+            navigationView.Menu.FindItem(R.Id.nav_start).SetVisible(!inOperation && !running);
+            navigationView.Menu.FindItem(R.Id.nav_stop).SetVisible(!inOperation && running);
+            navigationView.Menu.FindItem(R.Id.nav_reload).SetVisible(!inOperation && running);
 
             const int group = 0;
             const int order = 150;

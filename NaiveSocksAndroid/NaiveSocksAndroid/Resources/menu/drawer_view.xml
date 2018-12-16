@@ -31,6 +31,11 @@
 
   <group android:id="@+id/nav_group_control" android:checkableBehavior="none">
     <item
+        android:id="@+id/nav_operating"
+        android:icon="@drawable/ic_play_arrow_black_24dp"
+        android:title="@string/in_operation"
+        android:enabled="false" />
+    <item
         android:id="@+id/nav_start"
         android:icon="@drawable/ic_play_arrow_black_24dp"
         android:title="@string/start" />

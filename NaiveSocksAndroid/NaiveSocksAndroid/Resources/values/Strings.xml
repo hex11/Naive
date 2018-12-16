@@ -34,17 +34,18 @@
   <string name="save_and_quit">Save and quit</string>
   <string name="saving_error">Error: </string>
   <string name="copied">Copied</string>
-  <string name="initializing">initializing...</string>
-  <string name="controller_loading">controller loading...</string>
-  <string name="controller_starting">controller starting...</string>
-  <string name="controller_started">controller started.</string>
-  <string name="starting_error">starting error: </string>
-  <string name="controller_reloading">controller reloading...</string>
-  <string name="controller_reloaded">controller reloaded.</string>
-  <string name="reloading_error">reloading error: </string>
+  <string name="initializing">Initializing...</string>
+  <string name="controller_loading">Controller loading...</string>
+  <string name="controller_starting">Controller starting...</string>
+  <string name="controller_started">Controller started.</string>
+  <string name="starting_error">Starting error: </string>
+  <string name="controller_reloading">Controller reloading...</string>
+  <string name="controller_reloaded">Controller reloaded.</string>
+  <string name="reloading_error">Reloading error: </string>
   <string name="gc_done">GC Done.</string>
   <string name="service_is_stopped">NaiveSocks service is stopped</string>
   <string name="long_press_cxn_to_stop">Long press on a connection to stop it</string>
   <string name="got_it">Got it</string>
   <string name="log_dynamic_margin">Dynamic Margin</string>
+  <string name="in_operation">(Operating)</string>
 </resources>

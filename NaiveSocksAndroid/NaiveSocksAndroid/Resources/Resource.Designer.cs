@@ -3004,14 +3004,17 @@ namespace NaiveSocksAndroid
 			// aapt resource value: 0x7f0c00ad
 			public const int media_actions = 2131493037;
 			
-			// aapt resource value: 0x7f0c00e2
-			public const int menu_reload = 2131493090;
-			
-			// aapt resource value: 0x7f0c00e0
-			public const int menu_start = 2131493088;
-			
 			// aapt resource value: 0x7f0c00e1
-			public const int menu_stop = 2131493089;
+			public const int menu_operating = 2131493089;
+			
+			// aapt resource value: 0x7f0c00e4
+			public const int menu_reload = 2131493092;
+			
+			// aapt resource value: 0x7f0c00e2
+			public const int menu_start = 2131493090;
+			
+			// aapt resource value: 0x7f0c00e3
+			public const int menu_stop = 2131493091;
 			
 			// aapt resource value: 0x7f0c00bb
 			public const int message = 2131493051;
@@ -3055,14 +3058,17 @@ namespace NaiveSocksAndroid
 			// aapt resource value: 0x7f0c00da
 			public const int nav_logs = 2131493082;
 			
-			// aapt resource value: 0x7f0c00df
-			public const int nav_reload = 2131493087;
-			
 			// aapt resource value: 0x7f0c00dd
-			public const int nav_start = 2131493085;
+			public const int nav_operating = 2131493085;
+			
+			// aapt resource value: 0x7f0c00e0
+			public const int nav_reload = 2131493088;
 			
 			// aapt resource value: 0x7f0c00de
-			public const int nav_stop = 2131493086;
+			public const int nav_start = 2131493086;
+			
+			// aapt resource value: 0x7f0c00df
+			public const int nav_stop = 2131493087;
 			
 			// aapt resource value: 0x7f0c009d
 			public const int navigation_header_container = 2131493021;
@@ -3898,6 +3904,9 @@ namespace NaiveSocksAndroid
 			
 			// aapt resource value: 0x7f0d002e
 			public const int home = 2131558446;
+			
+			// aapt resource value: 0x7f0d0058
+			public const int in_operation = 2131558488;
 			
 			// aapt resource value: 0x7f0d004b
 			public const int initializing = 2131558475;
