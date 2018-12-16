@@ -31,7 +31,7 @@ namespace NaiveSocksAndroid
 
         public FragmentConnections()
         {
-            TimerInterval = 2000;
+            TimerInterval = 1000;
         }
 
         public override View OnCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState)
@@ -85,11 +85,32 @@ namespace NaiveSocksAndroid
             }
         }
 
+        ValueAnimator animator;
+        List<Action<float>> animateActions = new List<Action<float>>();
+
         private void UpdateItemViews()
         {
+            animateActions.Clear();
+            Action<Action<float>> registerAnimation = (action) => {
+                if (animator == null) {
+                    animator = ValueAnimator.OfFloat(1, 0);
+                    animator.Update += (s, e) => {
+                        var val = (float)e.Animation.AnimatedValue;
+                        foreach (var item in animateActions) {
+                            item(val);
+                        }
+                    };
+                    animator.AnimationEnd += (s, e) => animateActions.Clear();
+                }
+                animateActions.Add(action);
+            };
+
             var sb = new StringBuilder(64);
             foreach (var view in displayingViews) {
-                view.Update(sb);
+                view.Update(sb, registerAnimation);
+            }
+            if (animateActions.Count > 0) {
+                animator.Start();
             }
         }
 
@@ -161,9 +182,9 @@ namespace NaiveSocksAndroid
             public bool pendingRemoving = false;
 
             long lastTotalBytes = -1;
+            long lastTime = -1;
 
-
-            public void Update(StringBuilder sb)
+            public void Update(StringBuilder sb, Action<Action<float>> registerAnimation)
             {
                 var conn = Connection;
                 if (conn == null) {
@@ -174,9 +195,12 @@ namespace NaiveSocksAndroid
                 }
 
                 var ctr = conn.BytesCountersRW;
+                int KBps = -1;
 
                 if (conn.ConnectResult?.Ok == true) {
                     var totalBytes = ctr.TotalValue.Bytes;
+                    var time = Logging.getRuntime();
+
                     int blue;
                     if (totalBytes > 1000) {
                         blue = (int)Math.Log((double)totalBytes / 10, 1.1);
@@ -185,19 +209,24 @@ namespace NaiveSocksAndroid
                     } else {
                         blue = 0;
                     }
-                    Color color = new Color();
-                    if (lastTotalBytes != -1 && lastTotalBytes != totalBytes) {
-                        var anim = ValueAnimator.OfInt(0, 50, 0);
-                        anim.SetDuration(300);
-                        anim.Update += (s, e) => {
+                    var color = Color.Argb((conn.IsFinished ? 30 : 50) + (blue / 5), 0, 255, blue);
+                    this.SetBackgroundColor(color);
+                    if (registerAnimation != null && lastTotalBytes != -1 && lastTotalBytes != totalBytes) {
+                        var deltaBytes = totalBytes - lastTotalBytes;
+                        var deltaTime = Math.Max(1, time - lastTime);
+                        KBps = (int)(deltaBytes * 1000 / 1024 / deltaTime);
+                        // deltaBytes / 1024 / (deltaTime / 1000)
+
+                        var jumpValue = 50 + Math.Min(50, KBps);
+                        registerAnimation((x) => {
                             var animColor = color;
-                            animColor.A += (byte)(int)e.Animation.AnimatedValue;
+                            animColor.A += (byte)(jumpValue * x);
                             this.SetBackgroundColor(animColor);
-                        };
-                        anim.Start();
+                        });
                     }
+
                     lastTotalBytes = totalBytes;
-                    this.SetBackgroundColor(color = Color.Argb((conn.IsFinished ? 30 : 50) + (blue / 5), 0, 255, blue));
+                    lastTime = time;
                 } else {
                     this.SetBackgroundColor(Color.Argb((conn.IsFinished ? 40 : 80), 255, 255, 0));
                 }
@@ -210,6 +239,11 @@ namespace NaiveSocksAndroid
                 tv1.Text = sb.ToString();
 
                 sb.Clear();
+                if (KBps > 0) {
+                    sb.Append('[').Append(KBps.ToString("N0")).Append(" KB/s] ");
+                } else if (KBps == 0) {
+                    sb.Append("[<1 KB/s] ");
+                }
                 sb.Append(ctr.ToString()).Append(" T=").Append(WebSocket.CurrentTime - conn.CreateTime);
                 var adap = conn.ConnectResult?.Adapter;
                 if (adap != null)
@@ -226,7 +260,7 @@ namespace NaiveSocksAndroid
                 Task.Run(() => {
                     Connection?.Stop();
                     this.Post(() => {
-                        Update(new StringBuilder(64));
+                        Update(new StringBuilder(64), null);
                     });
                 });
                 return true;
