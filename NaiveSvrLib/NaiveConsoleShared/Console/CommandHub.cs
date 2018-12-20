@@ -108,7 +108,7 @@ namespace Naive.Console
                         con.WriteLine("exiting command loop.");
                         break;
                     }
-                    var cmd = Command.FromString(cmdline);
+                    var cmd = Command.FromCmdline(cmdline);
                     HandleCommand(con, cmd);
                     lastStatusCode = cmd.statusCode;
                     con.WriteLine("");

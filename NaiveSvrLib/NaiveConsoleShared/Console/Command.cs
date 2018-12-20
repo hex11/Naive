@@ -15,6 +15,8 @@ namespace Naive.Console
         public int statusCode = 0;
         public CmdConsole Console { get; set; }
         public void Write(string text) => Console.Write(text);
+        public void Write(string text, ConsoleColor color) => Console.Write(text, color);
+        public void Write(string text, Color32 color) => Console.Write(text, color);
         public void WriteLine() => Console.WriteLine("");
         public void WriteLine(string text) => Console.WriteLine(text);
         public string ReadLine() => Console.ReadLine();
@@ -129,20 +131,21 @@ namespace Naive.Console
             }
         }
 
-        public static Command FromString(string str)
+        public static Command FromCmdline(string str)
         {
-            str = str.Trim();
-            var splits = str.Split(new char[] { ' ' }, 2);
-            var cmd = new Command();
+            Command cmd = FromArray(SplitArguments(str));
             cmd.fullcmd = str;
+            return cmd;
+        }
+
+        public static Command FromArray(string[] splits)
+        {
+            var cmd = new Command();
             cmd.name = splits[0];
-            if (splits.Length > 1) {
-                cmd.arg = splits[1];
-                cmd.args = SplitArguments(splits[1]);
-            } else {
-                cmd.arg = "";
-                cmd.args = new string[0];
+            if (splits.Length > 0) {
+                cmd.args = splits.Skip(1).ToArray();
             }
+            // TODO: cmd.fullcmd & cmd.arg
             return cmd;
         }
 

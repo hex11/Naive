@@ -54,7 +54,8 @@ namespace NaiveSocks
 
 Usage: {NAME_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FILE] [--config-stdin]
         [--no-cli] [--no-log-stdout] [--log-file FILE] [--log-stdout-no-time]
-        [--force-jit[-async]] [--socket-impl (1|2|fa|ya)]";
+        [--force-jit[-async]] [--socket-impl (1|2|fa|ya)]
+        [--cmd CMDLINE...]";
 
         private static bool __magic_is_packed;
 
@@ -81,7 +82,11 @@ Usage: {NAME_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FILE] [--config-
             argumentParser.AddArg(ParasPara.OnePara, "-c", "--config");
             argumentParser.AddArg(ParasPara.NoPara, "-h", "--help");
             argumentParser.AddArg(ParasPara.NoPara, "-V", "--version");
+            argumentParser.AddArg(ParasPara.AllParaAfterIt, "--cmd");
             var ar = argumentParser.ParseArgs(args);
+            ar.TryGetValue("--cmd", out var argcmd);
+            if (argcmd == null)
+                Logging.info(NameWithVertionText);
             if (ar.ContainsKey("-h")) {
                 Console.WriteLine(cmdHelpText);
                 return;
@@ -159,7 +164,6 @@ Usage: {NAME_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FILE] [--config-
                     }
                 }
             };
-            Logging.info(NameWithVertionText);
 
             if (ar.ContainsKey("--force-jit")) {
                 ForceJit();
@@ -167,20 +171,23 @@ Usage: {NAME_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FILE] [--config-
                 Task.Run(() => ForceJit());
             }
 
-            if (specifiedConfigPath != null) {
-                Commands.loadController(controller, specifiedConfigPath);
-            } else if (specifiedConfigContent != null) {
-                controller.FuncGetConfigFile = () => Controller.ConfigFile.FromContent(specifiedConfigContent);
-                controller.Load();
-                controller.Start();
-            } else {
-                var paths = GetConfigFilePaths();
-                controller.LoadConfigFileFromMultiPaths(paths);
-                controller.Start();
+
+            if (argcmd == null || specifiedConfigPath != null || specifiedConfigContent != null) {
+                if (specifiedConfigPath != null) {
+                    Commands.loadController(controller, specifiedConfigPath);
+                } else if (specifiedConfigContent != null) {
+                    controller.FuncGetConfigFile = () => Controller.ConfigFile.FromContent(specifiedConfigContent);
+                    controller.Load();
+                    controller.Start();
+                } else {
+                    var paths = GetConfigFilePaths();
+                    controller.LoadConfigFileFromMultiPaths(paths);
+                    controller.Start();
+                }
             }
             var cmdHub = new CommandHub();
             cmdHub.Prompt = $"{NAME}>";
-            Commands.AddCommands(cmdHub, controller, null);
+            Commands.AddCommands(cmdHub, controller, null, new string[] { "all" });
             cmdHub.AddCmdHandler("newbie", (cmd) => Commands.NewbieWizard(cmd, controller, specifiedConfigPath ?? configFilePath));
             cmdHub.AddCmdHandler("ver", (cmd) => cmd.WriteLine(NameWithVertionText));
             if (Environment.OSVersion.Platform == PlatformID.Win32NT) {
@@ -197,6 +204,10 @@ Usage: {NAME_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FILE] [--config-
                     }
                     void OpenFolerAndShowFile(string fileName) => Process.Start("explorer", $"/select, \"{fileName}\"");
                 }, "Usage: openfolder [exe|config]");
+            }
+            if (argcmd != null) {
+                HandleArgCmd(argcmd, cmdHub);
+                return;
             }
 #if NS_WINFORM
             cmdHub.AddCmdHandler("gui", (cmd) => {
@@ -223,9 +234,18 @@ Usage: {NAME_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FILE] [--config-
                 }
                 Environment.Exit(0);
             }
-            WAIT:
+        WAIT:
             while (true)
                 Thread.Sleep(int.MaxValue);
+        }
+
+        private static void HandleArgCmd(Argument argcmd, CommandHub cmdHub)
+        {
+            if (argcmd.paras.Count == 0)
+                Environment.Exit(-1);
+            var cmdrun = Command.FromArray(argcmd.paras.ToArray());
+            cmdHub.HandleCommand(CmdConsole.StdIO, cmdrun);
+            Environment.Exit(cmdrun.statusCode);
         }
 
         private static void ForceJit()
