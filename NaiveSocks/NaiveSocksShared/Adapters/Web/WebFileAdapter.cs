@@ -34,43 +34,55 @@ namespace NaiveSocks
         NaiveTemplate.Template _tmpl;
         DateTime _tmplLwt;
 
-        public WebFileAdapter()
+        private Task HandleFile(HttpConnection p, string realPath)
         {
-            hitFile = (p, realPath) => {
-                if (p.Url_qstr == "dlcancel") {
-                    p.Handled = true;
-                    p.setContentTypeTextPlain();
-                    //if (p.Method != "POST")
-                    //    return p.writeLineAsync("E: POST needed.");
-                    if (this.allow_netdl == false) {
-                        return p.writeLineAsync($"E: {strMissingPermission("netdl")}.");
-                    }
+            if (p.Url_qstr == "dlcancel") {
+                p.Handled = true;
+                p.setContentTypeTextPlain();
+                //if (p.Method != "POST")
+                //    return p.writeLineAsync("E: POST needed.");
+                if (this.allow_netdl == false) {
+                    return p.writeLineAsync($"E: {strMissingPermission("netdl")}.");
+                }
 
-                    if (downloadTasks.TryGetValue(realPath, out var dlTask)) {
-                        dlTask.Cancel();
-                        return p.writeLineAsync("task is canceled.");
-                    } else {
-                        return p.writeLineAsync("E: task not found.");
-                    }
-                }
-                foreach (var item in gzip_wildcard) {
-                    if (Wildcard.IsMatch(realPath, item)) {
-                        p.outputStream.EnableGzipIfClientSupports();
-                        break;
-                    }
-                }
-                return WebSvrHelper.HandleFileAsync(p, realPath);
-            };
-            hitDir = (HttpConnection p, string path) => {
-                if (p.Method == "POST") {
-                    if (p.ParseUrlQstr()["upload"] != "0") {
-                        return HandleUpload(p, path);
-                    }
-                    return AsyncHelper.CompletedTask;
+                if (downloadTasks.TryGetValue(realPath, out var dlTask)) {
+                    dlTask.Cancel();
+                    return p.writeLineAsync("task is canceled.");
                 } else {
-                    return HandleDirList(p, path);
+                    return p.writeLineAsync("E: task not found.");
                 }
-            };
+            }
+            foreach (var item in gzip_wildcard) {
+                if (Wildcard.IsMatch(realPath, item)) {
+                    p.outputStream.EnableGzipIfClientSupports();
+                    break;
+                }
+            }
+            return WebSvrHelper.HandleFileAsync(p, realPath);
+        }
+
+        private Task HandleDir(HttpConnection p, string realPath)
+        {
+            if (p.Url_qstr == "dllist") {
+                if (this.allow_netdl == false) {
+                    return p.writeLineAsync($"E: {strMissingPermission("netdl")}.");
+                }
+                var sb = new StringBuilder();
+                foreach (var item in downloadTasks) {
+                    if (item.Key.StartsWith(realPath, StringComparison.Ordinal)) {
+                        sb.Append(item.Value.StatusText).Append("\n\n");
+                    }
+                }
+                return p.writeAsync(sb.ToString());
+            }
+            if (p.Method == "POST") {
+                if (p.ParseUrlQstr()["upload"] != "0") {
+                    return HandleUpload(p, realPath);
+                }
+                return AsyncHelper.CompletedTask;
+            } else {
+                return HandleDirList(p, realPath);
+            }
         }
 
         public override void SetConfig(TomlTable toml)
@@ -102,8 +114,6 @@ namespace NaiveSocks
             }
         }
 
-        Func<HttpConnection, string, Task> hitFile, hitDir;
-
         public override async Task HandleRequestAsyncImpl(HttpConnection p)
         {
             var realPath = p.Url_path;
@@ -125,11 +135,11 @@ namespace NaiveSocks
                 } else if (r == WebSvrHelper.PathResult.File) {
                     p.Handled = true;
                     p.ResponseStatusCode = "200 OK";
-                    await hitFile(p, fsFilePath);
+                    await HandleFile(p, fsFilePath);
                 } else if (r == WebSvrHelper.PathResult.Directory && allow_list) {
                     p.Handled = true;
                     p.ResponseStatusCode = "200 OK";
-                    await hitDir(p, fsFilePath);
+                    await HandleDir(p, fsFilePath);
                 }
             } finally {
                 p.Url_path = realPath;
@@ -367,17 +377,17 @@ namespace NaiveSocks
 
                     try {
                         var t = NaiveUtils.RunAsyncTask(async () => {
-
-                            await dlTask.Start();
-
-                            // If success, remove the task from list after 30 minutes.
-                            AsyncHelper.SetTimeout(30 * 60 * 1000, () => {
-                                downloadTasksLock.EnterWriteLock();
-                                downloadTasks.Remove(realDlPath);
-                                downloadTasksLock.ExitWriteLock();
-                            });
-
-                            MoveOrReplace(realDlPath, realPath);
+                            try {
+                                await dlTask.Start();
+                                MoveOrReplace(realDlPath, realPath);
+                            } finally {
+                                // Whether success or not, remove the task from list after 5 minutes.
+                                AsyncHelper.SetTimeout(5 * 60 * 1000, () => {
+                                    downloadTasksLock.EnterWriteLock();
+                                    downloadTasks.Remove(realDlPath);
+                                    downloadTasksLock.ExitWriteLock();
+                                });
+                            }
                         });
                         if (await t.WithTimeout(200)) {
                             info += "downloading task is started.";
