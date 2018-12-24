@@ -24,7 +24,7 @@ namespace NaiveSocksAndroid
 {
 
     [BroadcastReceiver(Name = "naive.NaiveSocksAndroid.BootReceiver", Enabled = false)]
-    [IntentFilter(new[] { Intent.ActionBootCompleted })]
+    [IntentFilter(new[] { Intent.ActionBootCompleted }, Priority = 114514)]
     public class BootReceiver : BroadcastReceiver
     {
         public override void OnReceive(Context context, Intent intent)
