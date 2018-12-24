@@ -296,6 +296,10 @@ namespace Naive.HttpSvr
             if (splits.Length != 3) {
                 throw new Exception("Bad Request: " + requestLine);
             }
+            foreach (var item in splits) {
+                if (item.Length == 0)
+                    throw new Exception("Bad Request: " + requestLine);
+            }
             Method = splits[0];
             RealUrl = Url = splits[1];
             HttpVersion = splits[2];
@@ -438,7 +442,7 @@ namespace Naive.HttpSvr
                     }
                 }
             }
-            DONE:
+        DONE:
 
             var len = cur;
             RawRequestBytesLength = len;

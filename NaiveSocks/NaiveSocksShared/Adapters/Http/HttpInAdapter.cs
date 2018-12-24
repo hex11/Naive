@@ -210,14 +210,14 @@ namespace NaiveSocks
                 int hostStart = url.IndexOf("://") + 3;
                 var scheme = url.Substring(0, hostStart - 3);
                 switch (scheme.ToLower()) {
-                case "http":
-                    ishttps = false;
-                    break;
-                case "https":
-                    ishttps = true;
-                    break;
-                default:
-                    throw new Exception($"unknown scheme '{scheme}'");
+                    case "http":
+                        ishttps = false;
+                        break;
+                    case "https":
+                        ishttps = true;
+                        break;
+                    default:
+                        throw new Exception($"unknown scheme '{scheme}'");
                 }
                 string host;
                 int realUrlStart = url.IndexOf('/', hostStart);
@@ -240,14 +240,29 @@ namespace NaiveSocks
                         || (headers["Connection"] != null
                             && headers["Connection"]?.Split(',').Select(x => x.Trim()).Contains("Upgrade") == true);
 
-            string protoStr(bool x) => x ? "strange-https" : "http";
+            int totalReqs = 0;
 
             AddrPort dest = parseUrl(p.Url, out var realurl, out var isHttps);
-            connnectDest:
+        connnectDest:
+            int destReqs = 0;
+            string p_HttpVersion = null;
+            string state = null;
             var tcsGetResult = new TaskCompletionSource<ConnectResult>();
             var tcsProcessing = new TaskCompletionSource<VoidType>();
             try {
-                var inc = InConnection.Create(this, dest, dataStream: null, getInfoStr: $"({protoStr(isHttps)}) " + p.epPair.ToString());
+                var inc = InConnection.Create(this, dest,
+                    (cr) => Task.FromResult<IMyStream>(null),
+                    () => {
+                        var sb = new StringBuilder();
+                        sb.Append("(").Append(p.HttpVersion ?? p_HttpVersion);
+                        if (isHttps)
+                            sb.Append(" tls");
+                        sb.Append(" ").Append(destReqs).Append("/").Append(totalReqs);
+                        if (state != null)
+                            sb.Append(" ").Append(state);
+                        sb.Append(") ").Append(p.epPair.ToString());
+                        return sb.ToString();
+                    });
                 inc.Url = p.Url;
                 Controller.Connect(inc, @out.Adapter,
                     (result) => {
@@ -290,17 +305,19 @@ namespace NaiveSocks
                         BufferPool.GlobalPut(buf.Bytes);
                     }
 
-                    bool keepAlive = true;
+                    bool keepAlive = p.IsHttp1_1;
                     void ProcessHeaders()
                     {
+                        totalReqs++;
+                        destReqs++;
+                        p_HttpVersion = p.HttpVersion; // p.HttpVersion will be cleaned on next request receving
                         newHeaders.Clear();
                         string connection_value = null;
                         foreach (var kv in p.RequestHeaders) {
                             var value = kv.Value;
                             if (string.Equals(kv.Key, "Proxy-Connection", StringComparison.OrdinalIgnoreCase)) {
                                 connection_value = value; // set after the loop to avoid duplicated Connection headers
-                                if (value == "close" || value == "Close" /* <- IE */ )
-                                    //       ^ Browsers excpet IE
+                                if (string.Equals(value, "close", StringComparison.OrdinalIgnoreCase))
                                     keepAlive = false;
                                 continue;
                             }
@@ -323,6 +340,7 @@ namespace NaiveSocks
                     p.SwitchProtocol();
                     var clientStream = getStream(p);
                     if (keepAlive == false) {
+                        state = "nonKeepAlive";
                         await MyStream.Relay(destStream, clientStream, whenCanReadResponse);
                         return;
                     }
@@ -347,6 +365,7 @@ namespace NaiveSocks
                                 Logger.info($"{p}: copied input data {p.inputDataStream.Length} bytes.");
                         }
                         if (!keepAlive) {
+                            state = "wasKeepAlive";
                             Logger.warning($"{p}: keep-alvie changed to false. ({dest})");
                             var copyingResponse2 = NaiveUtils.RunAsyncTask(async () => {
                                 await copyingResponse;
@@ -387,7 +406,7 @@ namespace NaiveSocks
                         if (newDest != dest || newIsHttps != isHttps) {
                             if (verbose)
                                 Logger.warning($"{p}: dest changed." +
-                                    $" ({protoStr(isHttps)}){dest} -> ({protoStr(newIsHttps)}){newDest}");
+                                    $" {(isHttps ? "(https) " : null)}{dest} -> {(newIsHttps ? "(https) " : null)}{newDest}");
                             await destStream.Shutdown(SocketShutdown.Send);
                             await copyingResponse;
                             dest = newDest;
