@@ -40,6 +40,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)IO\Socket\YASocket.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IO\TlsStream.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IO\WebSocket\WebSocket.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)IO\WebSocket\WebSocket.Manager.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IO\WebSocket\WebSocketClient.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IO\WebSocket\WebSocketServer.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IO\MsgStream.cs" />
@@ -54,7 +55,6 @@
     <Folder Include="$(MSBuildThisFileDirectory)HttpSvr\Http\" />
     <Folder Include="$(MSBuildThisFileDirectory)HttpSvr\Server\" />
     <Folder Include="$(MSBuildThisFileDirectory)IO\Buffer\" />
-    <Folder Include="$(MSBuildThisFileDirectory)IO\WebSocket\" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="$(MSBuildThisFileDirectory)HttpSvr\ListPage.html" />
