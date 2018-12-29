@@ -220,15 +220,17 @@ namespace NaiveSocks
                         throw new Exception($"unknown scheme '{scheme}'");
                 }
                 string host;
-                int realUrlStart = url.IndexOf('/', hostStart);
-                if (realUrlStart == -1) {
+                int pathStart = url.IndexOf('/', hostStart);
+                if (pathStart == -1) {
                     // such url: http://example.com
                     host = url.Substring(hostStart);
                     path = "/";
                 } else {
-                    host = url.Substring(hostStart, realUrlStart - hostStart);
-                    path = url.Substring(realUrlStart);
+                    host = url.Substring(hostStart, pathStart - hostStart);
+                    path = url.Substring(pathStart);
                 }
+                if (host.IndexOf('@') != -1)
+                    throw new ArgumentException("host should not contain '@'.");
                 if (host.Contains(":") && !host.Contains("[")) {
                     return AddrPort.Parse(host);
                 } else {
@@ -264,14 +266,23 @@ namespace NaiveSocks
                         return sb.ToString();
                     });
                 inc.Url = p.Url;
-                Controller.Connect(inc, @out.Adapter,
-                    (result) => {
-                        tcsGetResult.SetResult(result);
-                        return tcsProcessing.Task;
-                    }).Forget();
-                var r = await tcsGetResult.Task;
+                ConnectResult r;
+                try {
+                    Controller.Connect(inc, @out.Adapter,
+                                (result) => {
+                                    tcsGetResult.SetResult(result);
+                                    return tcsProcessing.Task;
+                                }).Forget();
+                    r = await tcsGetResult.Task;
+                } catch (Exception e) {
+                    Logger.exception(e, Logging.Level.Warning, "Controller.Connect exception");
+                    r = new ConnectResult(null, ConnectResultEnum.Failed) { FailedReason = e.Message };
+                }
                 if (!r.Ok) {
-                    throw new Exception($"ConnectResult: {r.Result} ({r.FailedReason})");
+                    p.setStatusCode("502 Bad Gateway");
+                    await p.writeAsync("<h1>502 Bad Gateway</h1>" + HttpUtil.HtmlEncode(r.FailedReason));
+                    await p.EndResponseAsync();
+                    return;
                 }
                 var thisCounterRW = inc.BytesCountersRW;
                 thisCounterRW.R.Add(p.RawRequestBytesLength);

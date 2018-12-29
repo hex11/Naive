@@ -436,9 +436,11 @@ namespace NaiveSocks
         private string bigString;
 
         private List<SubRange> blackDomainList;
+        private List<SubRange> blackWildcardDomainList;
         private List<Regex> blackRegexUrlList;
         private List<SubRange> blackWildcardUrlList;
         private List<SubRange> whiteDomainList;
+        private List<SubRange> whiteWildcardDomainList;
         private List<Regex> whiteRegexUrlList;
         private List<SubRange> whiteWildcardUrlList;
 
@@ -460,9 +462,11 @@ namespace NaiveSocks
             }
             var bssb = new StringBuilder(ruleset.Length);
             blackDomainList = new List<SubRange>(lineCount / 2);
+            blackWildcardDomainList = new List<SubRange>();
             blackRegexUrlList = new List<Regex>();
             blackWildcardUrlList = new List<SubRange>(lineCount / 2);
             whiteDomainList = new List<SubRange>();
+            whiteWildcardDomainList = new List<SubRange>();
             whiteRegexUrlList = new List<Regex>();
             whiteWildcardUrlList = new List<SubRange>();
             resultCache = new Dictionary<string, bool>(32);
@@ -493,16 +497,20 @@ namespace NaiveSocks
                 var ch3 = line.CharOrZero(3);
                 if (ch0 == '|') {
                     if (ch1 == '|') { // ||
+                        const int lineOffset = 2;
                         var offset = bssb.Length;
                         var len = line.Length - 2;
                         if (line.Contains('*', 2)) {
                             // add "*." + value
                             bssb.Append("*.");
-                            blackDomainList.Add(new SubRange(offset, len + 2));
-                            offset += 2;
+                            line.AppendTo(bssb, lineOffset);
+                            blackWildcardDomainList.Add(new SubRange(offset, len + 2));
+                            // and value without "*."
+                            blackWildcardDomainList.Add(new SubRange(offset + 2, len));
+                        } else {
+                            line.AppendTo(bssb, lineOffset);
+                            blackDomainList.Add(new SubRange(offset, len));
                         }
-                        line.AppendTo(bssb, 2);
-                        blackDomainList.Add(new SubRange(offset, len));
                     } else { // |
                         var offset = bssb.Length;
                         var len = line.Length - 1 + 1;
@@ -513,21 +521,25 @@ namespace NaiveSocks
                 } else if (ch0 == '@' & ch1 == '@') {
                     if (ch2 == '|') {
                         if (ch3 == '|') { // @@||
+                            const int lineOffset = 4;
                             var offset = bssb.Length;
                             var len = line.Length - 4;
                             if (line.Contains('*', 4)) {
                                 // add "*." + value
                                 bssb.Append("*.");
-                                whiteDomainList.Add(new SubRange(offset, len + 2));
-                                offset += 2;
+                                line.AppendTo(bssb, lineOffset);
+                                whiteWildcardDomainList.Add(new SubRange(offset, len + 2));
+                                // and value without "*."
+                                whiteWildcardDomainList.Add(new SubRange(offset + 2, len));
+                            } else {
+                                line.AppendTo(bssb, lineOffset);
+                                whiteDomainList.Add(new SubRange(offset, len));
                             }
-                            line.AppendTo(bssb, 4);
-                            whiteDomainList.Add(new SubRange(offset, len));
                         } else { // @@|
                             var offset = bssb.Length;
                             var len = line.Length - 3 + 1;
                             //var wc = line.Substring(3) + "*";
-                            line.AppendTo(bssb, 4); bssb.Append('*');
+                            line.AppendTo(bssb, 3); bssb.Append('*');
                             whiteWildcardUrlList.Add(new SubRange(offset, len));
                         }
                     } else { // @@
@@ -563,13 +575,15 @@ namespace NaiveSocks
                 continue;
             WRONG:
                 RulesCount--;
-                Logg?.warning($"unsupported/wrong ABP filter at line {lineNum + 1}: {line.Get().Quoted()}");
+                Logg?.warning($"unsupported/wrong ABP filter at line {lineNum}: {line.Get().Quoted()}");
             }
             bigString = bssb.ToString();
             blackDomainList.TrimExcess();
+            blackWildcardDomainList.TrimExcess();
             blackRegexUrlList.TrimExcess();
             blackWildcardUrlList.TrimExcess();
             whiteDomainList.TrimExcess();
+            whiteWildcardDomainList.TrimExcess();
             whiteRegexUrlList.TrimExcess();
             whiteWildcardUrlList.TrimExcess();
         }
@@ -614,17 +628,21 @@ namespace NaiveSocks
         private bool CheckUncached(AddrPort dest, string url)
         {
             var host = dest.Host;
-            var u = url ?? (dest.Port == 443 ? $"https://{host}/" : $"http://{host}/");
+            url = url ?? (dest.Port == 443 ? $"https://{host}/" : $"http://{host}/");
             foreach (var item in blackDomainList) {
                 if (MatchDomain(host, bigString, item))
                     goto IF_HIT;
             }
+            foreach (var item in blackWildcardDomainList) {
+                if (MatchWildcard(host, bigString, item))
+                    goto IF_HIT;
+            }
             foreach (var item in blackRegexUrlList) {
-                if (MatchRegex(u, item))
+                if (MatchRegex(url, item))
                     goto IF_HIT;
             }
             foreach (var item in blackWildcardUrlList) {
-                if (MatchWildcard(u, bigString, item))
+                if (MatchWildcard(url, bigString, item))
                     goto IF_HIT;
             }
             return false;
@@ -634,12 +652,16 @@ namespace NaiveSocks
                 if (MatchDomain(host, bigString, item))
                     return false;
             }
+            foreach (var item in whiteWildcardDomainList) {
+                if (MatchWildcard(host, bigString, item))
+                    return false;
+            }
             foreach (var item in whiteRegexUrlList) {
-                if (MatchRegex(u, item))
+                if (MatchRegex(url, item))
                     return false;
             }
             foreach (var item in whiteWildcardUrlList) {
-                if (MatchWildcard(u, bigString, item))
+                if (MatchWildcard(url, bigString, item))
                     return false;
             }
             return true;
@@ -662,14 +684,10 @@ namespace NaiveSocks
 
         static bool MatchDomain(string input, string pattern, SubRange sub)
         {
-            if (Contains(pattern, sub, '*')) {
-                return Wildcard.IsMatch(input, pattern, sub.offset, sub.length);
-            } else {
-                var i = IndexOf(input, pattern, sub.offset, sub.length);
-                if (i >= 0) {
-                    if ((i == 0 || input[i - 1] == '.') && i + sub.length == input.Length)
-                        return true;
-                }
+            var i = IndexOf(input, pattern, sub.offset, sub.length);
+            if (i >= 0) {
+                if ((i == 0 || input[i - 1] == '.') && i + sub.length == input.Length)
+                    return true;
             }
             return false;
         }
