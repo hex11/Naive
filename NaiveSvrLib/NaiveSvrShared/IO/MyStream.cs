@@ -623,6 +623,8 @@ namespace NaiveSocks
                             syncCounter = 0;
                             await Task.Yield();
                         }
+
+                        // read:
                         int read;
                         if (msgStream != null) {
                             // no buffer preallocated for IMsgStream
@@ -641,24 +643,31 @@ namespace NaiveSocks
                         } else if (TryReadSync && From is IMyStreamSync fromSync) {
                             read = fromSync.Read(buf);
                         } else if (From is IMyStreamNoBuffer nb) {
-                            tempBuf = await nb.ReadNBAsyncR(bs);
+                            tempBuf = await nb.ReadNBAsyncR(bs).SyncCounter(ref syncCounter);
                             buf = tempBuf;
                             read = tempBuf.Len;
                         } else {
                             read = await From.ReadAsyncR(buf).SyncCounter(ref syncCounter);
                         }
+
+                        // handle shutdown:
                         if (read == 0) {
                             VerboseLogger?.debugForce($"SHUTDOWN: {From} -> {To}");
                             if (shutdown && !To.State.HasShutdown)
                                 await To.Shutdown(SocketShutdown.Send).CAF();
                             break;
                         }
+
                         CounterR?.Add(read);
+
+                        // write:
                         if (TryWriteSync && To is IMyStreamSync toSync)
                             toSync.Write(new BytesSegment(buf.Bytes, buf.Offset, read));
                         else
                             await To.WriteAsyncR(new BytesSegment(buf.Bytes, buf.Offset, read)).SyncCounter(ref syncCounter);
                         CounterW?.Add(read);
+
+                        // recycle buffer if possible:
                         if (lastMsg.Data != null) {
                             lastMsg.TryRecycle();
                             buf.ResetSelf();
