@@ -52,6 +52,7 @@
 		line-height: 48px;
 		width: calc(100% - 68px);
 		overflow: auto;
+		white-space: nowrap;
 		font-size: 1.2em;
 		margin: 0 10px 0;
 	}
@@ -180,8 +181,8 @@
 </div>
 {{/can_upload}}
 {{foot}}
-{{#can_upload}}
 <script type='text/javascript'>
+{{#can_upload}}
 	function uploadTitleClicked() {
 		window.location.hash = '#upload';
 	}
@@ -351,7 +352,11 @@
 	}
 
 	setTimeout(initDownloadingStatus, 100);
-</script>
 {{/can_upload}}
+	(function () {
+		var title = document.getElementById('title');
+		title.scrollLeft = title.scrollWidth;
+	})();
+</script>
 </body>
 </html>

@@ -250,6 +250,15 @@ namespace NaiveTemplate
             new Parser(this, template).Parse();
         }
 
+        /// <summary>
+        /// TrimExcess on the node list and returns itself.
+        /// </summary>
+        public Template TrimExcess()
+        {
+            nodes.TrimExcess();
+            return this;
+        }
+
         private struct Parser
         {
             private readonly Template t;

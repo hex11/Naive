@@ -187,7 +187,7 @@ namespace Naive.HttpSvr
             }));
         }
 
-        static Lazy<Template> lazyListTmpl = new Lazy<Template>(() => new Template(GetListTmplString()), true);
+        static Lazy<Template> lazyListTmpl = new Lazy<Template>(() => new Template(GetListTmplString()).TrimExcess(), true);
         static Template dirTmpl = new Template("<div class='item dir'><a href='{{url}}/'>{{name}}/</a></div>\n");
         static Template fileTmpl = new Template("<div class='item file'><a href='{{url}}'>{{name}}</a></div>\n");
 

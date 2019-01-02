@@ -537,7 +537,7 @@ namespace NaiveSocks
                     var fi = new FileInfo(tmpl);
                     DateTime lwt = fi.LastWriteTimeUtc;
                     if (_tmplLwt != lwt) {
-                        _tmpl = new NaiveTemplate.Template(File.ReadAllText(tmpl, Encoding.UTF8));
+                        _tmpl = new NaiveTemplate.Template(File.ReadAllText(tmpl, Encoding.UTF8)).TrimExcess();
                         _tmplLwt = lwt;
                     }
                 } else {
