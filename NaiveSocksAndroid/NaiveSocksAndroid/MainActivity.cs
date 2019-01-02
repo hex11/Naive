@@ -463,7 +463,11 @@ namespace NaiveSocksAndroid
                     });
                 } else if (EqualsId(title, R.String.kill)) {
                     try {
-                        System.Diagnostics.Process.GetCurrentProcess().Kill();
+                        if (isServiceForegroundRunning) {
+                            StartServiceWithAction(BgService.Actions.KILL);
+                        } else {
+                            System.Diagnostics.Process.GetCurrentProcess().Kill();
+                        }
                     } catch (Exception e) {
                         Logging.exception(e, Logging.Level.Error, "Failed to kill myself!");
                     }

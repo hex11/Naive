@@ -90,7 +90,7 @@ namespace NaiveSocksAndroid
 
             public bool socket_underlying { get; set; } = false;
 
-            public string title_format { get; set; } = "{0}/{1} | {2:N0} KB ({5:N0}/s) | {4:N2} CPUs";
+            public string title_format { get; set; } = null;
 
             public VpnConfig vpn { get; set; }
         }
@@ -163,10 +163,18 @@ namespace NaiveSocksAndroid
         private void ToForeground()
         {
             Logger.info("ToForeground()");
-            if (IsForegroundRunning) {
-                Logger.logWithStackTrace("RunForegound() while isForegroundRunning", Logging.Level.Warning);
+
+            if (IsInOperation) {
+                Logger.logWithStackTrace("ToForeground() while the service is in operation", Logging.Level.Warning);
                 return;
             }
+
+            if (IsForegroundRunning) {
+                Logger.logWithStackTrace("ToForeground() while the service is already running in foreground", Logging.Level.Warning);
+                return;
+            }
+
+            SetRunningState(true, true);
 
             CreateNotifBuilder();
 
@@ -174,8 +182,6 @@ namespace NaiveSocksAndroid
 
             Controller = new Controller();
             Controller.Logger.ParentLogger = Logging.RootLogger;
-
-            SetRunningState(true, true);
 
             onScreen(powerManager.IsInteractive);
             var filter = new IntentFilter(Intent.ActionScreenOff);
@@ -267,6 +273,10 @@ namespace NaiveSocksAndroid
         private void ToBackground(bool removeNotif)
         {
             Logger.info("ToBackground(" + removeNotif + ")");
+            if (IsInOperation) {
+                Logger.logWithStackTrace("ToBackground() while the service is in operation", Logging.Level.Warning);
+                return;
+            }
             notifyTimer?.Dispose();
             notifyTimer = null;
             StopForeground(removeNotif);
@@ -347,12 +357,16 @@ namespace NaiveSocksAndroid
         {
             Task.Run(() => {
                 try {
-                    SetRunningState(true, true);
-                    if (!IsForegroundRunning) {
-                        this.StopSelf();
-                        Logging.warning("Reload() while !IsForegroundRunning");
+                    if (IsInOperation) {
+                        Logging.warning("Reload() while the service is in operation");
                         return;
                     }
+                    if (!IsForegroundRunning) {
+                        this.StopSelf();
+                        Logging.warning("Reload() while the service is foreground running");
+                        return;
+                    }
+                    SetRunningState(true, true);
                     vpnHelper?.Stop();
                     Controller.Reload();
                     CheckVPN();
@@ -422,29 +436,15 @@ namespace NaiveSocksAndroid
         long lastCpuTime = 0;
         long lastCopiedBytes = 0;
 
+        StringBuilder titleSb = null;
+
         private bool updateNotifBuilder()
         {
             var needRenotify = false;
 
             var curRuntime = Logging.getRuntime();
-            var curCpuTime = Process.ElapsedCpuTime;
-            float deltaRuntime = (float)Math.Max(1, curRuntime - lastRuntime);
-            var load = (curCpuTime - lastCpuTime) / deltaRuntime;
-            lastRuntime = curRuntime;
-            lastCpuTime = curCpuTime;
+            string title = FormatTitle(curRuntime);
 
-            long copiedBytes = MyStream.TotalCopiedBytes;
-            var deltaBytes = copiedBytes - lastCopiedBytes;
-            lastCopiedBytes = copiedBytes;
-
-            var title = currentConfig.title_format == null ? null : string.Format(currentConfig.title_format,
-                Controller.RunningConnections,
-                Controller.TotalHandledConnections,
-                copiedBytes / 1024,
-                MyStream.TotalCopiedPackets,
-                load,
-                ((float)deltaBytes / 1024) / (deltaRuntime / 1000) // KiB/s
-            );
             if (title != lastTitle) {
                 needRenotify = true;
                 lastTitle = title;
@@ -460,6 +460,50 @@ namespace NaiveSocksAndroid
                 builder.SetContentText(textLine);
             }
             return needRenotify;
+        }
+
+        private string FormatTitle(long curRuntime)
+        {
+            var curCpuTime = Process.ElapsedCpuTime;
+            float deltaRuntime = (float)Math.Max(1, curRuntime - lastRuntime);
+            var load = (curCpuTime - lastCpuTime) / deltaRuntime;
+            lastRuntime = curRuntime;
+            lastCpuTime = curCpuTime;
+
+            long copiedBytes = MyStream.TotalCopiedBytes;
+            var deltaBytes = copiedBytes - lastCopiedBytes;
+            lastCopiedBytes = copiedBytes;
+
+            var kiBps = ((float)deltaBytes / 1024) / (deltaRuntime / 1000);
+
+            string title;
+            if (currentConfig.title_format == null) {
+                // "{0}/{1} | {2:N0} KB ({5:N0}/s) | {4:N2} CPUs"
+                var sb = titleSb ?? (titleSb = new StringBuilder());
+                sb.Append(Controller.RunningConnections).Append('/').Append(Controller.TotalHandledConnections);
+                sb.Append(" | ");
+                sb.Append((copiedBytes / 1024).ToString("N0")).Append(" KB (");
+                if (kiBps == 0)
+                    sb.Append('0');
+                else if (kiBps >= 1)
+                    sb.Append(kiBps.ToString("N0"));
+                else
+                    sb.Append("<1");
+                sb.Append("/s) | ");
+                sb.Append(load.ToString("N2")).Append(" CPUs");
+                title = sb.ToString();
+                sb.Clear();
+            } else {
+                title = string.Format(currentConfig.title_format,
+                        Controller.RunningConnections,
+                        Controller.TotalHandledConnections,
+                        copiedBytes / 1024,
+                        MyStream.TotalCopiedPackets,
+                        load,
+                        kiBps);
+            }
+
+            return title;
         }
 
         Timer notifyTimer;
