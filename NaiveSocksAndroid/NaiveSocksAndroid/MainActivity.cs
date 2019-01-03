@@ -41,6 +41,7 @@ namespace NaiveSocksAndroid
         WindowSoftInputMode = SoftInput.StateUnchanged | SoftInput.AdjustResize
     )]
     [Android.App.MetaData("android.app.shortcuts", Resource = "@xml/shortcuts")]
+    [Android.App.IntentFilter(new[] { Android.Service.QuickSettings.TileService.ActionQsTilePreferences })]
     public class MainActivity : ActivityWithToolBar
     {
         private NavigationView navigationView;

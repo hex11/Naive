@@ -40,6 +40,14 @@ namespace NaiveSocksAndroid
         }
     }
 
+    static class BgServiceRunningState
+    {
+        public static bool IsRunning;
+        public static bool IsInOperation;
+        public static event Action StateChanged;
+        public static void InvokeStateChanged() => StateChanged?.Invoke();
+    }
+
     [Service(
         Name = "naive.NaiveSocksAndroid.BgService",
         Permission = "android.permission.BIND_VPN_SERVICE"
@@ -154,10 +162,16 @@ namespace NaiveSocksAndroid
 
         private void SetRunningState(bool isForeground, bool inOperation)
         {
+            bool stateChanged = IsForegroundRunning != isForeground || IsInOperation != inOperation;
             IsForegroundRunning = isForeground;
             IsInOperation = inOperation;
             AppConfig.Current.Set(AppConfig.service_running, isForeground);
             ForegroundStateChanged?.Invoke(this);
+            if (stateChanged) {
+                BgServiceRunningState.IsInOperation = IsInOperation;
+                BgServiceRunningState.IsRunning = isForeground;
+                BgServiceRunningState.InvokeStateChanged();
+            }
         }
 
         private void ToForeground()

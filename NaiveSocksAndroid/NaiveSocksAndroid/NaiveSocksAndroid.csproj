@@ -141,6 +141,7 @@
     <Compile Include="DnsDb.cs" />
     <Compile Include="Resources\Resource.Designer.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="ToggleTileService.cs" />
     <Compile Include="VpnHelper.cs" />
     <Compile Include="VpnLocalDns.cs" />
   </ItemGroup>
