@@ -18,8 +18,6 @@ namespace Naive.HttpSvr
         {
             this.BaseStream = BaseStream;
             IsClient = isClient;
-            PongReceived += WebSocket_PongReceived;
-            Activated += _activated;
         }
 
         public WebSocket(IMyStream BaseStream, bool isClient, bool isOpen) : this(BaseStream, isClient)
@@ -98,10 +96,6 @@ namespace Naive.HttpSvr
             return (await RecvMsg(null)).GetString();
         }
 
-        private static readonly Action<WebSocket> _activated = socket => {
-            socket.LatestActiveTime = CurrentTimeRough;
-        };
-
         public AsyncEvent<WebSocketMsg> ReceivedAsync = new AsyncEvent<WebSocketMsg>();
         public event Action<WebSocketMsg> Received;
         public event Action<WebSocket> Connected;
@@ -111,79 +105,10 @@ namespace Naive.HttpSvr
         public event Action<WebSocket> Activated;
         public States ConnectionState = States.Opening;
 
-        private static int _timeAcc = 1;
-        public static int TimeAcc
+        private void OnActivated()
         {
-            get { return _timeAcc; }
-            set {
-                ConfigManageTask(value, _manageInterval);
-            }
-        }
-
-        private static int _manageInterval = 3000;
-        public static int ManageInterval
-        {
-            get { return _manageInterval; }
-            set {
-                ConfigManageTask(_timeAcc, value);
-            }
-        }
-
-        public static void ConfigManageTask(int timeAcc, int manageInterval)
-        {
-            if (timeAcc <= 0)
-                throw new ArgumentOutOfRangeException(nameof(timeAcc));
-            if (manageInterval <= 0)
-                throw new ArgumentOutOfRangeException(nameof(manageInterval));
-            _timeAcc = timeAcc;
-            _manageInterval = manageInterval;
-
-            Manager.CheckManageTask();
-        }
-
-        private static int _RoughTime = 0;
-
-        private static bool _dontCalcTime = false;
-
-        public static int CurrentTime
-        {
-            get {
-                if (_dontCalcTime) {
-                    return _RoughTime;
-                } else {
-                    var calcTime = CalcCurrentTime();
-                    _RoughTime = calcTime;
-                    return calcTime;
-                }
-            }
-        }
-
-        public static int CurrentTimeRough => _RoughTime;
-
-        static long _totalMsUntilLastTicks = 0;
-
-        static int _lastTicks = Environment.TickCount;
-
-        static SpinLock _lastTicksLock = new SpinLock(false);
-
-        private static int CalcCurrentTime()
-        {
-            var curTicks = Environment.TickCount;
-            var laTicks = _lastTicks;
-
-            if (curTicks >= laTicks) {
-                var delta = curTicks - laTicks;
-                return (int)((_totalMsUntilLastTicks + delta) / 1000);
-            } else {
-                bool lt = false;
-                _lastTicksLock.Enter(ref lt);
-                var delta = (int.MaxValue - laTicks) + (curTicks - int.MinValue) + 1;
-                _lastTicks = curTicks;
-                _totalMsUntilLastTicks += delta;
-                var ret = (int)(_totalMsUntilLastTicks / 1000);
-                _lastTicksLock.Exit(false);
-                return ret;
-            }
+            this.LatestActiveTime = CurrentTimeRough;
+            Activated?.Invoke(this);
         }
 
         public int CreateTime = CurrentTime;
@@ -196,17 +121,6 @@ namespace Naive.HttpSvr
             Normal,
             PingSent,
             TimedoutClosed
-        }
-
-        public static List<WebSocket> ManagedWebSockets = new List<WebSocket>();
-
-        static List<Func<bool>> AdditionalManagementTasks = new List<Func<bool>>();
-
-        public static void AddManagementTask(Func<bool> func)
-        {
-            lock (AdditionalManagementTasks)
-                AdditionalManagementTasks.Add(func);
-            Manager.CheckManageTask();
         }
 
         public int ManagedPingTimeout = 15;
@@ -493,7 +407,7 @@ namespace Naive.HttpSvr
                 wf.bv = bv;
 
                 if (wf.opcode != 0x8)
-                    Activated?.Invoke(this);
+                    OnActivated();
                 switch (wf.opcode) {
                     case 0x8: // close
                         try {
@@ -502,14 +416,12 @@ namespace Naive.HttpSvr
                         } catch (Exception) { }
                         break;
                     case 0x9: // ping
-                        Logging.debug($"ping received on {this}");
-                        PingReceived?.Invoke(this);
+                        OnPingReceived();
                         var b = bv.GetBytes();
                         await SendMsgAsync(0xA, b, 0, b.Length).CAF();
                         break;
                     case 0xA: // pong
-                        Logging.debug($"pong received on {this}");
-                        PongReceived?.Invoke(this);
+                        OnPongReceived();
                         break;
                     default:
                         _loopR_request.Reset();
@@ -604,20 +516,36 @@ namespace Naive.HttpSvr
             return n;
         }
 
-        public int LastPingTime { get; private set; } = -1;
+        public int LastPingDuration { get; private set; } = -1;
+
+        public int LastPingSendTime { get; private set; } = -1;
+        public int LastPingReceivedTime { get; private set; } = -1;
 
         private DateTime _pingstart;
 
-        private void WebSocket_PongReceived(WebSocket ws)
+        private void OnPongReceived()
         {
-            LastPingTime = (int)(DateTime.UtcNow - _pingstart).TotalMilliseconds;
+            Logging.debug($"pong received on {this}");
+            Interlocked.Increment(ref TotalPongsReceived);
+            LastPingDuration = (int)(DateTime.UtcNow - _pingstart).TotalMilliseconds;
             _manageState = ManageState.Normal;
+            PongReceived?.Invoke(this);
+        }
+
+        private void OnPingReceived()
+        {
+            Logging.debug($"ping received on {this}");
+            Interlocked.Increment(ref TotalPingsReceived);
+            LastPingReceivedTime = CurrentTime;
+            PingReceived?.Invoke(this);
         }
 
         public void SendPing()
         {
+            LastPingSendTime = CurrentTime;
             _pingstart = DateTime.UtcNow;
             SendMsg(0x9, null, 0, 0);
+            Interlocked.Increment(ref TotalPingsSent);
         }
 
         public void BeginSendPing()
@@ -627,15 +555,15 @@ namespace Naive.HttpSvr
 
         public Task LastPingTask { get; private set; }
 
-        public int LastPingStartWsTime { get; private set; }
-
         public Task SendPingAsync()
         {
             if (LastPingTask?.IsCompleted == false)
                 return LastPingTask;
+            LastPingSendTime = CurrentTime;
             _pingstart = DateTime.UtcNow;
-            LastPingStartWsTime = CurrentTime;
-            return LastPingTask = SendMsgAsync(0x9, null, 0, 0);
+            var task = SendMsgAsync(0x9, null, 0, 0);
+            Interlocked.Increment(ref TotalPingsSent);
+            return LastPingTask = task;
         }
 
         public void SendString(string str)

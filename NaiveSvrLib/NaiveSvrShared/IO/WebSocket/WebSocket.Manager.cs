@@ -118,5 +118,95 @@ namespace Naive.HttpSvr
                 }
             }
         }
+
+        public static List<WebSocket> ManagedWebSockets = new List<WebSocket>();
+
+        static List<Func<bool>> AdditionalManagementTasks = new List<Func<bool>>();
+
+        public static void AddManagementTask(Func<bool> func)
+        {
+            lock (AdditionalManagementTasks)
+                AdditionalManagementTasks.Add(func);
+            Manager.CheckManageTask();
+        }
+
+        private static int _timeAcc = 1;
+        public static int TimeAcc
+        {
+            get { return _timeAcc; }
+            set {
+                ConfigManageTask(value, _manageInterval);
+            }
+        }
+
+        private static int _manageInterval = 3000;
+        public static int ManageInterval
+        {
+            get { return _manageInterval; }
+            set {
+                ConfigManageTask(_timeAcc, value);
+            }
+        }
+
+        public static void ConfigManageTask(int timeAcc, int manageInterval)
+        {
+            if (timeAcc <= 0)
+                throw new ArgumentOutOfRangeException(nameof(timeAcc));
+            if (manageInterval <= 0)
+                throw new ArgumentOutOfRangeException(nameof(manageInterval));
+            _timeAcc = timeAcc;
+            _manageInterval = manageInterval;
+
+            Manager.CheckManageTask();
+        }
+
+        private static int _RoughTime = 0;
+
+        private static bool _dontCalcTime = false;
+
+        public static int CurrentTime
+        {
+            get {
+                if (_dontCalcTime) {
+                    return _RoughTime;
+                } else {
+                    var calcTime = CalcCurrentTime();
+                    _RoughTime = calcTime;
+                    return calcTime;
+                }
+            }
+        }
+
+        public static int CurrentTimeRough => _RoughTime;
+
+        static long _totalMsUntilLastTicks = 0;
+
+        static int _lastTicks = Environment.TickCount;
+
+        static SpinLock _lastTicksLock = new SpinLock(false);
+
+        private static int CalcCurrentTime()
+        {
+            var curTicks = Environment.TickCount;
+            var laTicks = _lastTicks;
+
+            if (curTicks >= laTicks) {
+                var delta = curTicks - laTicks;
+                return (int)((_totalMsUntilLastTicks + delta) / 1000);
+            } else {
+                bool lt = false;
+                _lastTicksLock.Enter(ref lt);
+                var delta = (int.MaxValue - laTicks) + (curTicks - int.MinValue) + 1;
+                _lastTicks = curTicks;
+                _totalMsUntilLastTicks += delta;
+                var ret = (int)(_totalMsUntilLastTicks / 1000);
+                _lastTicksLock.Exit(false);
+                return ret;
+            }
+        }
+
+        public static int TotalPingsSent;
+        public static int TotalPongsReceived;
+        public static int TotalPingsReceived;
     }
 }

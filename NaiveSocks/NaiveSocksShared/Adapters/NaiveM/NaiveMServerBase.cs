@@ -11,7 +11,7 @@ namespace NaiveSocks
         internal List<NaiveMChannels> nmsList = new List<NaiveMChannels>();
         Dictionary<string, ImuxSession> imuxSessions = new Dictionary<string, ImuxSession>();
 
-        public int timeout { get; set; } = 60;
+        public int timeout { get; set; } = 120;
 
         public bool fastopen { get; set; } = true;
 

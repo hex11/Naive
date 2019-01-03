@@ -209,10 +209,11 @@ namespace NaiveSocks
                 }
             }, "[list|(stop ID1 ID2 IDn...)|stopall]");
             cmdHub.AddCmdHandler(prefix + "wsc", (cmd) => {
-                cmd.WriteLine($"# managed websocket connections ({WebSocket.ManagedWebSockets.Count}): ");
+                cmd.Write($"# total {WebSocket.TotalPingsSent} pings sent / {WebSocket.TotalPongsReceived} pongs received / {WebSocket.TotalPingsReceived} pings received\n", ConsoleColor.Cyan);
+                cmd.Write($"# managed websocket connections ({WebSocket.ManagedWebSockets.Count}): \n", ConsoleColor.Cyan);
                 var curTime = WebSocket.CurrentTime;
                 foreach (var item in WebSocket.ManagedWebSockets.ToArray()) {
-                    cmd.WriteLine($"{item} LatestActive/StartTime={item.LatestActiveTime - curTime}/{item.CreateTime - curTime}");
+                    cmd.WriteLine($"{item} Active/Start={item.LatestActiveTime - curTime}/{item.CreateTime - curTime} PingSent/Recv(Duration)={item.LastPingSendTime - curTime}/{item.LastPingReceivedTime - curTime}({item.LastPingDuration})");
                 }
             });
             cmdHub.AddCmdHandler(prefix + "reload", command => {
@@ -226,6 +227,38 @@ namespace NaiveSocks
                     command.statusCode = 1;
                 }
             }, "Usage: reload [NEW_FILE]");
+
+            const string watchHelp = "Usage: watch [-n SECONDS] command";
+            cmdHub.AddCmdHandler(prefix + "watch", command => {
+                if (command.args.Length == 0) {
+                    command.WriteLine(watchHelp);
+                    command.statusCode = 1;
+                    return;
+                }
+                int interval = 2;
+                string[] cmd;
+                if (command.args[0] == "-n") {
+                    interval = Int32.Parse(command.args[1]);
+                    cmd = command.args.Skip(2).ToArray();
+                } else {
+                    cmd = command.args;
+                }
+                CancellationTokenSource cts = new CancellationTokenSource();
+                var task = Task.Run(() => {
+                    while (true) {
+                        command.Write($"----- {command.fullcmd} -----\n", ConsoleColor.Blue);
+                        cmdHub.HandleCommand(command.Console, Command.FromArray(cmd));
+                        if (cts.IsCancellationRequested)
+                            return;
+                        if (cts.Token.WaitHandle.WaitOne(interval * 1000))
+                            return;
+                        command.WriteLine();
+                    }
+                });
+                command.ReadLine();
+                cts.Cancel();
+                task.Wait(3000);
+            }, watchHelp);
             cmdHub.AddCmdHandler(prefix + "stat", command => {
                 var proc = Process.GetCurrentProcess();
                 var sb = new StringBuilder();
