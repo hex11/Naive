@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="naive.NaiveSocksAndroid" android:installLocation="auto" android:versionCode="28" android:versionName="1.1.28">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="naive.NaiveSocksAndroid" android:installLocation="auto" android:versionCode="29" android:versionName="1.1.29">
 	<uses-sdk android:minSdkVersion="19" android:targetSdkVersion="27" />
 	<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 	<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
