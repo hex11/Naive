@@ -7,7 +7,7 @@ deploydir=bin/Deploy
 
 singlefile="$deploydir/NaiveSocks_SingleFile.exe"
 
-packname="NaiveSocks_Full"
+packname="NaiveSocks_net45"
 
 files=("NaiveSocks.exe" "NaiveSvrLib.dll" "Nett.dll")
 binaries=()
