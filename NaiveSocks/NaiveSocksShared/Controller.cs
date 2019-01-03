@@ -620,6 +620,7 @@ namespace NaiveSocks
                 debug($"'{inc.InAdapter.Name}' {inc} -> '{outAdapter.Name}'");
             try {
                 lock (InConnectionsLock) {
+                    inc.InAdapter.GetAdapter().CreatedConnections++;
                     _totalHandledConnections++;
                     InConnections.Add(inc);
                     NewConnection?.Invoke(inc);

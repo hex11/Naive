@@ -324,14 +324,8 @@ namespace NaiveSocks
                 c.WriteLine($"  ## InAdapters ({inadas.Length}):");
                 foreach (var item in inadas) {
                     var str = $"    - '{item.Name}': {item.ToString(false)} -> {item.@out?.ToString() ?? "(No OutAdapter)"}";
-                    var rw = item.BytesCountersRW;
-                    if (rw.TotalValue.Packets == 0) {
-                        con.WriteLine(str);
-                    } else {
-                        con.Write(str);
-                        con.Write(" R=" + rw.R, ConsoleColor.Green);
-                        con.Write(" W=" + rw.W + "\n", ConsoleColor.Yellow);
-                    }
+                    con.Write(str);
+                    PrintAdapterInfo(con, item);
                 }
                 c.WriteLine();
                 var outadas = cfg.OutAdapters.ToArray();
@@ -341,16 +335,25 @@ namespace NaiveSocks
                 c.WriteLine($"  ## OutAdapters ({outadas.Length}):");
                 foreach (var item in outadas) {
                     var str = $"    - '{item.Name}': {item.ToString(false)}";
-                    var rw = item.BytesCountersRW;
-                    if (rw.TotalValue.Packets == 0) {
-                        con.WriteLine(str);
-                    } else {
-                        con.Write(str);
-                        con.Write(" R=" + rw.R, ConsoleColor.Green);
-                        con.Write(" W=" + rw.W + "\n", ConsoleColor.Yellow);
-                    }
+                    con.Write(str);
+                    PrintAdapterInfo(con, item);
                 }
             });
+
+            void PrintAdapterInfo(CmdConsole con, Adapter item)
+            {
+                var rw = item.BytesCountersRW;
+                if (item.CreatedConnections != 0)
+                    con.Write(" Created=" + item.CreatedConnections, ConsoleColor.Cyan);
+                if (item.HandledConnections != 0)
+                    con.Write(" Handled=" + item.HandledConnections, ConsoleColor.Blue);
+                if (rw.TotalValue.Packets != 0) {
+                    con.Write(" R=" + rw.R, ConsoleColor.Green);
+                    con.Write(" W=" + rw.W, ConsoleColor.Yellow);
+                }
+                con.Write("\n");
+            }
+
             cmdHub.AddCmdHandler(prefix + "logs", command => {
                 var cmd = command.ArgOrNull(0);
                 if (cmd == "dump") {

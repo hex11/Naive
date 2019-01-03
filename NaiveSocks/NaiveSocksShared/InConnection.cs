@@ -55,6 +55,9 @@ namespace NaiveSocks
         {
             if (IsHandled)
                 throw new InvalidOperationException("the Connection has been already handled.");
+            var handlingAdapter = result.Adapter?.GetAdapter();
+            if (handlingAdapter != null)
+                System.Threading.Interlocked.Increment(ref handlingAdapter.HandledConnections);
             ConnectResult = result;
             if (result.destEP == null)
                 result.destEP = new IPEndPoint(0, 0);

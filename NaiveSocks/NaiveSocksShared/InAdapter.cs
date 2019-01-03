@@ -161,6 +161,9 @@ namespace NaiveSocks
 
         public IMyStream GetMyStreamFromSocket(Socket socket) => MyStream.FromSocket(socket, socket_impl);
 
+        public int CreatedConnections;
+        public int HandledConnections;
+
         public BytesCountersRW BytesCountersRW { get; } = new BytesCountersRW {
             R = new BytesCounter(),
             W = new BytesCounter(MyStream.GlobalWriteCounter)

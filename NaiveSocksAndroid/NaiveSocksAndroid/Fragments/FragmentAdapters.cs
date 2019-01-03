@@ -71,17 +71,24 @@ namespace NaiveSocksAndroid
             }
         }
 
+        StringBuilder sb = new StringBuilder();
+
         void AddAdapter(NaiveSocks.Adapter ada)
         {
             using (var tv = new TextView(themeWrapper) { Text = ada.ToString() }) {
                 connParent.AddView(tv);
             }
             var rw = ada.BytesCountersRW;
-            var rwstr = rw.TotalValue.Packets > 0 ? rw.ToString() : "---";
-            using (var tv = new TextView(themeWrapper) { Text = rwstr, Gravity = GravityFlags.End }) {
+            if (ada.CreatedConnections != 0)
+                sb.Append("Created=").Append(ada.CreatedConnections);
+            if (ada.HandledConnections != 0)
+                sb.Append(" Handled=").Append(ada.HandledConnections);
+            sb.Append(' ').Append(rw.ToString());
+            using (var tv = new TextView(themeWrapper) { Text = sb.ToString(), Gravity = GravityFlags.End }) {
                 tv.SetBackgroundColor(Color.Argb(30, 128, 128, 128));
                 connParent.AddView(tv);
             }
+            sb.Clear();
         }
     }
 }
