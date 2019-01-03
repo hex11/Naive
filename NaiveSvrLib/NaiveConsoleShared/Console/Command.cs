@@ -203,24 +203,25 @@ namespace Naive.Console
     {
         public byte A, R, G, B;
 
-        static Color32[] consoleColors = new Color32[] {
-            new Color32{A=0xFF, R=0x00, G=0x00, B=0x00},
-            new Color32{A=0xFF, R=0x00, G=0x00, B=0x8B},
-            new Color32{A=0xFF, R=0x00, G=0x64, B=0x00},
-            new Color32{A=0xFF, R=0x00, G=0x8B, B=0x8B},
-            new Color32{A=0xFF, R=0x8B, G=0x00, B=0x00},
-            new Color32{A=0xFF, R=0x8B, G=0x00, B=0x8B},
-            new Color32{A=0xFF, R=0xD7, G=0xC3, B=0x2A},
-            new Color32{A=0xFF, R=0x80, G=0x80, B=0x80},
-            new Color32{A=0xFF, R=0xA9, G=0xA9, B=0xA9},
-            new Color32{A=0xFF, R=0x00, G=0x00, B=0xFF},
-            new Color32{A=0xFF, R=0x00, G=0x80, B=0x00},
-            new Color32{A=0xFF, R=0x00, G=0xFF, B=0xFF},
-            new Color32{A=0xFF, R=0xFF, G=0x00, B=0x00},
-            new Color32{A=0xFF, R=0xFF, G=0x00, B=0xFF},
-            new Color32{A=0xFF, R=0xFF, G=0xFF, B=0x00},
-            new Color32{A=0xFF, R=0xFF, G=0xFF, B=0xFF}
+        private static readonly Color32[] consoleColors = new Color32[] {
+            new Color32{A=255, R=12, G=12, B=12},
+            new Color32{A=255, R=0, G=55, B=218},
+            new Color32{A=255, R=19, G=161, B=14},
+            new Color32{A=255, R=58, G=150, B=221},
+            new Color32{A=255, R=197, G=15, B=31},
+            new Color32{A=255, R=136, G=23, B=152},
+            new Color32{A=255, R=193, G=156, B=0},
+            new Color32{A=255, R=204, G=204, B=204},
+            new Color32{A=255, R=118, G=118, B=118},
+            new Color32{A=255, R=59, G=120, B=255},
+            new Color32{A=255, R=22, G=198, B=12},
+            new Color32{A=255, R=97, G=214, B=214},
+            new Color32{A=255, R=231, G=72, B=86},
+            new Color32{A=255, R=180, G=0, B=158},
+            new Color32{A=255, R=249, G=241, B=165},
+            new Color32{A=255, R=242, G=242, B=242}
         };
+        // https://blogs.msdn.microsoft.com/commandline/2017/08/02/updating-the-windows-console-colors/
 
         public ConsoleColor ToConsoleColor()
         {
@@ -239,7 +240,7 @@ namespace Naive.Console
         public static Color32 FromConsoleColor(ConsoleColor c)
         {
             if ((int)c > consoleColors.Length || (int)c < 0)
-                return consoleColors[0];
+                c = ConsoleColor.White;
             return consoleColors[(int)c];
         }
 

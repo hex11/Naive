@@ -235,24 +235,36 @@ namespace NaiveSocks
                     command.statusCode = 1;
                     return;
                 }
-                int interval = 2;
+                int interval = 2000;
                 string[] cmd;
+
                 if (command.args[0] == "-n") {
-                    interval = Int32.Parse(command.args[1]);
+                    interval = (int)(float.Parse(command.args[1]) * 1000);
                     cmd = command.args.Skip(2).ToArray();
+                } else if (command.args[0].StartsWith("-n")) {
+                    interval = (int)(float.Parse(command.args[0].Substring(2)) * 1000);
+                    cmd = command.args.Skip(1).ToArray();
                 } else {
                     cmd = command.args;
                 }
-                CancellationTokenSource cts = new CancellationTokenSource();
+                var cts = new CancellationTokenSource();
                 var task = Task.Run(() => {
-                    while (true) {
-                        command.Write($"----- {command.fullcmd} -----\n", ConsoleColor.Blue);
-                        cmdHub.HandleCommand(command.Console, Command.FromArray(cmd));
-                        if (cts.IsCancellationRequested)
-                            return;
-                        if (cts.Token.WaitHandle.WaitOne(interval * 1000))
-                            return;
-                        command.WriteLine();
+                    try {
+                        while (true) {
+                            command.Write($"----- {command.fullcmd} ----- {DateTime.Now.ToLongTimeString()}\n", ConsoleColor.Blue);
+                            cmdHub.HandleCommand(command.Console, Command.FromArray(cmd));
+                            if (cts.IsCancellationRequested)
+                                return;
+                            if (cts.Token.WaitHandle.WaitOne(interval))
+                                return;
+                            command.WriteLine();
+                        }
+                    } catch (Exception e) {
+                        command.statusCode = 1;
+                        command.Write("----- Error -----\n" + e.ToString() + "\n", ConsoleColor.Red);
+                        if (cts.IsCancellationRequested == false) {
+                            command.Write("Press Enter to exit...", ConsoleColor.Green);
+                        }
                     }
                 });
                 command.ReadLine();
