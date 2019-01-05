@@ -25,13 +25,13 @@
     <Compile Include="$(MSBuildThisFileDirectory)Encryption\Crc32.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Encryption\Speck.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Encryption\Chacha20.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Commands.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Controller.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Controller\Commands.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Controller\Controller.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)GUI\FormConnections.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\Direct\DirectInAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\Http\HttpInAdapter.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)InAdapter.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)InConnection.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Controller\InAdapter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Controller\InConnection.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\NaiveM\NaiveMInAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\NaiveM\NaiveMOutAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\NaiveM\NaiveMChannels.cs" />
@@ -39,7 +39,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\NaiveM\NaiveMServerBase.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IO\InverseMuxStream.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)IO\RrChannels.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)OutAdapter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Controller\OutAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\Direct\DirectOutAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\Http\HttpOutAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\NNetworkAdapter.cs" />
@@ -51,7 +51,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\Socks\Socks5Server.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\Socks\SocksInAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\Ss\Ss.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)SimpleSniffer.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Controller\SimpleSniffer.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Utils.cs" />
   </ItemGroup>
   <ItemGroup>
@@ -60,5 +60,6 @@
     <Folder Include="$(MSBuildThisFileDirectory)Adapters\Web\" />
     <Folder Include="$(MSBuildThisFileDirectory)Adapters\Socks\" />
     <Folder Include="$(MSBuildThisFileDirectory)Adapters\NaiveM\" />
+    <Folder Include="$(MSBuildThisFileDirectory)Controller\" />
   </ItemGroup>
 </Project>
