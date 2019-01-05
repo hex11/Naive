@@ -1,12 +1,15 @@
 ﻿using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace Naive.HttpSvr
 {
-    public struct BytesSegment
+    public struct BytesSegment : IEnumerable<byte> // implemented the interface for convenience in debugging
     {
         public byte[] Bytes;
         public int Offset;
@@ -66,6 +69,20 @@ namespace Naive.HttpSvr
         {
             get => Bytes[Offset + index];
             set => Bytes[Offset + index] = value;
+        }
+
+        public byte GetChecking(int index)
+        {
+            if (index < 0 || index >= Len)
+                throw new IndexOutOfRangeException();
+            return this[index];
+        }
+
+        public byte GetOrZero(int index)
+        {
+            if (index < 0 || index >= Len)
+                return 0;
+            return this[index];
         }
 
         public void SubSelf(int begin)
@@ -146,6 +163,16 @@ namespace Naive.HttpSvr
                 if (Bytes.Length < Offset + Len)
                     throw new ArgumentException("Bytes.Length < Offset + Len");
             }
+        }
+
+        public IEnumerator<byte> GetEnumerator()
+        {
+            return Bytes.Skip(Offset).Take(Len).GetEnumerator();
+        }
+
+        IEnumerator IEnumerable.GetEnumerator()
+        {
+            return GetEnumerator();
         }
     }
 
