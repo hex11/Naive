@@ -51,6 +51,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\Socks\Socks5Server.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\Socks\SocksInAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\Ss\Ss.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)SimpleSniffer.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Utils.cs" />
   </ItemGroup>
   <ItemGroup>

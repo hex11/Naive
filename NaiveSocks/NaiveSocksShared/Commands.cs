@@ -160,18 +160,24 @@ namespace NaiveSocks
                                 & ~InConnection.ToStringFlags.OutAdapter
                                 & ~InConnection.ToStringFlags.OutStream;
                             item.ToString(sb, flags);
-                            command.Write(sb.ToString());
+                            command.Write(sb.ToString(), ConsoleColor.White);
                             if (item.ConnectResult?.Adapter != null) {
                                 con.Write(" -> '" + item.ConnectResult.Adapter.Name + "'", ConsoleColor.Cyan);
+                            }
+                            IMyStream outStream = item.ConnectResult?.Stream;
+                            if (outStream != null) {
+                                con.Write(" - " + outStream.ToString(), ConsoleColor.Cyan);
                             }
                             var rw = item.BytesCountersRW;
                             con.Write("\n R=" + rw.R, ConsoleColor.Green);
                             con.Write(" W=" + rw.W + " ", ConsoleColor.Yellow);
-                            con.Write(item.GetInfoStr(), ConsoleColor.DarkGray);
-                            IMyStream outStream = item.ConnectResult?.Stream;
-                            if (outStream != null) {
-                                con.Write(" -> " + outStream.ToString() + "\n", ConsoleColor.Cyan);
+                            con.Write(item.GetInfoStr(), ConsoleColor.Gray);
+                            sb.Clear();
+                            item.GetSniffingInfo(sb);
+                            if (sb.Length > 0) {
+                                con.Write(" " + sb.ToString(), ConsoleColor.DarkYellow);
                             }
+                            con.Write("\n");
                         } else {
                             command.Console.Write(item + "\n", ConsoleColor.Yellow);
                         }

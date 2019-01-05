@@ -84,10 +84,27 @@ namespace NaiveSocks
                 Logger = new Logger("->" + outAdapter.Name, InAdapter.GetAdapter().Logger)
             };
             copier.SetCounters(outAdapter.GetAdapter().BytesCountersRW, this.BytesCountersRW);
+            Sniffer = new SimpleSniffer(copier.CopierFromRight, null);
             await copier.Run();
         }
 
         public virtual string GetInfoStr() => null;
+
+        public SimpleSniffer Sniffer { get; private set; }
+
+        public string GetSniffingInfo()
+        {
+            if (Sniffer == null)
+                return null;
+            var sb = new StringBuilder();
+            GetSniffingInfo(sb);
+            return sb.ToString();
+        }
+
+        public void GetSniffingInfo(StringBuilder sb)
+        {
+            Sniffer?.GetInfo(sb, TryGetDestWithOriginalName().Host);
+        }
 
         public override string ToString()
         {

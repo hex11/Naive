@@ -487,7 +487,7 @@ namespace Naive.HttpSvr
             return ConnectTcpAsync(dest, timeout, async socket => {
                 var tls = new NaiveSocks.TlsStream(NaiveSocks.MyStream.FromSocket(socket));
                 await tls.AuthAsClient(dest.Host, protocols);
-                return tls.ToStream();
+                return NaiveSocks.MyStream.ToStream(tls);
             }, ct);
         }
 

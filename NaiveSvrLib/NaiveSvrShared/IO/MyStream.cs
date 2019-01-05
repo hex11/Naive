@@ -344,8 +344,6 @@ namespace NaiveSocks
             return new StreamFromMyStream(myStream);
         }
 
-        public Stream ToStream() => ToStream(this);
-
         private static readonly BytesCounter globalWriteCouter = new BytesCounter();
 
         public static BytesCounter GlobalWriteCounter => globalWriteCouter;
@@ -593,6 +591,10 @@ namespace NaiveSocks
             public BytesCounter CounterR { get; set; }
             public BytesCounter CounterW { get; set; }
 
+            public int Progress { get; private set; }
+
+            public event Action<Copier, BytesSegment> OnRead;
+
             public Logger Logger { get; set; }
             public Logger VerboseLogger
             {
@@ -658,6 +660,9 @@ namespace NaiveSocks
                             break;
                         }
 
+                        ProcessPayload(buf.Sub(0, read));
+
+                        Progress += read;
                         CounterR?.Add(read);
 
                         // write:
@@ -684,6 +689,11 @@ namespace NaiveSocks
                     //    BufferPool.GlobalPut(buf.Bytes);
                     //}
                 }
+            }
+
+            private void ProcessPayload(BytesSegment bs)
+            {
+                OnRead?.Invoke(this, bs);
             }
 
             public override string ToString() => $"{{Copier {From} -> {To}}}";
@@ -949,9 +959,17 @@ namespace NaiveSocks
 
         public override IAsyncResult BeginWrite(byte[] buffer, int offset, int count, AsyncCallback callback, object state)
         {
-            return (BaseStream is IMyStreamBeginEnd be)
-                ? be.BeginWrite(buffer, offset, count, callback, state)
-                : base.BeginWrite(buffer, offset, count, callback, state);
+            if (BaseStream is IMyStreamBeginEnd be) {
+                return be.BeginWrite(buffer, offset, count, callback, state);
+            }
+            var task = BaseStream.WriteAsync(new BytesSegment(buffer, offset, count));
+            var awaiter = task.GetAwaiter();
+            if (awaiter.IsCompleted) {
+                callback(task);
+            } else {
+                awaiter.OnCompleted(() => callback(task));
+            }
+            return task;
         }
 
         public override void EndWrite(IAsyncResult asyncResult)
@@ -959,7 +977,10 @@ namespace NaiveSocks
             if (BaseStream is IMyStreamBeginEnd be) {
                 be.EndWrite(asyncResult);
             } else {
-                base.EndWrite(asyncResult);
+                var task = (Task)asyncResult;
+                if (task.IsCompleted == false)
+                    throw new Exception("task is not completed.");
+                task.GetAwaiter().GetResult();
             }
         }
 
@@ -968,15 +989,26 @@ namespace NaiveSocks
             if (BaseStream is IMyStreamBeginEnd be) {
                 return be.BeginRead(buffer, offset, count, callback, state);
             }
-            return base.BeginRead(buffer, offset, count, callback, state);
+            var task = BaseStream.ReadAsync(new BytesSegment(buffer, offset, count));
+            var awaiter = task.GetAwaiter();
+            if (awaiter.IsCompleted) {
+                callback(task);
+            } else {
+                awaiter.OnCompleted(() => callback(task));
+            }
+            return task;
         }
 
         public override int EndRead(IAsyncResult asyncResult)
         {
             if (BaseStream is IMyStreamBeginEnd be) {
                 return be.EndRead(asyncResult);
+            } else {
+                var task = (Task<int>)asyncResult;
+                if (task.IsCompleted == false)
+                    throw new Exception("task is not completed.");
+                return task.GetAwaiter().GetResult();
             }
-            return base.EndRead(asyncResult);
         }
     }
 

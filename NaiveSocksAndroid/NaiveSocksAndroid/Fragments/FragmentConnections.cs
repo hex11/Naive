@@ -244,6 +244,10 @@ namespace NaiveSocksAndroid
                 } else if (KBps == 0) {
                     sb.Append("[<1 KB/s] ");
                 }
+                if (conn.Sniffer != null) {
+                    conn.GetSniffingInfo(sb);
+                    sb.Append(' ');
+                }
                 sb.Append(ctr.ToString()).Append(" T=").Append(WebSocket.CurrentTime - conn.CreateTime);
                 var adap = conn.ConnectResult?.Adapter;
                 if (adap != null)
