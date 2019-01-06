@@ -24,6 +24,15 @@ namespace Naive.HttpSvr
             return buf ?? new byte[size];
         }
 
+        public static BytesSegment GlobalGetBs(int size) => GlobalGetBs(size, true);
+        public static BytesSegment GlobalGetBs(int size, bool setLen)
+        {
+            if (setLen)
+                return new BytesSegment(GlobalGet(size), 0, size);
+            else
+                return new BytesSegment(GlobalGet(size));
+        }
+
         public static void GlobalPut(byte[] buffer)
         {
             var ok = GlobalPool?.Put(buffer) == true;

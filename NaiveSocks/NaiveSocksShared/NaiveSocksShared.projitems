@@ -9,6 +9,9 @@
     <Import_RootNamespace>NaiveSocksShared</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Adapters\Http\HttpInAdapter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Adapters\Http\HttpOutAdapter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Adapters\Http\TlsSniInAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\Naive0\Naive0.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\Naive0\Naive0InAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\Naive0\Naive0OutAdapter.cs" />
@@ -29,7 +32,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)Controller\Controller.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)GUI\FormConnections.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\Direct\DirectInAdapter.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Adapters\Http\HttpInAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Controller\InAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Controller\InConnection.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\NaiveM\NaiveMInAdapter.cs" />
@@ -41,7 +43,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)IO\RrChannels.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Controller\OutAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\Direct\DirectOutAdapter.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Adapters\Http\HttpOutAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\NNetworkAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\Socks\SocksOutAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\RouterAdapter.cs" />
@@ -55,7 +56,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)Utils.cs" />
   </ItemGroup>
   <ItemGroup>
-    <Folder Include="$(MSBuildThisFileDirectory)Adapters\Http\" />
     <Folder Include="$(MSBuildThisFileDirectory)Adapters\Direct\" />
     <Folder Include="$(MSBuildThisFileDirectory)Adapters\Web\" />
     <Folder Include="$(MSBuildThisFileDirectory)Adapters\Socks\" />

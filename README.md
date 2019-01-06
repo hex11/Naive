@@ -16,12 +16,13 @@ Build status (master branch):
 
 - [x] Interactive CLI
 - [x] Configuration file using TOML
-- [x] Supported protocols (both inbound and outbound)
-  - [x] 'direct'
-  - [x] 'socks5'
-  - [x] 'http'
-  - [x] 'ss'
-  - [x] 'naive'
+- [x] Supported protocols
+  - [x] 'direct' (in/out)
+  - [x] 'socks5' (in/out)
+  - [x] 'http' (in/out)
+  - [x] 'tlssni' (in)
+  - [x] 'ss' (in/out)
+  - [x] 'naive' (in/out)
     - [x] Multiplexing
     - [x] Inversed multiplexing
     - [x] Compression

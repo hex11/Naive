@@ -16,13 +16,13 @@ namespace NaiveSocks
 
         public override Stream BaseStream => SslStream;
 
-        MyStreamWrapper streamWrapper;
+        MyStreamWrapperWithQueue streamWrapper;
 
         public override string ToString() => $"{{Tls on {RealBaseStream}}}";
 
         public TlsStream(IMyStream baseStream)
         {
-            streamWrapper = new MyStreamWrapper(baseStream);
+            streamWrapper = new MyStreamWrapperWithQueue(baseStream);
             SslStream = new SslStream(streamWrapper.ToStream(), false);
         }
 
@@ -40,14 +40,14 @@ namespace NaiveSocks
         {
             var recordHeader = new BytesSegment(new byte[5]);
             await RealBaseStream.ReadFullAsync(recordHeader);
-            streamWrapper.queue = recordHeader;
+            streamWrapper.Queue = recordHeader;
             int recordPayloadLength = GetRecordPayloadLength(recordHeader);
 
             var record = new BytesSegment(new byte[5 + recordPayloadLength]);
             recordHeader.CopyTo(record);
             var msg = record.Sub(5);
             await RealBaseStream.ReadFullAsync(msg);
-            streamWrapper.queue = record;
+            streamWrapper.Queue = record;
             ParseClientHello(msg, out _, out var sni);
             return sni;
         }
@@ -123,35 +123,6 @@ namespace NaiveSocks
         public Task AuthAsServer(System.Security.Cryptography.X509Certificates.X509Certificate certificate)
         {
             return SslStream.AuthenticateAsServerAsync(certificate);
-        }
-
-        class MyStreamWrapper : MyStream
-        {
-            public MyStreamWrapper(IMyStream baseStream)
-            {
-                BaseStream = baseStream;
-            }
-
-            public IMyStream BaseStream { get; }
-
-            public BytesSegment queue;
-
-            public override Task<int> ReadAsync(BytesSegment bs)
-            {
-                if (queue.Bytes == null)
-                    return BaseStream.ReadAsync(bs);
-                var r = Math.Min(queue.Len, bs.Len);
-                queue.CopyTo(bs, r);
-                queue.SubSelf(r);
-                if (queue.Len == 0)
-                    queue.ResetSelf();
-                return NaiveUtils.GetCachedTaskInt(r);
-            }
-
-            public override Task WriteAsync(BytesSegment bs)
-            {
-                return BaseStream.WriteAsync(bs);
-            }
         }
     }
 }

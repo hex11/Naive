@@ -105,6 +105,7 @@ namespace NaiveSocks
             RegisteredInTypes.Add("socks", typeof(SocksInAdapter));
             RegisteredInTypes.Add("socks5", typeof(SocksInAdapter));
             RegisteredInTypes.Add("http", typeof(HttpInAdapter));
+            RegisteredInTypes.Add("tlssni", typeof(TlsSniInAdapter));
             RegisteredInTypes.Add("naive", typeof(NaiveMInAdapter));
             RegisteredInTypes.Add("naivec", typeof(NaiveMInAdapter));
             RegisteredInTypes.Add("naive0", typeof(Naive0InAdapter));
