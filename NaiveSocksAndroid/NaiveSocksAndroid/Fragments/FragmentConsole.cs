@@ -80,7 +80,7 @@ namespace NaiveSocksAndroid
             linearLayout.AddView(scrollView);
             linearLayout.AddView(editText);
 
-            StartConsole();
+            linearLayout.Post(StartConsole);
 
             return linearLayout;
         }
@@ -90,7 +90,7 @@ namespace NaiveSocksAndroid
             inputLinesBuffer = new BlockingCollection<string>();
             proxy = new ConsoleProxy(this);
 
-            var controller = MainActivity.Service.Controller;
+            var controller = MainActivity.Service?.Controller;
             if (controller == null) {
                 appendText("Cannot initialize console: the controller is not running. Please start the service and try again.\n", Color.Red);
                 return;

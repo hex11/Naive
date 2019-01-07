@@ -701,7 +701,7 @@ namespace Naive.HttpSvr
                     }
                 }
 #if DEBUG
-                if (l.text.GetHashCode() != hash) {
+                if (withText && l.text.GetHashCode() != hash) {
                     Console.CmdConsole.StdIO.Write("Log checksum failed!\n", Console.Color32.FromConsoleColor(ConsoleColor.Red));
                 }
 #endif
