@@ -170,18 +170,18 @@ namespace NaiveSocks
         public delegate Task<IMyStream> ConnectionCallbackDelegate(ConnectResult cr);
 
         public static InConnection Create(IAdapter inAdapter, AddrPort dest, ConnectionCallbackDelegate connectionCallback, Func<string> getInfoStr = null)
-            => new lambdaHelper(inAdapter, dest, connectionCallback, getInfoStr);
+            => new InConnectionImpl(inAdapter, dest, connectionCallback, getInfoStr);
 
         public static InConnection Create(IAdapter inAdapter, AddrPort dest, IMyStream dataStream, string getInfoStr = null)
-            => new lambdaHelper(inAdapter, dest, async (r) => dataStream, () => getInfoStr);
+            => new InConnectionImpl(inAdapter, dest, async (r) => dataStream, () => getInfoStr);
 
-        private class lambdaHelper : InConnection
+        private class InConnectionImpl : InConnection
         {
             private readonly ConnectionCallbackDelegate _onConnectionCallback;
             private readonly Func<string> _getInfoStr;
 
-            public lambdaHelper(IAdapter iAdapter, AddrPort dest, ConnectionCallbackDelegate onConnectionCallback, Func<string> getInfoStr = null)
-                : base(iAdapter)
+            public InConnectionImpl(IAdapter adapter, AddrPort dest, ConnectionCallbackDelegate onConnectionCallback, Func<string> getInfoStr = null)
+                : base(adapter)
             {
                 _onConnectionCallback = onConnectionCallback;
                 _getInfoStr = getInfoStr;
@@ -191,6 +191,40 @@ namespace NaiveSocks
             protected override async Task OnConnectionResult(ConnectResult result)
             {
                 DataStream = await _onConnectionCallback(result);
+            }
+
+            public override string GetInfoStr()
+            {
+                return _getInfoStr?.Invoke();
+            }
+        }
+    }
+
+    public abstract class ConnectRequest : InConnection
+    {
+        public ConnectRequest(IAdapter adapter) : base(adapter)
+        {
+        }
+
+        protected override Task OnConnectionResult(ConnectResult result)
+        {
+            return NaiveUtils.CompletedTask;
+        }
+
+        public static ConnectRequest Create(IAdapter inAdapter, AddrPort dest, Func<string> getInfoStr = null)
+            => new ConnectRequestImpl(inAdapter, dest, getInfoStr);
+
+        public static ConnectRequest Create(IAdapter inAdapter, AddrPort dest, string getInfoStr = null)
+            => new ConnectRequestImpl(inAdapter, dest, () => getInfoStr);
+
+        private class ConnectRequestImpl : ConnectRequest
+        {
+            private readonly Func<string> _getInfoStr;
+
+            public ConnectRequestImpl(IAdapter adapter, AddrPort dest, Func<string> getInfoStr = null) : base(adapter)
+            {
+                _getInfoStr = getInfoStr;
+                this.Dest = dest;
             }
 
             public override string GetInfoStr()
@@ -226,6 +260,11 @@ namespace NaiveSocks
 
         public ConnectResult(IAdapter adapter, IMyStream destStream) : this(adapter, ConnectResultEnum.Conneceted, destStream)
         {
+        }
+
+        public ConnectResult(IAdapter adapter, string failedReason) : this(adapter, ConnectResultEnum.Failed)
+        {
+            FailedReason = failedReason;
         }
 
         public IAdapter Adapter { get; }

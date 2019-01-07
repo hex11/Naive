@@ -249,11 +249,9 @@ namespace NaiveSocks
             int destReqs = 0;
             string p_HttpVersion = null;
             string state = null;
-            var tcsGetResult = new TaskCompletionSource<ConnectResult>();
-            var tcsProcessing = new TaskCompletionSource<VoidType>();
+            Controller.ConnectResponse? ccr = null;
             try {
-                var inc = InConnection.Create(this, dest,
-                    (cr) => Task.FromResult<IMyStream>(null),
+                var req = ConnectRequest.Create(this, dest,
                     () => {
                         var sb = new StringBuilder();
                         sb.Append("(").Append(p.HttpVersion ?? p_HttpVersion);
@@ -265,26 +263,24 @@ namespace NaiveSocks
                         sb.Append(") ").Append(p.epPair.ToString());
                         return sb.ToString();
                     });
-                inc.Url = p.Url;
+                req.Url = p.Url;
                 ConnectResult r;
                 try {
-                    Controller.Connect(inc, @out.Adapter,
-                                (result) => {
-                                    tcsGetResult.SetResult(result);
-                                    return tcsProcessing.Task;
-                                }).Forget();
-                    r = await tcsGetResult.Task;
+                    ccr = await Controller.Connect(req, @out.Adapter);
+                    r = ccr.Value.Result;
                 } catch (Exception e) {
                     Logger.exception(e, Logging.Level.Warning, "Controller.Connect exception");
-                    r = new ConnectResult(null, ConnectResultEnum.Failed) { FailedReason = e.Message };
+                    r = new ConnectResult(null, e.Message);
                 }
                 if (!r.Ok) {
                     p.setStatusCode("502 Bad Gateway");
                     await p.writeAsync("<h1>502 Bad Gateway</h1>" + HttpUtil.HtmlEncode(r.FailedReason));
+                    p.keepAlive = false;
+                    // TODO: Keepalive
                     await p.EndResponseAsync();
                     return;
                 }
-                var thisCounterRW = inc.BytesCountersRW;
+                var thisCounterRW = req.BytesCountersRW;
                 thisCounterRW.R.Add(p.RawRequestBytesLength);
                 var destStream = r.Stream;
                 var destCounterRW = r.Adapter?.GetAdapter().BytesCountersRW ?? new BytesCountersRW() {
@@ -431,8 +427,10 @@ namespace NaiveSocks
                 } finally {
                     MyStream.CloseWithTimeout(destStream).Forget();
                 }
+            } catch (Exception e) {
+                ccr?.OnConnectionException(e);
             } finally {
-                tcsProcessing.TrySetResult(0);
+                ccr?.OnConnectionEnd();
             }
         }
 

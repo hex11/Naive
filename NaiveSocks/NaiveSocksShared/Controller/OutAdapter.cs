@@ -109,7 +109,7 @@ namespace NaiveSocks
             }
         }
 
-        public static Task<ConnectResult> Connect(IConnectionHandler handler, ConnectArgument arg)
+        public static Task<ConnectResult> ConnectWrapper(IConnectionHandler handler, ConnectArgument arg)
         {
             var tcs = new TaskCompletionSource<ConnectResult>();
             var newinc = InConnection.Create(arg.InAdapter, arg.Dest, async (r) => {

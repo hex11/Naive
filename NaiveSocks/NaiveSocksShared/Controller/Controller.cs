@@ -565,54 +565,77 @@ namespace NaiveSocks
             }
         }
 
-        public virtual async Task Connect(InConnection fakeInConn, IAdapter outAdapter, Func<ConnectResult, Task> callback)
+        public struct ConnectResponse
         {
-            if (fakeInConn == null)
-                throw new ArgumentNullException(nameof(fakeInConn));
+            public ConnectResponse(ConnectResult r, ConnectRequest req)
+            {
+                this.Result = r;
+                this.Request = req;
+            }
 
+            public ConnectResult Result { get; }
+            public ConnectRequest Request { get; }
+
+            public Task OnConnectionException(Exception e) => Request.Controller.onConnectionException(Request, e);
+            public Task OnConnectionEnd() => Request.Controller.onConnectionEnd(Request);
+        }
+
+        public virtual async Task<ConnectResponse> Connect(ConnectRequest request, IAdapter outAdapter)
+        {
+            if (request == null)
+                throw new ArgumentNullException(nameof(request));
+
+            ConnectResult result;
+
+            if (outAdapter == null) {
+                warning($"'{request.InAdapter.Name}' {request} -> (no out adapter)");
+                result = new ConnectResult(null, "no out adapter");
+                goto RETURN;
+            }
+            onConnectionBegin(request, outAdapter);
             try {
-                if (outAdapter == null) {
-                    warning($"'{fakeInConn.InAdapter.Name}' {fakeInConn} -> (no out adapter)");
-                    return;
-                }
-                onConnectionBegin(fakeInConn, outAdapter);
                 int redirectCount = 0;
                 while (true) {
                     AdapterRef redirected;
                     ConnectResult r;
                     if (outAdapter is IConnectionProvider cp) {
-                        r = await cp.Connect(fakeInConn).CAF();
+                        r = await cp.Connect(request).CAF();
                     } else if (outAdapter is IConnectionHandler ch) {
-                        r = await OutAdapter2.Connect(ch, fakeInConn).CAF();
+                        r = await OutAdapter2.ConnectWrapper(ch, request).CAF();
                     } else {
                         error($"{outAdapter} implement neither IConnectionProvider nor IConnectionHandler.");
-                        return;
+                        result = new ConnectResult(null, "wrong adapter");
+                        goto RETURN;
                     }
                     if (!r.IsRedirected) {
-                        await fakeInConn.HandleAndGetStream(r);
-                        await callback(r);
-                        return;
+                        await request.HandleAndGetStream(r);
+                        result = r;
+                        goto RETURN;
                     }
                     redirected = r.Redirected;
                     if (++redirectCount >= 10) {
-                        error($"'{fakeInConn.InAdapter.Name}' {fakeInConn} too many redirects, last redirect: {outAdapter.Name}");
-                        return;
+                        error($"'{request.InAdapter.Name}' {request} too many redirects, last redirect: {outAdapter.Name}");
+                        result = new ConnectResult(null, "too many redirects");
+                        goto RETURN;
                     }
                     var nextAdapter = redirected.Adapter;
                     if (nextAdapter == null) {
-                        warning($"'{fakeInConn.InAdapter.Name}' {fakeInConn} was redirected by '{outAdapter.Name}'" +
+                        warning($"'{request.InAdapter.Name}' {request} was redirected by '{outAdapter.Name}'" +
                                 $" to '{redirected}' which can not be found.");
-                        return;
+                        result = new ConnectResult(null, "redirect not found");
+                        goto RETURN;
                     }
                     outAdapter = nextAdapter;
                     if (LoggingLevel <= Logging.Level.None)
-                        debug($"'{fakeInConn.InAdapter.Name}' {fakeInConn} was redirected to '{redirected}'");
+                        debug($"'{request.InAdapter.Name}' {request} was redirected to '{redirected}'");
                 }
             } catch (Exception e) {
-                await onConnectionException(fakeInConn, e).CAF();
-            } finally {
-                await onConnectionEnd(fakeInConn).CAF();
+                await onConnectionException(request, e);
+                await onConnectionEnd(request);
+                throw;
             }
+        RETURN:
+            return new ConnectResponse(result, request);
         }
 
         private void onConnectionBegin(InConnection inc, IAdapter outAdapter)

@@ -110,5 +110,12 @@ namespace NaiveSocks
             if (Queue.Len == 0)
                 Queue.ResetSelf();
         }
+
+        public override string ToString()
+        {
+            if (Queue.Len > 0)
+                return $"{{Queued={Queue.Len} {BaseStream}}}";
+            return BaseStream.ToString();
+        }
     }
 }
