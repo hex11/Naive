@@ -565,21 +565,6 @@ namespace NaiveSocks
             }
         }
 
-        public struct ConnectResponse
-        {
-            public ConnectResponse(ConnectResult r, ConnectRequest req)
-            {
-                this.Result = r;
-                this.Request = req;
-            }
-
-            public ConnectResult Result { get; }
-            public ConnectRequest Request { get; }
-
-            public Task OnConnectionException(Exception e) => Request.Controller.onConnectionException(Request, e);
-            public Task OnConnectionEnd() => Request.Controller.onConnectionEnd(Request);
-        }
-
         public virtual async Task<ConnectResponse> Connect(ConnectRequest request, IAdapter outAdapter)
         {
             if (request == null)
@@ -654,7 +639,7 @@ namespace NaiveSocks
             }
         }
 
-        private async Task onConnectionEnd(InConnection inc)
+        internal async Task onConnectionEnd(InConnection inc)
         {
             inc.IsFinished = true;
             if (LoggingLevel <= Logging.Level.None)
@@ -677,7 +662,7 @@ namespace NaiveSocks
             }
         }
 
-        private async Task onConnectionException(InConnection inc, Exception e)
+        internal async Task onConnectionException(InConnection inc, Exception e)
         {
             Logger.exception(e, Logging.Level.Error, $"Handling {inc}");
             if (inc.IsHandled == false) {

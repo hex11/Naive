@@ -11,19 +11,19 @@ namespace NaiveSocks
 {
     public class TlsStream : MyStream.StreamWrapperBase
     {
-        public IMyStream RealBaseStream => streamWrapper.BaseStream;
+        public IMyStream RealBaseStream => MyStreamWrapper.BaseStream;
         public SslStream SslStream { get; }
 
         public override Stream BaseStream => SslStream;
 
-        MyStreamWrapperWithQueue streamWrapper;
+        public MyStreamWrapper MyStreamWrapper { get; }
 
         public override string ToString() => $"{{Tls on {RealBaseStream}}}";
 
         public TlsStream(IMyStream baseStream)
         {
-            streamWrapper = new MyStreamWrapperWithQueue(baseStream);
-            SslStream = new SslStream(streamWrapper.ToStream(), false);
+            MyStreamWrapper = new MyStreamWrapper(baseStream);
+            SslStream = new SslStream(MyStreamWrapper.ToStream(), false);
         }
 
         public Task AuthAsClient(string targetHost)
@@ -40,7 +40,7 @@ namespace NaiveSocks
         {
             var recordHeader = new BytesSegment(new byte[5]);
             await RealBaseStream.ReadFullAsync(recordHeader);
-            streamWrapper.Queue = recordHeader;
+            MyStreamWrapper.Queue = recordHeader;
             ushort ver = 0;
             int recordPayloadLength = GetRecordPayloadLength(recordHeader, ref ver);
 
@@ -48,7 +48,7 @@ namespace NaiveSocks
             recordHeader.CopyTo(record);
             var msg = record.Sub(5);
             await RealBaseStream.ReadFullAsync(msg);
-            streamWrapper.Queue = record;
+            MyStreamWrapper.Queue = record;
             ushort ver2 = 0;
             ParseClientHello(msg, ref ver2, out var sni);
             return sni;

@@ -84,11 +84,18 @@ namespace NaiveSocks
                 Logger = new Logger("->" + outAdapter.Name, InAdapter.GetAdapter().Logger)
             };
             copier.SetCounters(outAdapter.GetAdapter().BytesCountersRW, this.BytesCountersRW);
-            Sniffer = new SimpleSniffer(copier.CopierFromRight, null);
+            EnsureSniffer();
+            Sniffer.ListenToCopier(copier.CopierFromRight, null);
             await copier.Run();
         }
 
         public virtual string GetInfoStr() => null;
+
+        public void EnsureSniffer()
+        {
+            if (Sniffer == null)
+                Sniffer = new SimpleSniffer();
+        }
 
         public SimpleSniffer Sniffer { get; private set; }
 
@@ -231,6 +238,50 @@ namespace NaiveSocks
             {
                 return _getInfoStr?.Invoke();
             }
+        }
+    }
+
+    public struct ConnectResponse
+    {
+        public ConnectResponse(ConnectResult r, ConnectRequest req)
+        {
+            this.Result = r;
+            this.Request = req;
+        }
+
+        public ConnectResult Result { get; }
+        public ConnectRequest Request { get; }
+
+        public Task OnConnectionException(Exception e) => Request.Controller.onConnectionException(Request, e);
+        public Task OnConnectionEnd() => Request.Controller.onConnectionEnd(Request);
+
+        public MyStream.Copier CreateCopier(Adapter adapter, IMyStream myStream, bool toDest)
+        {
+            var dest = Result.Stream;
+            var ctrFrom = toDest ? adapter.BytesCountersRW : Result.Adapter.GetAdapter().BytesCountersRW;
+            var ctrTo = !toDest ? adapter.BytesCountersRW : Result.Adapter.GetAdapter().BytesCountersRW;
+            var c = new MyStream.Copier(toDest ? myStream : dest, !toDest ? myStream : dest) {
+                CounterR = ctrFrom.R,
+                CounterW = ctrTo.W,
+                Logger = adapter.Logger
+            };
+            Request.EnsureSniffer();
+            Request.Sniffer.ListenToCopier(toDest ? c : null, !toDest ? null : c);
+            return c;
+        }
+
+        public AwaitableWrapper WriteToDest(BytesSegment bs)
+        {
+            OnWriteToDest(bs);
+            return Result.Stream.WriteAsyncR(bs);
+        }
+
+        public void OnWriteToDest(BytesSegment bs)
+        {
+            Request.EnsureSniffer();
+            Request.Sniffer.ClientData(Request, bs);
+            Request.BytesCountersRW.R.Add(bs.Len);
+            Result.Adapter.GetAdapter().BytesCountersRW.W.Add(bs.Len);
         }
     }
 

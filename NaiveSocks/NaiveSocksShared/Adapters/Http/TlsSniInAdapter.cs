@@ -24,7 +24,7 @@ namespace NaiveSocks
                 TlsStream.ParseClientHelloRecord(bs, ref ver, out var name);
                 if (name == null)
                     return;
-                var conn = InConnection.Create(this, new AddrPort(name, dest_port), new MyStreamWrapperWithQueue(stream) { Queue = bs });
+                var conn = InConnection.Create(this, new AddrPort(name, dest_port), new MyStreamWrapper(stream) { Queue = bs });
                 await HandleIncommingConnection(conn);
             } catch (Exception e) {
                 Logger.exception(e, Logging.Level.Error, "OnNewConnection");

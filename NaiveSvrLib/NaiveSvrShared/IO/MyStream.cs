@@ -957,19 +957,33 @@ namespace NaiveSocks
             return BaseStream.WriteAsync(new BytesSegment(buffer, offset, count));
         }
 
+        class WriteAsyncResult : IAsyncResult
+        {
+            public AwaitableWrapper task;
+
+            public bool IsCompleted => task.IsCompleted;
+
+            public WaitHandle AsyncWaitHandle => throw new NotImplementedException();
+
+            public object AsyncState { get; set; }
+
+            public bool CompletedSynchronously { get; set; }
+        }
+
         public override IAsyncResult BeginWrite(byte[] buffer, int offset, int count, AsyncCallback callback, object state)
         {
             if (BaseStream is IMyStreamBeginEnd be) {
                 return be.BeginWrite(buffer, offset, count, callback, state);
             }
-            var task = BaseStream.WriteAsync(new BytesSegment(buffer, offset, count));
-            var awaiter = task.GetAwaiter();
-            if (awaiter.IsCompleted) {
-                callback(task);
+            var task = BaseStream.WriteAsyncR(new BytesSegment(buffer, offset, count));
+            var ar = new WriteAsyncResult() { task = task, AsyncState = state, CompletedSynchronously = task.IsCompleted };
+            if (ar.CompletedSynchronously) {
+                callback?.Invoke(ar);
             } else {
-                awaiter.OnCompleted(() => callback(task));
+                if (callback != null)
+                    task.OnCompleted(() => callback(ar));
             }
-            return task;
+            return ar;
         }
 
         public override void EndWrite(IAsyncResult asyncResult)
@@ -977,11 +991,24 @@ namespace NaiveSocks
             if (BaseStream is IMyStreamBeginEnd be) {
                 be.EndWrite(asyncResult);
             } else {
-                var task = (Task)asyncResult;
-                if (task.IsCompleted == false)
+                var ar = (WriteAsyncResult)asyncResult;
+                if (ar.task.IsCompleted == false)
                     throw new Exception("task is not completed.");
-                task.GetAwaiter().GetResult();
+                ar.task.GetResult();
             }
+        }
+
+        class ReadAsyncResult : IAsyncResult
+        {
+            public AwaitableWrapper<int> task;
+
+            public bool IsCompleted => task.IsCompleted;
+
+            public WaitHandle AsyncWaitHandle => throw new NotImplementedException();
+
+            public object AsyncState { get; set; }
+
+            public bool CompletedSynchronously { get; set; }
         }
 
         public override IAsyncResult BeginRead(byte[] buffer, int offset, int count, AsyncCallback callback, object state)
@@ -989,14 +1016,15 @@ namespace NaiveSocks
             if (BaseStream is IMyStreamBeginEnd be) {
                 return be.BeginRead(buffer, offset, count, callback, state);
             }
-            var task = BaseStream.ReadAsync(new BytesSegment(buffer, offset, count));
-            var awaiter = task.GetAwaiter();
-            if (awaiter.IsCompleted) {
-                callback(task);
+            var task = BaseStream.ReadAsyncR(new BytesSegment(buffer, offset, count));
+            var ar = new ReadAsyncResult() { task = task, AsyncState = state, CompletedSynchronously = task.IsCompleted };
+            if (ar.CompletedSynchronously) {
+                callback?.Invoke(ar);
             } else {
-                awaiter.OnCompleted(() => callback(task));
+                if (callback != null)
+                    task.OnCompleted(() => callback(ar));
             }
-            return task;
+            return ar;
         }
 
         public override int EndRead(IAsyncResult asyncResult)
@@ -1004,10 +1032,10 @@ namespace NaiveSocks
             if (BaseStream is IMyStreamBeginEnd be) {
                 return be.EndRead(asyncResult);
             } else {
-                var task = (Task<int>)asyncResult;
-                if (task.IsCompleted == false)
+                var ar = (ReadAsyncResult)asyncResult;
+                if (ar.task.IsCompleted == false)
                     throw new Exception("task is not completed.");
-                return task.GetAwaiter().GetResult();
+                return ar.task.GetResult();
             }
         }
     }
@@ -1047,7 +1075,7 @@ namespace NaiveSocks
             var pos = 0;
             var curnode = latestMsg;
             if (curnode == null || curnode.tlen == 0) {
-                curnode = (await MsgStream.RecvMsg(null).CAF()).Data;
+                curnode = (await MsgStream.RecvMsgR(null)).Data;
                 if (curnode == null)
                     return 0;
             }

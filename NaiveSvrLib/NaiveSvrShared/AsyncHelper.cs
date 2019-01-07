@@ -331,7 +331,7 @@ namespace Naive.HttpSvr
         public void Reset()
         {
             if (_continuation != null) {
-                throw new InvalidOperationException("Cannot reset: this awaiter is being listening. (complete this awaiter before reset)");
+                throw new InvalidOperationException($"Cannot reset: this awaiter is being listening. (completed={IsCompleted})");
             }
             if (_waitForGetResult != 0) {
                 throw new InvalidOperationException("Connot reset: GetResult() haven't been called. Race conditions may happen. _waitGetResult=" + _waitForGetResult);

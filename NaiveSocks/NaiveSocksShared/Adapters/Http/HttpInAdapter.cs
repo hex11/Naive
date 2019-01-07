@@ -249,7 +249,7 @@ namespace NaiveSocks
             int destReqs = 0;
             string p_HttpVersion = null;
             string state = null;
-            Controller.ConnectResponse? ccr = null;
+            ConnectResponse? _cr = null;
             try {
                 var req = ConnectRequest.Create(this, dest,
                     () => {
@@ -266,8 +266,8 @@ namespace NaiveSocks
                 req.Url = p.Url;
                 ConnectResult r;
                 try {
-                    ccr = await Controller.Connect(req, @out.Adapter);
-                    r = ccr.Value.Result;
+                    _cr = await Controller.Connect(req, @out.Adapter);
+                    r = _cr.Value.Result;
                 } catch (Exception e) {
                     Logger.exception(e, Logging.Level.Warning, "Controller.Connect exception");
                     r = new ConnectResult(null, e.Message);
@@ -280,8 +280,8 @@ namespace NaiveSocks
                     await p.EndResponseAsync();
                     return;
                 }
+                var cr = _cr.Value;
                 var thisCounterRW = req.BytesCountersRW;
-                thisCounterRW.R.Add(p.RawRequestBytesLength);
                 var destStream = r.Stream;
                 var destCounterRW = r.Adapter?.GetAdapter().BytesCountersRW ?? new BytesCountersRW() {
                     R = null,
@@ -289,11 +289,14 @@ namespace NaiveSocks
                 };
                 TlsStream tlsStream = null;
                 if (isHttps) {
+                    Logger.warning("\"https://\" request from " + p);
                     destStream = tlsStream = new TlsStream(destStream);
+                    tlsStream.MyStreamWrapper.WaitBeforeRead = new AwaitableWrapper(r.WhenCanRead);
+                    tlsStream.MyStreamWrapper.WritingBaseStream += (s, bs) => cr.OnWriteToDest(bs);
+                    destCounterRW.W = null;
                     await tlsStream.AuthAsClient(dest.Host);
                 }
                 var whenCanReadResponse = r.WhenCanRead;
-                var destCommonStream = MyStream.ToStream(destStream);
                 try {
                     var sb = new StringBuilder(p.RawRequest.Length);
                     var newHeaders = new HttpHeaderCollection(p.RequestHeaders.Count);
@@ -307,7 +310,12 @@ namespace NaiveSocks
                             newHeaders
                         );
                         var buf = NaiveUtils.GetUTF8Bytes_AllocFromPool(tw.ToString());
-                        destCounterRW.W.Add(buf.Len);
+                        thisCounterRW.R.Add(buf.Len);
+                        destCounterRW.W?.Add(buf.Len);
+                        if (!isHttps) {
+                            req.EnsureSniffer();
+                            req.Sniffer.ClientData(req, buf);
+                        }
                         await destStream.WriteAsync(buf);
                         BufferPool.GlobalPut(buf.Bytes);
                     }
@@ -348,7 +356,9 @@ namespace NaiveSocks
                     var clientStream = getStream(p);
                     if (keepAlive == false) {
                         state = "nonKeepAlive";
-                        await MyStream.Relay(destStream, clientStream, whenCanReadResponse);
+                        await new MyStream.TwoWayCopier(destStream, clientStream) { WhenCanReadFromLeft = r.WhenCanRead }
+                            .SetCounters(destCounterRW, thisCounterRW)
+                            .Run();
                         return;
                     }
 
@@ -420,7 +430,6 @@ namespace NaiveSocks
                             isHttps = newIsHttps;
                             goto connnectDest; // It works!
                         }
-                        thisCounterRW.R.Add(p.RawRequestBytesLength);
                         ProcessHeaders();
                         await WriteRequest();
                     }
@@ -428,9 +437,9 @@ namespace NaiveSocks
                     MyStream.CloseWithTimeout(destStream).Forget();
                 }
             } catch (Exception e) {
-                ccr?.OnConnectionException(e);
+                _cr?.OnConnectionException(e);
             } finally {
-                ccr?.OnConnectionEnd();
+                _cr?.OnConnectionEnd();
             }
         }
 

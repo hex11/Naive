@@ -4,9 +4,9 @@ using Naive.HttpSvr;
 
 namespace NaiveSocks
 {
-    public class MyStreamWrapperWithQueue : MyStream, IMyStreamReadR, IMyStreamWriteR, IMyStreamNoBuffer
+    public class MyStreamWrapper : MyStream, IMyStreamReadR, IMyStreamWriteR, IMyStreamNoBuffer
     {
-        public MyStreamWrapperWithQueue(IMyStream baseStream)
+        public MyStreamWrapper(IMyStream baseStream)
         {
             BaseStream = baseStream;
         }
@@ -14,6 +14,11 @@ namespace NaiveSocks
         public IMyStream BaseStream { get; }
 
         public BytesSegment Queue;
+
+        public AwaitableWrapper WaitBeforeRead = AwaitableWrapper.GetCompleted();
+
+        public event Action<MyStreamWrapper, BytesSegment> WritingBaseStream;
+        private void OnWriting(BytesSegment bs) => WritingBaseStream?.Invoke(this, bs);
 
         private int ReadFromQueue(BytesSegment bs)
         {
@@ -24,16 +29,26 @@ namespace NaiveSocks
             return r;
         }
 
+        private async Task<int> WaitAndRead(BytesSegment bs)
+        {
+            await WaitBeforeRead;
+            WaitBeforeRead = AwaitableWrapper.GetCompleted();
+            return await ReadAsyncR(bs);
+        }
+
         public override Task<int> ReadAsync(BytesSegment bs)
         {
             int r = ReadFromQueue(bs);
             if (r > 0)
                 return NaiveUtils.GetCachedTaskInt(r);
+            if (WaitBeforeRead.IsCompleted == false)
+                return WaitAndRead(bs);
             return BaseStream.ReadAsync(bs);
         }
 
         public override Task WriteAsync(BytesSegment bs)
         {
+            OnWriting(bs);
             return BaseStream.WriteAsync(bs);
         }
 
@@ -42,11 +57,14 @@ namespace NaiveSocks
             int r = ReadFromQueue(bs);
             if (r > 0)
                 return new AwaitableWrapper<int>(r);
+            if (WaitBeforeRead.IsCompleted == false)
+                return new AwaitableWrapper<int>(WaitAndRead(bs));
             return BaseStream.ReadAsyncR(bs);
         }
 
         public AwaitableWrapper WriteAsyncR(BytesSegment bs)
         {
+            OnWriting(bs);
             return BaseStream.WriteAsyncR(bs);
         }
 
@@ -58,11 +76,20 @@ namespace NaiveSocks
                 Dequeue(bs, len);
                 return new AwaitableWrapper<BytesSegment>(bs);
             }
+            if (WaitBeforeRead.IsCompleted == false)
+                return new AwaitableWrapper<BytesSegment>(ReadNBAsyncR_Wait(maxSize));
             if (BaseStream is IMyStreamNoBuffer nb) {
                 return nb.ReadNBAsyncR(maxSize);
             } else {
                 return ReadNBAsyncRWrapper(maxSize);
             }
+        }
+
+        private async Task<BytesSegment> ReadNBAsyncR_Wait(int maxSize)
+        {
+            await WaitBeforeRead;
+            WaitBeforeRead = AwaitableWrapper.GetCompleted();
+            return await ReadNBAsyncR(maxSize);
         }
 
         ReusableAwaiter<BytesSegment> _nb_ra;

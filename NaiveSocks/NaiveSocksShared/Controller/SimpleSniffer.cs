@@ -8,7 +8,7 @@ namespace NaiveSocks
 {
     public class SimpleSniffer
     {
-        public SimpleSniffer(MyStream.Copier clientSide, MyStream.Copier serverSide)
+        public void ListenToCopier(MyStream.Copier clientSide, MyStream.Copier serverSide)
         {
             if (clientSide != null)
                 clientSide.OnRead += ClientData;
@@ -18,53 +18,49 @@ namespace NaiveSocks
 
         readonly string[] httpMethods = new[] { "GET", "HEAD", "POST", "PUT", "DELETE", "CONNECT", "OPTIONS", "TRACE", "PATCH" };
 
-        private void ClientData(MyStream.Copier c, BytesSegment _bs)
+        public void ClientData(object sender, BytesSegment _bs)
         {
             if (clientDone)
                 return;
-            if (c.Progress == 0) {
-                clientDone = true;
-                try {
-                    TlsStream.ParseClientHelloRecord(_bs, ref TlsVer, out TlsSni);
-                } catch (Exception e) {
-                    if (TlsVer != 0) {
-                        TlsError = true;
-                        Logging.exception(e, Logging.Level.Warning, "parsing tls handshake from " + c);
-                    }
+            clientDone = true;
+            try {
+                TlsStream.ParseClientHelloRecord(_bs, ref TlsVer, out TlsSni);
+            } catch (Exception e) {
+                if (TlsVer != 0) {
+                    TlsError = true;
+                    Logging.exception(e, Logging.Level.Warning, "parsing tls handshake" + sender);
                 }
+            }
 
-                try {
-                    var bs = _bs;
-                    if (c.Progress == 0) {
-                        foreach (var item in httpMethods) {
-                            if (Match(bs, item) && bs.GetOrZero(item.Length) == ' ') {
-                                bs.SubSelf(item.Length + 1);
-                                Http = "HTTP?";
-                                break;
-                            }
-                        }
-                        if (Http != null) {
-                            var begin = Find(bs, (byte)' ');
-                            if (begin != -1) {
-                                begin += 1;
-                                bs.SubSelf(begin);
-                                if (Match(bs, "HTTP")) {
-                                    var len = Find(bs.Sub(0, Math.Min(bs.Len, 10)), (byte)'\r');
-                                    if (len == -1)
-                                        len = Find(bs.Sub(0, Math.Min(bs.Len, 10)), (byte)'\n');
-                                    if (len != -1) {
-                                        Http = Encoding.ASCII.GetString(bs.Bytes, bs.Offset, len);
-                                    }
-                                }
+            try {
+                var bs = _bs;
+                foreach (var item in httpMethods) {
+                    if (Match(bs, item) && bs.GetOrZero(item.Length) == ' ') {
+                        bs.SubSelf(item.Length + 1);
+                        Http = "HTTP?";
+                        break;
+                    }
+                }
+                if (Http != null) {
+                    var begin = Find(bs, (byte)' ');
+                    if (begin != -1) {
+                        begin += 1;
+                        bs.SubSelf(begin);
+                        if (Match(bs, "HTTP")) {
+                            var len = Find(bs.Sub(0, Math.Min(bs.Len, 10)), (byte)'\r');
+                            if (len == -1)
+                                len = Find(bs.Sub(0, Math.Min(bs.Len, 10)), (byte)'\n');
+                            if (len != -1) {
+                                Http = Encoding.ASCII.GetString(bs.Bytes, bs.Offset, len);
                             }
                         }
                     }
-                } catch (Exception e) {
                 }
+            } catch (Exception e) {
             }
         }
 
-        private void ServerData(MyStream.Copier c, BytesSegment bs)
+        public void ServerData(object sender, BytesSegment bs)
         {
 
         }

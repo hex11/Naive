@@ -175,7 +175,7 @@ namespace NaiveSocks
                 ThrowIfClosed();
                 var id = _latestId + 1;
                 var findMax = currentMaxId;
-                retry:
+            retry:
                 for (int i = 1; i <= findMax; i++) {
                     if (id > findMax) {
                         id = 1;
@@ -716,15 +716,17 @@ namespace NaiveSocks
                     Msg m;
                     var tmp = raR_deq;
                     raR_deq = null;
-                    if (!tmp.TryGetResult(out m, out var ex))
+                    if (!tmp.TryGetResult(out m, out var ex)) {
                         raR.SetException(ex);
-                    try {
-                        m = rar_continuation2(m);
-                    } catch (Exception e) {
-                        raR.SetException(e);
-                        return;
+                    } else {
+                        try {
+                            m = rar_continuation2(m);
+                        } catch (Exception e) {
+                            raR.SetException(e);
+                            return;
+                        }
+                        raR.SetResult(m);
                     }
-                    raR.SetResult(m);
                 };
             }
             raR_deq.OnCompleted(raR_continuation);
