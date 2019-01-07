@@ -25,10 +25,12 @@ namespace NaiveSocks
             if (c.Progress == 0) {
                 clientDone = true;
                 try {
-                    TlsStream.ParseClientHelloRecord(_bs, out var ver, out var sni);
-                    TlsVer = ver;
-                    TlsSni = sni.SingleOrDefault() ?? "";
+                    TlsStream.ParseClientHelloRecord(_bs, ref TlsVer, out TlsSni);
                 } catch (Exception e) {
+                    if (TlsVer != 0) {
+                        TlsError = true;
+                        Logging.exception(e, Logging.Level.Warning, "parsing tls handshake from " + c);
+                    }
                 }
 
                 try {
@@ -46,11 +48,13 @@ namespace NaiveSocks
                             if (begin != -1) {
                                 begin += 1;
                                 bs.SubSelf(begin);
-                                var len = Find(bs.Sub(0, Math.Min(bs.Len, 10)), (byte)'\r');
-                                if (len == -1)
-                                    len = Find(bs.Sub(0, Math.Min(bs.Len, 10)), (byte)'\n');
-                                if (len != -1) {
-                                    Http = Encoding.ASCII.GetString(bs.Bytes, bs.Offset, len);
+                                if (Match(bs, "HTTP")) {
+                                    var len = Find(bs.Sub(0, Math.Min(bs.Len, 10)), (byte)'\r');
+                                    if (len == -1)
+                                        len = Find(bs.Sub(0, Math.Min(bs.Len, 10)), (byte)'\n');
+                                    if (len != -1) {
+                                        Http = Encoding.ASCII.GetString(bs.Bytes, bs.Offset, len);
+                                    }
                                 }
                             }
                         }
@@ -66,6 +70,8 @@ namespace NaiveSocks
         }
 
         bool clientDone;
+
+        bool TlsError;
 
         string Http;
 
@@ -83,23 +89,27 @@ namespace NaiveSocks
         public void GetInfo(StringBuilder sb, string noSniValueIf)
         {
             if (TlsVer != 0) {
-                sb.Append("TLS");
-                sb.Append(TlsVer == 0x0301 ? " 1.0" :
-                    TlsVer == 0x0302 ? " 1.1" :
-                    TlsVer == 0x0303 ? " 1.2" :
-                    $"(Version 0x{TlsVer:x})");
+                sb.Append("TLS(");
+                sb.Append(TlsVer == 0x0301 ? "1.0" :
+                    TlsVer == 0x0302 ? "1.1" :
+                    TlsVer == 0x0303 ? "1.2" :
+                    $"0x{TlsVer:x}");
                 if (TlsSni != null) {
                     if (TlsSni == noSniValueIf)
-                        sb.Append(" (SNI)");
+                        sb.Append(",SNI");
                     else
-                        sb.Append(" (SNI=").Append(TlsSni).Append(")");
+                        sb.Append(",SNI=").Append(TlsSni);
                 }
+                if (TlsError) {
+                    sb.Append(",Error");
+                }
+                sb.Append(')');
             } else if (Http != null) {
                 sb.Append(Http);
             } else if (!clientDone) {
                 sb.Append("(No Data)");
             } else {
-                sb.Append("(Unknown)");
+                sb.Append("---");
             }
         }
 

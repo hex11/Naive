@@ -36,31 +36,33 @@ namespace NaiveSocks
             return SslStream.AuthenticateAsClientAsync(targetHost, null, protocols, false);
         }
 
-        public async Task<IEnumerable<string>> GetSniAsServer()
+        public async Task<string> GetSniAsServer()
         {
             var recordHeader = new BytesSegment(new byte[5]);
             await RealBaseStream.ReadFullAsync(recordHeader);
             streamWrapper.Queue = recordHeader;
-            int recordPayloadLength = GetRecordPayloadLength(recordHeader);
+            ushort ver = 0;
+            int recordPayloadLength = GetRecordPayloadLength(recordHeader, ref ver);
 
             var record = new BytesSegment(new byte[5 + recordPayloadLength]);
             recordHeader.CopyTo(record);
             var msg = record.Sub(5);
             await RealBaseStream.ReadFullAsync(msg);
             streamWrapper.Queue = record;
-            ParseClientHello(msg, out _, out var sni);
+            ushort ver2 = 0;
+            ParseClientHello(msg, ref ver2, out var sni);
             return sni;
         }
 
-        public static void ParseClientHelloRecord(BytesSegment bs, out ushort ver, out IEnumerable<string> sni)
+        public static void ParseClientHelloRecord(BytesSegment bs, ref ushort ver, out string sni)
         {
-            var payloadLen = GetRecordPayloadLength(bs);
+            var payloadLen = GetRecordPayloadLength(bs, ref ver);
             bs.SubSelf(5);
             bs.Len = Math.Min(bs.Len, payloadLen);
-            ParseClientHello(bs, out ver, out sni);
+            ParseClientHello(bs, ref ver, out sni);
         }
 
-        private static int GetRecordPayloadLength(BytesSegment recordHeader)
+        private static int GetRecordPayloadLength(BytesSegment recordHeader, ref ushort ver)
         {
             if (recordHeader.Len < 5)
                 throw new Exception("recordHeader length < 5");
@@ -68,12 +70,13 @@ namespace NaiveSocks
                 throw new Exception("Expected handshake (22), got " + recordHeader[0]);
             var versionMajor = recordHeader[1];
             var versionMinor = recordHeader[2];
-            if (versionMajor != 3 || versionMinor < 1 || versionMinor > 3)
+            if (versionMajor != 3)
                 throw new Exception($"Not supported version ({versionMajor}, {versionMinor})");
+            ver = (ushort)(versionMajor << 8 | versionMinor);
             return recordHeader[3] << 8 | recordHeader[4];
         }
 
-        private static void ParseClientHello(BytesSegment msg, out ushort version, out IEnumerable<string> sni)
+        private static void ParseClientHello(BytesSegment msg, ref ushort version, out string sni)
         {
             var cur = 0;
             if (msg[cur++] != 1)
@@ -87,6 +90,8 @@ namespace NaiveSocks
             cur += 1 + msg[cur]; // skip session_id
             cur += 2 + (msg[cur] << 8 | msg[cur + 1]); // skip cipher_suites
             cur += 1 + msg[cur]; // skip compression_methods
+            if (cur >= msgLength)
+                throw new Exception("extensionsBegin >= msgLength");
 
             var extensionsLength = msg[cur] << 8 | msg[cur + 1]; cur += 2;
             var extensionsEnd = cur + extensionsLength;
@@ -95,26 +100,30 @@ namespace NaiveSocks
             while (cur < extensionsEnd) {
                 var extType = (msg[cur] << 8 | msg[cur + 1]); cur += 2;
                 var extLen = (msg[cur] << 8 | msg[cur + 1]); cur += 2;
+                var extEnd = cur + extLen;
+                if (extEnd > extensionsEnd)
+                    throw new Exception("extEnd > extensionsEnd");
                 if (extType == 0) { // server_name
                     var nameListLen = (msg[cur] << 8 | msg[cur + 1]); cur += 2;
                     var nameListEnd = cur + nameListLen;
-                    if (nameListEnd > extensionsLength)
-                        throw new Exception("nameListEnd > extensionsLength");
+                    if (nameListEnd > extEnd)
+                        throw new Exception("nameListEnd > extEnd");
                     var nameList = new List<string>();
                     while (cur < nameListEnd) {
                         if (msg[cur++] != 0) // name_type: host_name
                             throw new Exception("Not supported name type " + msg[cur]);
                         var nameLen = (msg[cur] << 8 | msg[cur + 1]); cur += 2;
                         if (cur + nameLen > nameListEnd)
-                            throw new Exception("nameLen > nameListEnd");
+                            throw new Exception("nameEnd > nameListEnd");
                         var str = NaiveUtils.UTF8Encoding.GetString(msg.Bytes, msg.Offset + cur, nameLen);
-                        nameList.Add(str);
-                        cur += nameLen;
+                        // TODO: check encoding
+                        sni = str;
+                        return;
                     }
-                    sni = nameList;
+                    sni = null;
                     return;
                 }
-                cur += extLen;
+                cur = extEnd;
             }
             sni = null;
             return;

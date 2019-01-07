@@ -13,19 +13,23 @@ namespace NaiveSocks
 
         public override async void OnNewConnection(TcpClient client)
         {
+            var stream = GetMyStreamFromSocket(client.Client);
             try {
-                var stream = MyStream.FromSocket(client.Client);
                 var bs = BufferPool.GlobalGetBs(8 * 1024, false);
                 var r = await stream.ReadAsyncR(bs);
                 if (r <= 0)
                     return;
                 bs.Len = r;
-                TlsStream.ParseClientHelloRecord(bs, out _, out var names);
-                var name = names.Single();
+                ushort ver = 0;
+                TlsStream.ParseClientHelloRecord(bs, ref ver, out var name);
+                if (name == null)
+                    return;
                 var conn = InConnection.Create(this, new AddrPort(name, dest_port), new MyStreamWrapperWithQueue(stream) { Queue = bs });
-                HandleIncommingConnection(conn).Forget();
+                await HandleIncommingConnection(conn);
             } catch (Exception e) {
                 Logger.exception(e, Logging.Level.Error, "OnNewConnection");
+            } finally {
+                MyStream.CloseWithTimeout(stream).Forget();
             }
         }
     }
