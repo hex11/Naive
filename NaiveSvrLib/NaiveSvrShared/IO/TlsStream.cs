@@ -36,7 +36,7 @@ namespace NaiveSocks
             return SslStream.AuthenticateAsClientAsync(targetHost, null, protocols, false);
         }
 
-        public async Task<string> GetSniAsServer()
+        public async Task<ClientHello> ReadClientHello()
         {
             var recordHeader = new BytesSegment(new byte[5]);
             await RealBaseStream.ReadFullAsync(recordHeader);
@@ -49,17 +49,24 @@ namespace NaiveSocks
             var msg = record.Sub(5);
             await RealBaseStream.ReadFullAsync(msg);
             MyStreamWrapper.Queue = record;
-            ushort ver2 = 0;
-            ParseClientHello(msg, ref ver2, out var sni);
-            return sni;
+            var ch = new ClientHello();
+            ParseClientHello(msg, ref ch);
+            return ch;
         }
 
-        public static void ParseClientHelloRecord(BytesSegment bs, ref ushort ver, out string sni)
+        public struct ClientHello
         {
-            var payloadLen = GetRecordPayloadLength(bs, ref ver);
+            public ushort Version;
+            public string Sni;
+            public string Alpn;
+        }
+
+        public static void ParseClientHelloRecord(BytesSegment bs, ref ClientHello ch)
+        {
+            var payloadLen = GetRecordPayloadLength(bs, ref ch.Version);
             bs.SubSelf(5);
             bs.Len = Math.Min(bs.Len, payloadLen);
-            ParseClientHello(bs, ref ver, out sni);
+            ParseClientHello(bs, ref ch);
         }
 
         private static int GetRecordPayloadLength(BytesSegment recordHeader, ref ushort ver)
@@ -76,7 +83,7 @@ namespace NaiveSocks
             return recordHeader[3] << 8 | recordHeader[4];
         }
 
-        private static void ParseClientHello(BytesSegment msg, ref ushort version, out string sni)
+        private static void ParseClientHello(BytesSegment msg, ref ClientHello ch)
         {
             var cur = 0;
             if (msg[cur++] != 1)
@@ -84,7 +91,7 @@ namespace NaiveSocks
             var msgLength = msg[cur] << 16 | msg[cur + 1] << 8 | msg[cur + 2]; cur += 3;
             msg.SubSelf(4); cur = 0;
 
-            version = (ushort)(msg[cur] << 8 | msg[cur + 1]); cur += 2;
+            ch.Version = (ushort)(msg[cur] << 8 | msg[cur + 1]); cur += 2;
 
             cur += 32; // skip random
             cur += 1 + msg[cur]; // skip session_id
@@ -109,7 +116,7 @@ namespace NaiveSocks
                     if (nameListEnd > extEnd)
                         throw new Exception("nameListEnd > extEnd");
                     var nameList = new List<string>();
-                    while (cur < nameListEnd) {
+                    if (cur < nameListEnd) { // read the first item only
                         if (msg[cur++] != 0) // name_type: host_name
                             throw new Exception("Not supported name type " + msg[cur]);
                         var nameLen = (msg[cur] << 8 | msg[cur + 1]); cur += 2;
@@ -117,15 +124,22 @@ namespace NaiveSocks
                             throw new Exception("nameEnd > nameListEnd");
                         var str = NaiveUtils.UTF8Encoding.GetString(msg.Bytes, msg.Offset + cur, nameLen);
                         // TODO: check encoding
-                        sni = str;
-                        return;
+                        ch.Sni = str;
                     }
-                    sni = null;
-                    return;
+                } else if (extType == 16) { // ALPN
+                    var listLen = (msg[cur] << 8 | msg[cur + 1]); cur += 2;
+                    var listEnd = cur + listLen;
+                    if (listEnd > extEnd)
+                        throw new Exception("alpnListEnd > extEnd");
+                    if (cur < listEnd) { // read the first item only
+                        var strLen = msg[cur++];
+                        if (cur + strLen > listEnd)
+                            throw new Exception("alpnStrEnd > nameListEnd");
+                        ch.Alpn = Encoding.ASCII.GetString(msg.Bytes, msg.Offset + cur, strLen);
+                    }
                 }
                 cur = extEnd;
             }
-            sni = null;
             return;
         }
 

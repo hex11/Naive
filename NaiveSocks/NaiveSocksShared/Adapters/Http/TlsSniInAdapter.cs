@@ -20,11 +20,11 @@ namespace NaiveSocks
                 if (r <= 0)
                     return;
                 bs.Len = r;
-                ushort ver = 0;
-                TlsStream.ParseClientHelloRecord(bs, ref ver, out var name);
-                if (name == null)
+                var ch = new TlsStream.ClientHello();
+                TlsStream.ParseClientHelloRecord(bs, ref ch);
+                if (ch.Sni == null)
                     return;
-                var conn = InConnection.Create(this, new AddrPort(name, dest_port), new MyStreamWrapper(stream) { Queue = bs });
+                var conn = InConnection.Create(this, new AddrPort(ch.Sni, dest_port), new MyStreamWrapper(stream) { Queue = bs });
                 await HandleIncommingConnection(conn);
             } catch (Exception e) {
                 Logger.exception(e, Logging.Level.Error, "OnNewConnection");

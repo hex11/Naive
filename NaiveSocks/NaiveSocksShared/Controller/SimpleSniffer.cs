@@ -24,9 +24,9 @@ namespace NaiveSocks
                 return;
             clientDone = true;
             try {
-                TlsStream.ParseClientHelloRecord(_bs, ref TlsVer, out TlsSni);
+                TlsStream.ParseClientHelloRecord(_bs, ref Tls);
             } catch (Exception e) {
-                if (TlsVer != 0) {
+                if (Tls.Version != 0) {
                     TlsError = true;
                     Logging.exception(e, Logging.Level.Warning, "parsing tls handshake" + sender);
                 }
@@ -62,7 +62,7 @@ namespace NaiveSocks
 
         public void ServerData(object sender, BytesSegment bs)
         {
-
+            // TODO
         }
 
         bool clientDone;
@@ -71,9 +71,7 @@ namespace NaiveSocks
 
         string Http;
 
-        ushort TlsVer;
-
-        string TlsSni;
+        TlsStream.ClientHello Tls;
 
         public string GetInfo()
         {
@@ -84,17 +82,24 @@ namespace NaiveSocks
 
         public void GetInfo(StringBuilder sb, string noSniValueIf)
         {
-            if (TlsVer != 0) {
+            if (Tls.Version != 0) {
                 sb.Append("TLS(");
-                sb.Append(TlsVer == 0x0301 ? "1.0" :
-                    TlsVer == 0x0302 ? "1.1" :
-                    TlsVer == 0x0303 ? "1.2" :
-                    $"0x{TlsVer:x}");
-                if (TlsSni != null) {
-                    if (TlsSni == noSniValueIf)
-                        sb.Append(",SNI");
-                    else
-                        sb.Append(",SNI=").Append(TlsSni);
+                if (Tls.Version == 0x0303 && Tls.Alpn == "h2" && (noSniValueIf != null && Tls.Sni == noSniValueIf)) {
+                    sb.Append("'h2'");
+                } else {
+                    sb.Append(Tls.Version == 0x0301 ? "1.0" :
+                        Tls.Version == 0x0302 ? "1.1" :
+                        Tls.Version == 0x0303 ? "1.2" :
+                        $"0x{Tls.Version:x}");
+                    if (Tls.Sni != null) {
+                        if (Tls.Sni == noSniValueIf)
+                            sb.Append(",SNI");
+                        else
+                            sb.Append(",SNI=").Append(Tls.Sni);
+                    }
+                    if (Tls.Alpn != null && !string.Equals(Tls.Alpn, "http/1.1", StringComparison.OrdinalIgnoreCase)) {
+                        sb.Append(",'").Append(Tls.Alpn).Append('\'');
+                    }
                 }
                 if (TlsError) {
                     sb.Append(",Error");
