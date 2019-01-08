@@ -22,6 +22,8 @@ namespace NaiveSocks
         public AdapterRef Redirected { get; set; }
         public bool IsRedirected => Redirected != null;
 
+        public IAdapter RunningHandler { get; internal set; }
+
         public bool IsStoppingRequested { get; private set; }
         public bool IsFinished { get; internal set; }
 
@@ -140,7 +142,7 @@ namespace NaiveSocks
             if ((flags & ToStringFlags.Id) != 0)
                 sb.Append("cxn#").Append(Id).Append(' ');
             sb.Append('\'').Append(InAdapter?.Name).Append('\'');
-            var outAdapter = ConnectResult?.Adapter;
+            var outAdapter = ConnectResult?.Adapter ?? RunningHandler;
             if (outAdapter != null && (flags & ToStringFlags.OutAdapter) != 0)
                 sb.Append("->'").Append(outAdapter.Name).Append('\'');
             if ((flags & ToStringFlags.Time) != 0)

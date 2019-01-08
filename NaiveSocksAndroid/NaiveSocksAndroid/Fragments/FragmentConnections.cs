@@ -249,7 +249,7 @@ namespace NaiveSocksAndroid
                     sb.Append(' ');
                 }
                 sb.Append(ctr.ToString()).Append(" T=").Append(WebSocket.CurrentTime - conn.CreateTime);
-                var adap = conn.ConnectResult?.Adapter;
+                var adap = conn.ConnectResult?.Adapter ?? conn.RunningHandler;
                 if (adap != null)
                     sb.Append(" -> '").Append(adap.Name).Append("'");
                 var outStream = conn.ConnectResult?.Stream;

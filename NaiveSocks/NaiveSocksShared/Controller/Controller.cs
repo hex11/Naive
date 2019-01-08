@@ -539,6 +539,7 @@ namespace NaiveSocks
                 onConnectionBegin(inc, outAdapter);
                 int redirectCount = 0;
                 while (true) {
+                    inc.RunningHandler = outAdapter;
                     await outAdapter.HandleConnection(inc).CAF();
                     if (inc.IsHandled || !inc.IsRedirected) {
                         break;
@@ -583,6 +584,7 @@ namespace NaiveSocks
                 while (true) {
                     AdapterRef redirected;
                     ConnectResult r;
+                    request.RunningHandler = outAdapter;
                     if (outAdapter is IConnectionProvider cp) {
                         r = await cp.Connect(request).CAF();
                     } else if (outAdapter is IConnectionHandler ch) {
@@ -642,6 +644,7 @@ namespace NaiveSocks
         internal async Task onConnectionEnd(InConnection inc)
         {
             inc.IsFinished = true;
+            inc.RunningHandler = null;
             if (LoggingLevel <= Logging.Level.None)
                 debug($"{inc} End.");
             if (inc.IsHandled == false) {

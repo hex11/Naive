@@ -179,7 +179,12 @@ namespace NaiveSocks
                             }
                             con.Write("\n");
                         } else {
-                            command.Console.Write(item + "\n", ConsoleColor.Yellow);
+                            con.Write(item.ToString(), ConsoleColor.Yellow);
+                            var handler = item.RunningHandler?.Name;
+                            if (handler == null)
+                                con.Write(" -> ?\n", ConsoleColor.Cyan);
+                            else
+                                con.Write(" -> '" + handler + "'\n", ConsoleColor.Cyan);
                         }
                     }
                     command.WriteLine($"({arr.Length} connections)");
