@@ -89,7 +89,7 @@ namespace NaiveSocks
                     if (operating) {
                         if (fdR == -1) {
                             ex = GetClosedException();
-                            goto CALLBACK;
+                            goto END_ASYNC;
                         }
                         if (mode == 3) {
                             bs = BufferPool.GlobalGet(arg);
@@ -165,7 +165,7 @@ namespace NaiveSocks
                             }
                         }
                     }
-                CALLBACK:
+                END_ASYNC:
                     if (operating) {
                         bufRead.ResetSelf();
                         readState = 0;
@@ -382,6 +382,7 @@ namespace NaiveSocks
                 raRead.Reset();
                 readState = 1;
                 bufRead = bs;
+                readArg = bs.Len; // only for ToString() to print the length
                 if (Debug)
                     Logging.debugForce(this + ": wait for epoll");
             }
@@ -545,8 +546,11 @@ namespace NaiveSocks
                 }
                 if ((State.Value | flag.Value) != State.Value) {
                     State |= flag;
-                    if (LinuxNative.shutdown(fd, how) == -1)
-                        Logging.warning(this + ": shutdown(how=" + how + ") errno " + LinuxNative.GetErrno());
+                    if (LinuxNative.shutdown(fd, how) == -1) {
+                        int errno = LinuxNative.GetErrno();
+                        if (errno != 107) // ENOTCONN
+                            Logging.warning(this + ": shutdown(how=" + how + ") errno " + errno);
+                    }
                     TryCleanUp_NoLock();
                 }
             }
@@ -667,6 +671,9 @@ namespace NaiveSocks
             };
             mapLock.EnterWriteLock();
             try {
+                if (fdCleanupList.Contains(fd)) {
+                    Logger.warning("Adding fd " + fd + ", which is in cleanupList");
+                }
                 mapFdToHandler.Add(fd, handler);
                 //mapFdToHandler[fd] = handler;
             } finally {
