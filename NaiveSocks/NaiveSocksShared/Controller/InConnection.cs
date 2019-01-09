@@ -87,7 +87,7 @@ namespace NaiveSocks
             };
             copier.SetCounters(outAdapter.GetAdapter().BytesCountersRW, this.BytesCountersRW);
             EnsureSniffer();
-            Sniffer.ListenToCopier(copier.CopierFromRight, null);
+            Sniffer.ListenToCopier(copier.CopierFromRight, copier.CopierFromLeft);
             await copier.Run();
         }
 
@@ -284,6 +284,14 @@ namespace NaiveSocks
             Request.Sniffer.ClientData(Request, bs);
             Request.BytesCountersRW.R.Add(bs.Len);
             Result.Adapter.GetAdapter().BytesCountersRW.W.Add(bs.Len);
+        }
+
+        public void OnReadFromDest(BytesSegment bs)
+        {
+            Request.EnsureSniffer();
+            Request.Sniffer.ServerData(Request, bs);
+            Request.BytesCountersRW.W.Add(bs.Len);
+            Result.Adapter.GetAdapter().BytesCountersRW.R.Add(bs.Len);
         }
     }
 

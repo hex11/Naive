@@ -61,12 +61,33 @@ namespace NaiveSocks
             public string Alpn;
         }
 
-        public static void ParseClientHelloRecord(BytesSegment bs, ref ClientHello ch)
+        public struct ServerHello
+        {
+            public ushort Version;
+            public bool SniUsed;
+            public string Alpn;
+        }
+
+        public static void ParseClientHelloRecord(BytesSegment bs, ref ClientHello ch, out int size)
         {
             var payloadLen = GetRecordPayloadLength(bs, ref ch.Version);
+            size = 5 + payloadLen;
+            if (bs.Len < size)
+                return;
             bs.SubSelf(5);
             bs.Len = Math.Min(bs.Len, payloadLen);
             ParseClientHello(bs, ref ch);
+        }
+
+        public static void ParseServerHelloRecord(BytesSegment bs, ref ServerHello ch, out int size)
+        {
+            var payloadLen = GetRecordPayloadLength(bs, ref ch.Version);
+            size = 5 + payloadLen;
+            if (bs.Len < size)
+                return;
+            bs.SubSelf(5);
+            bs.Len = Math.Min(bs.Len, payloadLen);
+            ParseServerHello(bs, ref ch);
         }
 
         private static int GetRecordPayloadLength(BytesSegment recordHeader, ref ushort ver)
@@ -86,8 +107,9 @@ namespace NaiveSocks
         private static void ParseClientHello(BytesSegment msg, ref ClientHello ch)
         {
             var cur = 0;
-            if (msg[cur++] != 1)
+            if (msg[cur] != 1)
                 throw new Exception("Expected client hello (1), got " + msg[cur]);
+            cur++;
             var msgLength = msg[cur] << 16 | msg[cur + 1] << 8 | msg[cur + 2]; cur += 3;
             msg.SubSelf(4); cur = 0;
 
@@ -137,6 +159,70 @@ namespace NaiveSocks
                             throw new Exception("alpnStrEnd > nameListEnd");
                         ch.Alpn = Encoding.ASCII.GetString(msg.Bytes, msg.Offset + cur, strLen);
                     }
+                } else if (extType == 43) { // supported_versions
+                    var listLen = msg[cur++];
+                    if (listLen < 2)
+                        throw new Exception("listLen < 2");
+                    var listEnd = cur + listLen;
+                    if (listEnd > extEnd)
+                        throw new Exception("supported_versions listEnd > extEnd");
+                    while (cur < listEnd) {
+                        var ver = (ushort)(msg[cur] << 8 | msg[cur + 1]); cur += 2;
+                        if (ver > ch.Version)
+                            ch.Version = ver;
+                    }
+                }
+                cur = extEnd;
+            }
+            return;
+        }
+
+        private static void ParseServerHello(BytesSegment msg, ref ServerHello hello)
+        {
+            var cur = 0;
+            if (msg[cur] != 2)
+                throw new Exception("Expected server hello (2), got " + msg[cur]);
+            cur++;
+            var msgLength = msg[cur] << 16 | msg[cur + 1] << 8 | msg[cur + 2]; cur += 3;
+            msg.SubSelf(4); cur = 0;
+
+            hello.Version = (ushort)(msg[cur] << 8 | msg[cur + 1]); cur += 2;
+
+            cur += 32; // skip random
+            cur += 1 + msg[cur]; // skip session_id
+            cur += 2; // skip cipher suite
+            cur += 1; // compression_methods
+            if (cur >= msgLength)
+                throw new Exception("extensionsBegin >= msgLength");
+
+            var extensionsLength = msg[cur] << 8 | msg[cur + 1]; cur += 2;
+            var extensionsEnd = cur + extensionsLength;
+            if (extensionsEnd > msgLength)
+                throw new Exception("extensionsEnd > msgLength");
+            while (cur < extensionsEnd) {
+                var extType = (msg[cur] << 8 | msg[cur + 1]); cur += 2;
+                var extLen = (msg[cur] << 8 | msg[cur + 1]); cur += 2;
+                var extEnd = cur + extLen;
+                if (extEnd > extensionsEnd)
+                    throw new Exception("extEnd > extensionsEnd");
+                if (extType == 0) { // server_name
+                    hello.SniUsed = true;
+                } else if (extType == 16) { // ALPN
+                    var listLen = (msg[cur] << 8 | msg[cur + 1]); cur += 2;
+                    var listEnd = cur + listLen;
+                    if (listEnd > extEnd)
+                        throw new Exception("alpnListEnd > extEnd");
+                    if (cur < listEnd) { // read the first item only
+                        var strLen = msg[cur++];
+                        if (cur + strLen > listEnd)
+                            throw new Exception("alpnStrEnd > nameListEnd");
+                        hello.Alpn = Encoding.ASCII.GetString(msg.Bytes, msg.Offset + cur, strLen);
+                    }
+                } else if (extType == 43) { // supported_versions
+                    if (extLen != 2)
+                        throw new Exception("supported_versions extLen != 2");
+                    var ver = (ushort)(msg[cur] << 8 | msg[cur + 1]); cur += 2;
+                    hello.Version = ver;
                 }
                 cur = extEnd;
             }

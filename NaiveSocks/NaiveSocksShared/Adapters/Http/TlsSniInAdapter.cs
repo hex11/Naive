@@ -21,7 +21,7 @@ namespace NaiveSocks
                     return;
                 bs.Len = r;
                 var ch = new TlsStream.ClientHello();
-                TlsStream.ParseClientHelloRecord(bs, ref ch);
+                TlsStream.ParseClientHelloRecord(bs, ref ch, out _);
                 if (ch.Sni == null)
                     return;
                 var conn = InConnection.Create(this, new AddrPort(ch.Sni, dest_port), new MyStreamWrapper(stream) { Queue = bs });

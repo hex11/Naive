@@ -293,7 +293,9 @@ namespace NaiveSocks
                     destStream = tlsStream = new TlsStream(destStream);
                     tlsStream.MyStreamWrapper.WaitBeforeRead = new AwaitableWrapper(r.WhenCanRead);
                     tlsStream.MyStreamWrapper.WritingBaseStream += (s, bs) => cr.OnWriteToDest(bs);
-                    destCounterRW.W = null;
+                    tlsStream.MyStreamWrapper.ReadBaseStream += (s, bs) => cr.OnReadFromDest(bs);
+                    thisCounterRW = new BytesCountersRW();
+                    destCounterRW = new BytesCountersRW();
                     await tlsStream.AuthAsClient(dest.Host);
                 }
                 var whenCanReadResponse = r.WhenCanRead;
@@ -310,7 +312,7 @@ namespace NaiveSocks
                             newHeaders
                         );
                         var buf = NaiveUtils.GetUTF8Bytes_AllocFromPool(tw.ToString());
-                        thisCounterRW.R.Add(buf.Len);
+                        thisCounterRW.R?.Add(buf.Len);
                         destCounterRW.W?.Add(buf.Len);
                         if (!isHttps) {
                             req.EnsureSniffer();

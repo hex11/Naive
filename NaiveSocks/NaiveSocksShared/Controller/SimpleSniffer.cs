@@ -20,15 +20,15 @@ namespace NaiveSocks
 
         public void ClientData(object sender, BytesSegment _bs)
         {
-            if (clientDone)
+            if (clientDone || _bs.Len == 0)
                 return;
             clientDone = true;
             try {
-                TlsStream.ParseClientHelloRecord(_bs, ref Tls);
+                TlsStream.ParseClientHelloRecord(_bs, ref Tls, out var size);
             } catch (Exception e) {
                 if (Tls.Version != 0) {
                     TlsError = true;
-                    Logging.exception(e, Logging.Level.Warning, "parsing tls handshake" + sender);
+                    Logging.exception(e, Logging.Level.Warning, "parsing tls client hello from " + sender);
                 }
             }
 
@@ -62,8 +62,48 @@ namespace NaiveSocks
 
         public void ServerData(object sender, BytesSegment bs)
         {
-            // TODO
+            if (serverDone || bs.Len == 0)
+                return;
+            serverDone = true;
+            if (sBuf != null) {
+                bs.CopyTo(sBuf, 0, bs.Len, sProg);
+                sProg += bs.Len;
+                if (sProg < sBuf.Length) {
+                    goto CONTINUE_READ;
+                } else {
+                    bs = new BytesSegment(sBuf, 0, sProg);
+                }
+            }
+            if (Tls.Version != 0) {
+                var hello = new TlsStream.ServerHello();
+                try {
+                    TlsStream.ParseServerHelloRecord(bs, ref hello, out var size);
+                    if (size > bs.Len) {
+                        if (sBuf != null)
+                            throw new Exception();
+                        sBuf = new byte[size];
+                        bs.CopyTo(sBuf);
+                        sProg = bs.Len;
+                        goto CONTINUE_READ;
+                    }
+                } catch (Exception e) {
+                    if (hello.Version != 0) {
+                        TlsError = true;
+                        Logging.exception(e, Logging.Level.Warning, "parsing tls server hello from " + sender);
+                    }
+                }
+                Tls.Version = Math.Min(Tls.Version, hello.Version);
+                Tls.Alpn = hello.Alpn;
+            }
+            sBuf = null;
+            return;
+        CONTINUE_READ:
+            serverDone = false;
+            return;
         }
+
+        byte[] sBuf;
+        int sProg;
 
         bool clientDone;
 
@@ -73,6 +113,8 @@ namespace NaiveSocks
 
         TlsStream.ClientHello Tls;
 
+        bool serverDone;
+
         public string GetInfo()
         {
             var sb = new StringBuilder();
@@ -80,31 +122,35 @@ namespace NaiveSocks
             return sb.ToString();
         }
 
-        public void GetInfo(StringBuilder sb, string noSniValueIf)
+        public void GetInfo(StringBuilder sb, string probablySNI)
         {
             if (Tls.Version != 0) {
                 sb.Append("TLS(");
-                if (Tls.Version == 0x0303 && Tls.Alpn == "h2" && (noSniValueIf != null && Tls.Sni == noSniValueIf)) {
-                    sb.Append("'h2'");
-                } else {
+                if (!(Tls.Alpn == "h2" && Tls.Version == 0x0303)) {
                     sb.Append(Tls.Version == 0x0301 ? "1.0" :
                         Tls.Version == 0x0302 ? "1.1" :
                         Tls.Version == 0x0303 ? "1.2" :
+                        Tls.Version == 0x0304 ? "1.3" :
                         $"0x{Tls.Version:x}");
-                    if (Tls.Sni != null) {
-                        if (Tls.Sni == noSniValueIf)
-                            sb.Append(",SNI");
-                        else
-                            sb.Append(",SNI=").Append(Tls.Sni);
-                    }
-                    if (Tls.Alpn != null && !string.Equals(Tls.Alpn, "http/1.1", StringComparison.OrdinalIgnoreCase)) {
-                        sb.Append(",'").Append(Tls.Alpn).Append('\'');
-                    }
+                    sb.Append(',');
+                }
+                if (Tls.Sni == null) {
+                    sb.Append("noSNI,");
+                } else if (Tls.Sni == probablySNI) {
+                    //sb.Append(",SNI");
+                } else {
+                    sb.Append("SNI=").Append(Tls.Sni).Append(',');
+                }
+                if (Tls.Alpn != null && !string.Equals(Tls.Alpn, "http/1.1", StringComparison.OrdinalIgnoreCase)) {
+                    sb.Append("'").Append(Tls.Alpn).Append('\'').Append(',');
                 }
                 if (TlsError) {
-                    sb.Append(",Error");
+                    sb.Append("Error,");
                 }
-                sb.Append(')');
+                if (!serverDone) {
+                    sb.Append("...,");
+                }
+                sb[sb.Length - 1] = ')';
             } else if (Http != null) {
                 sb.Append(Http);
             } else if (!clientDone) {

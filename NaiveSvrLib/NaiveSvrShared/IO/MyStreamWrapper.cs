@@ -20,29 +20,26 @@ namespace NaiveSocks
         public event Action<MyStreamWrapper, BytesSegment> WritingBaseStream;
         private void OnWriting(BytesSegment bs) => WritingBaseStream?.Invoke(this, bs);
 
-        private int ReadFromQueue(BytesSegment bs)
-        {
-            if (Queue.Len == 0)
-                return 0;
-            var r = Math.Min(Queue.Len, bs.Len);
-            Dequeue(bs, r);
-            return r;
-        }
+        public event Action<MyStreamWrapper, BytesSegment> ReadBaseStream;
+        private void OnRead(BytesSegment bs) => ReadBaseStream?.Invoke(this, bs);
+        private bool ReadEventRegistered => ReadBaseStream != null;
 
-        private async Task<int> WaitAndRead(BytesSegment bs)
+        private async Task<int> ComplexRead(BytesSegment bs)
         {
             await WaitBeforeRead;
             WaitBeforeRead = AwaitableWrapper.GetCompleted();
-            return await ReadAsyncR(bs);
+            var r = await _ReadAsyncR(bs, true);
+            OnRead(bs.Sub(0, r));
+            return r;
         }
 
         public override Task<int> ReadAsync(BytesSegment bs)
         {
-            int r = ReadFromQueue(bs);
+            int r = TryDequeue(bs);
             if (r > 0)
                 return NaiveUtils.GetCachedTaskInt(r);
-            if (WaitBeforeRead.IsCompleted == false)
-                return WaitAndRead(bs);
+            if (WaitBeforeRead.IsCompleted == false || ReadEventRegistered)
+                return ComplexRead(bs);
             return BaseStream.ReadAsync(bs);
         }
 
@@ -54,11 +51,16 @@ namespace NaiveSocks
 
         public AwaitableWrapper<int> ReadAsyncR(BytesSegment bs)
         {
-            int r = ReadFromQueue(bs);
+            return _ReadAsyncR(bs, false);
+        }
+
+        private AwaitableWrapper<int> _ReadAsyncR(BytesSegment bs, bool noComplex)
+        {
+            int r = TryDequeue(bs);
             if (r > 0)
                 return new AwaitableWrapper<int>(r);
-            if (WaitBeforeRead.IsCompleted == false)
-                return new AwaitableWrapper<int>(WaitAndRead(bs));
+            if (!noComplex && (WaitBeforeRead.IsCompleted == false || ReadEventRegistered))
+                return new AwaitableWrapper<int>(ComplexRead(bs));
             return BaseStream.ReadAsyncR(bs);
         }
 
@@ -70,14 +72,19 @@ namespace NaiveSocks
 
         public AwaitableWrapper<BytesSegment> ReadNBAsyncR(int maxSize)
         {
+            return ReadNB(maxSize, false);
+        }
+
+        private AwaitableWrapper<BytesSegment> ReadNB(int maxSize, bool noComplex)
+        {
             if (Queue.Len > 0) {
                 var len = Math.Min(Queue.Len, maxSize);
                 var bs = BufferPool.GlobalGetBs(len);
                 Dequeue(bs, len);
                 return new AwaitableWrapper<BytesSegment>(bs);
             }
-            if (WaitBeforeRead.IsCompleted == false)
-                return new AwaitableWrapper<BytesSegment>(ReadNBAsyncR_Wait(maxSize));
+            if (!noComplex && (WaitBeforeRead.IsCompleted == false || ReadEventRegistered))
+                return new AwaitableWrapper<BytesSegment>(ReadNB_Complex(maxSize));
             if (BaseStream is IMyStreamNoBuffer nb) {
                 return nb.ReadNBAsyncR(maxSize);
             } else {
@@ -85,11 +92,13 @@ namespace NaiveSocks
             }
         }
 
-        private async Task<BytesSegment> ReadNBAsyncR_Wait(int maxSize)
+        private async Task<BytesSegment> ReadNB_Complex(int maxSize)
         {
             await WaitBeforeRead;
             WaitBeforeRead = AwaitableWrapper.GetCompleted();
-            return await ReadNBAsyncR(maxSize);
+            var r = await ReadNB(maxSize, true);
+            OnRead(r);
+            return r;
         }
 
         ReusableAwaiter<BytesSegment> _nb_ra;
@@ -128,6 +137,15 @@ namespace NaiveSocks
                 awaiter.OnCompleted(_nb_continuation);
             }
             return new AwaitableWrapper<BytesSegment>(_nb_ra);
+        }
+
+        private int TryDequeue(BytesSegment bs)
+        {
+            if (Queue.Len == 0)
+                return 0;
+            var r = Math.Min(Queue.Len, bs.Len);
+            Dequeue(bs, r);
+            return r;
         }
 
         private void Dequeue(BytesSegment bs, int len)
