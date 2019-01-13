@@ -35,9 +35,17 @@ namespace NaiveSocks
 
         static NaiveMChannels()
         {
-            MsgRequestConverter = x => NaiveProtocol.Request.Parse(x.Data.GetBytes());
+            MsgRequestConverter = x => {
+                var r = NaiveProtocol.Request.Parse(x.Data.GetBytes());
+                x.TryRecycle();
+                return r;
+            };
             RequestMsgConverter = x => x.ToBytes();
-            MsgReplyConverter = x => NaiveProtocol.Reply.Parse(x.Data.GetBytes());
+            MsgReplyConverter = x => {
+                var r = NaiveProtocol.Reply.Parse(x.Data.GetBytes());
+                x.TryRecycle();
+                return r;
+            };
             ReplyMsgConverter = x => x.ToBytes();
         }
 

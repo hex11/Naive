@@ -245,6 +245,7 @@ namespace NaiveSocks
                 var msg = new Msg(frame.Data);
                 if (frame.Id == ReservedId) {
                     handleRsvMsg(msg);
+                    msg.TryRecycle();
                     continue;
                 }
                 Channel ch;
@@ -482,9 +483,8 @@ namespace NaiveSocks
 
         private static bool IsRecvEOF(StateEnum value)
         {
-            return value >= StateEnum.Closed
-                | value == StateEnum.EOFReceived
-                | value == StateEnum.ClosingByRemote;
+            return value >= StateEnum.Closing
+                | value == StateEnum.EOFReceived;
         }
 
         public enum StateEnum
@@ -502,7 +502,7 @@ namespace NaiveSocks
             EOFSent = 2, // waiting for 'EOF', then reply 'Close' -> ClosingByLocal
                          //             'Close', then reply 'Close' -> ClosedByLocal
 
-            //// Closing: (no sending)
+            //// Closing: (no sending, drops received msgs)
             Closing = 3,
             ClosingByLocal = 3, // waiting for 'Close', then -> ClosedByLocal
             ClosingByRemote = 7, // waiting for 'Close', then -> ClosedByRemote
@@ -543,6 +543,12 @@ namespace NaiveSocks
 
         internal void MsgReceived(Msg msg)
         {
+            if (IsClosingOrClosed) {
+                msg.TryRecycle();
+                return;
+            }
+            // TODO: race condition: onRecvEOF() may be called at this time, then the msg will be enqueued after the EOF.
+            // (Consider: lock _syncroot)
             if (recvQueue.Enqueue(msg) && !msg.IsEOF) {
                 Interlocked.Add(ref queuedSize, msg.Data.tlen);
                 CheckBlockingRemote();
