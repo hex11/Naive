@@ -30,8 +30,7 @@ namespace NaiveSocks
                 if (arr.Length == count) {
                     var newarr = new T[arr.Length * 4];
                     for (int i = 0; i < count; i++) {
-                        var readI = (firstIndex + i) % newarr.Length;
-                        newarr[i] = arr[readI];
+                        newarr[i] = PeetAtInternal(i);
                     }
                     arr = newarr;
                     firstIndex = 0;
@@ -95,6 +94,11 @@ namespace NaiveSocks
             if (index < 0 || index >= count) {
                 throw new ArgumentOutOfRangeException(nameof(index));
             }
+            return PeetAtInternal(index);
+        }
+
+        private T PeetAtInternal(int index)
+        {
             return arr[(firstIndex + index) % arr.Length];
         }
 
