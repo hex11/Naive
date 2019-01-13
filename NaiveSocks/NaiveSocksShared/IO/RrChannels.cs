@@ -42,25 +42,21 @@ namespace NaiveSocks
             await BaseChannels.Start();
         }
 
-        private void Channels_NewRemoteChannel(Channel ch)
+        private async void Channels_NewRemoteChannel(Channel ch)
         {
-            async Task tmp()
-            {
-                using (ch) {
-                    try {
-                        OnRemoteChannelCreated(ch);
-                        var req = await ch.RecvMsg(null).CAF();
-                        if (req.IsEOF) // WTF?
-                            return;
-                        var task = Requested?.Invoke(new ReceivedRequest(MsgRequestConverter(req), ch, ReplyMsgConverter));
-                        if (task != null)
-                            await task.CAF();
-                    } catch (Exception e) {
-                        Logging.exception(e, Logging.Level.Error, this.ToString() + " handler");
-                    }
+            using (ch) {
+                try {
+                    OnRemoteChannelCreated(ch);
+                    var req = await ch.RecvMsg(null).CAF();
+                    if (req.IsEOF) // WTF?
+                        return;
+                    var task = Requested?.Invoke(new ReceivedRequest(MsgRequestConverter(req), ch, ReplyMsgConverter));
+                    if (task != null)
+                        await task.CAF();
+                } catch (Exception e) {
+                    Logging.exception(e, Logging.Level.Error, this.ToString() + " handler");
                 }
             }
-            tmp().Forget();
         }
 
         public async Task<RequestResult> Request(TRequest req)

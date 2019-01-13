@@ -46,7 +46,7 @@ namespace NaiveSocks
 
         public override void OnNewConnection(TcpClient client)
         {
-            new SocksInConnection(client, this).Start().Forget();
+            new SocksInConnection(client, this).Start();
         }
 
         private class SocksInConnection : InConnection
@@ -112,7 +112,7 @@ namespace NaiveSocks
                 };
             }
 
-            public async Task Start()
+            public async void Start()
             {
                 bool fail = false;
                 try {

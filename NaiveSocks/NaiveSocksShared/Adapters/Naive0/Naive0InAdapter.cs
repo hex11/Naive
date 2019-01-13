@@ -29,10 +29,10 @@ namespace NaiveSocks
 
         public override void OnNewConnection(TcpClient client)
         {
-            Handle(client).Forget();
+            Handle(client);
         }
 
-        private async Task Handle(TcpClient client)
+        private async void Handle(TcpClient client)
         {
             try {
                 var socketStream = GetMyStreamFromSocket(client.Client);

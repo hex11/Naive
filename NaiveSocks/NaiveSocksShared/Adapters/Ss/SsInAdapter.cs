@@ -20,20 +20,18 @@ namespace NaiveSocks
             base.OnStart();
         }
 
-        public override void OnNewConnection(TcpClient client)
+        public override async void OnNewConnection(TcpClient client)
         {
-            async Task tmp()
-            {
-                try {
-                    using (client) {
-                        var socket = client.Client;
-                        var remoteEP = socket.RemoteEndPoint as IPEndPoint;
-                        var dataStream = getEncryptionStream(GetMyStreamFromSocket(socket));
-                        var buf = new BytesSegment(new byte[3]);
-                        await dataStream.ReadAllAsync(buf, 3).CAF(); // read ahead
-                        var addrType = (Socks5Server.AddrType)buf[0];
-                        string addrString = null;
-                        switch (addrType) {
+            try {
+                using (client) {
+                    var socket = client.Client;
+                    var remoteEP = socket.RemoteEndPoint as IPEndPoint;
+                    var dataStream = getEncryptionStream(GetMyStreamFromSocket(socket));
+                    var buf = new BytesSegment(new byte[3]);
+                    await dataStream.ReadAllAsync(buf, 3).CAF(); // read ahead
+                    var addrType = (Socks5Server.AddrType)buf[0];
+                    string addrString = null;
+                    switch (addrType) {
                         case Socks5Server.AddrType.IPv4Address:
                         case Socks5Server.AddrType.IPv6Address:
                             var buf2 = new byte[addrType == Socks5Server.AddrType.IPv4Address ? 4 : 16];
@@ -59,17 +57,15 @@ namespace NaiveSocks
                             Logger.warning($"unknown addr type {addrType} ({remoteEP})");
                             await Task.Delay(10 * 1000 + NaiveUtils.Random.Next(20 * 1000)).CAF();
                             return;
-                        }
-                        await dataStream.ReadAllAsync(buf, 2).CAF();
-                        int port = buf[0] << 8 | buf[1];
-                        var dest = new AddrPort(addrString, port);
-                        await Controller.HandleInConnection(InConnection.Create(this, dest, dataStream, $"remote={remoteEP}")).CAF();
                     }
-                } catch (Exception e) {
-                    Logger.exception(e, Logging.Level.Error, "handling connection");
+                    await dataStream.ReadAllAsync(buf, 2).CAF();
+                    int port = buf[0] << 8 | buf[1];
+                    var dest = new AddrPort(addrString, port);
+                    await Controller.HandleInConnection(InConnection.Create(this, dest, dataStream, $"remote={remoteEP}")).CAF();
                 }
+            } catch (Exception e) {
+                Logger.exception(e, Logging.Level.Error, "handling connection");
             }
-            Task.Run(tmp);
         }
     }
 }
