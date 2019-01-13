@@ -15,7 +15,6 @@
     <item name="android:textSize">12sp</item>
   </style>
   <style name="MyTheme.Base" parent="Theme.AppCompat.Light.DarkActionBar">
-    <item name="android:windowBackground">@android:color/black</item>
     <!--If you are using revision 22.1 please use just windowNoTitle. Without android:-->
     <item name="windowNoTitle">true</item>
     <!--We will be using the toolbar so no need to show ActionBar-->
