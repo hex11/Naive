@@ -19,6 +19,9 @@ namespace NaiveSocksAndroid
         static IncrNumberGenerator idGen = new IncrNumberGenerator();
         int id = idGen.Get();
 
+        protected virtual bool UpdateOnConnected => true;
+        bool lastUpdateConnected = false;
+
         void DebugEvent(string text)
         {
             //Logging.debugForce(this.GetType().Name + "#" + id + ": " + text);
@@ -39,6 +42,12 @@ namespace NaiveSocksAndroid
         protected bool InfoStrSupport => InfoStrChanged != null;
 
         protected void ChangeInfoStr(string str) => InfoStrChanged?.Invoke(str);
+
+        public void OnConnected()
+        {
+            if (IsVisible && !lastUpdateConnected && UpdateOnConnected)
+                InvokeUpdate();
+        }
 
         public override void OnAttach(Context context)
         {
@@ -81,7 +90,7 @@ namespace NaiveSocksAndroid
         {
             postOnTheFly = false;
             if (IsVisible) {
-                OnUpdate();
+                InvokeUpdate();
             }
             PostDelayed();
         }
@@ -96,13 +105,10 @@ namespace NaiveSocksAndroid
             }
         }
 
-        private void PostUpdate()
+        private void InvokeUpdate()
         {
-            handler.Post(() => {
-                if (!IsVisible)
-                    return;
-                OnUpdate();
-            });
+            lastUpdateConnected = MainActivity.Service != null;
+            OnUpdate();
         }
 
         protected virtual void OnUpdate()
@@ -113,6 +119,7 @@ namespace NaiveSocksAndroid
         {
             DebugEvent("OnStart");
             base.OnStart();
+            InvokeUpdate();
             if (!postOnTheFly)
                 PostDelayed();
         }
@@ -121,7 +128,6 @@ namespace NaiveSocksAndroid
         {
             DebugEvent("OnResume");
             base.OnResume();
-            PostUpdate();
         }
 
         public override void OnPause()

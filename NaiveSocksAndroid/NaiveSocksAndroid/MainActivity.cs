@@ -115,6 +115,7 @@ namespace NaiveSocksAndroid
                     Service.ShowingActivity = this;
                     Service.ForegroundStateChanged += Service_ForegroundStateChanged;
                     InvalidateOptionsMenu();
+                    curFrag?.OnConnected();
                 },
                 disconnected: (ComponentName name) => {
                     if (Service.ShowingActivity != this) {
@@ -255,7 +256,7 @@ namespace NaiveSocksAndroid
             }
         }
 
-        Fragment curFrag = null;
+        MyBaseFragment curFrag = null;
 
         private void NavigationView_NavigationItemSelected(object sender, NavigationView.NavigationItemSelectedEventArgs e)
         {
