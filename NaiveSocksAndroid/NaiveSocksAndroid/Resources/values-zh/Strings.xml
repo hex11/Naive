@@ -47,5 +47,6 @@
   <string name="long_press_cxn_to_stop">长按以停止连接</string>
   <string name="got_it">知道了</string>
   <string name="log_dynamic_margin">动态间隔</string>
+  <string name="conn_sort_by_speed">按速度排序</string>
   <string name="in_operation">(动作中)</string>
 </resources>

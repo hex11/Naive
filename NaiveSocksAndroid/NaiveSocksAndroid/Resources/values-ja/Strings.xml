@@ -47,5 +47,6 @@
   <string name="long_press_cxn_to_stop">長押して接続を停止します</string>
   <string name="got_it">了解しました</string>
   <string name="log_dynamic_margin">ダイナミックマージン</string>
+  <string name="conn_sort_by_speed">スピードで並べ替え</string>
   <string name="in_operation">(動作中)</string>
 </resources>

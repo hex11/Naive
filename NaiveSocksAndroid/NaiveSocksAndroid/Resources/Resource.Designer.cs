@@ -3842,6 +3842,9 @@ namespace NaiveSocksAndroid
 			// aapt resource value: 0x7f0d0042
 			public const int config_editor = 2131558466;
 			
+			// aapt resource value: 0x7f0d0058
+			public const int conn_sort_by_speed = 2131558488;
+			
 			// aapt resource value: 0x7f0d0030
 			public const int connections = 2131558448;
 			
@@ -3905,8 +3908,8 @@ namespace NaiveSocksAndroid
 			// aapt resource value: 0x7f0d002e
 			public const int home = 2131558446;
 			
-			// aapt resource value: 0x7f0d0058
-			public const int in_operation = 2131558488;
+			// aapt resource value: 0x7f0d0059
+			public const int in_operation = 2131558489;
 			
 			// aapt resource value: 0x7f0d004b
 			public const int initializing = 2131558475;

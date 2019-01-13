@@ -22,12 +22,14 @@ using Android.Animation;
 
 namespace NaiveSocksAndroid
 {
-    public class FragmentConnections : MyBaseFragment
+    public class FragmentConnections : MyBaseFragment, ICanHandleMenu
     {
         LinearLayout connParent;
         List<ItemView> displayingViews = new List<ItemView>();
         private ContextThemeWrapper themeWrapper;
+        private int menuItemId;
 
+        private bool sorting = true;
 
         public FragmentConnections()
         {
@@ -53,7 +55,26 @@ namespace NaiveSocksAndroid
                     .Show();
             }
 
+            sorting = AppConfig.Current.GetBool(AppConfig.conn_sort_by_speed, true);
+
             return view;
+        }
+
+        public void OnCreateMenu(IMenu menu)
+        {
+            var menuItem = menu.Add(200, menuItemId = 114514 + 1, 200, R.String.conn_sort_by_speed);
+            menuItem.SetShowAsAction(ShowAsAction.Never);
+            menuItem.SetCheckable(true);
+            menuItem.SetChecked(sorting);
+        }
+
+        public void OnMenuItemSelected(IMenuItem item)
+        {
+            if (item.ItemId == menuItemId) {
+                sorting = !item.IsChecked;
+                item.SetChecked(sorting);
+                AppConfig.Current.Set(AppConfig.conn_sort_by_speed, sorting);
+            }
         }
 
         long lastUpdateTime = -1;
@@ -111,6 +132,16 @@ namespace NaiveSocksAndroid
             var time = Logging.getRuntime();
             foreach (var view in displayingViews) {
                 view.Update(sb, registerAnimation, time);
+            }
+            if (sorting) {
+                displayingViews.Sort((a, b) => b.KBps - a.KBps);
+                int pos = 0;
+                foreach (var item in displayingViews) {
+                    if (item.KBps < 0)
+                        break;
+                    connParent.RemoveView(item);
+                    connParent.AddView(item, pos++);
+                }
             }
             lastUpdateTime = time;
             if (animateActions.Count > 0) {
@@ -190,6 +221,8 @@ namespace NaiveSocksAndroid
             long lastTotalBytes = 0;
             public long lastTime = -1;
 
+            public int KBps;
+
             public void Update(StringBuilder sb, Action<Action<float>> registerAnimation, long time)
             {
                 var conn = Connection;
@@ -244,6 +277,7 @@ namespace NaiveSocksAndroid
                 tv1.Text = sb.ToString();
 
                 sb.Clear();
+                this.KBps = KBps;
                 if (KBps > 0) {
                     sb.Append('[').Append(KBps.ToString("N0")).Append(" KB/s] ");
                 } else if (KBps == 0) {
