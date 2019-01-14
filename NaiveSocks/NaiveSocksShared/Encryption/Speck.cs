@@ -26,7 +26,7 @@ namespace NaiveSocks
             {
                 if (key.Length < KeySize)
                     throw new ArgumentException($"key.Length < {KeySize}");
-                keyStreamBuf = (byte*)Marshal.AllocHGlobal(KeystreamBufferSize);
+                keyStreamBuf = (QWords128*)Marshal.AllocHGlobal(KeystreamBufferSize);
                 QWords128 workingKey;
                 BytesToWords128(key, out workingKey);
                 this.keys = Cipher.getKeySchedules_128_128(workingKey);
@@ -60,7 +60,7 @@ namespace NaiveSocks
             const int KsBlockCount = 8;
             const int KeystreamBufferSize = BlockSize * KsBlockCount;
 
-            byte* keyStreamBuf;
+            QWords128* keyStreamBuf;
             int keystreamBufferPos = KeystreamBufferSize;
 
             protected override void IVSetup(byte[] IV)
@@ -103,7 +103,7 @@ namespace NaiveSocks
                     if ((counter.v1 += ctrPerThread) < oldV1)
                         counter.v0++;
                     tasks[i] = Task.Run(() => {
-                        var ksBuffer = stackalloc byte[KeystreamBufferSize];
+                        var ksBuffer = stackalloc QWords128[KsBlockCount];
                         var ksPos = KeystreamBufferSize;
                         Update(&bytes[threadPos], lenPerThread,
                             ksBuffer, ref ksPos, ref threadCtr, keys);
@@ -115,14 +115,14 @@ namespace NaiveSocks
             }
 
             static void Update(byte* bytes, int len,
-                byte* keyStreamBuf, ref int keystreamBufferPos, ref QWords128 counter, Keys128128 keys)
+                QWords128* keyStreamBuf, ref int keystreamBufferPos, ref QWords128 counter, Keys128128 keys)
             {
                 while (len > 0) {
                     var remainningKeystream = KeystreamBufferSize - keystreamBufferPos;
                     if (remainningKeystream == 0) {
                         keystreamBufferPos = 0;
                         remainningKeystream = KeystreamBufferSize;
-                        var ksb = (QWords128*)keyStreamBuf;
+                        var ksb = keyStreamBuf;
                         for (int i = 0; i < KsBlockCount; i++) {
                             ksb[i] = counter;
                             if (++counter.v1 == 0)
@@ -131,7 +131,7 @@ namespace NaiveSocks
                         }
                     }
                     var count = len < remainningKeystream ? len : remainningKeystream;
-                    NaiveUtils.XorBytesUnsafe(&keyStreamBuf[keystreamBufferPos], bytes, count);
+                    NaiveUtils.XorBytesUnsafe((byte*)keyStreamBuf + keystreamBufferPos, bytes, count);
                     bytes += count;
                     len -= count;
                     keystreamBufferPos += count;
@@ -148,7 +148,7 @@ namespace NaiveSocks
             {
                 if (key.Length < KeySize)
                     throw new ArgumentException($"key.Length < {KeySize}");
-                keyStreamBuf = (byte*)Marshal.AllocHGlobal(KeystreamBufferSize);
+                keyStreamBuf = (DWords64*)Marshal.AllocHGlobal(KeystreamBufferSize);
                 DWords128 workingKey;
                 BytesToBlock128(key, out workingKey);
                 this.keys = Cipher.getKeySchedules_64_128(workingKey);
@@ -180,10 +180,10 @@ namespace NaiveSocks
             uint32[] keys;
             DWords64 counter;
 
-            const int KsBlockCount = 8;
+            const int KsBlockCount = 16;
             const int KeystreamBufferSize = BlockSize * KsBlockCount;
 
-            byte* keyStreamBuf;
+            DWords64* keyStreamBuf;
             int keystreamBufferPos = KeystreamBufferSize;
 
             protected override void IVSetup(byte[] IV)
@@ -198,14 +198,14 @@ namespace NaiveSocks
                 bs.CheckAsParameter();
                 var pos = bs.Offset;
                 var end = pos + bs.Len;
-                byte* keyStreamBuf = this.keyStreamBuf;
+                var keyStreamBuf = this.keyStreamBuf;
                 fixed (byte* bytes = bs.Bytes) {
                     while (pos < end) {
                         var remainningKeystream = KeystreamBufferSize - keystreamBufferPos;
                         if (remainningKeystream == 0) {
                             keystreamBufferPos = 0;
                             remainningKeystream = KeystreamBufferSize;
-                            var ksb = (DWords64*)keyStreamBuf;
+                            var ksb = keyStreamBuf;
                             for (int i = 0; i < KsBlockCount; i++) {
                                 ksb[i] = counter;
                                 if (++counter.v1 == 0)
@@ -215,7 +215,7 @@ namespace NaiveSocks
                         }
                         var count = end - pos;
                         count = count < remainningKeystream ? count : remainningKeystream;
-                        NaiveUtils.XorBytesUnsafe(keyStreamBuf + keystreamBufferPos, bytes + pos, count);
+                        NaiveUtils.XorBytesUnsafe((byte*)keyStreamBuf + keystreamBufferPos, bytes + pos, count);
                         pos += count;
                         keystreamBufferPos += count;
                     }
@@ -241,28 +241,14 @@ namespace NaiveSocks
         public struct Keys128128
         {
             public uint64[] keys;
-            //public uint64* keys;
-            //public IntPtr ptr;
 
             public static Keys128128 alloc()
             {
                 return new Keys128128 { keys = new uint64[32] };
-                //// align to 64 bytes
-                //var r = new Keys128128();
-                //r.ptr = Marshal.AllocHGlobal(32 * 8 + 64);
-                //var offset = (int)((ulong)r.ptr % 64);
-                //if (offset == 0) {
-                //    r.ptr = Marshal.ReAllocHGlobal(r.ptr, (IntPtr)(32 * 8));
-                //    r.keys = (uint64*)r.ptr;
-                //} else {
-                //    r.keys = (uint64*)(r.ptr + (64 - offset));
-                //}
-                //return r;
             }
 
             public void free()
             {
-                //Marshal.FreeHGlobal(ptr);
             }
         }
 
