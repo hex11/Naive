@@ -48,5 +48,6 @@
   <string name="got_it">了解しました</string>
   <string name="log_dynamic_margin">ダイナミックマージン</string>
   <string name="conn_sort_by_speed">スピードで並べ替え</string>
+  <string name="conn_more_info">もっと情報を表示します</string>
   <string name="in_operation">(動作中)</string>
 </resources>

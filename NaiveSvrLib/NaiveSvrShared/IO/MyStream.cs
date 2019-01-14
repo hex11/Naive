@@ -7,6 +7,7 @@ using System.Diagnostics;
 using System.Threading;
 using System.Collections.Generic;
 using System.Reflection;
+using System.Text;
 
 namespace NaiveSocks
 {
@@ -169,7 +170,25 @@ namespace NaiveSocks
 
         public override string ToString()
         {
-            return $"{Packets:N0}({Bytes:N0})";
+            var sb = new StringBuilder();
+            ToString(sb, false);
+            return sb.ToString();
+        }
+
+        public void ToString(StringBuilder sb, bool largeUnit)
+        {
+            sb.AppendFormat(Packets.ToString("N0")).Append("(");
+            if (largeUnit) {
+                if (Bytes == 0)
+                    sb.Append("0 KB");
+                else if (Bytes < 1024)
+                    sb.Append("<1 KB");
+                else
+                    sb.Append((Bytes / 1024).ToString("N0")).Append(" KB");
+            } else {
+                sb.AppendFormat(Bytes.ToString("N0"));
+            }
+            sb.Append(")");
         }
 
         public static BytesCounterValue operator +(BytesCounterValue v1, BytesCounterValue v2)
@@ -195,7 +214,17 @@ namespace NaiveSocks
 
         public override string ToString()
         {
-            return $"R={R} W={W}";
+            var sb = new StringBuilder();
+            ToString(sb, false);
+            return sb.ToString();
+        }
+
+        public void ToString(StringBuilder sb, bool simple)
+        {
+            sb.Append("R=");
+            R.Value.ToString(sb, simple);
+            sb.Append(" W=");
+            W.Value.ToString(sb, simple);
         }
     }
 
@@ -225,9 +254,14 @@ namespace NaiveSocks
         private bool AddWithTTL(long bytes, int ttl)
         {
             Value.Add(bytes);
-            if (--ttl <= 0)
-                return false;
-            return Next?.AddWithTTL(bytes, ttl) ?? true;
+            var node = Next;
+            while (node != null) {
+                if (--ttl <= 0)
+                    return false;
+                node.Value.Add(bytes);
+                node = node.Next;
+            }
+            return true;
         }
 
         public override string ToString()

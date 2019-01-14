@@ -48,5 +48,6 @@
   <string name="got_it">Got it</string>
   <string name="log_dynamic_margin">Dynamic Margin</string>
   <string name="conn_sort_by_speed">Sort by speed</string>
+  <string name="conn_more_info">Show more info</string>
   <string name="in_operation">(Operating)</string>
 </resources>

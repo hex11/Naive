@@ -27,9 +27,9 @@ namespace NaiveSocksAndroid
         LinearLayout connParent;
         List<ItemView> displayingViews = new List<ItemView>();
         private ContextThemeWrapper themeWrapper;
-        private int menuItemId;
 
         private bool sorting = true;
+        private bool moreInfo = false;
 
         public FragmentConnections()
         {
@@ -55,25 +55,40 @@ namespace NaiveSocksAndroid
                     .Show();
             }
 
-            sorting = AppConfig.Current.GetBool(AppConfig.conn_sort_by_speed, true);
+            sorting = AppConfig.Current.GetBool(AppConfig.conn_sort_by_speed, sorting);
+            moreInfo = AppConfig.Current.GetBool(AppConfig.conn_more_info, moreInfo);
 
             return view;
         }
 
+        const int menuItemIdBase = 114514;
+
         public void OnCreateMenu(IMenu menu)
         {
-            var menuItem = menu.Add(200, menuItemId = 114514 + 1, 200, R.String.conn_sort_by_speed);
-            menuItem.SetShowAsAction(ShowAsAction.Never);
-            menuItem.SetCheckable(true);
-            menuItem.SetChecked(sorting);
+            {
+                var menuItem = menu.Add(200, menuItemIdBase + 1, 200, R.String.conn_sort_by_speed);
+                menuItem.SetShowAsAction(ShowAsAction.Never);
+                menuItem.SetCheckable(true);
+                menuItem.SetChecked(sorting);
+            }
+            {
+                var menuItem = menu.Add(200, menuItemIdBase + 2, 200, R.String.conn_more_info);
+                menuItem.SetShowAsAction(ShowAsAction.Never);
+                menuItem.SetCheckable(true);
+                menuItem.SetChecked(moreInfo);
+            }
         }
 
         public void OnMenuItemSelected(IMenuItem item)
         {
-            if (item.ItemId == menuItemId) {
+            if (item.ItemId == menuItemIdBase + 1) {
                 sorting = !item.IsChecked;
                 item.SetChecked(sorting);
                 AppConfig.Current.Set(AppConfig.conn_sort_by_speed, sorting);
+            } else if (item.ItemId == menuItemIdBase + 2) {
+                moreInfo = !item.IsChecked;
+                item.SetChecked(moreInfo);
+                AppConfig.Current.Set(AppConfig.conn_more_info, moreInfo);
             }
         }
 
@@ -117,8 +132,15 @@ namespace NaiveSocksAndroid
             Action<Action<float>> registerAnimation = (action) => {
                 if (animator == null) {
                     animator = ValueAnimator.OfFloat(1, 0);
+                    int ctr = 0;
                     animator.Update += (s, e) => {
                         var val = (float)e.Animation.AnimatedValue;
+                        // skip every second frame to save power:
+                        if (val == 0f) { // avoid skipping the last frame
+                            ctr = 0; // reset the counter so the first frame of next animation won't be skipped
+                        } else if (ctr++ % 2 == 1) {
+                            return;
+                        }
                         foreach (var item in animateActions) {
                             item(val);
                         }
@@ -131,6 +153,7 @@ namespace NaiveSocksAndroid
             var sb = new StringBuilder(64);
             var time = Logging.getRuntime();
             foreach (var view in displayingViews) {
+                view.moreInfo = moreInfo;
                 view.Update(sb, registerAnimation, time);
             }
             if (sorting) {
@@ -163,7 +186,7 @@ namespace NaiveSocksAndroid
                 if (!found) {
                     if (view.pendingRemoving) {
                         displayingViews.RemoveAt(i);
-                        connParent.RemoveViewAt(i);
+                        connParent.RemoveView(view);
                     } else {
                         view.pendingRemoving = true;
                     }
@@ -223,6 +246,8 @@ namespace NaiveSocksAndroid
 
             public int KBps;
 
+            public bool moreInfo = true;
+
             public void Update(StringBuilder sb, Action<Action<float>> registerAnimation, long time)
             {
                 var conn = Connection;
@@ -272,8 +297,10 @@ namespace NaiveSocksAndroid
                 sb.Clear();
                 sb.Append('#').Append(conn.Id).Append(' ');
                 conn.ToString(sb, InConnection.ToStringFlags.None);
-                sb.AppendLine();
-                sb.Append(conn.GetInfoStr());
+                if (moreInfo) {
+                    sb.AppendLine();
+                    sb.Append(conn.GetInfoStr());
+                }
                 tv1.Text = sb.ToString();
 
                 sb.Clear();
@@ -287,13 +314,16 @@ namespace NaiveSocksAndroid
                     conn.GetSniffingInfo(sb);
                     sb.Append(' ');
                 }
-                sb.Append(ctr.ToString()).Append(" T=").Append(WebSocket.CurrentTime - conn.CreateTime);
+                ctr.ToString(sb, !moreInfo);
+                sb.Append(" T=").Append(WebSocket.CurrentTime - conn.CreateTime);
                 var adap = conn.ConnectResult?.Adapter ?? conn.RunningHandler;
                 if (adap != null)
                     sb.Append(" -> '").Append(adap.Name).Append("'");
-                var outStream = conn.ConnectResult?.Stream;
-                if (outStream != null) {
-                    sb.Append("\n-> ").Append(outStream.ToString());
+                if (moreInfo) {
+                    var outStream = conn.ConnectResult?.Stream;
+                    if (outStream != null) {
+                        sb.Append("\n-> ").Append(outStream.ToString());
+                    }
                 }
                 tv2.Text = sb.ToString();
             }

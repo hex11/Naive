@@ -59,6 +59,7 @@ namespace NaiveSocksAndroid
         public const string log_dynamic_margin = "log_dynamic_margin";
         public const string service_running = "service_running";
         public const string conn_sort_by_speed = "conn_sort_by_speed";
+        public const string conn_more_info = "conn_more_info";
 
         public bool Autostart { get => GetBool(start_on_boot, false); set => Set(start_on_boot, value); }
 
