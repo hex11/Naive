@@ -114,14 +114,13 @@ namespace NaiveSocks
 
             public async void Start()
             {
-                bool fail = false;
                 try {
                     if (!await socks5svr.ProcessAsync()) {
                         MyStream.CloseWithTimeout(socks5svr.Stream).Forget();
                     }
-                } catch (System.Exception) {
+                } catch (Exception e) {
+                    _adapter.Logger.exception(e, Logging.Level.Warning, "listener");
                     MyStream.CloseWithTimeout(socks5svr.Stream).Forget();
-                    throw;
                 }
             }
 
