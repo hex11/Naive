@@ -244,9 +244,9 @@ namespace NaiveSocksAndroid
 
         static class Native
         {
-            // native binaries from shadowsocks-android release apk:
+            // native binaries from shadowsocks-android release apk (too lazy to compile):
             // https://github.com/shadowsocks/shadowsocks-android/releases
-            // (v4.6.1)
+            // (v4.7.0)
 
             // to send TUN file descriptor to tun2socks.
             public const string SsJniHelper = "libjni-helper.so";
