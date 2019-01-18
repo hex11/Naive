@@ -31,9 +31,6 @@ namespace NaiveSocksAndroid
             ICacheReverseDns cacheRDns;
             ICacheDns cacheDns;
 
-            string ipPrefix;
-            int lastIp;
-
             public LocalDns(VpnHelper vpnHelper)
             {
                 this.vpnHelper = vpnHelper;
@@ -42,13 +39,9 @@ namespace NaiveSocksAndroid
             public bool SocksConnectionFilter(InConnection x)
             {
                 if (IPAddress.TryParse(x.Dest.Host, out var ip)) {
-                    bool isFake = dnsResolver == null && ip.ToString().StartsWith(ipPrefix);
                     var host = cacheRDns.TryGetDomain((uint)ip.Address);
                     if (host != null) {
                         x.DestOriginalName = host;
-                    } else {
-                        if (isFake)
-                            Logging.warning("Fake DNS not found: " + ip);
                     }
                 }
                 return true;
@@ -68,8 +61,6 @@ namespace NaiveSocksAndroid
                         cacheDns = new SimpleCacheDns();
                     }
                 }
-
-                ipPrefix = vpnConfig.FakeDnsPrefix;
 
                 UDPListen().Forget();
             }
@@ -164,9 +155,7 @@ namespace NaiveSocksAndroid
                                 ip = new IPAddress(ipLongs[NaiveUtils.Random.Next(ipLongs.Length)]);
                             } else {
                                 if (dnsResolver == null) {
-                                    ip = IPAddress.Parse(ipPrefix + Interlocked.Increment(ref lastIp));
-                                    ipLongs = new uint[] { (uint)ip.Address };
-                                    Logging.info("Fake DNS: " + ip.ToString() + " -> " + strName);
+                                    throw new Exception("no dns resolver");
                                 } else {
                                     IPAddress[] ips;
                                     var startTime = Logging.getRuntime();

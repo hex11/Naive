@@ -112,8 +112,8 @@ namespace NaiveSocksAndroid
             } else {
                 dnsResolver = controller.FindAdapter<IDnsProvider>(VpnConfig.Handler);
             }
-            if (dnsResolver == null) {
-                Logging.warning("Fake DNS is enabled because no valid DNS resolver specified.");
+            if (VpnConfig.LocalDnsPort > 0 && dnsResolver == null) {
+                throw new Exception("local dns is enabled but cannot find a dns resolver. Check Handler or DnsResolver in configuration.");
             }
             socksInAdapter.ConnectionFilter += localDns.SocksConnectionFilter;
             Logging.info("VPN connections handler: " + socksInAdapter.QuotedName);
@@ -127,23 +127,23 @@ namespace NaiveSocksAndroid
             }
             var me = Bg.PackageName;
             bool isAnyAllowed = false;
-            if (VpnConfig.EnableAppFilter) {
-                if (!string.IsNullOrEmpty(VpnConfig.AppList))
-                    foreach (var item in from x in VpnConfig.AppList.Split('\n')
-                                         let y = x.Trim()
-                                         where y.Length > 0 && y != me
-                                         select y) {
-                        try {
-                            if (VpnConfig.ByPass) {
-                                builder.AddDisallowedApplication(item);
-                            } else {
-                                builder.AddAllowedApplication(item);
-                                isAnyAllowed = true;
-                            }
-                        } catch (Exception e) {
-                            Logging.error($"adding package '{item}': {e.Message}");
+            if (VpnConfig.EnableAppFilter && !string.IsNullOrEmpty(VpnConfig.AppList)) {
+                Logging.info("applying AppList...");
+                foreach (var item in from x in VpnConfig.AppList.Split('\n')
+                                     let y = x.Trim()
+                                     where y.Length > 0 && y != me
+                                     select y) {
+                    try {
+                        if (VpnConfig.ByPass) {
+                            builder.AddDisallowedApplication(item);
+                        } else {
+                            builder.AddAllowedApplication(item);
+                            isAnyAllowed = true;
                         }
+                    } catch (Exception e) {
+                        Logging.error($"adding package '{item}': {e.Message}");
                     }
+                }
             }
             if (!isAnyAllowed)
                 builder.AddDisallowedApplication(me);
@@ -155,7 +155,7 @@ namespace NaiveSocksAndroid
 
             if (VpnConfig.LocalDnsPort > 0) {
                 Logging.info("Starting local DNS server at 127.0.0.1:" + VpnConfig.LocalDnsPort);
-                string strResolver = dnsResolver?.GetAdapter().QuotedName ?? $"(fake resolver, prefix='{VpnConfig.FakeDnsPrefix}')";
+                string strResolver = dnsResolver?.GetAdapter().QuotedName;
                 Logging.info("DNS resolver: " + strResolver);
                 localDns.StartDnsServer();
             }
