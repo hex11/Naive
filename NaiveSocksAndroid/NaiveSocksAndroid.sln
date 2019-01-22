@@ -19,9 +19,9 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NaiveSocksCoreAndroid", "Na
 EndProject
 Project("{D954291E-2A0B-460D-934E-DC6B0785DB48}") = "NaiveSocksCliShared", "..\NaiveSocksCliShared\NaiveSocksCliShared.shproj", "{F8975733-0B83-4AF3-BF4E-8BCDAFEE4A70}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DNS", "dns\DNS\DNS.csproj", "{0F8DC72A-3C56-47EE-8B13-5BE0923BEA76}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DNS", "..\dns\DNS\DNS.csproj", "{0F8DC72A-3C56-47EE-8B13-5BE0923BEA76}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "LiteDB", "LiteDB\LiteDB\LiteDB.csproj", "{E2BFD430-81C5-4E0E-B8F2-99760B3A609C}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "LiteDB", "..\LiteDB\LiteDB\LiteDB.csproj", "{E2BFD430-81C5-4E0E-B8F2-99760B3A609C}"
 EndProject
 Global
 	GlobalSection(SharedMSBuildProjectFiles) = preSolution

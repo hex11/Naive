@@ -187,11 +187,11 @@
       <Project>{b6fdce48-2582-4cbc-b1ed-4a6952e183d2}</Project>
       <Name>NaiveSvrLib</Name>
     </ProjectReference>
-    <ProjectReference Include="..\dns\DNS\DNS.csproj">
+    <ProjectReference Include="..\..\dns\DNS\DNS.csproj">
       <Project>{0f8dc72a-3c56-47ee-8b13-5be0923bea76}</Project>
       <Name>DNS</Name>
     </ProjectReference>
-    <ProjectReference Include="..\LiteDB\LiteDB\LiteDB.csproj">
+    <ProjectReference Include="..\..\LiteDB\LiteDB\LiteDB.csproj">
       <Project>{e2bfd430-81c5-4e0e-b8f2-99760b3a609c}</Project>
       <Name>LiteDB</Name>
     </ProjectReference>

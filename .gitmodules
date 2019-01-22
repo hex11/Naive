@@ -3,9 +3,9 @@
 	url = https://github.com/hex11/Nett
 
 [submodule "dns"]
-	path = NaiveSocksAndroid/dns
+	path = dns
 	url = https://github.com/hex11/dns
 
 [submodule "LiteDB"]
-	path = NaiveSocksAndroid/LiteDB
+	path = LiteDB
 	url = https://github.com/hex11/LiteDB
