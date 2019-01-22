@@ -10,6 +10,7 @@ singlefile="$deploydir/NaiveSocks_SingleFile.exe"
 packname="NaiveSocks_net45"
 
 binaries=("NaiveSocks.exe" "NaiveSvrLib.dll" "Nett.dll" "LiteDB.dll")
+deploy_binaries=()
 
 function has() {
 	return hash $* 2>/dev/null
@@ -37,6 +38,7 @@ mkdir -p "$deploydir"
 for f in "${binaries[@]}"; do
 	echo copy $f
 	cp "$bindir/$f" "$deploydir/"
+	deploy_binaries+=("$deploydir/$f")
 done
 
 STEP copy configration example...
@@ -47,7 +49,7 @@ STEP pack single file edition...
 
 if [ -f $nzip ]; then
 	has mono && MONO=mono || MONO=""
-	$MONO $nzip pe "${binaries[@]}" "" "$singlefile"
+	$MONO $nzip pe "${deploy_binaries[@]}" "" "$singlefile"
 else
 	echo "The NaiveZip executable not found! ($nzip)"
 fi

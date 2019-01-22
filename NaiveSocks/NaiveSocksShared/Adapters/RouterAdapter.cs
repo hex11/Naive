@@ -49,6 +49,8 @@ namespace NaiveSocks
 
             public bool base64 { get; set; }
 
+            public bool is_dns { get; set; }
+
             public string new_host { get; set; }
             public AddrPort new_dest { get; set; }
 
@@ -96,6 +98,8 @@ namespace NaiveSocks
         private static bool HandleRule(ConnectArgument x, Rule r, out Match regexMatch)
         {
             regexMatch = null;
+            if (r.is_dns && x is DnsFakeConnectArg)
+                return true;
             if (x.DestOriginalName != null && HandleRule(r, ref regexMatch, x.DestOriginalName, x.Dest.Port))
                 return true;
             if (HandleRule(r, ref regexMatch, x.Dest.Host, x.Dest.Port))
@@ -339,9 +343,16 @@ namespace NaiveSocks
             return AsyncHelper.CompletedTask;
         }
 
+        class DnsFakeConnectArg : ConnectArgument
+        {
+            public DnsFakeConnectArg() : base(null)
+            {
+            }
+        }
+
         public Task<IPAddress[]> ResolveName(string name)
         {
-            var arg = new ConnectArgument(this) { Dest = new AddrPort(name, 53) };
+            var arg = new DnsFakeConnectArg() { Dest = new AddrPort(name, 53) };
             AdapterRef adapterRef;
             if (Handle(arg, out var redir)) {
                 adapterRef = redir;

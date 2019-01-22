@@ -120,6 +120,7 @@ namespace NaiveSocks
             RegisteredOutTypes.Add("naivec", typeof(NaiveMOutAdapter));
             RegisteredOutTypes.Add("naive0", typeof(Naive0OutAdapter));
             RegisteredOutTypes.Add("ss", typeof(SsOutAdapter));
+            RegisteredOutTypes.Add("dns", typeof(DnsOutAdapter));
             RegisteredOutTypes.Add("webcon", typeof(WebConAdapter));
             RegisteredOutTypes.Add("webfile", typeof(WebFileAdapter));
 
