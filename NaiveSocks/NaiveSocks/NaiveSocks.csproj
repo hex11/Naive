@@ -8,7 +8,7 @@
     <OutputType>Exe</OutputType>
     <RootNamespace>NaiveSocks</RootNamespace>
     <AssemblyName>NaiveSocks</AssemblyName>
-    <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.5.1</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <TargetFrameworkProfile />
@@ -35,6 +35,7 @@
     <WarningLevel>4</WarningLevel>
     <Prefer32Bit>false</Prefer32Bit>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <DebugSymbols>true</DebugSymbols>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release%28Debug%29|AnyCPU'">
     <OutputPath>bin\Release\</OutputPath>
@@ -67,6 +68,10 @@
     </None>
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\LiteDB\LiteDB\LiteDB.csproj">
+      <Project>{bbfc9ef7-0051-4dc9-bae2-60fdbc7b91c9}</Project>
+      <Name>LiteDB</Name>
+    </ProjectReference>
     <ProjectReference Include="..\..\NaiveSvrLib\NaiveSvrLib\NaiveSvrLib.csproj">
       <Project>{b6fdce48-2582-4cbc-b1ed-4a6952e183d2}</Project>
       <Name>NaiveSvrLib</Name>
@@ -78,5 +83,6 @@
   </ItemGroup>
   <Import Project="..\NaiveSocksShared\NaiveSocksShared.projitems" Label="Shared" />
   <Import Project="..\..\NaiveSocksCliShared\NaiveSocksCliShared.projitems" Label="Shared" />
+  <Import Project="..\..\dns\DNSShared\DNSShared.projitems" Label="Shared" />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

@@ -33,6 +33,11 @@ namespace NaiveSocks
             else
                 return $"ref'{Ref}'(Not Found)";
         }
+
+        public static AdapterRef FromAdapter(IAdapter adapter)
+        {
+            return new AdapterRef() { Adapter = adapter };
+        }
     }
 
     public struct AdapterRefOrArray
@@ -362,6 +367,7 @@ namespace NaiveSocks
     public abstract class InAdapter : Adapter, IInAdapter
     {
         public AdapterRef @out { get; set; }
+
         protected Task HandleIncommingConnection(InConnection inConnection)
         {
             return Controller.HandleInConnection(inConnection, @out.Adapter as IConnectionHandler);
@@ -386,6 +392,7 @@ namespace NaiveSocks
 
         protected override void OnStop()
         {
+            base.OnStop();
             listener?.Stop();
         }
 

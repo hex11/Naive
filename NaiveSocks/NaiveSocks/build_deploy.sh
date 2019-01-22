@@ -9,8 +9,7 @@ singlefile="$deploydir/NaiveSocks_SingleFile.exe"
 
 packname="NaiveSocks_net45"
 
-files=("NaiveSocks.exe" "NaiveSvrLib.dll" "Nett.dll")
-binaries=()
+binaries=("NaiveSocks.exe" "NaiveSvrLib.dll" "Nett.dll" "LiteDB.dll")
 
 function has() {
 	return hash $* 2>/dev/null
@@ -35,10 +34,9 @@ STEP copy binarys...
 
 mkdir -p "$deploydir"
 
-for f in "${files[@]}"; do
+for f in "${binaries[@]}"; do
 	echo copy $f
 	cp "$bindir/$f" "$deploydir/"
-	binaries+=("$deploydir/$f")
 done
 
 STEP copy configration example...

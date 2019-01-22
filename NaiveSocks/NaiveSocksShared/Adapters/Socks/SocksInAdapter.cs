@@ -15,7 +15,7 @@ namespace NaiveSocks
 
         public User[] users { get; set; }
 
-        public Func<InConnection, bool> ConnectionFilter { get; set; }
+        public AdapterRef rdns { get; set; }
 
         public struct User
         {
@@ -88,16 +88,11 @@ namespace NaiveSocks
                     this.Dest.Host = s.TargetAddr;
                     this.Dest.Port = s.TargetPort;
                     this.DataStream = s.Stream;
-                    if (adapter.ConnectionFilter != null) {
-                        bool close = false;
+                    if (adapter.rdns?.Adapter is DnsInAdapter dnsIn) {
                         try {
-                            close = !adapter.ConnectionFilter(this);
+                            dnsIn.HandleRdns(this);
                         } catch (Exception e) {
-                            adapter.Logger.exception(e, Logging.Level.Error, "ConnectionFilter");
-                        }
-                        if (close) {
-                            MyStream.CloseWithTimeout(_stream).Forget();
-                            return;
+                            adapter.Logger.exception(e, Logging.Level.Error, "rdns handling");
                         }
                     }
                     if (adapter.fastreply)

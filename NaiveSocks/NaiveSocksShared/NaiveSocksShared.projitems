@@ -9,6 +9,9 @@
     <Import_RootNamespace>NaiveSocksShared</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Adapters\Dns\DnsDb.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Adapters\Dns\DnsInAdapter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Adapters\Dns\DnsCache.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\Http\HttpInAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\Http\HttpOutAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\Http\TlsSniInAdapter.cs" />

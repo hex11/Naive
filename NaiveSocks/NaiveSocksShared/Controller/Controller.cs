@@ -110,6 +110,7 @@ namespace NaiveSocks
             RegisteredInTypes.Add("naivec", typeof(NaiveMInAdapter));
             RegisteredInTypes.Add("naive0", typeof(Naive0InAdapter));
             RegisteredInTypes.Add("ss", typeof(SsInAdapter));
+            RegisteredInTypes.Add("dns", typeof(DnsInAdapter));
 
             RegisteredOutTypes.Add("direct", typeof(DirectOutAdapter));
             RegisteredOutTypes.Add("socks", typeof(SocksOutAdapter));

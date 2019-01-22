@@ -138,12 +138,10 @@
     <Compile Include="Fragments\FragmentLogs.cs" />
     <Compile Include="Fragments\MyBaseFragment.cs" />
     <Compile Include="MainActivity.cs" />
-    <Compile Include="DnsDb.cs" />
     <Compile Include="Resources\Resource.Designer.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="ToggleTileService.cs" />
     <Compile Include="VpnHelper.cs" />
-    <Compile Include="VpnLocalDns.cs" />
   </ItemGroup>
   <ItemGroup>
     <AndroidNativeLibrary Include="lib\arm64-v8a\libjni-helper.so" />

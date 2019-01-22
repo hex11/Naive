@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>netcoreapp2.0</TargetFramework>
+    <TargetFramework>netcoreapp2.1</TargetFramework>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
   </PropertyGroup>
 
@@ -15,6 +15,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\LiteDB\LiteDB\LiteDB.csproj" />
     <ProjectReference Include="..\NaiveSvrLibStandard\NaiveSvrLibStandard.csproj" />
     <ProjectReference Include="..\Nett\Source\Nett\Nett.csproj" />
   </ItemGroup>
@@ -22,5 +23,7 @@
   <Import Project="..\NaiveSocks\NaiveSocksShared\NaiveSocksShared.projitems" Label="Shared" />
 
   <Import Project="..\NaiveSocksCliShared\NaiveSocksCliShared.projitems" Label="Shared" />
+
+  <Import Project="..\dns\DNSShared\DNSShared.projitems" Label="Shared" />
 
 </Project>

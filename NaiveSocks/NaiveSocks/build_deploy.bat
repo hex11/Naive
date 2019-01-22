@@ -6,7 +6,7 @@ set bindir=bin\release
 set deploydir=%bindir%\naivesocks
 if not [%1]==[] set deploydir=%1
 set singlefile=%deploydir%\NaiveSocks_SingleFile.exe
-set files=NaiveSocks.exe NaiveSvrLib.dll Nett.dll
+set files=NaiveSocks.exe NaiveSvrLib.dll Nett.dll LiteDB.dll
 
 call :info copying files to deploy dir...
 

@@ -37,8 +37,6 @@ namespace NaiveSocksAndroid
 
         public string DnsResolver { get; set; }
         public int LocalDnsPort { get; set; } = 5333;
-        public string FakeDnsPrefix { get; set; } = "1.";
-        public int DnsListenerCount { get; set; } = 1;
         public int DnsTtl { get; set; } = 30;
         public int DnsCacheTtl { get; set; } = 120;
         public bool DnsDebug { get; set; } = false;
@@ -56,7 +54,6 @@ namespace NaiveSocksAndroid
         public VpnHelper(BgService service)
         {
             Bg = service;
-            localDns = new LocalDns(this);
             Native.Init(service);
         }
 
@@ -64,13 +61,13 @@ namespace NaiveSocksAndroid
         public bool Running { get; private set; }
         public VpnConfig VpnConfig { get; set; }
 
-        public DnsDb DnsDb => localDns.DnsDb;
+        public DnsDb DnsDb => dnsInAdapter?.cacheDns as DnsDb;
 
         ParcelFileDescriptor pfd;
 
         IDnsProvider dnsResolver;
         SocksInAdapter socksInAdapter;
-        LocalDns localDns;
+        DnsInAdapter dnsInAdapter;
 
         public void StartVpn()
         {
@@ -98,10 +95,7 @@ namespace NaiveSocksAndroid
                         listen = NaiveUtils.ParseIPEndPoint("127.1:" + VpnConfig.SocksPort),
                         @out = handlerRef
                     };
-                    Logging.info("Automatically created adapter " + socksInAdapter);
-                    socksInAdapter.SetConfig(Nett.Toml.Create());
-                    controller.AddInAdapter(socksInAdapter, true);
-                    socksInAdapter.Start();
+                    AddInAdapter(controller, socksInAdapter);
                 }
             }
             if (VpnConfig.DnsResolver != null) {
@@ -115,7 +109,6 @@ namespace NaiveSocksAndroid
             if (VpnConfig.LocalDnsPort > 0 && dnsResolver == null) {
                 throw new Exception("local dns is enabled but cannot find a dns resolver. Check Handler or DnsResolver in configuration.");
             }
-            socksInAdapter.ConnectionFilter += localDns.SocksConnectionFilter;
             Logging.info("VPN connections handler: " + socksInAdapter.QuotedName);
 
             var builder = new VpnService.Builder(Bg)
@@ -154,10 +147,7 @@ namespace NaiveSocksAndroid
             Logging.info("VPN established, fd=" + fd);
 
             if (VpnConfig.LocalDnsPort > 0) {
-                Logging.info("Starting local DNS server at 127.0.0.1:" + VpnConfig.LocalDnsPort);
-                string strResolver = dnsResolver?.GetAdapter().QuotedName;
-                Logging.info("DNS resolver: " + strResolver);
-                localDns.StartDnsServer();
+                InitLocalDns(controller);
             }
 
             string dnsgw = null;
@@ -167,6 +157,37 @@ namespace NaiveSocksAndroid
                 dnsgw = "127.0.0.1:" + VpnConfig.LocalDnsPort;
             }
             StartTun2Socks(fd, "127.0.0.1:" + socksInAdapter.listen.Port, VpnConfig.Mtu, dnsgw);
+        }
+
+        private void InitLocalDns(Controller controller)
+        {
+            var dnsIn = new DnsInAdapter() {
+                Name = "VPNDNS",
+                @out = AdapterRef.FromAdapter(dnsResolver),
+                listen = new IPEndPoint(IPAddress.Loopback, VpnConfig.LocalDnsPort),
+                ttl = VpnConfig.DnsTtl,
+                cache_ttl = VpnConfig.DnsCacheTtl,
+                verbose = VpnConfig.DnsDebug
+            };
+            if (VpnConfig.DnsDomainDb) {
+                dnsIn.cache = "db";
+                dnsIn.cache_path = App.DnsDbFile;
+            } else {
+                dnsIn.cache = "ram";
+            }
+            socksInAdapter.rdns = AdapterRef.FromAdapter(dnsIn);
+            Logging.info("Starting local DNS server at 127.0.0.1:" + VpnConfig.LocalDnsPort);
+            string strResolver = dnsResolver?.GetAdapter().QuotedName;
+            Logging.info("DNS resolver: " + strResolver);
+            AddInAdapter(controller, dnsIn);
+        }
+
+        private static void AddInAdapter(Controller controller, InAdapter adapter)
+        {
+            Logging.info("Automatically created adapter " + adapter);
+            adapter.SetConfig(Nett.Toml.Create());
+            controller.AddInAdapter(adapter, true);
+            adapter.Start();
         }
 
         private void StartTun2Socks(int fd, string socksAddr, int mtu, string dnsgw)
@@ -221,8 +242,6 @@ namespace NaiveSocksAndroid
 
         public void Stop()
         {
-            localDns.StopDnsServer();
-            socksInAdapter.ConnectionFilter -= localDns.SocksConnectionFilter;
             KillProcesses();
             if (Running) {
                 Running = false;

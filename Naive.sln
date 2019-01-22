@@ -37,16 +37,22 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Nett", "Nett\Source\Nett\Nett.csproj", "{00C1FC7D-07B4-44FF-886C-4AF17EF31919}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "LiteDB", "LiteDB\LiteDB\LiteDB.csproj", "{BBFC9EF7-0051-4DC9-BAE2-60FDBC7B91C9}"
+EndProject
+Project("{D954291E-2A0B-460D-934E-DC6B0785DB48}") = "DNSShared", "dns\DNSShared\DNSShared.shproj", "{F20D9E39-CC91-4FF0-BFD0-A5B7B0FBC5C1}"
+EndProject
 Global
 	GlobalSection(SharedMSBuildProjectFiles) = preSolution
 		NaiveSvrLib\NaiveSvrShared\NaiveSvrShared.projitems*{0b623dfc-5129-419c-bb03-823809f9178d}*SharedItemsImports = 13
 		NaiveZip\NZipShared\NZipShared.projitems*{104b1bf6-4740-4f18-8adc-7b2f730e6000}*SharedItemsImports = 4
+		dns\DNSShared\DNSShared.projitems*{489d2bc7-5344-4cba-bbe0-f104f955199c}*SharedItemsImports = 4
 		NaiveSocksCliShared\NaiveSocksCliShared.projitems*{489d2bc7-5344-4cba-bbe0-f104f955199c}*SharedItemsImports = 4
 		NaiveSocks\NaiveSocksShared\NaiveSocksShared.projitems*{489d2bc7-5344-4cba-bbe0-f104f955199c}*SharedItemsImports = 4
 		NaiveZip\NZipShared\NZipShared.projitems*{a8493ec4-38ac-45bf-9a52-d3822a962bd6}*SharedItemsImports = 13
 		NaiveSvrLib\NaiveConsoleShared\NaiveConsoleShared.projitems*{a92bc4fa-7794-4694-a814-74f3ced1cfad}*SharedItemsImports = 13
 		NaiveSvrLib\NaiveConsoleShared\NaiveConsoleShared.projitems*{b6fdce48-2582-4cbc-b1ed-4a6952e183d2}*SharedItemsImports = 4
 		NaiveSvrLib\NaiveSvrShared\NaiveSvrShared.projitems*{b6fdce48-2582-4cbc-b1ed-4a6952e183d2}*SharedItemsImports = 4
+		dns\DNSShared\DNSShared.projitems*{f20d9e39-cc91-4ff0-bfd0-a5b7b0fbc5c1}*SharedItemsImports = 13
 		NaiveSocksCliShared\NaiveSocksCliShared.projitems*{f8975733-0b83-4af3-bf4e-8bcdafee4a70}*SharedItemsImports = 13
 		NaiveSocks\NaiveSocksShared\NaiveSocksShared.projitems*{fffcf1f9-7c24-425b-bf68-a12f26abb42d}*SharedItemsImports = 13
 	EndGlobalSection
@@ -92,6 +98,12 @@ Global
 		{00C1FC7D-07B4-44FF-886C-4AF17EF31919}.Release(Debug)|Any CPU.Build.0 = Release|Any CPU
 		{00C1FC7D-07B4-44FF-886C-4AF17EF31919}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{00C1FC7D-07B4-44FF-886C-4AF17EF31919}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BBFC9EF7-0051-4DC9-BAE2-60FDBC7B91C9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BBFC9EF7-0051-4DC9-BAE2-60FDBC7B91C9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BBFC9EF7-0051-4DC9-BAE2-60FDBC7B91C9}.Release(Debug)|Any CPU.ActiveCfg = Release|Any CPU
+		{BBFC9EF7-0051-4DC9-BAE2-60FDBC7B91C9}.Release(Debug)|Any CPU.Build.0 = Release|Any CPU
+		{BBFC9EF7-0051-4DC9-BAE2-60FDBC7B91C9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BBFC9EF7-0051-4DC9-BAE2-60FDBC7B91C9}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -100,6 +112,8 @@ Global
 		{F172074F-C119-47FD-BC38-173847ED2083} = {C4FDEA2C-B470-4F74-BE1F-3F744B5479A7}
 		{A6D5ADD3-5B85-4CD8-BE28-6AC19B8F6786} = {C4FDEA2C-B470-4F74-BE1F-3F744B5479A7}
 		{00C1FC7D-07B4-44FF-886C-4AF17EF31919} = {80C7A2DF-57C1-4B94-ACF1-8323E9941253}
+		{BBFC9EF7-0051-4DC9-BAE2-60FDBC7B91C9} = {80C7A2DF-57C1-4B94-ACF1-8323E9941253}
+		{F20D9E39-CC91-4FF0-BFD0-A5B7B0FBC5C1} = {80C7A2DF-57C1-4B94-ACF1-8323E9941253}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {0BAEFEEE-0666-494C-9B5A-A75BF2B43B94}
