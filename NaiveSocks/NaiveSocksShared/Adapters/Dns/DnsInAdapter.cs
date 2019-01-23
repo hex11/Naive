@@ -61,6 +61,7 @@ namespace NaiveSocks
                 }
                 var db = new DnsDb(Controller.ProcessFilePath(cache_path));
                 db.Logger = new Logger("db", Logger);
+                db.Init();
                 cacheRDns = db;
                 cacheDns = db;
             } else {

@@ -31,11 +31,15 @@ namespace NaiveSocks
         public DnsDb(string dbPath)
         {
             FilePath = dbPath;
+        }
+
+        public void Init()
+        {
             Logger?.info("initializing...");
             bool retrying = false;
         BEGIN:
             try {
-                liteDb = new LiteDatabase(dbPath);
+                liteDb = new LiteDatabase(FilePath);
                 cfgCollection = liteDb.GetCollection("meta");
 
                 CheckVersion();
@@ -52,7 +56,7 @@ namespace NaiveSocks
                     retrying = true;
                     Logger?.info("delete current db file and retry...");
                     liteDb.Dispose();
-                    System.IO.File.Delete(dbPath);
+                    System.IO.File.Delete(FilePath);
                     goto BEGIN;
                 }
             }

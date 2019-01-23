@@ -161,7 +161,7 @@ namespace NaiveSocksAndroid
 
         private void InitLocalDns(Controller controller)
         {
-            var dnsIn = new DnsInAdapter() {
+            dnsInAdapter = new DnsInAdapter() {
                 Name = "VPNDNS",
                 @out = AdapterRef.FromAdapter(dnsResolver),
                 listen = new IPEndPoint(IPAddress.Loopback, VpnConfig.LocalDnsPort),
@@ -170,16 +170,16 @@ namespace NaiveSocksAndroid
                 verbose = VpnConfig.DnsDebug
             };
             if (VpnConfig.DnsDomainDb) {
-                dnsIn.cache = "db";
-                dnsIn.cache_path = App.DnsDbFile;
+                dnsInAdapter.cache = "db";
+                dnsInAdapter.cache_path = App.DnsDbFile;
             } else {
-                dnsIn.cache = "ram";
+                dnsInAdapter.cache = "ram";
             }
-            socksInAdapter.rdns = AdapterRef.FromAdapter(dnsIn);
+            socksInAdapter.rdns = AdapterRef.FromAdapter(dnsInAdapter);
             Logging.info("Starting local DNS server at 127.0.0.1:" + VpnConfig.LocalDnsPort);
             string strResolver = dnsResolver?.GetAdapter().QuotedName;
             Logging.info("DNS resolver: " + strResolver);
-            AddInAdapter(controller, dnsIn);
+            AddInAdapter(controller, dnsInAdapter);
         }
 
         private static void AddInAdapter(Controller controller, InAdapter adapter)
