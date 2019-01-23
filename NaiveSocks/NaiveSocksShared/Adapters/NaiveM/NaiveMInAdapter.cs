@@ -32,8 +32,7 @@ namespace NaiveSocks
         }
 
         public string path { get; set; } = "/";
-        private const string DefaultKey = "hello, world";
-        public string key { get; set; } = DefaultKey;
+        public string key { get; set; }
 
         // map path to encryption key
         public Dictionary<string, string> paths { get; set; }
@@ -74,8 +73,9 @@ namespace NaiveSocks
             }
             if (path_settings.Count == 0) {
                 path_settings = new Dictionary<string, PathSettings>();
-                if (key == DefaultKey) {
-                    Logging.warning($"{this} is using default key: '{DefaultKey}'");
+                if (key == null) {
+                    Logger.error("key is not specified");
+                    return;
                 }
                 path_settings.Add(path, new PathSettings {
                     networks = this.networks
@@ -88,7 +88,7 @@ namespace NaiveSocks
                 httpServer.AddListener(listen);
                 httpServer.Run();
             } else {
-                Logging.warning($"{this}: no listener!");
+                Logger.warning("no listener!");
             }
         }
 

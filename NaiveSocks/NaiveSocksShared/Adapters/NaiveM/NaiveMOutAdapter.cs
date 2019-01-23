@@ -24,7 +24,7 @@ namespace NaiveSocks
         public string uri { get; set; }
         public AddrPort server { get; set; } // default port is 80 or 443 (with tls)
         public string path { get; set; } = "/";
-        public string key { get; set; } = "hello, world";
+        public string key { get; set; }
 
         public bool connect_on_start { get; set; } = false;
         public int pool_min_free { get; set; } = 1;
@@ -112,6 +112,10 @@ namespace NaiveSocks
         public override void SetConfig(TomlTable toml)
         {
             base.SetConfig(toml);
+            if (key == null) {
+                Logger.error("'key' is not specified.");
+                return;
+            }
             if (toml.TryGetValue("imux", out var imux)) {
                 if (imux is TomlArray ta) {
                     var imuxarr = ta.Get<int[]>();
@@ -130,16 +134,16 @@ namespace NaiveSocks
                 if (!parsedUri.IsAbsoluteUri)
                     throw new Exception("not an absolute URI!");
                 switch (parsedUri.Scheme) {
-                case "http":
-                case "ws":
-                case "naivem":
-                    break;
-                case "https":
-                case "wss":
-                    tls = true;
-                    break;
-                default:
-                    throw new Exception($"Unknown URI scheme '{parsedUri.Scheme}'");
+                    case "http":
+                    case "ws":
+                    case "naivem":
+                        break;
+                    case "https":
+                    case "wss":
+                        tls = true;
+                        break;
+                    default:
+                        throw new Exception($"Unknown URI scheme '{parsedUri.Scheme}'");
                 }
                 server = new AddrPort {
                     Host = parsedUri.Host,
