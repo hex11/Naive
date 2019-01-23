@@ -45,13 +45,14 @@ namespace Naive.HttpSvr
             return new Msg(frame.bv);
         }
 
-        ReusableAwaiter<Msg> _RecvMsgR_ra = new ReusableAwaiter<Msg>();
+        ReusableAwaiter<Msg> _RecvMsgR_ra;
         ReusableAwaiter<FrameValue> _RecvMsgR_awaiter;
         Action _RecvMsgR_cont;
 
         public AwaitableWrapper<Msg> RecvMsgR(BytesView buf)
         {
-            if (_RecvMsgR_cont == null) {
+            if (_RecvMsgR_ra == null) {
+                _RecvMsgR_ra = new ReusableAwaiter<Msg>();
                 _RecvMsgR_cont = () => {
                     if (!_RecvMsgR_awaiter.TryGetResult(out var r, out var ex)) {
                         _RecvMsgR_ra.SetException(ex);
@@ -418,7 +419,7 @@ namespace Naive.HttpSvr
                     case 0x9: // ping
                         OnPingReceived();
                         var b = bv.GetBytes();
-                        await SendMsgAsync(0xA, b, 0, b.Length).CAF();
+                        await SendMsgAsync(0xA, new BytesView(b)).CAF();
                         break;
                     case 0xA: // pong
                         OnPongReceived();

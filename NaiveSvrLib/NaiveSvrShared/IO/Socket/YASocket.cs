@@ -427,7 +427,7 @@ namespace NaiveSocks
             return new AwaitableWrapper<BytesSegment>(raReadNB);
         }
 
-        public override async Task ReadFullAsyncImpl(BytesSegment bs)
+        protected override async Task ReadFullAsyncImpl(BytesSegment bs)
         {
             await ReadFullAsyncR(bs);
             return;

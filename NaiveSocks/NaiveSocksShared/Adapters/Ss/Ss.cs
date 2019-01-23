@@ -308,17 +308,17 @@ namespace NaiveSocks
         }
     }
 
-    public class IvEncryptStream : IMyStream
+    public class IvEncryptStream : IMyStream, IMyStreamWriteR
     {
         public IMyStream BaseStream { get; }
-        public IIVEncryptor recvHelper, sendHelper;
+        public IIVEncryptor recvEnc, sendEnc;
         private bool ivSent, ivReceived;
 
         public IvEncryptStream(IMyStream baseStream, IIVEncryptor recv, IIVEncryptor send)
         {
             BaseStream = baseStream;
-            recvHelper = recv;
-            sendHelper = send;
+            recvEnc = recv;
+            sendEnc = send;
         }
 
         public MyStreamState State => BaseStream.State;
@@ -336,15 +336,15 @@ namespace NaiveSocks
         public async Task<int> ReadAsync(BytesSegment bs)
         {
             if (!ivReceived) {
-                var buf = new BytesSegment(new byte[recvHelper.IVLength]);
-                await BaseStream.ReadAllAsync(buf, buf.Len).CAF();
-                recvHelper.IV = buf.Bytes;
+                var buf = new BytesSegment(new byte[recvEnc.IVLength]);
+                await BaseStream.ReadFullAsyncR(buf).CAF();
+                recvEnc.IV = buf.Bytes;
                 ivReceived = true;
             }
-            var read = await BaseStream.ReadAsync(bs).CAF();
+            var read = await BaseStream.ReadAsyncR(bs).CAF();
             if (read > 0) {
                 bs.Len = read;
-                recvHelper.Update(bs);
+                recvEnc.Update(bs);
             }
             return read;
         }
@@ -352,17 +352,25 @@ namespace NaiveSocks
         public async Task WriteAsync(BytesSegment bs)
         {
             if (!ivSent) {
-                var iv = sendHelper.IV;
-                await BaseStream.WriteAsync(new BytesSegment(iv)).CAF();
+                var iv = sendEnc.IV;
+                await BaseStream.WriteAsyncR(new BytesSegment(iv)).CAF();
                 ivSent = true;
             }
-            sendHelper.Update(bs);
-            await BaseStream.WriteAsync(bs).CAF();
+            sendEnc.Update(bs);
+            await BaseStream.WriteAsyncR(bs).CAF();
         }
 
-        public async Task FlushAsync()
+        public AwaitableWrapper WriteAsyncR(BytesSegment bs)
         {
-            await BaseStream.FlushAsync();
+            if (!ivSent)
+                return new AwaitableWrapper(WriteAsync(bs));
+            sendEnc.Update(bs);
+            return BaseStream.WriteAsyncR(bs);
+        }
+
+        public Task FlushAsync()
+        {
+            return BaseStream.FlushAsync();
         }
 
         public override string ToString()

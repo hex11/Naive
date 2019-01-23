@@ -10,7 +10,7 @@ using System.Reflection;
 
 namespace NaiveSocks
 {
-    public class SocketStream1 : SocketStream, IMyStreamMultiBuffer, IMyStreamWriteR, IMyStreamMultiBufferR
+    public class SocketStream1 : SocketStream, IMyStreamMultiBufferR
     {
         public SocketStream1(Socket socket) : base(socket)
         {
@@ -93,37 +93,30 @@ namespace NaiveSocks
             return VoidType.Void;
         }
 
-        ReusableAwaiter<int> raR;
-        Action<BytesSegment> raR_start;
-        ReusableAwaiter<VoidType> raW;
-        Action<BytesSegment> raW_start;
+        ReusableAwaiter<int>.BeginEndStateMachine<SocketStream1, BytesSegment> raR;
+        ReusableAwaiter<VoidType>.BeginEndStateMachine<SocketStream1, BytesSegment> raW;
+        ReusableAwaiter<VoidType>.BeginEndStateMachine<SocketStream1, ArraySegment<byte>[]> raWm;
 
         protected override AwaitableWrapper<int> ReadAsyncRImpl(BytesSegment bs)
         {
             if (raR == null)
-                raR = ReusableAwaiter<int>.FromBeginEnd(this, ReadBeginMethod, ReadEndMethod, out raR_start);
-            raR_start(bs);
-            return new AwaitableWrapper<int>(raR);
+                raR = new ReusableAwaiter<int>.BeginEndStateMachine<SocketStream1, BytesSegment>(this, ReadBeginMethod, ReadEndMethod);
+            return new AwaitableWrapper<int>(raR.Start(bs));
         }
 
         public override AwaitableWrapper WriteAsyncRImpl(BytesSegment bs)
         {
             if (raW == null)
-                raW = ReusableAwaiter<VoidType>.FromBeginEnd(this, WriteBeginMethod, WriteEndMethod, out raW_start);
-            raW_start(bs);
-            return new AwaitableWrapper(raW);
+                raW = new ReusableAwaiter<VoidType>.BeginEndStateMachine<SocketStream1, BytesSegment>(this, WriteBeginMethod, WriteEndMethod);
+            return new AwaitableWrapper(raW.Start(bs));
         }
-
-        ReusableAwaiter<VoidType> raWm;
-        Action<ArraySegment<byte>[]> raWm_start;
 
         public AwaitableWrapper WriteMultipleAsyncR(BytesView bv)
         {
             if (raWm == null)
-                raWm = ReusableAwaiter<VoidType>.FromBeginEnd(this, WriteMultipleBegin, WriteMultipleEnd, out raWm_start);
+                raWm = new ReusableAwaiter<VoidType>.BeginEndStateMachine<SocketStream1, ArraySegment<byte>[]>(this, WriteMultipleBegin, WriteMultipleEnd);
             ArraySegment<byte>[] bufList = PrepareWriteMultiple(bv);
-            raWm_start(bufList);
-            return new AwaitableWrapper(raWm);
+            return new AwaitableWrapper(raWm.Start(bufList));
         }
     }
 

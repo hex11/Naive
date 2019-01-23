@@ -155,15 +155,26 @@ namespace Naive.HttpSvr
         }
     }
 
-    // https://stackoverflow.com/a/40689207
-    public sealed class ReusableAwaiter<T> : INotifyCompletion, ICriticalNotifyCompletion
+    public interface IAwaiter<T> : INotifyCompletion, ICriticalNotifyCompletion
     {
-        private Action _continuation = null;
-        private Action _continuation_2 = null;
+        T GetResult();
+        bool IsCompleted { get; }
+    }
+
+    // https://stackoverflow.com/a/40689207
+    public class ReusableAwaiter<T> : IAwaiter<T>
+    {
+        private object _continuation = null; // action or exception
         private T _result = default(T);
-        private Exception _exception = null;
         private SpinLock _lock = new SpinLock(false);
-        private int _waitForGetResult = 0;
+        private State state;
+
+        enum State : byte
+        {
+            Reset,
+            ContRegistered,
+            Completed
+        }
 
         public object Tag;
 
@@ -171,38 +182,34 @@ namespace Naive.HttpSvr
         {
             if (_continuation == null)
                 return "(no continuation)";
-            return "[" + _continuation + ", " + _continuation_2 + "]";
+            return "[" + _continuation + "]";
         }
 
         public static ReusableAwaiter<T> NewCompleted(T result)
         {
-            return new ReusableAwaiter<T>() { IsCompleted = true, _result = result };
+            return new ReusableAwaiter<T>() { state = State.Completed, _result = result };
         }
 
-        public bool IsBeingListening => _continuation != null;
+        public bool IsBeingListening => _continuation is Action;
 
-        public bool IsCompleted
-        {
-            get;
-            private set;
-        }
+        public bool IsCompleted => state == State.Completed;
 
-        public Exception Exception => _exception;
+        public Exception Exception => _continuation as Exception;
 
         public T GetResult()
         {
             PreGetResult();
-            if (_exception != null)
-                throw _exception;
+            if (_continuation is Exception ex)
+                throw ex;
             return _result;
         }
 
         public bool TryGetResult(out T result, out Exception exception)
         {
             PreGetResult();
-            if (_exception != null) {
+            if (_continuation is Exception ex) {
                 result = default(T);
-                exception = _exception;
+                exception = ex;
                 return false;
             }
             exception = null;
@@ -216,8 +223,6 @@ namespace Naive.HttpSvr
                 Logging.logWithStackTrace("GetResult() when not completed", Logging.Level.Warning);
                 throw new InvalidOperationException("not completed");
             }
-            if (_waitForGetResult > 0)
-                _waitForGetResult--;
         }
 
         public void OnCompleted(Action continuation)
@@ -228,14 +233,10 @@ namespace Naive.HttpSvr
                 _lock.Exit();
                 continuation();
             } else {
-                _waitForGetResult++;
                 if (_continuation == null) {
                     _continuation = continuation;
+                    this.state = State.ContRegistered;
                     _lock.Exit();
-                } else if (_continuation_2 == null) {
-                    _continuation_2 = continuation;
-                    _lock.Exit();
-                    Logging.logWithStackTrace("continuation_2", Logging.Level.Warning);
                 } else {
                     _lock.Exit();
                     //throw new InvalidOperationException("This ReusableAwaiter instance has already been listened");
@@ -265,7 +266,7 @@ namespace Naive.HttpSvr
                 }
 
                 this._result = result;
-                this.IsCompleted = true;
+                this.state = State.Completed;
 
                 ExitLockAndTryRunContinuations();
                 return true;
@@ -293,11 +294,12 @@ namespace Naive.HttpSvr
                     _lock.Exit();
                     return false;
                 }
-
-                this._exception = exception;
-                this.IsCompleted = true;
-
-                ExitLockAndTryRunContinuations();
+                var c1 = _continuation;
+                this._continuation = exception;
+                this.state = State.Completed;
+                _lock.Exit();
+                if (c1 is Action action)
+                    JustAwaiter.RunContinuation(action);
                 return true;
             }
             return false;
@@ -306,12 +308,10 @@ namespace Naive.HttpSvr
         private void ExitLockAndTryRunContinuations()
         {
             var c1 = _continuation;
-            var c2 = _continuation_2;
             _continuation = null;
-            _continuation_2 = null;
             _lock.Exit();
-            JustAwaiter.TryRunContinuation(c1);
-            JustAwaiter.TryRunContinuation(c2);
+            if (c1 is Action action)
+                JustAwaiter.RunContinuation(action);
         }
 
         public void SetException(Exception exception)
@@ -322,7 +322,7 @@ namespace Naive.HttpSvr
 
         public bool CanResetNow()
         {
-            return _continuation == null && _waitForGetResult == 0;
+            return IsBeingListening;
         }
 
         /// <summary>
@@ -330,17 +330,12 @@ namespace Naive.HttpSvr
         /// </summary>
         public void Reset()
         {
-            if (_continuation != null) {
+            if (IsBeingListening) {
                 throw new InvalidOperationException($"Cannot reset: this awaiter is being listening. (completed={IsCompleted})");
-            }
-            if (_waitForGetResult != 0) {
-                throw new InvalidOperationException("Connot reset: GetResult() haven't been called. Race conditions may happen. _waitGetResult=" + _waitForGetResult);
             }
             this._result = default(T);
             this._continuation = null;
-            this._continuation_2 = null;
-            this._exception = null;
-            this.IsCompleted = false;
+            this.state = State.Reset;
         }
 
         public ReusableAwaiter<T> GetAwaiter()
@@ -348,34 +343,52 @@ namespace Naive.HttpSvr
             return this;
         }
 
-        public static ReusableAwaiter<T> FromBeginEnd<TInstance, TArgs, T>(
-            TInstance thisRef, Func<TInstance, TArgs, AsyncCallback, object, IAsyncResult> beginMethod,
-            Func<TInstance, IAsyncResult, T> endMethod, out Action<TArgs> reusableStart)
-        {
-            var _ra = new ReusableAwaiter<T>();
-            var _thisRef = thisRef;
-            AsyncCallback _callback = (ar) => {
-                T result;
-                try {
-                    result = endMethod(_thisRef, ar);
-                } catch (Exception e) {
-                    _ra.SetException(e);
-                    return;
-                }
-                _ra.SetResult(result);
-            };
-            reusableStart = (args) => {
-                _ra.Reset();
-                beginMethod(_thisRef, args, _callback, _ra);
-            };
-            return _ra;
-        }
-
         public ReusableAwaiter<T> CAF() => this;
 
         public async Task<T> CreateTask()
         {
             return await this;
+        }
+
+        public class BeginEndStateMachine<TInstance, TArgs> : ReusableAwaiter<T>
+        {
+            TInstance _thisRef;
+            Func<TInstance, TArgs, AsyncCallback, object, IAsyncResult> _beginMethod;
+            Func<TInstance, IAsyncResult, T> _endMethod;
+
+            public BeginEndStateMachine(TInstance thisRef, Func<TInstance, TArgs, AsyncCallback, object, IAsyncResult> beginMethod,
+            Func<TInstance, IAsyncResult, T> endMethod)
+            {
+                _thisRef = thisRef;
+                _beginMethod = beginMethod;
+                _endMethod = endMethod;
+            }
+
+            private static readonly AsyncCallback _callback = Callback;
+            private static void Callback(IAsyncResult ar)
+            {
+                var thiz = (BeginEndStateMachine<TInstance, TArgs>)ar.AsyncState;
+                thiz.InstanceCallback(ar);
+            }
+
+            private void InstanceCallback(IAsyncResult ar)
+            {
+                T result;
+                try {
+                    result = _endMethod(_thisRef, ar);
+                } catch (Exception e) {
+                    SetException(e);
+                    return;
+                }
+                SetResult(result);
+            }
+
+            public ReusableAwaiter<T> Start(TArgs args)
+            {
+                Reset();
+                _beginMethod(_thisRef, args, _callback, this);
+                return this;
+            }
         }
     }
 
@@ -403,17 +416,14 @@ namespace Naive.HttpSvr
                 throw new ArgumentNullException(nameof(continuation));
 
             if (_continuation == IS_COMPLETED) {
-                TryRunContinuation(continuation);
+                RunContinuation(continuation);
                 return;
             }
-            var v = Interlocked.Exchange(ref _continuation, continuation);
+            var v = Interlocked.CompareExchange(ref _continuation, continuation, null);
             if (v == null) {
-                // nothing to do
+                // continuation is exchanged and nothing to do
             } else if (v == IS_COMPLETED) {
-                v = Interlocked.Exchange(ref _continuation, IS_COMPLETED);
-                if (v == continuation) {
-                    TryRunContinuation(continuation);
-                } // or the continuation is called somewhere else
+                RunContinuation(continuation);
             } else {
                 throw new Exception("a continuation is already registered!");
             }
@@ -426,20 +436,18 @@ namespace Naive.HttpSvr
 
         public void SetBlocking(bool blocking)
         {
+            if (blocking && (_continuation == null))
+                return;
             if (!blocking && (_continuation == IS_COMPLETED))
                 return;
             if (blocking) {
-                var v = Interlocked.Exchange(ref _continuation, null);
-                if (v == IS_COMPLETED || v == null) {
-                    // nothing to do
-                } else {
-                    // then it's a continuation
-                    _continuation = v;
-                }
+                var v = Interlocked.CompareExchange(ref _continuation, null, IS_COMPLETED);
+                // if v is null or a continuation: it's already blocking
+                // else v will be IS_COMPLETED: successfully set to blocking state
             } else {
                 var v = Interlocked.Exchange(ref _continuation, IS_COMPLETED);
                 if (v != null && v != IS_COMPLETED) {
-                    TryRunContinuation(v);
+                    RunContinuation(v);
                 }
             }
         }
@@ -454,19 +462,15 @@ namespace Naive.HttpSvr
             return this;
         }
 
-        static WaitCallback waitCallback = (state) => ((Action)state)();
-
-        internal static void TryRunContinuation(Action c)
+        internal static void RunContinuation(Action c)
         {
-            if (c != null) {
-                try {
-                    c();
-                    //Task.Run(c);
-                    //ThreadPool.QueueUserWorkItem(waitCallback, c);
-                    //ThreadPool.UnsafeQueueUserWorkItem(waitCallback, c);
-                } catch (Exception e) {
-                    Logging.exception(e, Logging.Level.Error, "continuation threw an exception.");
-                }
+            try {
+                c();
+                //Task.Run(c);
+                //ThreadPool.QueueUserWorkItem(waitCallback, c);
+                //ThreadPool.UnsafeQueueUserWorkItem(waitCallback, c);
+            } catch (Exception e) {
+                Logging.exception(e, Logging.Level.Error, "continuation threw an exception.");
             }
         }
     }
@@ -495,6 +499,12 @@ namespace Naive.HttpSvr
             result = default(T);
         }
 
+        public AwaitableWrapper(IAwaiter<T> ia)
+        {
+            awaitable = ia ?? throw new ArgumentNullException(nameof(ia));
+            result = default(T);
+        }
+
         public AwaitableWrapper<T> GetAwaiter() => this;
 
         private static ConfiguredTaskAwaitable<T>.ConfiguredTaskAwaiter GetTaskAwaiter(Task<T> task)
@@ -511,6 +521,8 @@ namespace Naive.HttpSvr
                     return GetTaskAwaiter(task).IsCompleted;
                 } else if (awaitable is ReusableAwaiter<T> ra) {
                     return ra.IsCompleted;
+                } else if (awaitable is IAwaiter<T> ia) {
+                    return ia.IsCompleted;
                 } else {
                     throw WrongAwaitableType();
                 }
@@ -525,6 +537,8 @@ namespace Naive.HttpSvr
                 return GetTaskAwaiter(task).GetResult();
             } else if (awaitable is ReusableAwaiter<T> ra) {
                 return ra.GetResult();
+            } else if (awaitable is IAwaiter<T> ia) {
+                return ia.GetResult();
             } else {
                 throw WrongAwaitableType();
             }
@@ -533,11 +547,13 @@ namespace Naive.HttpSvr
         public void OnCompleted(Action continuation)
         {
             if (awaitable == COMPLETED) {
-                JustAwaiter.TryRunContinuation(continuation);
+                JustAwaiter.RunContinuation(continuation);
             } else if (awaitable is Task<T> task) {
                 GetTaskAwaiter(task).OnCompleted(continuation);
             } else if (awaitable is ReusableAwaiter<T> ra) {
                 ra.OnCompleted(continuation);
+            } else if (awaitable is IAwaiter<T> ia) {
+                ia.OnCompleted(continuation);
             } else {
                 throw WrongAwaitableType();
             }
@@ -546,11 +562,13 @@ namespace Naive.HttpSvr
         public void UnsafeOnCompleted(Action continuation)
         {
             if (awaitable == COMPLETED) {
-                JustAwaiter.TryRunContinuation(continuation);
+                JustAwaiter.RunContinuation(continuation);
             } else if (awaitable is Task<T> task) {
                 GetTaskAwaiter(task).UnsafeOnCompleted(continuation);
             } else if (awaitable is ReusableAwaiter<T> ra) {
                 ra.UnsafeOnCompleted(continuation);
+            } else if (awaitable is IAwaiter<T> ia) {
+                ia.UnsafeOnCompleted(continuation);
             } else {
                 throw WrongAwaitableType();
             }
@@ -594,6 +612,11 @@ namespace Naive.HttpSvr
             awaitable = ra ?? throw new ArgumentNullException(nameof(ra));
         }
 
+        public AwaitableWrapper(IAwaiter<VoidType> ia)
+        {
+            awaitable = ia ?? throw new ArgumentNullException(nameof(ia));
+        }
+
         public AwaitableWrapper GetAwaiter() => this;
 
         private static ConfiguredTaskAwaitable.ConfiguredTaskAwaiter GetTaskAwaiter(Task task)
@@ -610,6 +633,8 @@ namespace Naive.HttpSvr
                     return GetTaskAwaiter(task).IsCompleted;
                 } else if (awaitable is ReusableAwaiter<VoidType> ra) {
                     return ra.IsCompleted;
+                } else if (awaitable is IAwaiter<VoidType> ia) {
+                    return ia.IsCompleted;
                 } else {
                     throw WrongAwaitableType();
                 }
@@ -624,6 +649,8 @@ namespace Naive.HttpSvr
                 GetTaskAwaiter(task).GetResult();
             } else if (awaitable is ReusableAwaiter<VoidType> ra) {
                 ra.GetResult();
+            } else if (awaitable is IAwaiter<VoidType> ia) {
+                ia.GetResult();
             } else {
                 throw WrongAwaitableType();
             }
@@ -632,11 +659,13 @@ namespace Naive.HttpSvr
         public void OnCompleted(Action continuation)
         {
             if (awaitable == COMPLETED) {
-                JustAwaiter.TryRunContinuation(continuation);
+                JustAwaiter.RunContinuation(continuation);
             } else if (awaitable is Task task) {
                 GetTaskAwaiter(task).OnCompleted(continuation);
             } else if (awaitable is ReusableAwaiter<VoidType> ra) {
                 ra.OnCompleted(continuation);
+            } else if (awaitable is IAwaiter<VoidType> ia) {
+                ia.OnCompleted(continuation);
             } else {
                 throw WrongAwaitableType();
             }
@@ -645,11 +674,13 @@ namespace Naive.HttpSvr
         public void UnsafeOnCompleted(Action continuation)
         {
             if (awaitable == COMPLETED) {
-                JustAwaiter.TryRunContinuation(continuation);
+                JustAwaiter.RunContinuation(continuation);
             } else if (awaitable is Task task) {
                 GetTaskAwaiter(task).UnsafeOnCompleted(continuation);
             } else if (awaitable is ReusableAwaiter<VoidType> ra) {
                 ra.UnsafeOnCompleted(continuation);
+            } else if (awaitable is IAwaiter<VoidType> ia) {
+                ia.UnsafeOnCompleted(continuation);
             } else {
                 throw WrongAwaitableType();
             }

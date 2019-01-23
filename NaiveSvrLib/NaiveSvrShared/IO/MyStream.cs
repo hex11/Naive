@@ -784,6 +784,16 @@ namespace NaiveSocks
                 return ReadFullImpl(myStream, bs);
         }
 
+        public static AwaitableWrapper ReadFullAsyncR(this IMyStream myStream, BytesSegment bs)
+        {
+            if (myStream is IMyStreamReadFullR fullR)
+                return fullR.ReadFullAsyncR(bs);
+            else if (myStream is IMyStreamReadFull full)
+                return new AwaitableWrapper(full.ReadFullAsync(bs));
+            else
+                return new AwaitableWrapper(ReadFullImpl(myStream, bs));
+        }
+
         public static async Task ReadFullImpl(IMyStream myStream, BytesSegment bs)
         {
             int pos = 0;
@@ -836,11 +846,10 @@ namespace NaiveSocks
         }
     }
 
-    public class ReadFullRStateMachine
+    public class ReadFullRStateMachine : ReusableAwaiter<VoidType>
     {
         Action _moveNext;
 
-        ReusableAwaiter<VoidType> ra;
         IMyStream myStream = null;
         BytesSegment bs;
         int step = -1;
@@ -869,7 +878,7 @@ namespace NaiveSocks
                 awaitable.UnsafeOnCompleted(_moveNext);
             } catch (Exception e) {
                 ResetState();
-                ra.SetException(e);
+                SetException(e);
                 return;
             }
             return;
@@ -881,14 +890,14 @@ namespace NaiveSocks
                 pos += read;
             } catch (Exception e) {
                 ResetState();
-                ra.SetException(e);
+                SetException(e);
                 return;
             }
             goto WHILE;
         //}
         EWHILE:
             ResetState();
-            ra.SetResult(VoidType.Void);
+            SetResult(VoidType.Void);
             return;
         }
 
@@ -906,15 +915,14 @@ namespace NaiveSocks
                 throw new Exception("state machine is already running");
             if (_moveNext == null) {
                 _moveNext = MoveNext;
-                ra = new ReusableAwaiter<VoidType>();
             }
-            ra.Reset();
+            Reset();
             step = 0;
             myStream = stream;
             bs = bytes;
             pos = 0;
             MoveNext();
-            return ra;
+            return this;
         }
     }
 

@@ -45,18 +45,6 @@ namespace NaiveSocks
         {
             _socket = await NaiveUtils.ConnectTcpAsync(new AddrPort(_socksAddr, _socksPort), 0);
             var _ns = MyStream.FromSocket(_socket);
-            Task write(byte[] buf) => _ns.WriteAsync(buf, 0, buf.Length);
-            //Task read(byte[] buf) => _ns.ReadAsync(buf, 0, buf.Length);
-            async Task readAll(byte[] buf, int offset, int len)
-            {
-                var pos = 0;
-                while (pos < len) {
-                    var read = await _ns.ReadAsync(buf, offset + pos, len - pos);
-                    if (read == 0)
-                        throw new DisconnectedException("unexpected EOF");
-                    pos += read;
-                }
-            }
 
             var user = _username;
             var pass = _password ?? "";
@@ -65,8 +53,8 @@ namespace NaiveSocks
                 user == null
                 ? new byte[] { SOCKS_VER, 1, NOAUTH }
                 : new byte[] { SOCKS_VER, AUTH_METH_SUPPORT, NOAUTH, USER_PASS_AUTH };
-            await _ns.WriteAsync(buffer, 0, buffer.Length);
-            await readAll(buffer, 0, 2);
+            await _ns.WriteAsyncR(buffer);
+            await _ns.ReadFullAsyncR(new BytesSegment(buffer, 0, 2));
             if (buffer[1] == NOAUTH) {
                 // nothing to do.
             } else if (buffer[1] == USER_PASS_AUTH) {
@@ -78,8 +66,8 @@ namespace NaiveSocks
                 credentials[pos++] = (byte)pass.Length;
                 pos += Encoding.ASCII.GetBytes(pass, 0, pass.Length, credentials, pos);
 
-                await write(credentials);
-                await readAll(buffer, 0, 2);
+                await _ns.WriteAsyncR(credentials);
+                await _ns.ReadFullAsyncR(new BytesSegment(buffer, 0, 2));
                 if (buffer[1] != SOCKS_CMD_SUCCSESS)
                     throw new SocksRefuseException("Invalid username or password.");
             } else {
@@ -97,25 +85,25 @@ namespace NaiveSocks
             buffer[3] = addrType;
             address.CopyTo(buffer, 4);
             port.CopyTo(buffer, 4 + address.Length);
-            await write(buffer);
+            await _ns.WriteAsyncR(buffer);
 
             buffer = new byte[256];
-            await readAll(buffer, 0, 4);
+            await _ns.ReadFullAsyncR(new BytesSegment(buffer, 0, 4));
             if (buffer[1] != SOCKS_CMD_SUCCSESS)
                 throw new SocksRefuseException($"remote socks5 server returns {new BytesView(buffer, 0, 4)}");
             switch (buffer[3]) {
-            case 1:
-                await readAll(buffer, 0, 4 + 2);
-                break;
-            case 3:
-                await readAll(buffer, 0, 1);
-                await readAll(buffer, 0, buffer[0]);
-                break;
-            case 4:
-                await readAll(buffer, 0, 16 + 2);
-                break;
-            default:
-                throw new Exception("Not supported addr type: " + buffer[3]);
+                case 1:
+                    await _ns.ReadFullAsyncR(new BytesSegment(buffer, 0, 4 + 2));
+                    break;
+                case 3:
+                    await _ns.ReadFullAsyncR(new BytesSegment(buffer, 0, 1));
+                    await _ns.ReadFullAsyncR(new BytesSegment(buffer, 0, buffer[0]));
+                    break;
+                case 4:
+                    await _ns.ReadFullAsyncR(new BytesSegment(buffer, 0, 16 + 2));
+                    break;
+                default:
+                    throw new Exception("Not supported addr type: " + buffer[3]);
             }
 
             return _ns;
@@ -130,28 +118,28 @@ namespace NaiveSocks
                 return SOCKS_ADDR_TYPE_DOMAIN_NAME;
 
             switch (ipAddr.AddressFamily) {
-            case AddressFamily.InterNetwork:
-                return SOCKS_ADDR_TYPE_IPV4;
-            case AddressFamily.InterNetworkV6:
-                return SOCKS_ADDR_TYPE_IPV6;
-            default:
-                throw new BadDistanationAddrException();
+                case AddressFamily.InterNetwork:
+                    return SOCKS_ADDR_TYPE_IPV4;
+                case AddressFamily.InterNetworkV6:
+                    return SOCKS_ADDR_TYPE_IPV6;
+                default:
+                    throw new BadDistanationAddrException();
             }
         }
 
         private byte[] GetDestAddressBytes(byte addressType, string host)
         {
             switch (addressType) {
-            case SOCKS_ADDR_TYPE_IPV4:
-            case SOCKS_ADDR_TYPE_IPV6:
-                return IPAddress.Parse(host).GetAddressBytes();
-            case SOCKS_ADDR_TYPE_DOMAIN_NAME:
-                byte[] bytes = new byte[host.Length + 1];
-                bytes[0] = Convert.ToByte(host.Length);
-                Encoding.ASCII.GetBytes(host).CopyTo(bytes, 1);
-                return bytes;
-            default:
-                return null;
+                case SOCKS_ADDR_TYPE_IPV4:
+                case SOCKS_ADDR_TYPE_IPV6:
+                    return IPAddress.Parse(host).GetAddressBytes();
+                case SOCKS_ADDR_TYPE_DOMAIN_NAME:
+                    byte[] bytes = new byte[host.Length + 1];
+                    bytes[0] = Convert.ToByte(host.Length);
+                    Encoding.ASCII.GetBytes(host).CopyTo(bytes, 1);
+                    return bytes;
+                default:
+                    return null;
             }
         }
 

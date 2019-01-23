@@ -50,7 +50,7 @@ namespace NaiveSocks
         public async Task<bool> ProcessAsync()
         {
             buf = new byte[256];
-            var read = await Stream.ReadAsync(buf, 0, buf.Length);
+            var read = await Stream.ReadAsyncR(buf);
             if (read < 3)
                 return false;
 
@@ -62,11 +62,8 @@ namespace NaiveSocks
             var correctLen = 2 + nmethod;
             if (read > correctLen)
                 throw getException("unexpected packet length");
-            while (read < correctLen) {
-                var r = await Stream.ReadAsync(buf, read, correctLen - read);
-                if (r == 0)
-                    throw getException("unexpected EOF");
-                read += r;
+            if (read < correctLen) {
+                await Stream.ReadFullAsyncR(new BytesSegment(buf, read, correctLen - read));
             }
             byte succeedMethod = 0xff; // NO ACCEPTABLE METHODS
             for (int i = 0; i < nmethod; i++) {
@@ -82,23 +79,23 @@ namespace NaiveSocks
                 return false;
             if (succeedMethod == 2) {
                 // https://tools.ietf.org/html/rfc1929
-                await Stream.ReadAllAsync(buf, 2);
+                await ReadFullAsyncR(buf, 2);
                 var ver = buf[0];
                 var ulen = buf[1];
 
-                await Stream.ReadAllAsync(buf, ulen);
+                await ReadFullAsyncR(buf, ulen);
                 Username = Encoding.ASCII.GetString(buf, 0, ulen);
 
-                await Stream.ReadAllAsync(buf, 1);
+                await ReadFullAsyncR(buf, 1);
                 var plen = buf[0];
 
-                await Stream.ReadAllAsync(buf, plen);
+                await ReadFullAsyncR(buf, plen);
                 Password = Encoding.ASCII.GetString(buf, 0, plen);
 
                 var ok = Auth?.Invoke(this) ?? false;
                 buf[0] = 1;
                 buf[1] = (byte)(ok ? 0 : 1);
-                await Stream.WriteAsync(buf, 0, 2);
+                await Stream.WriteAsyncR(new BytesSegment(buf, 0, 2));
                 if (!ok)
                     return false;
             }
@@ -116,32 +113,34 @@ namespace NaiveSocks
         private async Task processRequests()
         {
             var b = new byte[4];
-            await readBytesAsync(b, 4);
+            await ReadFullAsyncR(b, 4);
             checkVersion(b[0]);
             var cmd = (ReqCmd)b[1];
             var rsv = b[2];
             var addrType = (AddrType)b[3];
             string addrString = null;
             switch (addrType) {
-            case AddrType.IPv4Address:
-            case AddrType.IPv6Address:
-                var ip = new IPAddress(await readNewBytesAsync(addrType == AddrType.IPv4Address ? 4 : 16));
-                addrString = ip.ToString();
-                break;
-            case AddrType.DomainName:
-                var length = await readByteAsync();
-                if (length == 0)
-                    throw getException("length of domain name cannot be zero");
-                await readBytesAsync(length);
-                addrString = Encoding.ASCII.GetString(buf, 0, length);
-                break;
+                case AddrType.IPv4Address:
+                case AddrType.IPv6Address:
+                    var ipbytes = new byte[addrType == AddrType.IPv4Address ? 4 : 16];
+                    await Stream.ReadFullAsyncR(ipbytes);
+                    var ip = new IPAddress(ipbytes);
+                    addrString = ip.ToString();
+                    break;
+                case AddrType.DomainName:
+                    var length = await readByteAsync();
+                    if (length == 0)
+                        throw getException("length of domain name cannot be zero");
+                    await ReadSharedBufferAsyncR(length);
+                    addrString = Encoding.ASCII.GetString(buf, 0, length);
+                    break;
             }
             //Console.WriteLine($"(socks5) request Cmd={cmd} AddrType={addrType} Addr={addrString}");
             TargetAddr = addrString;
             if (addrString == null) {
                 await WriteReply(Rep.Address_type_not_supported);
             } else if (cmd == ReqCmd.Connect) {
-                await readBytesAsync(b, 2);
+                await ReadFullAsyncR(b, 2);
                 TargetPort = b[0] << 8;
                 TargetPort |= b[1];
                 Status = Socks5Status.ProcessingRequest;
@@ -179,13 +178,13 @@ namespace NaiveSocks
                 throw getException("Socks5 Method Selection Message has been already sent.");
             buf[0] = 0x05;
             buf[1] = method;
-            await Stream.WriteAsync(buf, 0, 2);
+            await Stream.WriteAsyncR(new BytesSegment(buf, 0, 2));
             Status = Socks5Status.WaitingForRequest;
         }
 
-        public async Task WriteReply(Rep rep) => await WriteReply(rep, AddrType.IPv4Address, null, 0);
+        public AwaitableWrapper WriteReply(Rep rep) => WriteReply(rep, AddrType.IPv4Address, null, 0);
 
-        public async Task WriteReply(Rep rep, AddrType atyp, byte[] addr, int port)
+        public AwaitableWrapper WriteReply(Rep rep, AddrType atyp, byte[] addr, int port)
         {
             if (Status == Socks5Status.ReplySent) {
                 throw getException("Socks5 reply has been already sent.");
@@ -200,7 +199,7 @@ namespace NaiveSocks
             }
             buf[8] = (0x00);
             buf[9] = (0x00);
-            await Stream.WriteAsync(buf, 0, 10);
+            return Stream.WriteAsyncR(new BytesSegment(buf, 0, 10));
         }
 
         private async Task<byte> readByteAsync()
@@ -212,27 +211,14 @@ namespace NaiveSocks
             return oneByteBuf[0];
         }
 
-        private Task readBytesAsync(int count)
+        private AwaitableWrapper ReadSharedBufferAsyncR(int count)
         {
-            return readBytesAsync(buf, count);
+            return ReadFullAsyncR(buf, count);
         }
 
-        private async Task<byte[]> readNewBytesAsync(int length)
+        private AwaitableWrapper ReadFullAsyncR(byte[] bytes, int count)
         {
-            var b = new byte[length];
-            await readBytesAsync(b, length);
-            return b;
-        }
-
-        private async Task readBytesAsync(byte[] bytes, int count)
-        {
-            var pos = 0;
-            while (pos < count) {
-                int read;
-                pos += read = await Stream.ReadAsync(bytes, pos, count - pos);
-                if (read == 0)
-                    throw getEOFException();
-            }
+            return Stream.ReadFullAsyncR(new BytesSegment(bytes, 0, count));
         }
 
         private Exception getException(string msg) => new Exception(msg);
@@ -244,7 +230,7 @@ namespace NaiveSocks
             if (ex != null) {
                 rep = GetRepFromSocketErrorCode(ex.SocketErrorCode);
             }
-            WriteReply(rep).Forget();
+            WriteReply(rep);
         }
 
         private static Rep GetRepFromSocketErrorCode(SocketError se)

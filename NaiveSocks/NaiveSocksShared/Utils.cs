@@ -83,17 +83,6 @@ namespace NaiveSocks
             return NaiveUtils.ParseIPEndPoint(endPoint);
         }
 
-        public static async Task ReadAllAsync(this IMyStream myStream, BytesSegment bv, int count)
-        {
-            var pos = 0;
-            while (pos < count) {
-                var read = await myStream.ReadAsync(new BytesSegment(bv.Bytes, bv.Offset + pos, count - pos));
-                if (read == 0)
-                    throw new DisconnectedException($"unexpected EOF while ReadAll() (count={count}, pos={pos})");
-                pos += read;
-            }
-        }
-
         public static void SymmetricalAction<T>(T left, T right, Action<T, T> action)
         {
             action(left, right);

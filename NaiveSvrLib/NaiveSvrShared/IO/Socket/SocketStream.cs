@@ -12,7 +12,7 @@ using System.Runtime.InteropServices;
 namespace NaiveSocks
 {
 
-    public abstract class SocketStream : MyStream, IMyStreamSync, IMyStreamReadFull, IMyStreamReadR, IMyStreamWriteR
+    public abstract class SocketStream : MyStream, IMyStreamSync, IMyStreamReadFull, IMyStreamReadFullR, IMyStreamReadR, IMyStreamWriteR
     {
         static SocketStream()
         {
@@ -103,39 +103,51 @@ namespace NaiveSocks
         public bool EnableSmartSyncRead { get; set; } = false;
         public bool Enable2ndBufferCheck { get; set; } = false;
 
+        ReadFullRStateMachine readStateMachine;
+
 
         public Task ReadFullAsync(BytesSegment bs)
         {
             if (LengthCanSyncRead >= bs.Len) {
-                var task = ReadAsync(bs, true);
-                if (!(task.IsCompleted && task.Result == bs.Len)) {
+                var task = ReadAsyncR(bs, true);
+                if (!(task.IsCompleted && task.GetResult() == bs.Len)) {
                     Logging.errorAndThrow($"BUG in ReadAsync(bs, true)! (bs.Len={bs.Len})");
                 }
-                return task;
+                return NaiveUtils.CompletedTask;
             } else {
                 return ReadFullAsyncImpl(bs);
             }
         }
 
+        public AwaitableWrapper ReadFullAsyncR(BytesSegment bs)
+        {
+            if (LengthCanSyncRead >= bs.Len) {
+                var task = ReadAsyncR(bs, true);
+                if (!(task.IsCompleted && task.GetResult() == bs.Len)) {
+                    Logging.errorAndThrow($"BUG in ReadAsync(bs, true)! (bs.Len={bs.Len})");
+                }
+                return AwaitableWrapper.GetCompleted();
+            } else {
+                if (readStateMachine == null)
+                    readStateMachine = new ReadFullRStateMachine();
+                return new AwaitableWrapper(readStateMachine.Start(this, bs));
+            }
+        }
+
         public virtual int GetAvailable() => Socket.Available;
 
-        public virtual Task ReadFullAsyncImpl(BytesSegment bs)
+        protected virtual Task ReadFullAsyncImpl(BytesSegment bs)
         {
             return MyStreamExt.ReadFullImpl(this, bs);
         }
 
         public override Task<int> ReadAsync(BytesSegment bs)
         {
-            return ReadAsync(bs, false);
-        }
-
-        private Task<int> ReadAsync(BytesSegment bs, bool full)
-        {
             // We use an internal read-ahead buffer to reduce many read() syscalls when bs.Len is very small.
             // It's important since there is a hardware bug named 'Meltdown' in Intel CPUs.
             // TESTED: This optimization made ReadAsync 20x faster when bs.Len == 4, 
             //         on Windows 10 x64 16299.192 with a laptop Haswell CPU.
-            var ret = PreReadAsync(ref bs, full);
+            var ret = PreReadAsync(ref bs, false);
             if (ret > 0)
                 return NaiveUtils.GetCachedTaskInt(ret);
             if ((ret = TryReadSync(bs)) > 0) {
@@ -148,7 +160,12 @@ namespace NaiveSocks
 
         public AwaitableWrapper<int> ReadAsyncR(BytesSegment bs)
         {
-            var ret = PreReadAsync(ref bs, false);
+            return ReadAsyncR(bs, false);
+        }
+
+        private AwaitableWrapper<int> ReadAsyncR(BytesSegment bs, bool full)
+        {
+            var ret = PreReadAsync(ref bs, full);
             if (ret > 0)
                 return new AwaitableWrapper<int>(ret);
             if ((ret = TryReadSync(bs)) > 0) {
