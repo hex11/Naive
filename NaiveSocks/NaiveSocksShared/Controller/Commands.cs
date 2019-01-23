@@ -218,7 +218,7 @@ namespace NaiveSocks
                         item.Stop();
                     }
                 }
-            }, "[list|(stop ID1 ID2 IDn...)|stopall]");
+            }, "[list|(stop CONNECTION_ID...)|stopall]");
             cmdHub.AddCmdHandler(prefix + "wsc", (cmd) => {
                 cmd.Write($"# total {WebSocket.TotalPingsSent} pings sent / {WebSocket.TotalPongsReceived} pongs received / {WebSocket.TotalPingsReceived} pings received\n", ConsoleColor.Cyan);
                 cmd.Write($"# managed websocket connections ({WebSocket.ManagedWebSockets.Count}): \n", ConsoleColor.Cyan);
@@ -293,7 +293,7 @@ namespace NaiveSocks
                     .Append(" / Private: ").Append(proc.PrivateMemorySize64.ToString("N0")).ToString());
                 sb.Clear();
 
-                con.Write("[CollectionCount] ", ConsoleColor.Cyan);
+                con.Write("[GC Count] ", ConsoleColor.Cyan);
                 int max = GC.MaxGeneration + 1;
                 for (int i = 0; i < max; i++) {
                     if (i != 0)
@@ -311,9 +311,9 @@ namespace NaiveSocks
                 command.WriteLine($"{proc.Threads.Count} (workers: {workersMin}-{workersMax}, ports: {portsMin}-{portsMax})");
                 con.Write("[Connections] ", ConsoleColor.Cyan);
                 command.WriteLine($"{controller.RunningConnections} running, {controller.TotalHandledConnections} handled, {controller.TotalFailedConnections} failed");
-                con.Write("[MyStream Copied] ", ConsoleColor.Cyan);
+                con.Write("[Relay Counters] ", ConsoleColor.Cyan);
                 command.WriteLine($"{MyStream.TotalCopiedPackets:N0} packets, {MyStream.TotalCopiedBytes:N0} bytes");
-                con.Write("[SocketStream Counters]\n", ConsoleColor.Cyan);
+                con.Write("[Socket Counters]\n", ConsoleColor.Cyan);
                 command.WriteLine($"  {SocketStream.GlobalCounters.StringRead};");
                 command.WriteLine($"  {SocketStream.GlobalCounters.StringWrite}.");
             });

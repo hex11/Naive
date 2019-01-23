@@ -739,6 +739,13 @@ namespace Naive.HttpSvr
             }
         }
 
+        public void WriteHistoryLog()
+        {
+            foreach (var item in Logging.getLogsHistoryArray()) {
+                Logging_Logged(item);
+            }
+        }
+
         public void Stop()
         {
             lock (sw) {

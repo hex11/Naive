@@ -84,9 +84,6 @@ Usage: {NAME_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FILE] [--config-
             argumentParser.AddArg(ParasPara.NoPara, "-V", "--version");
             argumentParser.AddArg(ParasPara.AllParaAfterIt, "--cmd");
             var ar = argumentParser.ParseArgs(args);
-            ar.TryGetValue("--cmd", out var argcmd);
-            if (argcmd == null)
-                Logging.info(NameWithVertionText);
             if (ar.ContainsKey("-h")) {
                 Console.WriteLine(cmdHelpText);
                 return;
@@ -101,10 +98,14 @@ Usage: {NAME_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FILE] [--config-
             if (ar.ContainsKey("--stdout-no-time") || ar.ContainsKey("--log-stdout-no-time")) {
                 Logging.WriteLogToConsoleWithTime = false;
             }
+            ar.TryGetValue("--cmd", out var argcmd);
+            if (argcmd == null)
+                Logging.info(NameWithVertionText);
             if (ar.TryGetValue("--log-file", out var logFile)) {
                 Logging.info($"Logging file: {logFile.FirstParaOrThrow}");
                 logWriter = new LogFileWriter(logFile.FirstParaOrThrow, Logging.RootLogger);
                 logWriter.Start();
+                logWriter.WriteHistoryLog();
             }
             if (ar.TryGetValue("-c", out var v)) {
                 specifiedConfigPath = v.FirstParaOrThrow;
@@ -127,8 +128,8 @@ Usage: {NAME_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FILE] [--config-
                 lock (CmdConsole.ConsoleOnStdIO.Lock) {
                     var p = MyStream.TotalCopiedPackets;
                     var b = MyStream.TotalCopiedBytes;
-                    Console.Title = $"{NAME} - current/total {controller.InConnections.Count}/{controller.TotalHandledConnections} connections." +
-                        $" copied {p:N0} Δ{p - lastPackets:N0} packets / {b:N0} Δ{b - lastBytes:N0} bytes";
+                    Console.Title = $"{controller.InConnections.Count}/{controller.TotalHandledConnections} current/total connections" +
+                        $" | relayed {p:N0} Δ{p - lastPackets:N0} packets / {b:N0} Δ{b - lastBytes:N0} bytes - {NAME}";
                     lastPackets = p;
                     lastBytes = b;
                 }
