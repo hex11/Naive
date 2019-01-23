@@ -74,7 +74,6 @@ namespace NaiveSocksAndroid
             editText.SetSingleLine();
             editText.ImeOptions = ImeAction.Send;
             editText.SetOnEditorActionListener(this);
-            editText.FocusedByDefault = true;
 
             scrollView.AddView(textView);
             linearLayout.AddView(scrollView);
