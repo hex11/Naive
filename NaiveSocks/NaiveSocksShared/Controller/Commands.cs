@@ -18,41 +18,11 @@ namespace NaiveSocks
     {
         static Commands()
         {
+            FileDownloadManager dl = null;
             AddAdditionalCommand("dl", cmd => {
-                var src = cmd.args[0];
-                var dst = cmd.args[1];
-                //var conns = cmd.args.Length <= 2 ? 1 : int.Parse(cmd.args[2]);
-                var uri = new Uri(src);
-                Task.Run(async () => {
-                    var httpClient = new System.Net.Http.HttpClient();
-                    cmd.WriteLine("HTTP requesting...");
-                    var resp = await httpClient.GetAsync(uri, System.Net.Http.HttpCompletionOption.ResponseHeadersRead);
-                    var stream = await resp.Content.ReadAsStreamAsync();
-                    cmd.WriteLine("Response received.");
-                    long length = -1;
-                    try {
-                        length = Int64.Parse(resp.Content.Headers.GetValues("Content-Length").Single());
-                        cmd.WriteLine("Length: " + length.ToString("N0"));
-                    } catch (Exception) {
-                        cmd.WriteLine("Failed to get length.");
-                    }
-                    var buf = new BytesSegment(new byte[64 * 1024]);
-                    Directory.CreateDirectory(new FileInfo(dst).DirectoryName);
-                    long progress = 0;
-                    using (var fs = File.Open(dst, FileMode.Create, FileAccess.Write, FileShare.Read)) {
-                        cmd.WriteLine("Download started...");
-                        while (true) {
-                            var r = await stream.ReadAsync(buf);
-                            if (r == 0) {
-                                cmd.WriteLine("Received EOF: " + progress.ToString("N0"));
-                                break;
-                            }
-                            progress += r;
-                            //cmd.WriteLine("Progress: " + progress.ToString("N0"));
-                            fs.Write(buf.Bytes, 0, r);
-                        }
-                    }
-                }).Wait();
+                if (dl == null)
+                    dl = new FileDownloadManager();
+                dl.HandleCommand(cmd);
             });
             if (Environment.OSVersion.Platform == PlatformID.Unix) {
                 AddAdditionalCommand("proc", (c) => {
