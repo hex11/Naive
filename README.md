@@ -2,14 +2,13 @@
 or
 [Latest build on Appveyor](https://ci.appveyor.com/project/hex11/naive/build/artifacts)
 
-Build status:
+Build status (latest commit):
 
 [![Appveyor build status](https://ci.appveyor.com/api/projects/status/brdxtqcek50ny38b?svg=true)](https://ci.appveyor.com/project/hex11/naive)
 
 Build status (master branch):
 
 [![Appveyor build status](https://ci.appveyor.com/api/projects/status/brdxtqcek50ny38b/branch/master?svg=true)](https://ci.appveyor.com/project/hex11/naive/branch/master)
-[![Travis CI build status](https://travis-ci.org/hex11/Naive.svg?branch=master)](https://travis-ci.org/hex11/Naive)
 
 
 # Feature & Future
@@ -23,11 +22,11 @@ Build status (master branch):
   - [x] 'tlssni' (in)
   - [x] 'ss' (in/out)
   - [x] 'naive' (in/out)
-    - [x] Multiplexing
-    - [x] Inversed multiplexing
-    - [x] Compression
-- [x] Router
-  - [x] ABP Filter support
+    - [x] Multiplexing (for 0-RTT handshake) and optional inversed multiplexing (for bandwidth)
+    - [x] Optional compression
+- [x] 'dns' - simple DNS server and client (UDP only)
+- [x] 'router'
+  - [x] [ABP Filter](https://adblockplus.org/filter-cheatsheet) support
   - [x] Auto download ABP Filters from URL
 - [x] Web server
   - [x] 'webfile' - Static website / file server
@@ -35,14 +34,12 @@ Build status (master branch):
   - [ ] Advanced configuration UI
 - [x] Linux
   - [x] Async socket implementation using epoll
+  - [x] Transparent proxy support
 - [x] Android
   - [x] UI: Status / Adapters / Connections / Log / Console
   - [x] Simple text configuration editor
   - [ ] Advanced configuration UI
-  - [x] VpnService implementation
-    - [x] Using tun2socks
-    - [x] Local DNS
-      - [x] Using LiteDB
+  - [x] VpnService implementation using tun2socks
 - [ ] Windows
   - [ ] GUI with systray
 - [ ] UDP support
