@@ -508,7 +508,7 @@ namespace Naive.HttpSvr
             this.bufferSize = size;
             buffer = (byte*)Marshal.AllocHGlobal(size);
             GC.AddMemoryPressure(size);
-            logs = new NaiveSocks.MyQueue<myLog>(1024);
+            logs = new MyQueue<myLog>(256);
         }
 
         ~LogBuffer()
@@ -517,7 +517,7 @@ namespace Naive.HttpSvr
             GC.RemoveMemoryPressure(bufferSize);
         }
 
-        NaiveSocks.MyQueue<myLog> logs;
+        MyQueue<myLog> logs;
         int minIndex;
 
         public int MinIndex => minIndex;

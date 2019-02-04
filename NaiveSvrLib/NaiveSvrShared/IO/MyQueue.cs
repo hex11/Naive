@@ -5,7 +5,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace NaiveSocks
+namespace Naive.HttpSvr
 {
     public class MyQueue<T>
     {

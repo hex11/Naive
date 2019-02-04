@@ -286,6 +286,8 @@ namespace NaiveSocks
                 con.Write("[Socket Counters]\n", ConsoleColor.Cyan);
                 command.WriteLine($"  {SocketStream.GlobalCounters.StringRead};");
                 command.WriteLine($"  {SocketStream.GlobalCounters.StringWrite}.");
+                con.Write("[ContRunner Counters] ", ConsoleColor.Cyan);
+                command.WriteLine($"{ContinuationRunner.InContextCount}/{ContinuationRunner.OutContextCount}");
             });
             cmdHub.AddCmdHandler(prefix + "config", c => {
                 var con = c.Console;

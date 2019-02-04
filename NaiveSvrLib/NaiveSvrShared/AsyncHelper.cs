@@ -299,7 +299,7 @@ namespace Naive.HttpSvr
                 this.state = State.Completed;
                 _lock.Exit();
                 if (c1 is Action action)
-                    JustAwaiter.RunContinuation(action);
+                    ContinuationRunner.Run(action);
                 return true;
             }
             return false;
@@ -311,7 +311,7 @@ namespace Naive.HttpSvr
             _continuation = null;
             _lock.Exit();
             if (c1 is Action action)
-                JustAwaiter.RunContinuation(action);
+                ContinuationRunner.Run(action);
         }
 
         public void SetException(Exception exception)
@@ -462,16 +462,9 @@ namespace Naive.HttpSvr
             return this;
         }
 
-        internal static void RunContinuation(Action c)
+        private static void RunContinuation(Action c)
         {
-            try {
-                c();
-                //Task.Run(c);
-                //ThreadPool.QueueUserWorkItem(waitCallback, c);
-                //ThreadPool.UnsafeQueueUserWorkItem(waitCallback, c);
-            } catch (Exception e) {
-                Logging.exception(e, Logging.Level.Error, "continuation threw an exception.");
-            }
+            ContinuationRunner.Run(c);
         }
     }
 
@@ -547,7 +540,7 @@ namespace Naive.HttpSvr
         public void OnCompleted(Action continuation)
         {
             if (awaitable == COMPLETED) {
-                JustAwaiter.RunContinuation(continuation);
+                ContinuationRunner.Run(continuation);
             } else if (awaitable is Task<T> task) {
                 GetTaskAwaiter(task).OnCompleted(continuation);
             } else if (awaitable is ReusableAwaiter<T> ra) {
@@ -562,7 +555,7 @@ namespace Naive.HttpSvr
         public void UnsafeOnCompleted(Action continuation)
         {
             if (awaitable == COMPLETED) {
-                JustAwaiter.RunContinuation(continuation);
+                ContinuationRunner.Run(continuation);
             } else if (awaitable is Task<T> task) {
                 GetTaskAwaiter(task).UnsafeOnCompleted(continuation);
             } else if (awaitable is ReusableAwaiter<T> ra) {
@@ -659,7 +652,7 @@ namespace Naive.HttpSvr
         public void OnCompleted(Action continuation)
         {
             if (awaitable == COMPLETED) {
-                JustAwaiter.RunContinuation(continuation);
+                ContinuationRunner.Run(continuation);
             } else if (awaitable is Task task) {
                 GetTaskAwaiter(task).OnCompleted(continuation);
             } else if (awaitable is ReusableAwaiter<VoidType> ra) {
@@ -674,7 +667,7 @@ namespace Naive.HttpSvr
         public void UnsafeOnCompleted(Action continuation)
         {
             if (awaitable == COMPLETED) {
-                JustAwaiter.RunContinuation(continuation);
+                ContinuationRunner.Run(continuation);
             } else if (awaitable is Task task) {
                 GetTaskAwaiter(task).UnsafeOnCompleted(continuation);
             } else if (awaitable is ReusableAwaiter<VoidType> ra) {
@@ -704,6 +697,72 @@ namespace Naive.HttpSvr
         private Exception WrongAwaitableType()
         {
             return new Exception("should not happend! awaitable=" + awaitable);
+        }
+    }
+
+    public static class ContinuationRunner
+    {
+        [ThreadStatic]
+        public static bool InRunnerContext = false;
+        [ThreadStatic]
+        public static Context CurrentContext;
+
+        public static int InContextCount, OutContextCount;
+
+        public class Context : MyQueue<Action>
+        {
+            public void CheckContinuation()
+            {
+                while (TryDequeue(out var cont)) {
+                    RunDirectly(cont);
+                }
+            }
+
+            public void PutContinuation(Action cont)
+            {
+                Enqueue(cont);
+            }
+
+            public static void Begin()
+            {
+                InRunnerContext = true;
+            }
+
+            public static void Checkpoint()
+            {
+                CurrentContext?.CheckContinuation();
+            }
+
+            public static void End()
+            {
+                Checkpoint();
+                InRunnerContext = false;
+                // CurrentContext may be reused in the same thread
+            }
+        }
+
+        public static void Run(Action cont)
+        {
+            if (InRunnerContext) {
+                if (CurrentContext == null)
+                    CurrentContext = new Context();
+                CurrentContext.PutContinuation(cont);
+                Interlocked.Increment(ref InContextCount);
+                return;
+            }
+            Interlocked.Increment(ref OutContextCount);
+            Context.Begin();
+            RunDirectly(cont);
+            Context.End();
+        }
+
+        public static void RunDirectly(Action cont)
+        {
+            try {
+                cont();
+            } catch (Exception e) {
+                Logging.exception(e, Logging.Level.Error, "continuation");
+            }
         }
     }
 }

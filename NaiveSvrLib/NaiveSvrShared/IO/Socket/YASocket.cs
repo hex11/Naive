@@ -778,6 +778,7 @@ namespace NaiveSocks
 
         private unsafe void PollLoop_size12(int ep)
         {
+            ContinuationRunner.Context.Begin();
             var events = stackalloc epoll_event[MAX_EVENTS];
             while (true) {
                 var eventCount = LinuxNative.epoll_wait(ep, events, MAX_EVENTS, -1);
@@ -811,6 +812,7 @@ namespace NaiveSocks
                     }
                 }
                 RunningHandler = null;
+                ContinuationRunner.Context.Checkpoint();
                 mapLock.EnterWriteLock();
                 fdCleanupList.Clear();
                 mapLock.ExitWriteLock();
@@ -819,6 +821,7 @@ namespace NaiveSocks
 
         private unsafe void PollLoop_size16(int ep)
         {
+            ContinuationRunner.Context.Begin();
             var events = stackalloc epoll_event_16[MAX_EVENTS];
             while (true) {
                 var eventCount = LinuxNative.epoll_wait(ep, events, MAX_EVENTS, -1);
@@ -852,6 +855,7 @@ namespace NaiveSocks
                     }
                 }
                 RunningHandler = null;
+                ContinuationRunner.Context.Checkpoint();
                 mapLock.EnterWriteLock();
                 fdCleanupList.Clear();
                 mapLock.ExitWriteLock();
