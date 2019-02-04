@@ -54,6 +54,8 @@ namespace NaiveSocksAndroid
         //IsolatedProcess = true,
         //Process = ":bg"
         )]
+    [IntentFilter(new[] { "android.net.VpnService" })]
+    [MetaData("android.net.VpnService.SUPPORTS_ALWAYS_ON", Value = "true")]
     public class BgService : VpnService
     {
         static bool isN = Build.VERSION.SdkInt >= BuildVersionCodes.N;
@@ -64,7 +66,7 @@ namespace NaiveSocksAndroid
         private PowerManager powerManager;
         private NotificationManager notificationManager;
 
-        NotificationCompat.Builder builder, restartBuilder;
+        NotificationCompat.Builder builder;
         const int MainNotificationId = 1;
         const string MainNotifChannelId = "nsocks_service";
 
@@ -117,22 +119,12 @@ namespace NaiveSocksAndroid
 
             powerManager = (PowerManager)GetSystemService(Context.PowerService);
             notificationManager = (NotificationManager)GetSystemService(Context.NotificationService);
-
-            restartBuilder = new NotificationCompat.Builder(this, MainNotifChannelId)
-                        .SetContentTitle(GetString(R.String.service_is_stopped))
-                        .AddAction(BuildServiceAction(Actions.START, R.String.start, Android.Resource.Drawable.StarOff, 6))
-                        .SetSmallIcon(Resource.Drawable.N)
-                        .SetColor(unchecked((int)0xFF2196F3))
-                        .SetAutoCancel(true)
-                        .SetPriority((int)NotificationPriority.Min)
-                        .SetVisibility(NotificationCompat.VisibilitySecret)
-                        .SetShowWhen(false);
         }
 
         private void CreateNotifBuilder()
         {
             if (isO) {
-                var chan = new NotificationChannel(MainNotifChannelId, "NaiveSocks Service", NotificationImportance.Low);
+                var chan = new NotificationChannel(MainNotifChannelId, "NaiveSocks Service", NotificationImportance.Min);
                 chan.LockscreenVisibility = NotificationVisibility.Private;
                 notificationManager.CreateNotificationChannel(chan);
             }
@@ -140,7 +132,8 @@ namespace NaiveSocksAndroid
             builder = new NotificationCompat.Builder(this, MainNotifChannelId)
                                     .SetContentText(GetString(R.String.initializing))
                                     .SetContentIntent(BuildIntentToShowMainActivity())
-                                    .AddAction(BuildServiceAction(Actions.KILL, R.String.kill, Android.Resource.Drawable.StarOff, 1))
+                                    .AddAction(BuildServiceAction(Actions.STOP_NOTIF, R.String.stop, Android.Resource.Drawable.StarOff, 1))
+                                    //.AddAction(BuildServiceAction(Actions.KILL, R.String.kill, Android.Resource.Drawable.StarOff, 1))
                                     .AddAction(BuildServiceAction(Actions.RELOAD, R.String.reload, Android.Resource.Drawable.StarOff, 2))
                                     .AddAction(BuildServiceAction(Actions.GC, R.String.gc, Android.Resource.Drawable.StarOff, 3))
                                     .SetSmallIcon(R.Drawable.N)
@@ -331,19 +324,26 @@ namespace NaiveSocksAndroid
                 case Actions.START:
                     this.ToForeground();
                     break;
+                case "android.net.VpnService":
+                    Logger.info("(intent: android.net.VpnService)");
+                    this.ToForeground();
+                    break;
                 case Actions.START_VPN:
                     StartVpn();
                     break;
                 case Actions.STOP:
+                case Actions.STOP_NOTIF:
                     if (IsForegroundRunning)
                         ToBackground(true);
                     this.StopSelf();
+                    if (action == Actions.STOP_NOTIF)
+                        ShowRestartNotification(false);
                     break;
                 case Actions.KILL:
                     if (IsForegroundRunning)
                         ToBackground(false);
                     this.StopSelf(startId);
-                    notificationManager.Notify(MainNotificationId, restartBuilder.Build());
+                    ShowRestartNotification(true);
                     System.Diagnostics.Process.GetCurrentProcess().Kill();
                     break;
                 case Actions.RELOAD:
@@ -365,6 +365,23 @@ namespace NaiveSocksAndroid
                     break;
             }
             return StartCommandResult.Sticky;
+        }
+
+        private void ShowRestartNotification(bool killed)
+        {
+            var builder = new NotificationCompat.Builder(this, MainNotifChannelId)
+                           .SetContentTitle(GetString(killed ? R.String.process_is_killed : R.String.service_is_stopped))
+                           .SetContentIntent(BuildIntentToShowMainActivity())
+                           .AddAction(BuildServiceAction(Actions.START, R.String.start, Android.Resource.Drawable.StarOff, 6))
+                           .SetSmallIcon(Resource.Drawable.N)
+                           .SetColor(unchecked((int)0xFF2196F3))
+                           .SetAutoCancel(true)
+                           .SetPriority((int)NotificationPriority.Min)
+                           .SetVisibility(NotificationCompat.VisibilitySecret)
+                           .SetShowWhen(false);
+            if (!killed)
+                builder.AddAction(BuildServiceAction(Actions.KILL, R.String.kill, Android.Resource.Drawable.StarOff, 1));
+            notificationManager.Notify(MainNotificationId, builder.Build());
         }
 
         public void Reload()
@@ -590,6 +607,7 @@ namespace NaiveSocksAndroid
             public const string START = "start!";
             public const string START_VPN = "startVpn!";
             public const string STOP = "stop!";
+            public const string STOP_NOTIF = "stop_notif!";
             public const string TOGGLE = "toggle!";
             public const string KILL = "kill!";
             public const string RELOAD = "reload!";

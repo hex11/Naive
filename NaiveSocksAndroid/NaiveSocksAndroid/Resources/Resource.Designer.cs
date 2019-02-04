@@ -3842,11 +3842,11 @@ namespace NaiveSocksAndroid
 			// aapt resource value: 0x7f0d0042
 			public const int config_editor = 2131558466;
 			
-			// aapt resource value: 0x7f0d0059
-			public const int conn_more_info = 2131558489;
+			// aapt resource value: 0x7f0d005a
+			public const int conn_more_info = 2131558490;
 			
-			// aapt resource value: 0x7f0d0058
-			public const int conn_sort_by_speed = 2131558488;
+			// aapt resource value: 0x7f0d0059
+			public const int conn_sort_by_speed = 2131558489;
 			
 			// aapt resource value: 0x7f0d0030
 			public const int connections = 2131558448;
@@ -3905,14 +3905,14 @@ namespace NaiveSocksAndroid
 			// aapt resource value: 0x7f0d0053
 			public const int gc_done = 2131558483;
 			
-			// aapt resource value: 0x7f0d0056
-			public const int got_it = 2131558486;
+			// aapt resource value: 0x7f0d0057
+			public const int got_it = 2131558487;
 			
 			// aapt resource value: 0x7f0d002e
 			public const int home = 2131558446;
 			
-			// aapt resource value: 0x7f0d005a
-			public const int in_operation = 2131558490;
+			// aapt resource value: 0x7f0d005b
+			public const int in_operation = 2131558491;
 			
 			// aapt resource value: 0x7f0d004b
 			public const int initializing = 2131558475;
@@ -3920,14 +3920,14 @@ namespace NaiveSocksAndroid
 			// aapt resource value: 0x7f0d003b
 			public const int kill = 2131558459;
 			
-			// aapt resource value: 0x7f0d0057
-			public const int log_dynamic_margin = 2131558487;
+			// aapt resource value: 0x7f0d0058
+			public const int log_dynamic_margin = 2131558488;
 			
 			// aapt resource value: 0x7f0d002f
 			public const int logs = 2131558447;
 			
-			// aapt resource value: 0x7f0d0055
-			public const int long_press_cxn_to_stop = 2131558485;
+			// aapt resource value: 0x7f0d0056
+			public const int long_press_cxn_to_stop = 2131558486;
 			
 			// aapt resource value: 0x7f0d002a
 			public const int naivesocksandroid = 2131558442;
@@ -3955,6 +3955,9 @@ namespace NaiveSocksAndroid
 			
 			// aapt resource value: 0x7f0d0047
 			public const int press_again_to_quit = 2131558471;
+			
+			// aapt resource value: 0x7f0d0055
+			public const int process_is_killed = 2131558485;
 			
 			// aapt resource value: 0x7f0d0035
 			public const int reload = 2131558453;

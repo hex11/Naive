@@ -1,1 +1,1 @@
-﻿MONO_GC_PARAMS=bridge-implementation=new
+﻿MONO_GC_PARAMS=bridge-implementation=new,nursery-size=4m,major=marksweep-fixed,major-heap-size=128m,evacuation-threshold=80

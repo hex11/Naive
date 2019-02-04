@@ -263,7 +263,7 @@ namespace NaiveSocks
                     .Append(" / Private: ").Append(proc.PrivateMemorySize64.ToString("N0")).ToString());
                 sb.Clear();
 
-                con.Write("[GC Count] ", ConsoleColor.Cyan);
+                con.Write("[GC Counters] ", ConsoleColor.Cyan);
                 int max = GC.MaxGeneration + 1;
                 for (int i = 0; i < max; i++) {
                     if (i != 0)

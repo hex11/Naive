@@ -1,6 +1,10 @@
 ﻿<?xml version="1.0" encoding="utf-8" ?>
 <!-- styles v21 -->
 <resources>
+  <style name="MyTheme.LaunchScreen" parent="MyTheme.Light">
+    <item name="android:windowBackground">@drawable/launch_screen</item>
+    <item name="android:windowTranslucentStatus">true</item>
+  </style>
   <!--<style name="MyTheme.Light" parent="Theme.AppCompat.Light">
   </style>-->
   <style name="MyTheme.Light" parent="MyTheme.Base">
@@ -10,8 +14,8 @@
     <item name="android:windowSharedElementEnterTransition">@android:transition/move</item>
     <item name="android:windowSharedElementExitTransition">@android:transition/move</item>
     <item name="android:windowDrawsSystemBarBackgrounds">true</item>
-    <item name="android:statusBarColor">@android:color/transparent</item>
-    <item name="android:windowTranslucentStatus">true</item>
+    <item name="android:statusBarColor">?colorPrimaryDark</item>
+    <item name="android:windowTranslucentStatus">false</item>
     <item name="android:windowTranslucentNavigation">false</item>
   </style>
 </resources>

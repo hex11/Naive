@@ -18,7 +18,7 @@
   <string name="editconfig">编辑配置...</string>
   <string name="submenu_restart_kill">重启/杀死</string>
   <string name="restart">重启</string>
-  <string name="kill">我杀我自己!</string>
+  <string name="kill">终止进程</string>
   <string name="autoscroll">自动滚动</string>
   <string name="format_enabled">{0} 已启用</string>
   <string name="format_disable">{0} 已禁用</string>
@@ -44,6 +44,7 @@
   <string name="reloading_error">重载错误: </string>
   <string name="gc_done">GC 完毕</string>
   <string name="service_is_stopped">NaiveSocks 服务已停止</string>
+  <string name="process_is_killed">NaiveSocks 进程已终止</string>
   <string name="long_press_cxn_to_stop">长按以停止连接</string>
   <string name="got_it">知道了</string>
   <string name="log_dynamic_margin">动态间隔</string>

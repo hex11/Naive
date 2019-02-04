@@ -18,7 +18,7 @@
   <string name="editconfig">設定を編集...</string>
   <string name="submenu_restart_kill">再起動/キル</string>
   <string name="restart">再起動</string>
-  <string name="kill">キル！</string>
+  <string name="kill">強制終了</string>
   <string name="autoscroll">自動スクロール</string>
   <string name="format_enabled">{0}は有効になっています</string>
   <string name="format_disable">{0}は無効になっています</string>
@@ -44,6 +44,7 @@
   <string name="reloading_error">リロードエラー: </string>
   <string name="gc_done">GC 完了</string>
   <string name="service_is_stopped">サービスは停止されました</string>
+  <string name="process_is_killed">プロセスは強制終了されました</string>
   <string name="long_press_cxn_to_stop">長押して接続を停止します</string>
   <string name="got_it">了解しました</string>
   <string name="log_dynamic_margin">ダイナミックマージン</string>

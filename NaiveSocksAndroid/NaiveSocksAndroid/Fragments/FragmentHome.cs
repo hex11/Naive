@@ -82,7 +82,7 @@ namespace NaiveSocksAndroid
                     .Append(" / WS: ").Append(proc.WorkingSet64.ToString("N0"));
             });
 
-            NewDataItem("CollectionCount", sb => {
+            NewDataItem("GC Counters", sb => {
                 int max = GC.MaxGeneration + 1;
                 for (int i = 0; i < max; i++) {
                     if (i != 0)
@@ -116,11 +116,11 @@ namespace NaiveSocksAndroid
                 }
             });
 
-            NewDataItem("MyStream Copied", sb => {
+            NewDataItem("Relay Counters", sb => {
                 sb.Append(MyStream.TotalCopiedPackets.ToString("N0")).Append(" packets, ").Append(MyStream.TotalCopiedBytes.ToString("N0")).Append(" bytes");
             });
 
-            NewDataItem("SocketStream Counters", sb => {
+            NewDataItem("Socket Counters", sb => {
                 sb.Append(SocketStream.GlobalCounters.StringRead).AppendLine();
                 sb.Append(SocketStream.GlobalCounters.StringWrite);
             });
