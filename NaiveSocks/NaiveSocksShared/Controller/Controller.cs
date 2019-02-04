@@ -102,6 +102,7 @@ namespace NaiveSocks
         private void RegisterBuiltInTypes()
         {
             RegisteredInTypes.Add("direct", typeof(DirectInAdapter));
+            RegisteredInTypes.Add("tproxy", typeof(TProxyInAdapter));
             RegisteredInTypes.Add("socks", typeof(SocksInAdapter));
             RegisteredInTypes.Add("socks5", typeof(SocksInAdapter));
             RegisteredInTypes.Add("http", typeof(HttpInAdapter));

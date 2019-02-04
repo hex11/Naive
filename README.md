@@ -34,7 +34,7 @@ Build status (master branch):
   - [ ] Advanced configuration UI
 - [x] Linux
   - [x] Async socket implementation using epoll
-  - [x] Transparent proxy support
+  - [x] 'tproxy' (in) - Transparent proxy support
 - [x] Android
   - [x] UI: Status / Adapters / Connections / Log / Console
   - [x] Simple text configuration editor
