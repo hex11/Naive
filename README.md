@@ -24,7 +24,7 @@ Build status (master branch):
   - [x] 'naive' (in/out)
     - [x] Multiplexing (for 0-RTT handshake) and optional inversed multiplexing (for bandwidth)
     - [x] Optional compression
-- [x] 'dns' - simple DNS server and client (UDP only)
+- [x] 'dns' - simple DNS server (UDP) and client (UDP/DoH)
 - [x] 'router'
   - [x] [ABP Filter](https://adblockplus.org/filter-cheatsheet) support
   - [x] Auto download ABP Filters from URL

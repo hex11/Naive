@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using DNS;
 using DNS.Client;
+using DNS.Client.RequestResolver;
 using DNS.Protocol;
 using DNS.Protocol.ResourceRecords;
 using Naive.HttpSvr;
@@ -15,13 +16,31 @@ namespace NaiveSocks
     {
         public AddrPort server { get; set; }
 
+        public string doh { get; set; }
+
+        protected override void GetDetail(GetDetailContext ctx)
+        {
+            base.GetDetail(ctx);
+            if (doh != null) {
+                ctx.AddField("DoH", doh);
+            } else {
+                ctx.AddField(nameof(server), server);
+            }
+        }
+
         DnsClient dnsClient;
 
         protected override void OnStart()
         {
             base.OnStart();
-            server = server.WithDefaultPort(53);
-            dnsClient = new DnsClient(IPAddress.Parse(server.Host), server.Port);
+            if (doh != null) {
+                if (doh == "cloudflare")
+                    doh = "https://1.1.1.1/dns-query";
+                dnsClient = new DnsClient(new HttpsRequestResolver() { Uri = doh });
+            } else {
+                server = server.WithDefaultPort(53);
+                dnsClient = new DnsClient(IPAddress.Parse(server.Host), server.Port);
+            }
         }
 
         public override Task HandleConnection(InConnection connection)
