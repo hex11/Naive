@@ -33,6 +33,8 @@ namespace Naive.HttpSvr
 
         public IHttpRequestHandler handler;
 
+        public Logger Logger = new Logger("HttpSvr", Logging.RootLogger);
+
         private string _mark;
         public string mark
         {
@@ -41,11 +43,9 @@ namespace Naive.HttpSvr
             }
             set {
                 _mark = value;
-                stamp = string.IsNullOrEmpty(value) ? "[HttpSvr]" : $"[HttpSvr:{value}]";
+                Logger.Stamp = string.IsNullOrEmpty(value) ? "HttpSvr" : $"HttpSvr:{value}";
             }
         }
-
-        public string stamp { get; private set; } = "[HttpSvr]";
 
         [Obsolete("Use AddListener method")]
         public NaiveHttpServer(int port) : this()
@@ -92,7 +92,7 @@ namespace Naive.HttpSvr
         public Task Run()
         {
             if (Listeners.Count == 0) {
-                Logging.warning($"{stamp} Run(): No listner.");
+                Logger.warning($"Run(): No listner.");
             }
             List<Task> tasks = new List<Task>(Listeners.Count);
             foreach (var listener in Listeners) {
@@ -164,19 +164,19 @@ namespace Naive.HttpSvr
                 return;
             }
 #endif
-            Logging.log(text, level);
+            Logger.log(text, level);
         }
 
         public virtual void logException(Exception ex, Logging.Level level, string text)
         {
-            Logging.exception(ex, level, text);
+            Logger.exception(ex, level, text);
         }
 
         public virtual void OnHttpConnectionException(Exception ex, HttpConnection p)
         {
             if (p.disconnecting)
                 return;
-            Logging.exception(ex, Logging.Level.Error, $"{stamp} ({p.myStream}) httpConnection processing");
+            Logger.exception(ex, Logging.Level.Error, $"({p.myStream}) httpConnection processing");
         }
 
         public class NaiveHttpListener
@@ -186,7 +186,8 @@ namespace Naive.HttpSvr
             public IPEndPoint localEP { get; }
             public bool IsRunning { get; private set; } = false;
             public bool LogInfo { get; set; } = false;
-            private string stamp => server.stamp;
+            public Logger Logger => server.Logger;
+
             public NaiveHttpListener(NaiveHttpServer server, TcpListener tcpListener)
             {
                 this.server = server;
@@ -201,12 +202,12 @@ namespace Naive.HttpSvr
                     await _listen();
                 } catch (Exception e) {
                     if (IsRunning) {
-                        server.logException(e, Logging.Level.Error, $"{stamp}({localEP}) Run():");
+                        server.logException(e, Logging.Level.Error, $"({localEP}) Run():");
                     }
                 } finally {
                     IsRunning = false;
                     if (LogInfo)
-                        server.log($"{stamp}({localEP}) listening thread exiting", Logging.Level.Warning);
+                        server.log($"({localEP}) listening thread exiting", Logging.Level.Warning);
                 }
             }
 
@@ -216,11 +217,11 @@ namespace Naive.HttpSvr
                 try {
                     tcpListener.Start();
                 } catch (Exception e) {
-                    Logging.error($"{stamp} starting listening on {localEP}: {e.Message}");
+                    Logger.error($"starting listening on {localEP}: {e.Message}");
                     return;
                 }
                 if (LogInfo)
-                    Logging.info($"{stamp} listening on {localEP}");
+                    Logger.info($"listening on {localEP}");
                 while (true) {
                     try {
                         var client = await tcpListener.AcceptTcpClientAsync();
@@ -228,7 +229,7 @@ namespace Naive.HttpSvr
                         Task.Run(() => server.HandleAcceptedTcp(client)).Forget();
                     } catch (Exception e) {
                         if (IsRunning) {
-                            server.logException(e, Logging.Level.Error, $"{stamp}({localEP}) accepting connection:");
+                            server.logException(e, Logging.Level.Error, $"({localEP}) accepting connection:");
                             await Task.Delay(300);
                         } else {
                             return;
@@ -243,7 +244,7 @@ namespace Naive.HttpSvr
                     IsRunning = false;
                     tcpListener.Stop();
                 } catch (Exception ex) {
-                    Logging.exception(ex, Logging.Level.Warning, $"{stamp} stopping TcpListener ({localEP})");
+                    Logger.exception(ex, Logging.Level.Warning, $"stopping TcpListener ({localEP})");
                 }
             }
         }
@@ -264,7 +265,7 @@ namespace Naive.HttpSvr
                     return;
                 }
             } catch (Exception e) {
-                Logging.exception(e, Logging.Level.Error, $"{stamp} ({epPair}) httpConnection creating");
+                Logger.exception(e, Logging.Level.Error, $"({epPair}) httpConnection creating");
                 return;
             }
             try {
@@ -273,7 +274,7 @@ namespace Naive.HttpSvr
                 try {
                     this.OnHttpConnectionException(e, connection);
                 } catch (Exception e2) {
-                    Logging.exception(e2, Logging.Level.Error, "In OnHttpConnectionExceptionExit");
+                    Logger.exception(e2, Logging.Level.Error, "In OnHttpConnectionExceptionExit");
                 }
             }
         }
