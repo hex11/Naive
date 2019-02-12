@@ -153,8 +153,14 @@ namespace NaiveSocks
         bool Reloading(object oldInstance);
     }
 
+    [System.AttributeUsage(AttributeTargets.Property, Inherited = false, AllowMultiple = false)]
+    sealed class NotConfAttribute : Attribute
+    {
+    }
+
     public abstract class Adapter : IAdapter
     {
+        [NotConf]
         public string Name { get; set; }
 
         public Adapter GetAdapter() => this;

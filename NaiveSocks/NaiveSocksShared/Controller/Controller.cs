@@ -130,6 +130,47 @@ namespace NaiveSocks
             RegisteredOutTypes.Add("nnetwork", typeof(NNetworkAdapter));
         }
 
+        public void GenerateDocument(TextWriter tw)
+        {
+            List<Type> types = new List<Type>();
+            foreach (var item in RegisteredInTypes.Keys.Union(RegisteredOutTypes.Keys)) {
+                {
+                    if (RegisteredInTypes.TryGetValue(item, out var type)) {
+                        if (types.Contains(type)) {
+                            tw.WriteLine($"[InAdatper alias '{item}' - {type.Name}]");
+                        } else {
+                            types.Add(type);
+                            tw.WriteLine($"[InAdatper type '{item}' - {type.Name}]");
+                            GenerateDocument(tw, type);
+                        }
+                        tw.WriteLine();
+                    }
+                }
+                {
+                    if (RegisteredOutTypes.TryGetValue(item, out var type)) {
+                        if (types.Contains(type)) {
+                            tw.WriteLine($"[OutAdatper alias '{item}' - {type.Name}]");
+                        } else {
+                            types.Add(type);
+                            tw.WriteLine($"[OutAdatper type '{item}' - {type.Name}]");
+                            GenerateDocument(tw, type);
+                        }
+                        tw.WriteLine();
+                    }
+                }
+            }
+        }
+
+        public void GenerateDocument(TextWriter tw, Type type)
+        {
+            var props = type.GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+            foreach (var item in props) {
+                if (item.CanWrite && item.GetCustomAttributes(typeof(NotConfAttribute), false).Any() == false) {
+                    tw.WriteLine($"({item.PropertyType.Name})\t{item.Name}");
+                }
+            }
+        }
+
         public void LoadConfigFileOrWarning(string path, bool now = true)
         {
             FuncGetConfigFile = () => {
@@ -172,7 +213,7 @@ namespace NaiveSocks
         {
             var config = configFile ?? FuncGetConfigFile?.Invoke();
             if (config == null)
-                warning($"no configuration.");
+                error($"no configuration.");
             return config;
         }
 
@@ -624,7 +665,7 @@ namespace NaiveSocks
                 await onConnectionEnd(request);
                 throw;
             }
-        RETURN:
+            RETURN:
             return new ConnectResponse(result, request);
         }
 
