@@ -903,6 +903,35 @@ namespace NaiveSocks
                     var now = DateTime.Now;
                 }
             }),
+            new TestItem("DnsDb upserts 10,000 items", (ctx) => {
+                var db = new DnsDb("performance-test.db");
+                db.Init();
+                for (int i = 0; i < 10000; i++) {
+                    db.Set(i.ToString(), new IpRecord{
+                        expire = DateTime.Now,
+                        ipLongs = new uint[] {
+                            (uint)NaiveUtils.Random.Next(0, 50000)
+                        }
+                    });
+                }
+            }),
+            new TestItem("DnsDb query by domain 10,000 times", (ctx) => {
+                var db = new DnsDb("performance-test.db");
+                db.Init();
+                for (int i = 0; i < 10000; i++) {
+                    db.TryGetIp(NaiveUtils.Random.Next(0, 20000).ToString(), out var val);
+                }
+            }),
+            new TestItem("DnsDb query by ip 10,000 times", (ctx) => {
+                var db = new DnsDb("performance-test.db");
+                db.Init();
+                for (int i = 0; i < 10000; i++) {
+                    db.TryGetDomain((uint)NaiveUtils.Random.Next(0, 50000));
+                }
+            }),
+            new TestItem("DnsDb delete test file", (ctx) => {
+                File.Delete("performance-test.db");
+            }),
         };
 
         private static void PrintLogs(CmdConsole con, Logging.Log[] logs)
