@@ -13,7 +13,34 @@ namespace NaiveSocks
 
     public interface IDnsProvider : IAdapter
     {
-        Task<IPAddress[]> ResolveName(string name);
+        Task<DnsResponse> ResolveName(DnsRequest req);
+    }
+
+    public class DnsRequest
+    {
+        public string Name;
+        public RequestType Type = RequestType.A;
+
+        int Redirects = 0;
+
+        public Task<DnsResponse> RedirectTo(IDnsProvider dnsProvider)
+        {
+            if (++Redirects > 16) throw new Exception("too many redirects");
+            return dnsProvider.ResolveName(this);
+        }
+    }
+
+    public enum RequestType
+    {
+        A = 1,
+        AAAA = 2 ,
+        AnAAAA = 3
+    }
+
+    public class DnsResponse
+    {
+        public IPAddress[] Addresses;
+        public int? TTL;
     }
 
     public interface IConnectionProvider

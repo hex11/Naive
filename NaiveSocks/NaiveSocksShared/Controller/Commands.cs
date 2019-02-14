@@ -489,7 +489,7 @@ namespace NaiveSocks
                     selected = adapters[selectedId];
                 }
                 Task.Run(async () => {
-                    foreach (var item in await selected.ResolveName(cmd.args[0])) {
+                    foreach (var item in (await selected.ResolveName(new DnsRequest { Name = cmd.args[0] })).Addresses) {
                         cmd.WriteLine(item.ToString());
                     }
                 }).Wait(3000);
@@ -907,26 +907,27 @@ namespace NaiveSocks
                 var db = new DnsDb("performance-test.db");
                 db.Init();
                 for (int i = 0; i < 10000; i++) {
-                    db.Set(i.ToString(), new IpRecord{
+                    var r = new IpRecord{
                         expire = DateTime.Now,
                         ipLongs = new uint[] {
                             (uint)NaiveUtils.Random.Next(0, 50000)
                         }
-                    });
+                    };
+                    db.Set(i.ToString(), ref r);
                 }
             }),
             new TestItem("DnsDb query by domain 10,000 times", (ctx) => {
                 var db = new DnsDb("performance-test.db");
                 db.Init();
                 for (int i = 0; i < 10000; i++) {
-                    db.TryGetIp(NaiveUtils.Random.Next(0, 20000).ToString(), out var val);
+                    db.QueryByName(NaiveUtils.Random.Next(0, 20000).ToString(), out var val);
                 }
             }),
             new TestItem("DnsDb query by ip 10,000 times", (ctx) => {
                 var db = new DnsDb("performance-test.db");
                 db.Init();
                 for (int i = 0; i < 10000; i++) {
-                    db.TryGetDomain((uint)NaiveUtils.Random.Next(0, 50000));
+                    db.QueryByIp((uint)NaiveUtils.Random.Next(0, 50000));
                 }
             }),
             new TestItem("DnsDb delete test file", (ctx) => {

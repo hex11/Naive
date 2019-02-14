@@ -48,12 +48,12 @@ namespace NaiveSocks
             throw new Exception("This is just a dns client and cannot handle regular connection.");
         }
 
-        public async Task<IPAddress[]> ResolveName(string name)
+        public async Task<DnsResponse> ResolveName(DnsRequest dr)
         {
+            var name = dr.Name;
             var req = dnsClient.Create();
             var domain = new Domain(name);
-            req.Questions.Add(new Question(domain, RecordType.A));
-            //req.Questions.Add(new Question(domain, RecordType.AAAA));
+            req.Questions.Add(new Question(domain, dr.Type != RequestType.AAAA ? RecordType.A : RecordType.AAAA));
             req.OperationCode = OperationCode.Query;
             req.RecursionDesired = true;
             var r = await req.Resolve();
@@ -73,13 +73,16 @@ namespace NaiveSocks
                 }
             }
             var arr = new IPAddress[count];
+            int? ttl = null;
             int cur = 0;
             foreach (var item in r.AnswerRecords) {
                 if (item.Type == RecordType.A || item.Type == RecordType.AAAA) {
                     arr[cur++] = ((IPAddressResourceRecord)item).IPAddress;
+                    int newTtl = (int)item.TimeToLive.TotalSeconds;
+                    ttl = ttl.HasValue ? Math.Min(newTtl, ttl.Value) : newTtl;
                 }
             }
-            return arr;
+            return new DnsResponse { Addresses = arr, TTL = ttl };
         }
     }
 }

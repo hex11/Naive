@@ -294,11 +294,11 @@ namespace NaiveSocks
             return ncs.Connect(arg);
         }
 
-        public async Task<IPAddress[]> ResolveName(string name)
+        public async Task<DnsResponse> ResolveName(DnsRequest req)
         {
             var ncs = GetPoolItem();
             await ncs.ConnectIfNot();
-            return await ncs.nms.DnsQuery(name);
+            return await ncs.nms.DnsQuery(req);
         }
 
         public async Task SpeedTest(Action<string> log)

@@ -9,7 +9,7 @@ using Naive.HttpSvr;
 
 namespace NaiveSocks
 {
-    public class DnsDb : ICacheReverseDns, ICacheDns
+    public class DnsDb : ICacheDns
     {
         public Naive.HttpSvr.Logger Logger;
 
@@ -49,6 +49,8 @@ namespace NaiveSocks
 
                 engine.EnsureIndex(ColRecords, "idx_ips", "$.Ips[*]", false);
                 engine.EnsureIndex(ColRecords, "idx_oldips", "$.OldIps[*]", false);
+                engine.EnsureIndex(ColRecords, "idx_ips6", "$.Ips6[*]", false);
+                engine.EnsureIndex(ColRecords, "idx_oldips6", "$.OldIps6[*]", false);
                 Logger?.info($"{engine.Count(ColRecords)} records.");
                 CheckShrink();
             } catch (Exception e) {
@@ -166,46 +168,51 @@ namespace NaiveSocks
             return reduced;
         }
 
-        public void Set(string domain, IpRecord val)
+        public void Set(string domain, ref IpRecord val)
         {
             lock (syncRoot) {
                 var begin = Logging.getRuntime();
                 inserts++;
                 var doc = FindDocByDomain(domain).SingleOrDefault();
                 Record r = null;
-                if (doc != null)
-                    r = Record.FromDocument(doc);
-                else
-                    r = new Record() { Domain = domain };
-                int[] ipints = new int[val.ipLongs.Length];
-                for (int i = 0; i < ipints.Length; i++) {
-                    ipints[i] = (int)val.ipLongs[i];
-                }
-                if (r.Ips != null && r.Ips.Length > 0) {
-                    if (r.OldIps != null) {
-                        r.OldIps = r.OldIps.Union(r.Ips).Except(ipints).ToArray();
-                    } else {
-                        r.OldIps = r.Ips.Except(ipints).ToArray();
+                if (doc != null) r = Record.FromDocument(doc);
+                else r = new Record() { Domain = domain };
+
+                // update IPv4/v6 records separately
+                if (val.ipLongs != null) {
+                    if (r.Ips != null && r.Ips.Length > 0) {
+                        if (r.OldIps != null) {
+                            r.OldIps = r.OldIps.Union(r.Ips).Except(val.ipLongs).ToArray();
+                        } else {
+                            r.OldIps = r.Ips.Except(val.ipLongs).ToArray();
+                            if (r.OldIps.Length == 0) r.OldIps = null;
+                        }
                     }
+                    r.Ips = val.ipLongs;
+                    r.Date = DateTime.Now;
+                    r.Expire = val.expire;
                 }
-                r.Ips = ipints;
-                r.Date = DateTime.Now;
-                r.Expire = val.expire;
+                if (val.ips6 != null) {
+                    if (r.Ips6 != null && r.Ips6.Length > 0) {
+                        var ec = Ip6.EqualityComparer;
+                        if (r.OldIps6 != null) {
+                            r.OldIps6 = r.OldIps6.Union(r.Ips6, ec).Except(val.ips6, ec).ToArray();
+                        } else {
+                            r.OldIps6 = r.Ips6.Except(val.ips6, ec).ToArray();
+                            if (r.OldIps6.Length == 0) r.OldIps6 = null;
+                        }
+                    }
+                    r.Ips6 = val.ips6;
+                    r.Date = DateTime.Now;
+                    r.Expire6 = val.expire6;
+                }
+
                 engine.Upsert(ColRecords, r.ToDocument(), BsonType.Int32);
                 insertTotalTime += (int)(Logging.getRuntime() - begin);
             }
         }
 
-        public void Set(uint[] ips, string domain)
-        {
-            // done by Set(string, IpRecord)
-        }
-
-        public void Set(uint ip, string domain)
-        {
-        }
-
-        public string TryGetDomain(uint ip)
+        public string QueryByIp(uint ip)
         {
             Interlocked.Increment(ref queryByIps);
             var begin = Logging.getRuntime();
@@ -213,30 +220,14 @@ namespace NaiveSocks
                 var docs = FindDocByIp(ip);
                 var r = GetFirstOrNull(ip, docs, out var m);
                 if (m) {
-                    var domainsSb = new StringBuilder();
-                    foreach (var item in docs) {
-                        if (domainsSb.Length != 0)
-                            domainsSb.Append('|');
-                        domainsSb.Append(item["_id"].AsString);
-                        if (r.Expire < item["Expire"].AsDateTime) {
-                            r = Record.FromDocument(item);
-                        }
-                    }
-                    Logger?.warning($"multiple domains ({domainsSb}) resolve to a ip address ({new IPAddress(ip)}).");
+                    HandleMultipleItems(docs, ref r, out var domains);
+                    Logger?.warning($"multiple domains ({domains}) resolve to a ip address ({new IPAddress(ip)}).");
                 } else if (r == null) {
                     docs = FindDocByOldIp(ip);
                     r = GetFirstOrNull(ip, docs, out m);
                     if (m) {
-                        var domainsSb = new StringBuilder();
-                        foreach (var item in docs) {
-                            if (domainsSb.Length != 0)
-                                domainsSb.Append('|');
-                            domainsSb.Append(item["_id"].AsString);
-                            if (r.Expire < item["Expire"].AsDateTime) {
-                                r = Record.FromDocument(item);
-                            }
-                        }
-                        Logger?.warning($"multiple domains ({domainsSb}) were (but not now) resolving to a ip address ({new IPAddress(ip)}).");
+                        HandleMultipleItems(docs, ref r, out var domains);
+                        Logger?.warning($"multiple domains ({domains}) were (but not now) resolving to a ip address ({new IPAddress(ip)}).");
                     } else if (r != null) {
                         Logger?.warning($"domain ({r.Domain}) was (but not now) resolving to ip ({new IPAddress(ip)}).");
                     }
@@ -247,7 +238,27 @@ namespace NaiveSocks
             }
         }
 
-        public bool TryGetIp(string domain, out IpRecord val)
+        private static void HandleMultipleItems(IEnumerable<BsonDocument> docs, ref Record r, out string domainList)
+        {
+            var domainsSb = new StringBuilder();
+            foreach (var item in docs) {
+                if (domainsSb.Length != 0)
+                    domainsSb.Append('|');
+                domainsSb.Append(item["_id"].AsString);
+                if (r.Expire < item["Expire"].AsDateTime) {
+                    r = Record.FromDocument(item);
+                }
+            }
+            domainList = domainsSb.ToString();
+        }
+
+        public string QueryByIp6(Ip6 ip)
+        {
+            // TODO
+            return null;
+        }
+
+        public bool QueryByName(string domain, out IpRecord val)
         {
             Interlocked.Increment(ref queryByDomains);
             var begin = Logging.getRuntime();
@@ -256,10 +267,8 @@ namespace NaiveSocks
                 if (doc != null) {
                     var r = Record.FromDocument(doc);
                     val = new IpRecord();
-                    val.ipLongs = new uint[r.Ips.Length];
-                    for (int i = 0; i < val.ipLongs.Length; i++) {
-                        val.ipLongs[i] = (uint)r.Ips[i];
-                    }
+                    val.ipLongs = r.Ips;
+                    val.ips6 = r.Ips6;
                     val.expire = r.Expire;
                     return true;
                 }
@@ -290,14 +299,12 @@ namespace NaiveSocks
 
         private IEnumerable<BsonDocument> FindDocByIp(uint ip)
         {
-            int ipInt = (int)ip;
-            return engine.Find(ColRecords, Query.EQ("idx_ips", ipInt));
+            return engine.Find(ColRecords, Query.EQ("idx_ips", (int)ip));
         }
 
         private IEnumerable<BsonDocument> FindDocByOldIp(uint ip)
         {
-            int ipInt = (int)ip;
-            return engine.Find(ColRecords, Query.EQ("idx_oldips", ipInt));
+            return engine.Find(ColRecords, Query.EQ("idx_oldips", (int)ip));
         }
 
         private IEnumerable<BsonDocument> FindDocByDomain(string domain)
@@ -327,10 +334,16 @@ namespace NaiveSocks
         {
             // Domain is primary key
             public string Domain { get; set; }
-            public int[] Ips { get; set; }
-            public int[] OldIps { get; set; }
-            public DateTime Date { get; set; }
-            public DateTime Expire { get; set; }
+
+            public uint[] Ips { get; set; }
+            public uint[] OldIps { get; set; }
+            public DateTime Date { get; set; } = DateTime.MinValue;
+            public DateTime Expire { get; set; } = DateTime.MinValue;
+
+            public Ip6[] Ips6 { get; set; }
+            public Ip6[] OldIps6 { get; set; }
+            public DateTime Date6 { get; set; } = DateTime.MinValue;
+            public DateTime Expire6 { get; set; } = DateTime.MinValue;
 
             public override string ToString()
             {
@@ -341,21 +354,35 @@ namespace NaiveSocks
             {
                 var r = new Record();
                 if (doc.TryGetValue("_id", out var id)) r.Domain = id.AsString;
-                if (doc.TryGetValue("Ips", out var ips)) r.Ips = ips.AsArray.Select(x => x.AsInt32).ToArray();
-                if (doc.TryGetValue("OldIps", out var oldips)) r.OldIps = oldips.AsArray.Select(x => x.AsInt32).ToArray();
-                if (doc.TryGetValue("Date", out var date)) r.Date = date.AsDateTime;
-                if (doc.TryGetValue("Expire", out var expire)) r.Expire = expire.AsDateTime;
+                if (doc.TryGetValue("Ips", out var ips)) r.Ips = ips.AsArray.Select(x => (uint)x.AsInt32).ToArray();
+                if (doc.TryGetValue("OldIps", out var oldips)) r.OldIps = oldips.AsArray.Select(x => (uint)x.AsInt32).ToArray();
+                r.Date = TryGetDateTime(doc, "Date");
+                r.Expire = TryGetDateTime(doc, "Expire");
+                if (doc.TryGetValue("Ips6", out var ips6)) r.Ips6 = ips6.AsArray.Select(x => new Ip6(x.AsBinary)).ToArray();
+                if (doc.TryGetValue("OldIps6", out var oldips6)) r.OldIps6 = oldips6.AsArray.Select(x => new Ip6(x.AsBinary)).ToArray();
+                r.Date6 = TryGetDateTime(doc, "Date6");
+                r.Expire6 = TryGetDateTime(doc, "Expire6");
                 return r;
+            }
+
+            static DateTime TryGetDateTime(BsonDocument doc, string key)
+            {
+                if (doc.TryGetValue(key, out var dt)) return dt.AsDateTime;
+                else return default(DateTime);
             }
 
             public BsonDocument ToDocument()
             {
                 var doc = new BsonDocument();
                 doc.Add("_id", Domain);
-                if (Ips != null) doc.Add("Ips", new BsonArray(Ips.Select(x => new BsonValue(x))));
-                if (OldIps != null) doc.Add("OldIps", new BsonArray(OldIps.Select(x => new BsonValue(x))));
-                doc.Add("Date", Date);
-                doc.Add("Expire", Expire);
+                if (Ips != null) doc.Add("Ips", new BsonArray(Ips.Select(x => new BsonValue((int)x))));
+                if (OldIps != null) doc.Add("OldIps", new BsonArray(OldIps.Select(x => new BsonValue((int)x))));
+                if (Date != DateTime.MinValue) doc.Add("Date", Date);
+                if (Expire != DateTime.MinValue) doc.Add("Expire", Expire);
+                if (Ips6 != null) doc.Add("Ips6", new BsonArray(Ips6.Select(x => new BsonValue(x.ToBytes()))));
+                if (OldIps6 != null) doc.Add("OldIps6", new BsonArray(OldIps6.Select(x => new BsonValue(x.ToBytes()))));
+                if (Date6 != DateTime.MinValue) doc.Add("Date6", Date6);
+                if (Expire6 != DateTime.MinValue)  doc.Add("Expire6", Expire6);
                 return doc;
             }
         }

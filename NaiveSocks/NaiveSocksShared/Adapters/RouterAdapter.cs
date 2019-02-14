@@ -350,9 +350,9 @@ namespace NaiveSocks
             }
         }
 
-        public Task<IPAddress[]> ResolveName(string name)
+        public Task<DnsResponse> ResolveName(DnsRequest req)
         {
-            var arg = new DnsFakeConnectArg() { Dest = new AddrPort(name, 53) };
+            var arg = new DnsFakeConnectArg() { Dest = new AddrPort(req.Name, 53) };
             AdapterRef adapterRef;
             if (Handle(arg, out var redir)) {
                 adapterRef = redir;
@@ -360,14 +360,14 @@ namespace NaiveSocks
                 adapterRef = @default;
             }
             if (adapterRef.Adapter is FailAdapter) {
-                return Task.FromResult<IPAddress[]>(null);
+                return Task.FromResult<DnsResponse>(null);
             }
             var dnsProvider = adapterRef.Adapter as IDnsProvider;
             if (dnsProvider == null) {
                 Logger.error($"{adapterRef} is not a DNS resolver.");
-                return Task.FromResult<IPAddress[]>(null);
+                return Task.FromResult<DnsResponse>(null);
             }
-            return dnsProvider.ResolveName(name);
+            return req.RedirectTo(dnsProvider);
         }
     }
 

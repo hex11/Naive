@@ -127,14 +127,14 @@ namespace NaiveSocksAndroid
                     cmd.WriteLine($"QueryByIp: {db.queryByIps:N0} times in {db.queryByIpTotalTime:N0} ms");
                     cmd.WriteLine($"QueryByDomain: {db.queryByDomains:N0} times in {db.queryByDomainTotalTime:N0} ms");
                 } else if (subcmd == "ip") {
-                    var r = db.TryGetDomain((uint)IPAddress.Parse(cmd.ArgOrNull(1)).Address);
+                    var r = db.QueryByIp((uint)IPAddress.Parse(cmd.ArgOrNull(1)).Address);
                     cmd.WriteLine("Result: " + (r ?? "(null)"));
                     if (r != null && cmd.ArgOrNull(2) == "del") {
                         cmd.WriteLine($"Deleted {(db.Delete(r) ? "1" : "0")} records");
                     }
                 } else if (subcmd == "name") {
                     var name = cmd.ArgOrNull(1);
-                    if (db.TryGetIp(name, out var r)) {
+                    if (db.QueryByName(name, out var r)) {
                         cmd.WriteLine("Result: " + r);
                         if (cmd.ArgOrNull(2) == "del") {
                             cmd.WriteLine($"Deleted {(db.Delete(name) ? "1" : "0")} records");

@@ -809,10 +809,10 @@ namespace NaiveSocks
                         }
                         RunningHandler = handler;
                         handler.HandleEvent(this, fd, eventType);
+                        ContinuationRunner.Context.Checkpoint();
                     }
                 }
                 RunningHandler = null;
-                ContinuationRunner.Context.Checkpoint();
                 mapLock.EnterWriteLock();
                 fdCleanupList.Clear();
                 mapLock.ExitWriteLock();
@@ -852,10 +852,10 @@ namespace NaiveSocks
                         }
                         RunningHandler = handler;
                         handler.HandleEvent(this, fd, eventType);
+                        ContinuationRunner.Context.Checkpoint();
                     }
                 }
                 RunningHandler = null;
-                ContinuationRunner.Context.Checkpoint();
                 mapLock.EnterWriteLock();
                 fdCleanupList.Clear();
                 mapLock.ExitWriteLock();

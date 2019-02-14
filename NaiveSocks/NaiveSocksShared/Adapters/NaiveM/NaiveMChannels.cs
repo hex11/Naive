@@ -368,6 +368,7 @@ namespace NaiveSocks
             var name = req.additionalString.Substring("dns:".Length);
             IPAddress[] addrs = null;
             try {
+                // TODO: pass DnsRequest to a dns resolver and return more info to the client
                 addrs = await Dns.GetHostAddressesAsync(name);
             } catch (Exception) {
                 await ch.SendMsg(new NaiveProtocol.Reply(AddrPort.Empty, 1, "dns_failed").ToBytes());
@@ -489,16 +490,21 @@ namespace NaiveSocks
             }
         }
 
-        public async Task<IPAddress[]> DnsQuery(string name)
+        public async Task<DnsResponse> DnsQuery(DnsRequest req)
         {
-            if (IPAddress.TryParse(name, out var addr))
-                return new[] { addr };
-            var resMsg = await Request(new NaiveProtocol.Request(AddrPort.Empty, "dns:" + name));
+            if (IPAddress.TryParse(req.Name, out var addr))
+                return new DnsResponse { Addresses = new[] { addr } };
+            var resMsg = await Request(new NaiveProtocol.Request(AddrPort.Empty, "dns:" + req.Name) {
+                extraStrings = new string[] {
+                    ((int)req.Type).ToString()
+                }
+            });
             var response = await resMsg.GetReply(keepOpen: false);
             if (response.status == 0 && response.additionalString?.StartsWith("dns_ok:") == true) {
                 var str = response.additionalString.Substring(7);
                 var addrs = from x in str.Split('|') select IPAddress.Parse(x);
-                return addrs.ToArray();
+                // TODO: try receive TTL from the server
+                return new DnsResponse { Addresses = addrs.ToArray() };
             } else if (response.additionalString == "dns_failed") {
                 throw new Exception("remote returned an error");
             } else {
