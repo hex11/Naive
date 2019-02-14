@@ -14,8 +14,11 @@ namespace NaiveSocks
         public Naive.HttpSvr.Logger Logger;
 
         LiteDatabase liteDb;
-        LiteCollection<Record> collection;
+        LiteEngine engine => liteDb.Engine;
         LiteCollection<BsonDocument> cfgCollection;
+
+        const string ColRecords = "dns_records_v3";
+        const int LatestVersion = 3;
 
         public string FilePath { get; }
 
@@ -37,18 +40,16 @@ namespace NaiveSocks
         {
             Logger?.info("initializing...");
             bool retrying = false;
-        BEGIN:
+            BEGIN:
             try {
                 liteDb = new LiteDatabase(FilePath);
                 cfgCollection = liteDb.GetCollection("meta");
 
                 CheckVersion();
 
-                collection = liteDb.GetCollection<Record>("dns_records_v2");
-                collection.EnsureIndex("idx_ips", "$.Ips[*]", false);
-                collection.EnsureIndex("idx_oldips", "$.OldIps[*]", false);
-                collection.EnsureIndex("Domain", true);
-                Logger?.info($"{collection.Count()} records.");
+                engine.EnsureIndex(ColRecords, "idx_ips", "$.Ips[*]", false);
+                engine.EnsureIndex(ColRecords, "idx_oldips", "$.OldIps[*]", false);
+                Logger?.info($"{engine.Count(ColRecords)} records.");
                 CheckShrink();
             } catch (Exception e) {
                 Logger?.exception(e, Logging.Level.Error, "failed to initialize");
@@ -58,6 +59,8 @@ namespace NaiveSocks
                     liteDb.Dispose();
                     System.IO.File.Delete(FilePath);
                     goto BEGIN;
+                } else {
+                    throw;
                 }
             }
         }
@@ -65,7 +68,13 @@ namespace NaiveSocks
         private void CheckVersion()
         {
             BsonValue ver = GetConfigValue("Version");
-            if (ver == null && liteDb.CollectionExists("dns_records")) {
+            if (ver == null && !liteDb.CollectionExists("dns_records")) {
+                // it's a new database
+                ver = LatestVersion;
+                SetConfigValue("Version", ver);
+                return;
+            }
+            if (ver == null) {
                 Logger?.info("upgrading from v0 to v1...");
                 var col = liteDb.GetCollection("dns_records");
                 var colNew = liteDb.GetCollection("dns_records_v1");
@@ -83,12 +92,6 @@ namespace NaiveSocks
                 ver = 1;
                 SetConfigValue("Version", ver);
                 liteDb.DropCollection("dns_records");
-                Logger?.info("finished upgrade.");
-            }
-            if (ver == null) {
-                ver = 2;
-                SetConfigValue("Version", ver);
-                return;
             }
             if (ver == 1) {
                 Logger?.info("upgrading from v1 to v2...");
@@ -97,10 +100,25 @@ namespace NaiveSocks
                 liteDb.RenameCollection("dns_records_v1", "dns_records_v2");
                 ver = 2;
                 SetConfigValue("Version", ver);
+            }
+            if (ver == 2) {
+                Logger?.info("upgrading from v2 to v3...");
+                var oldcol = "dns_records_v2";
+                var newcol = "dns_records_v3";
+                engine.DropCollection(newcol); // in case there was unfinished upgrading
+                var newdocs = engine.FindAll(oldcol).Select(x => {
+                    x["_id"] = x["Domain"];
+                    x.Remove("Domain");
+                    return x;
+                });
+                engine.InsertBulk(newcol, newdocs, autoId: BsonType.Null);
+                ver = 3;
+                SetConfigValue("Version", ver);
+                engine.DropCollection(oldcol);
                 Logger?.info("finished upgrade.");
             }
-            if (ver != 2) {
-                throw new Exception("db version " + GetConfigValue("Version").AsInt32 + " is not supported.");
+            if (ver != LatestVersion) {
+                throw new Exception("db version " + ver.ToString() + " is not supported.");
             }
         }
 
@@ -132,7 +150,7 @@ namespace NaiveSocks
             }
         }
 
-        public int RecordCount() => collection.Count();
+        public int RecordCount() => (int)engine.Count(ColRecords);
 
         public long Shrink()
         {
@@ -153,8 +171,11 @@ namespace NaiveSocks
             lock (syncRoot) {
                 var begin = Logging.getRuntime();
                 inserts++;
-                var r = FindDocByDomain(domain).SingleOrDefault();
-                if (r == null)
+                var doc = FindDocByDomain(domain).SingleOrDefault();
+                Record r = null;
+                if (doc != null)
+                    r = Record.FromDocument(doc);
+                else
                     r = new Record() { Domain = domain };
                 int[] ipints = new int[val.ipLongs.Length];
                 for (int i = 0; i < ipints.Length; i++) {
@@ -170,7 +191,7 @@ namespace NaiveSocks
                 r.Ips = ipints;
                 r.Date = DateTime.Now;
                 r.Expire = val.expire;
-                collection.Upsert(r);
+                engine.Upsert(ColRecords, r.ToDocument(), BsonType.Int32);
                 insertTotalTime += (int)(Logging.getRuntime() - begin);
             }
         }
@@ -196,9 +217,9 @@ namespace NaiveSocks
                     foreach (var item in docs) {
                         if (domainsSb.Length != 0)
                             domainsSb.Append('|');
-                        domainsSb.Append(item.Domain);
-                        if (r.Expire < item.Expire) {
-                            r = item;
+                        domainsSb.Append(item["_id"].AsString);
+                        if (r.Expire < item["Expire"].AsDateTime) {
+                            r = Record.FromDocument(item);
                         }
                     }
                     Logger?.warning($"multiple domains ({domainsSb}) resolve to a ip address ({new IPAddress(ip)}).");
@@ -210,9 +231,9 @@ namespace NaiveSocks
                         foreach (var item in docs) {
                             if (domainsSb.Length != 0)
                                 domainsSb.Append('|');
-                            domainsSb.Append(item.Domain);
-                            if (r.Expire < item.Expire) {
-                                r = item;
+                            domainsSb.Append(item["_id"].AsString);
+                            if (r.Expire < item["Expire"].AsDateTime) {
+                                r = Record.FromDocument(item);
                             }
                         }
                         Logger?.warning($"multiple domains ({domainsSb}) were (but not now) resolving to a ip address ({new IPAddress(ip)}).");
@@ -231,8 +252,9 @@ namespace NaiveSocks
             Interlocked.Increment(ref queryByDomains);
             var begin = Logging.getRuntime();
             try {
-                var r = FindDocByDomain(domain).SingleOrDefault();
-                if (r != null) {
+                var doc = FindDocByDomain(domain).SingleOrDefault();
+                if (doc != null) {
+                    var r = Record.FromDocument(doc);
                     val = new IpRecord();
                     val.ipLongs = new uint[r.Ips.Length];
                     for (int i = 0; i < val.ipLongs.Length; i++) {
@@ -254,41 +276,41 @@ namespace NaiveSocks
                 var r = FindDocByDomain(domain).SingleOrDefault();
                 if (r == null)
                     return false;
-                return collection.Delete(r.Id);
+                return engine.Delete(ColRecords, r["_id"]);
             }
         }
 
         public int Clean(DateTime expiredBefore)
         {
             Logger?.info($"deleting records expired before {expiredBefore}...");
-            var r = collection.Delete(Query.LT("Expire", expiredBefore));
+            var r = engine.Delete(ColRecords, Query.LT("Expire", expiredBefore));
             Logger?.info($"deleted {r}.");
             return r;
         }
 
-        private IEnumerable<Record> FindDocByIp(uint ip)
+        private IEnumerable<BsonDocument> FindDocByIp(uint ip)
         {
             int ipInt = (int)ip;
-            return collection.Find(Query.EQ("idx_ips", ipInt));
+            return engine.Find(ColRecords, Query.EQ("idx_ips", ipInt));
         }
 
-        private IEnumerable<Record> FindDocByOldIp(uint ip)
+        private IEnumerable<BsonDocument> FindDocByOldIp(uint ip)
         {
             int ipInt = (int)ip;
-            return collection.Find(Query.EQ("idx_oldips", ipInt));
+            return engine.Find(ColRecords, Query.EQ("idx_oldips", ipInt));
         }
 
-        private IEnumerable<Record> FindDocByDomain(string domain)
+        private IEnumerable<BsonDocument> FindDocByDomain(string domain)
         {
-            return collection.Find(Query.EQ("Domain", new BsonValue(domain)));
+            return engine.Find(ColRecords, Query.EQ("_id", new BsonValue(domain)));
         }
 
-        private Record GetFirstOrNull(uint ip, IEnumerable<Record> docs, out bool multipleItems)
+        private Record GetFirstOrNull(uint ip, IEnumerable<BsonDocument> docs, out bool multipleItems)
         {
             Record doc;
             using (var e = docs.GetEnumerator()) {
                 if (e.MoveNext()) {
-                    doc = e.Current;
+                    doc = Record.FromDocument(e.Current);
                     if (e.MoveNext()) {
                         multipleItems = true;
                         return doc;
@@ -303,7 +325,7 @@ namespace NaiveSocks
 
         public class Record
         {
-            public int Id { get; set; }
+            // Domain is primary key
             public string Domain { get; set; }
             public int[] Ips { get; set; }
             public int[] OldIps { get; set; }
@@ -312,7 +334,29 @@ namespace NaiveSocks
 
             public override string ToString()
             {
-                return $"{{Id={Id}, Domain={Domain}, Ips={string.Join("|", Ips)}, OldIps={string.Join("|", OldIps)}, Date={Date}, Expire={Expire}}}";
+                return $"{{Domain={Domain}, Ips={string.Join("|", Ips)}, OldIps={string.Join("|", OldIps)}, Date={Date}, Expire={Expire}}}";
+            }
+
+            public static Record FromDocument(BsonDocument doc)
+            {
+                var r = new Record();
+                if (doc.TryGetValue("_id", out var id)) r.Domain = id.AsString;
+                if (doc.TryGetValue("Ips", out var ips)) r.Ips = ips.AsArray.Select(x => x.AsInt32).ToArray();
+                if (doc.TryGetValue("OldIps", out var oldips)) r.OldIps = oldips.AsArray.Select(x => x.AsInt32).ToArray();
+                if (doc.TryGetValue("Date", out var date)) r.Date = date.AsDateTime;
+                if (doc.TryGetValue("Expire", out var expire)) r.Expire = expire.AsDateTime;
+                return r;
+            }
+
+            public BsonDocument ToDocument()
+            {
+                var doc = new BsonDocument();
+                doc.Add("_id", Domain);
+                if (Ips != null) doc.Add("Ips", new BsonArray(Ips.Select(x => new BsonValue(x))));
+                if (OldIps != null) doc.Add("OldIps", new BsonArray(OldIps.Select(x => new BsonValue(x))));
+                doc.Add("Date", Date);
+                doc.Add("Expire", Expire);
+                return doc;
             }
         }
     }

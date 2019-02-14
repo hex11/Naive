@@ -165,19 +165,21 @@ namespace NaiveSocks
                         Logger.debugForce($"id {q.Id} query: {item}");
                     if (item.Type == RecordType.A) {
                         var strName = item.Name.ToString();
-                        IPAddress ip;
+                        IEnumerable<IPAddress> ips;
                         IpRecord val = new IpRecord();
                         bool exist = cacheDns?.TryGetIp(strName, out val) ?? false;
                         var ipLongs = val.ipLongs;
                         if (exist && val.expire > DateTime.Now) {
-                            ip = new IPAddress(ipLongs[NaiveUtils.Random.Next(ipLongs.Length)]);
+                            if (ipLongs.Length == 0) {
+                                throw new Exception("ipLongs.Length == 0");
+                            }
+                            ips = ipLongs.Select(x => new IPAddress(x));
                         } else {
                             if (dnsProvider == null) {
                                 throw new Exception("no dns resolver");
                             }
                             bool mainTask = false;
                             Task<IPAddress[]> task;
-                            IPAddress[] ips;
                             var startTime = Logging.getRuntime();
                             lock (resolvingNames) {
                                 if (!resolvingNames.TryGetValue(strName, out task)) {
@@ -188,9 +190,9 @@ namespace NaiveSocks
                             }
                             try {
                                 try {
-                                    ips = await task;
-                                    ipLongs = ipv4Filter(ips);
-                                    ip = ips.First(x => x.AddressFamily == AddressFamily.InterNetwork);
+                                    var iparr = await task;
+                                    ips = iparr;
+                                    ipLongs = ipv4Filter(iparr);
                                 } catch (Exception e) {
                                     if (mainTask) {
                                         Logger.warning("resolving: " + strName + ": " + e.Message + " (" + (Logging.getRuntime() - startTime) + " ms)");
@@ -213,7 +215,9 @@ namespace NaiveSocks
                                 }
                             }
                         }
-                        r.AnswerRecords.Add(new IPAddressResourceRecord(item.Name, ip, TimeSpan.FromSeconds(ttl)));
+                        foreach (var ip in ips) {
+                            r.AnswerRecords.Add(new IPAddressResourceRecord(item.Name, ip, TimeSpan.FromSeconds(ttl)));
+                        }
                         r.ResponseCode = ResponseCode.NoError;
                     } else {
                         Logger.warning("Unsupported DNS record: " + item);
