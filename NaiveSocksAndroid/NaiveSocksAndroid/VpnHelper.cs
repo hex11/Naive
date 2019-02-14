@@ -46,6 +46,8 @@ namespace NaiveSocksAndroid
 
         public int Mtu { get; set; } = 1500;
 
+        public bool Ipv6 { get; set; } = false;
+
         public string[] RemoteDns { get; set; } = new[] { "8.8.8.8" };
     }
 
@@ -114,7 +116,12 @@ namespace NaiveSocksAndroid
             var builder = new VpnService.Builder(Bg)
                 .SetSession("NaiveSocks VPN bridge")
                 .SetMtu(VpnConfig.Mtu)
-                .AddAddress("172.31.1.1", 24);
+                .AddAddress("172.31.1.1", 24)
+                .AddRoute("0.0.0.0", 0);
+            if (VpnConfig.Ipv6) {
+                builder.AddAddress("fd11:4514:1919::1", 126);
+                builder.AddRoute("::", 0);
+            }
             foreach (var item in VpnConfig.RemoteDns) {
                 builder.AddDnsServer(item);
             }
@@ -140,15 +147,15 @@ namespace NaiveSocksAndroid
             }
             if (!isAnyAllowed)
                 builder.AddDisallowedApplication(me);
-            builder.AddRoute("0.0.0.0", 0);
-            pfd = builder.Establish();
-            var fd = pfd.Fd;
-            Running = true;
-            Logging.info("VPN established, fd=" + fd);
 
             if (VpnConfig.LocalDnsPort > 0) {
                 InitLocalDns(controller);
             }
+
+            pfd = builder.Establish();
+            var fd = pfd.Fd;
+            Running = true;
+            Logging.info("VPN established, fd=" + fd);
 
             string dnsgw = null;
             if (VpnConfig.DnsGw.IsNullOrEmpty() == false) {
@@ -156,7 +163,7 @@ namespace NaiveSocksAndroid
             } else if (VpnConfig.LocalDnsPort > 0) {
                 dnsgw = "127.0.0.1:" + VpnConfig.LocalDnsPort;
             }
-            StartTun2Socks(fd, "127.0.0.1:" + socksInAdapter.listen.Port, VpnConfig.Mtu, dnsgw);
+            StartTun2Socks(fd, "127.0.0.1:" + socksInAdapter.listen.Port, dnsgw);
         }
 
         private void InitLocalDns(Controller controller)
@@ -190,19 +197,22 @@ namespace NaiveSocksAndroid
             adapter.Start();
         }
 
-        private void StartTun2Socks(int fd, string socksAddr, int mtu, string dnsgw)
+        private void StartTun2Socks(int fd, string socksAddr, string dnsgw)
         {
             string sockPath = "t2s_sock_path";
             var arg = "--netif-ipaddr 172.31.1.2"
                          + " --netif-netmask 255.255.255.0"
                          + " --socks-server-addr " + socksAddr
                          + " --tunfd " + fd
-                         + " --tunmtu " + mtu
+                         + " --tunmtu " + VpnConfig.Mtu
                          + " --sock-path " + sockPath
                          + " --loglevel 3"
                          + " --enable-udprelay";
             if (dnsgw != null) {
                 arg += " --dnsgw " + dnsgw;
+            }
+            if (VpnConfig.Ipv6) {
+                arg += " --netif-ip6addr fd11:4514:1919::2";
             }
             var filesDir = AppConfig.FilesDir;
             StartProcess(Native.GetLibFullPath(Native.SsTun2Socks), arg, filesDir);
@@ -246,6 +256,8 @@ namespace NaiveSocksAndroid
             if (Running) {
                 Running = false;
                 pfd.Close();
+                pfd.Dispose();
+                pfd = null;
             }
         }
 
