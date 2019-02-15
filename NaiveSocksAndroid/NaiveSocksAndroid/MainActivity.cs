@@ -237,7 +237,6 @@ namespace NaiveSocksAndroid
             base.OnStop();
             if (isConnected)
                 UnbindService();
-            AsyncHelper.SetTimeout(100, () => GC.Collect());
         }
 
         private void UnbindService()
