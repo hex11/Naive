@@ -19,7 +19,7 @@ namespace NaiveSocks
     public class DnsRequest
     {
         public string Name;
-        public RequestType Type = RequestType.A;
+        public DnsRequestType Type = DnsRequestType.A;
 
         int Redirects = 0;
 
@@ -30,7 +30,7 @@ namespace NaiveSocks
         }
     }
 
-    public enum RequestType
+    public enum DnsRequestType
     {
         A = 1,
         AAAA = 2 ,

@@ -99,7 +99,19 @@ namespace NaiveSocks
                 throw new ArgumentNullException(nameof(domain));
 
             mapLock.EnterWriteLock();
-            mapHostIp[domain] = val;
+            if (mapHostIp.TryGetValue(domain, out var old)) {
+                if (val.ipLongs != null) {
+                    old.ipLongs = val.ipLongs;
+                    old.expire = val.expire;
+                }
+                if (val.ips6 != null) {
+                    old.ips6 = val.ips6;
+                    old.expire6 = val.expire6;
+                }
+                mapHostIp[domain] = old;
+            } else {
+                mapHostIp[domain] = val;
+            }
             mapLock.ExitWriteLock();
 
             SetReverseMap(ref val, domain);

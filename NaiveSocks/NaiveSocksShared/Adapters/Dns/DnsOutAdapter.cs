@@ -53,7 +53,7 @@ namespace NaiveSocks
             var name = dr.Name;
             var req = dnsClient.Create();
             var domain = new Domain(name);
-            req.Questions.Add(new Question(domain, dr.Type != RequestType.AAAA ? RecordType.A : RecordType.AAAA));
+            req.Questions.Add(new Question(domain, dr.Type != DnsRequestType.AAAA ? RecordType.A : RecordType.AAAA));
             req.OperationCode = OperationCode.Query;
             req.RecursionDesired = true;
             var r = await req.Resolve();

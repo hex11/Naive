@@ -144,7 +144,13 @@ namespace NaiveSocks
             }
         }
 
-        Dictionary<string, Task<DnsResponse>> resolvingNames = new Dictionary<string, Task<DnsResponse>>();
+        Dictionary<string, ResolveTask> resolvingNames = new Dictionary<string, ResolveTask>();
+        Dictionary<string, ResolveTask> resolvingNames6 = new Dictionary<string, ResolveTask>();
+
+        class ResolveTask
+        {
+            public Task<DnsResponse> A, AAAA;
+        }
 
         static readonly IPAddress[] emptyIps = new IPAddress[0];
 
@@ -159,79 +165,81 @@ namespace NaiveSocks
                     Logger.warning($"id {q.Id} does not contain any questions." +
                         $"\nAdditionalRecords: {string.Join(", ", q.AdditionalRecords)}");
                 }
-                // TODO: support AAAA correctly
-                var queryNames = new List<Domain>();
+
+                //
+                var queryNames = new Dictionary<Domain, DnsRequestType>();
                 foreach (var item in questions) {
                     if (item.Type == RecordType.A || item.Type == RecordType.AAAA) {
-                        if (verbose)
-                            Logger.debugForce($"id {q.Id} query: {item}");
-                        if (!queryNames.Contains(item.Name)) queryNames.Add(item.Name);
+                        DnsRequestType type = item.Type == RecordType.A ? DnsRequestType.A : DnsRequestType.AAAA;
+                        if (verbose) Logger.debugForce($"id {q.Id} query: {item}");
+                        if (!queryNames.ContainsKey(item.Name)) {
+                            queryNames.Add(item.Name, type);
+                        } else {
+                            queryNames[item.Name] |= type;
+                        }
                     } else if (item.Type == RecordType.PTR) {
                     } else {
                         Logger.warning("Unsupported DNS record: " + item);
                     }
                 }
-                foreach (var name in queryNames) {
-                    var strName = name.ToString();
+
+                foreach (var kv in queryNames) {
+                    bool reqv4 = (kv.Value & DnsRequestType.A) != 0;
+                    bool reqv6 = (kv.Value & DnsRequestType.AAAA) != 0;
+                    var strName = kv.Key.ToString();
                     IEnumerable<IPAddress> ips = emptyIps;
                     IpRecord val = new IpRecord();
                     bool exist = cacheDns?.QueryByName(strName, out val) ?? false;
+                    var now = DateTime.Now;
+                    if (val.expire < now) val.ipLongs = null;
+                    if (val.expire6 < now) val.ips6 = null;
                     var ipLongs = val.ipLongs;
                     var ips6 = val.ips6;
-                    if (exist && val.expire > DateTime.Now) {
-                        if (ipLongs != null) ips = ipLongs.Select(x => new IPAddress(x));
-                        if (ips6 != null) ips = ips.Concat(ips6.Select(x => x.ToIPAddress()));
-                    } else {
-                        if (dnsProvider == null) {
-                            throw new Exception("no dns resolver");
-                        }
-                        bool mainTask = false;
-                        Task<DnsResponse> task;
+                    if (!exist || (reqv4 && ipLongs == null) || (reqv6 && ips6 == null)) {
                         var startTime = Logging.getRuntime();
-                        lock (resolvingNames) {
-                            if (!resolvingNames.TryGetValue(strName, out task)) {
-                                task = dnsProvider.ResolveName(new DnsRequest { Name = strName, Type = RequestType.AnAAAA });
-                                resolvingNames[strName] = task;
-                                mainTask = true;
-                            }
-                        }
+                        var task = StartResolve(kv.Value, strName, out var newTask);
                         try {
                             try {
                                 var resp = await task;
                                 var iparr = resp.Addresses;
                                 ips = iparr;
-                                ipFilter(iparr, out ipLongs, out ips6);
+                                ipFilter(iparr, ref ipLongs, ref ips6);
                             } catch (Exception e) {
-                                if (mainTask) {
-                                    Logger.warning("resolving: " + strName + ": " + e.Message + " (" + (Logging.getRuntime() - startTime) + " ms)");
+                                if (newTask) {
+                                    Logger.warning("resolving: " + strName + " (" + kv.Value + "): " + e.Message + " (" + (Logging.getRuntime() - startTime) + " ms)");
                                 }
                                 continue;
                             }
-                            if (mainTask) {
-                                Logger.info("" + strName + " -> " + string.Join("|", ips)
+
+                            if (newTask) {
+                                Logger.info("" + strName + " (" + kv.Value + ") -> " + string.Join("|", ips)
                                     + " (" + (Logging.getRuntime() - startTime) + " ms)");
-                                var ir = new IpRecord {
-                                    ipLongs = ipLongs,
-                                    ips6 = ips6,
-                                    expire = DateTime.Now.AddSeconds(cache_ttl)
-                                };
-                                cacheDns?.Set(strName, ref ir);
+                                var newExpire = DateTime.Now.AddSeconds(cache_ttl);
+                                if (ipLongs != null) {
+                                    val.ipLongs = ipLongs;
+                                    val.expire = newExpire;
+                                }
+                                if (ips6 != null) {
+                                    val.ips6 = ips6;
+                                    val.expire6 = newExpire;
+                                }
+                                cacheDns?.Set(strName, ref val);
                             }
                         } finally {
-                            if (mainTask) {
-                                lock (resolvingNames)
-                                    resolvingNames.Remove(strName);
+                            if (newTask) {
+                                EndResolve(strName, task);
                             }
                         }
                     }
-                    foreach (var ip in ips) {
-                        foreach (var que in questions) {
-                            if (que.Name == name) {
-                                if ((que.Type == RecordType.A && ip.AddressFamily == AddressFamily.InterNetwork)
-                                    || (que.Type == RecordType.AAAA && ip.AddressFamily == AddressFamily.InterNetworkV6)) {
-                                    r.AnswerRecords.Add(new IPAddressResourceRecord(name, ip, TimeSpan.FromSeconds(ttl)));
-                                }
-                            }
+
+                    if (reqv4 && ipLongs != null) {
+                        foreach (var item in ipLongs) {
+                            r.AnswerRecords.Add(new ResourceRecord(kv.Key, BitConverter.GetBytes(item), RecordType.A, ttl: TimeSpan.FromSeconds(ttl)));
+                        }
+                    }
+                    if (reqv6 && ips6 != null) {
+                        foreach (var item in ips6) {
+                            r.AnswerRecords.Add(new ResourceRecord(kv.Key, item.ToBytes(), RecordType.AAAA, ttl: TimeSpan.FromSeconds(ttl)));
                         }
                     }
                     r.ResponseCode = ResponseCode.NoError;
@@ -242,7 +250,52 @@ namespace NaiveSocks
             return r;
         }
 
-        private static void ipFilter(IPAddress[] ips, out uint[] ipLongs, out Ip6[] ips6)
+        private Task<DnsResponse> StartResolve(DnsRequestType type, string strName, out bool newTask)
+        {
+            if (dnsProvider == null) {
+                throw new Exception("no dns resolver");
+            }
+            lock (resolvingNames) {
+                newTask = false;
+                if (resolvingNames.TryGetValue(strName, out var rt)) {
+                    // try to return a running task
+                    if (type == DnsRequestType.A && rt.A != null) return rt.A;
+                    if (type == DnsRequestType.AAAA || rt.AAAA != null) return rt.AAAA;
+                    if (type == DnsRequestType.AnAAAA) {
+                        if (rt.A == rt.AAAA) return rt.A;
+                        if (rt.A != null && rt.AAAA != null) return UnionWarpper(rt);
+                    }
+                } else {
+                    rt = new ResolveTask();
+                    resolvingNames[strName] = rt;
+                }
+                var task = dnsProvider.ResolveName(new DnsRequest { Name = strName, Type = type });
+                if ((type & DnsRequestType.A) != 0 && rt.A == null) rt.A = task;
+                if ((type & DnsRequestType.AAAA) != 0 && rt.AAAA == null) rt.AAAA = task;
+                newTask = true;
+                return task;
+            }
+        }
+
+        private void EndResolve(string strName, Task t)
+        {
+            lock (resolvingNames) {
+                var rt = resolvingNames[strName];
+                if (rt.A == t) rt.A = null;
+                if (rt.AAAA == t) rt.AAAA = null;
+                if (rt.A == null && rt.AAAA == null)
+                    resolvingNames.Remove(strName);
+            }
+        }
+
+        async Task<DnsResponse> UnionWarpper(ResolveTask rt)
+        {
+            return new DnsResponse {
+                Addresses = ((await rt.A).Addresses ?? emptyIps).Union((await rt.AAAA).Addresses ?? emptyIps).ToArray()
+            };
+        }
+
+        private static void ipFilter(IPAddress[] ips, ref uint[] ipLongs, ref Ip6[] ips6)
         {
             int count = 0, count6 = 0;
             for (int i = 0; i < ips.Length; i++) {
@@ -252,9 +305,8 @@ namespace NaiveSocks
                 else if (cur.AddressFamily == AddressFamily.InterNetworkV6)
                     count6++;
             }
-
-            ipLongs = count == 0 ? null : new uint[count];
-            ips6 = count6 == 0 ? null : new Ip6[count6];
+            if (count > 0) ipLongs = new uint[count];
+            if (count6 > 0) ips6 = new Ip6[count6];
             int ipLongsCur = 0;
             int ips6Cur = 0;
             for (int i = 0; i < ips.Length; i++) {

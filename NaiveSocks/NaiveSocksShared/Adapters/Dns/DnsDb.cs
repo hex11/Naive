@@ -203,7 +203,7 @@ namespace NaiveSocks
                         }
                     }
                     r.Ips6 = val.ips6;
-                    r.Date = DateTime.Now;
+                    r.Date6 = DateTime.Now;
                     r.Expire6 = val.expire6;
                 }
 
@@ -214,22 +214,32 @@ namespace NaiveSocks
 
         public string QueryByIp(uint ip)
         {
+            return QueryByIpCore(ip, FindDocByIp, x => new IPAddress(x));
+        }
+
+        public string QueryByIp6(Ip6 ip)
+        {
+            return QueryByIpCore(ip, FindDocByIp6, x => x.ToIPAddress());
+        }
+
+        private string QueryByIpCore<T>(T ip, Func<T, bool, IEnumerable<BsonDocument>> getDocs, Func<T, IPAddress> getIp)
+        {
             Interlocked.Increment(ref queryByIps);
             var begin = Logging.getRuntime();
             try {
-                var docs = FindDocByIp(ip);
-                var r = GetFirstOrNull(ip, docs, out var m);
+                var docs = getDocs(ip, false);
+                var r = GetFirstOrNull(docs, out var m);
                 if (m) {
                     HandleMultipleItems(docs, ref r, out var domains);
-                    Logger?.warning($"multiple domains ({domains}) resolve to a ip address ({new IPAddress(ip)}).");
+                    Logger?.warning($"multiple domains ({domains}) resolve to a ip address ({getIp(ip)}).");
                 } else if (r == null) {
-                    docs = FindDocByOldIp(ip);
-                    r = GetFirstOrNull(ip, docs, out m);
+                    docs = getDocs(ip, true);
+                    r = GetFirstOrNull(docs, out m);
                     if (m) {
                         HandleMultipleItems(docs, ref r, out var domains);
-                        Logger?.warning($"multiple domains ({domains}) were (but not now) resolving to a ip address ({new IPAddress(ip)}).");
+                        Logger?.warning($"multiple domains ({domains}) were (but not now) resolving to a ip address ({getIp(ip)}).");
                     } else if (r != null) {
-                        Logger?.warning($"domain ({r.Domain}) was (but not now) resolving to ip ({new IPAddress(ip)}).");
+                        Logger?.warning($"domain ({r.Domain}) was (but not now) resolving to ip ({getIp(ip)}).");
                     }
                 }
                 return r?.Domain;
@@ -252,12 +262,6 @@ namespace NaiveSocks
             domainList = domainsSb.ToString();
         }
 
-        public string QueryByIp6(Ip6 ip)
-        {
-            // TODO
-            return null;
-        }
-
         public bool QueryByName(string domain, out IpRecord val)
         {
             Interlocked.Increment(ref queryByDomains);
@@ -270,6 +274,7 @@ namespace NaiveSocks
                     val.ipLongs = r.Ips;
                     val.ips6 = r.Ips6;
                     val.expire = r.Expire;
+                    val.expire6 = r.Expire6;
                     return true;
                 }
                 val = default(IpRecord);
@@ -297,14 +302,14 @@ namespace NaiveSocks
             return r;
         }
 
-        private IEnumerable<BsonDocument> FindDocByIp(uint ip)
+        private IEnumerable<BsonDocument> FindDocByIp(uint ip, bool old)
         {
-            return engine.Find(ColRecords, Query.EQ("idx_ips", (int)ip));
+            return engine.Find(ColRecords, Query.EQ(old ? "idx_oldips" : "idx_ips", (int)ip));
         }
 
-        private IEnumerable<BsonDocument> FindDocByOldIp(uint ip)
+        private IEnumerable<BsonDocument> FindDocByIp6(Ip6 ip, bool old)
         {
-            return engine.Find(ColRecords, Query.EQ("idx_oldips", (int)ip));
+            return engine.Find(ColRecords, Query.EQ(old ? "idx_oldips6" : "idx_ips6", ip.ToBytes()));
         }
 
         private IEnumerable<BsonDocument> FindDocByDomain(string domain)
@@ -312,7 +317,7 @@ namespace NaiveSocks
             return engine.Find(ColRecords, Query.EQ("_id", new BsonValue(domain)));
         }
 
-        private Record GetFirstOrNull(uint ip, IEnumerable<BsonDocument> docs, out bool multipleItems)
+        private Record GetFirstOrNull(IEnumerable<BsonDocument> docs, out bool multipleItems)
         {
             Record doc;
             using (var e = docs.GetEnumerator()) {
@@ -382,7 +387,7 @@ namespace NaiveSocks
                 if (Ips6 != null) doc.Add("Ips6", new BsonArray(Ips6.Select(x => new BsonValue(x.ToBytes()))));
                 if (OldIps6 != null) doc.Add("OldIps6", new BsonArray(OldIps6.Select(x => new BsonValue(x.ToBytes()))));
                 if (Date6 != DateTime.MinValue) doc.Add("Date6", Date6);
-                if (Expire6 != DateTime.MinValue)  doc.Add("Expire6", Expire6);
+                if (Expire6 != DateTime.MinValue) doc.Add("Expire6", Expire6);
                 return doc;
             }
         }
