@@ -159,15 +159,16 @@ namespace NaiveSocks
             sb.Append(':').Append(Dest.Port);
             if (ConnectResult != null) {
                 if (ConnectResult.Result == ConnectResultEnum.Conneceted) {
-                    sb.Append(' ').Append("(OK)");
                     if ((flags & ToStringFlags.OutStream) != 0 && ConnectResult.Stream != null) {
-                        sb.Append("->").Append(ConnectResult.Stream);
+                        sb.Append(' ').Append("->").Append(ConnectResult.Stream);
                     }
                 } else if (ConnectResult.Result == ConnectResultEnum.Failed) {
                     sb.Append(' ').Append("(FAIL)");
                 } else if (ConnectResult.IsRedirected) {
                     sb.Append(' ').Append("(REDIR->'").Append(ConnectResult.Redirected.Adapter?.Name).Append("')");
                 }
+            } else {
+                sb.Append(' ').Append("(...)");
             }
             if (IsStoppingRequested)
                 sb.Append(' ').Append("(STOPPING)");

@@ -227,19 +227,17 @@ namespace NaiveSocks
             Interlocked.Increment(ref queryByIps);
             var begin = Logging.getRuntime();
             try {
-                var docs = getDocs(ip, false);
-                var r = GetFirstOrNull(docs, out var m);
-                if (m) {
-                    HandleMultipleItems(docs, ref r, out var domains);
-                    Logger?.warning($"multiple domains ({domains}) resolve to a ip address ({getIp(ip)}).");
+                var r = GetFirstOrNull(getDocs(ip, false), out var enumerator);
+                if (enumerator != null) {
+                    HandleMultipleItems(enumerator, ref r, out var domains);
+                    Logger?.warning($"multiple domains ({domains}) are resolved to ip ({getIp(ip)}).");
                 } else if (r == null) {
-                    docs = getDocs(ip, true);
-                    r = GetFirstOrNull(docs, out m);
-                    if (m) {
-                        HandleMultipleItems(docs, ref r, out var domains);
-                        Logger?.warning($"multiple domains ({domains}) were (but not now) resolving to a ip address ({getIp(ip)}).");
+                    r = GetFirstOrNull(getDocs(ip, true), out enumerator);
+                    if (enumerator != null) {
+                        HandleMultipleItems(enumerator, ref r, out var domains);
+                        Logger?.warning($"multiple domains ({domains}) were (but not now) resolved to ip ({getIp(ip)}).");
                     } else if (r != null) {
-                        Logger?.warning($"domain ({r.Domain}) was (but not now) resolving to ip ({getIp(ip)}).");
+                        Logger?.warning($"domain ({r.Domain}) was (but not now) resolved to ip ({getIp(ip)}).");
                     }
                 }
                 return r?.Domain;
@@ -248,18 +246,34 @@ namespace NaiveSocks
             }
         }
 
-        private static void HandleMultipleItems(IEnumerable<BsonDocument> docs, ref Record r, out string domainList)
+        private static void HandleMultipleItems(IEnumerator<BsonDocument> docs, ref Record r, out string domainList)
         {
-            var domainsSb = new StringBuilder();
-            foreach (var item in docs) {
-                if (domainsSb.Length != 0)
-                    domainsSb.Append('|');
-                domainsSb.Append(item["_id"].AsString);
-                if (r.Expire < item["Expire"].AsDateTime) {
-                    r = Record.FromDocument(item);
+            // current enumerator index = 1
+            var domains = new List<string>();
+            int selected = 0;
+            DateTime selectedExpire = r.Expire;
+            BsonDocument selectedDoc = null;
+            domains.Add(r.Domain);
+            do {
+                var item = docs.Current;
+                if (selectedExpire < item["Expire"].AsDateTime) {
+                    selectedDoc = item;
+                    selected = domains.Count;
+                }
+                domains.Add(item["_id"].AsString);
+            } while (docs.MoveNext());
+            if (selectedDoc != null) r = Record.FromDocument(selectedDoc);
+
+            var sb = new StringBuilder();
+            for (int i = 0; i < domains.Count; i++) {
+                if (i != 0) sb.Append('|');
+                if (i == selected) {
+                    sb.Append('[').Append(domains[i]).Append(']');
+                } else {
+                    sb.Append(domains[i]);
                 }
             }
-            domainList = domainsSb.ToString();
+            domainList = sb.ToString();
         }
 
         public bool QueryByName(string domain, out IpRecord val)
@@ -317,21 +331,21 @@ namespace NaiveSocks
             return engine.Find(ColRecords, Query.EQ("_id", new BsonValue(domain)));
         }
 
-        private Record GetFirstOrNull(IEnumerable<BsonDocument> docs, out bool multipleItems)
+        private Record GetFirstOrNull(IEnumerable<BsonDocument> docs, out IEnumerator<BsonDocument> enumerator)
         {
             Record doc;
             using (var e = docs.GetEnumerator()) {
                 if (e.MoveNext()) {
                     doc = Record.FromDocument(e.Current);
                     if (e.MoveNext()) {
-                        multipleItems = true;
+                        enumerator = e;
                         return doc;
                     }
                 } else {
                     doc = null;
                 }
             }
-            multipleItems = false;
+            enumerator = null;
             return doc;
         }
 
@@ -373,7 +387,7 @@ namespace NaiveSocks
             static DateTime TryGetDateTime(BsonDocument doc, string key)
             {
                 if (doc.TryGetValue(key, out var dt)) return dt.AsDateTime;
-                else return default(DateTime);
+                else return DateTime.MinValue;
             }
 
             public BsonDocument ToDocument()

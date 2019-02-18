@@ -80,7 +80,7 @@ namespace NaiveSocks
                     TlsStream.ParseServerHelloRecord(bs, ref hello, out var size);
                     if (size > bs.Len) {
                         if (sBuf != null)
-                            throw new Exception();
+                            throw new Exception("sBuf != null");
                         sBuf = new byte[size];
                         bs.CopyTo(sBuf);
                         sProg = bs.Len;
@@ -131,7 +131,7 @@ namespace NaiveSocks
                         Tls.Version == 0x0302 ? "1.1" :
                         Tls.Version == 0x0303 ? "1.2" :
                         Tls.Version == 0x0304 ? "1.3" :
-                        $"0x{Tls.Version:x}");
+                        $"0x{Tls.Version:x4}");
                     sb.Append(',');
                 }
                 if (Tls.Sni == null) {
