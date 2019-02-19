@@ -358,11 +358,10 @@ namespace NaiveSocks
                     var ct = new CancellationTokenSource(30 * 1000).Token;
                     var nms = await NaiveMChannels.ConnectTo(settings, ct);
                     state = 2;
-                    nms.OutAdapter = adapter;
-                    nms.InAdapter = adapter;
+                    nms.Adapter = adapter;
                     nms.Logger = Logger;
                     nms.LogDest = adapter.log_dest;
-                    nms.GotRemoteInConnection = (inc) => {
+                    nms.ConnectionHandler = (inc) => {
                         Logger.info($"inbound {(inc as NaiveMChannels.InConnection)?.Channel}" +
                                         $" (dest={inc.Dest}) redirecting to 127.1");
                         adapter.CheckPool();

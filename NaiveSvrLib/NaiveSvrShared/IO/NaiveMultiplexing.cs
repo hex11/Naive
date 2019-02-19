@@ -22,20 +22,18 @@ namespace NaiveSocks
     //                    0 : main channel
     //        1 to MaxValue : can be created by local
 
-    public class IncrNumberGenerator
+    public struct IncrNumberGenerator
     {
         private int Id;
-        public int Get()
-        {
-            return Interlocked.Increment(ref Id);
-        }
+
+        public int Get() => Interlocked.Increment(ref Id);
     }
 
     public class NaiveMultiplexing
     {
         public NaiveMultiplexing(IMsgStream baseStream)
         {
-            BaseStream = baseStream;
+            BaseStream = baseStream ?? throw new ArgumentNullException(nameof(baseStream));
             MainChannel = new Channel(this, MainId);
             ReservedChannel = new Channel(this, ReservedId);
             addChannel_NoLock(MainChannel);
@@ -58,6 +56,7 @@ namespace NaiveSocks
         public int TotalRemoteChannels { get; private set; }
 
         public bool Closed { get; private set; }
+
         private void ThrowIfClosed()
         {
             if (Closed)
@@ -135,10 +134,7 @@ namespace NaiveSocks
 
         public async Task Start()
         {
-            if (_mainReadTask != null) {
-                await _mainReadTask;
-                return;
-            }
+            if (_mainReadTask != null) throw new Exception("already running");
             try {
                 await (_mainReadTask = MainReadLoop()).CAF();
                 Logging.warning($"{this} stopped.");
@@ -156,16 +152,21 @@ namespace NaiveSocks
         public void Close(bool closeBaseStream = true)
         {
             lock (_channelsLock) {
-                if (Closed)
-                    return;
-                Closed = true;
-                foreach (var item in Channels) {
-                    item.Value.ParentChannelsClosed();
-                }
-                Channels.Clear();
+                if (Closed) return;
+                SetClosedState();
             }
             if (closeBaseStream)
                 BaseStream.Close(new CloseOpt(CloseType.Close));
+        }
+
+        void SetClosedState()
+        {
+            if (Closed) return;
+            Closed = true;
+            foreach (var item in Channels) {
+                item.Value.ParentChannelsClosed();
+            }
+            Channels.Clear();
         }
 
         private int _latestId = 0;
@@ -175,7 +176,7 @@ namespace NaiveSocks
                 ThrowIfClosed();
                 var id = _latestId + 1;
                 var findMax = currentMaxId;
-            retry:
+                retry:
                 for (int i = 1; i <= findMax; i++) {
                     if (id > findMax) {
                         id = 1;
@@ -230,7 +231,7 @@ namespace NaiveSocks
         private async Task MainReadLoop()
         {
             int syncCount = 0;
-            while (true) {
+            while (!Closed) {
                 if (syncCount > 64) {
                     syncCount = 0;
                     await Task.Yield();

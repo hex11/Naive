@@ -13,11 +13,9 @@ namespace NaiveSocks
 {
     public class NaiveMChannels : RrChannels<NaiveProtocol.Request, NaiveProtocol.Reply>
     {
-        public IInAdapter InAdapter;
+        public IAdapter Adapter;
 
-        public Func<NaiveSocks.InConnection, Task> GotRemoteInConnection;
-
-        public IConnectionHandler OutAdapter;
+        public Func<InConnection, Task> ConnectionHandler;
 
         public Logger Logger;
         public bool LogDest;
@@ -105,25 +103,8 @@ namespace NaiveSocks
             if (settings.Headers?.ContainsKey("Host") == false) {
                 settings.Headers["Host"] = (settings.Host.Port == 80) ? settings.Host.Host : settings.Host.ToString();
             }
-            Task<IMsgStream> connect(string addStr, bool isHttp, CancellationToken ctt)
-            {
-                var req = new NaiveProtocol.Request(AddrPort.Empty) {
-                    additionalString = addStr
-                };
-                if (settings.Encryption != null) {
-                    req.extraStrings = new[] { settings.Encryption, settings.EncryptionPerChannel };
-                }
-                var reqbytes = req.ToBytes();
-                reqbytes = NaiveProtocol.EncryptOrDecryptBytes(true, key, reqbytes);
-                var reqPath = string.Format(settings.UrlFormat, settings.Path, HttpUtil.UrlEncode(Convert.ToBase64String(reqbytes)));
-                if (isHttp) {
-                    return ConnectHttpChunked(settings, key, reqPath, settings.Encryption, ctt);
-                } else {
-                    return ConnectWebSocket(settings, key, reqPath, settings.Encryption, ctt);
-                }
-            }
             IMsgStream msgStream;
-            // [ wsso | ws | http ]
+            // [ websocket send-only (wsso) | websocket (ws) | http ]
             int wssoCount = settings.ImuxWsSendOnlyConnections; // sending only (index starting from 0)
             int wsCount = settings.ImuxWsConnections; // sending and recving (index following by wssoCount)
             int httpCount = settings.ImuxHttpConnections; // recving only
@@ -144,7 +125,7 @@ namespace NaiveSocks
                                                     wssoCount.ToString(), httpCount.ToString());
                     IMsgStream stream;
                     try {
-                        stream = await connect(ImuxPrefix + parameter, x >= httpStart, myCts.Token);
+                        stream = await Connect(ImuxPrefix + parameter, x >= httpStart, settings, myCts.Token);
                     } catch (Exception e) {
                         Logging.debug($"{sid}-{x}: {e.Message}");
                         fail.TrySetException(e);
@@ -189,7 +170,7 @@ namespace NaiveSocks
                     );
                 }
             } else {
-                msgStream = await connect("channels", false, ct);
+                msgStream = await Connect("channels", false, settings, ct);
             }
             var ncs = new NaiveMChannels(new NaiveMultiplexing(msgStream));
             if (settings.EncryptionPerChannel.IsNullOrEmpty() == false) {
@@ -197,6 +178,24 @@ namespace NaiveSocks
                 ncs.PerChannelEncryptionKey = settings.Key;
             }
             return ncs;
+        }
+
+        private static Task<IMsgStream> Connect(string addStr, bool isHttp, ConnectingSettings settings, CancellationToken ct)
+        {
+            var req = new NaiveProtocol.Request(AddrPort.Empty) {
+                additionalString = addStr
+            };
+            if (settings.Encryption != null) {
+                req.extraStrings = new[] { settings.Encryption, settings.EncryptionPerChannel };
+            }
+            var reqbytes = req.ToBytes();
+            reqbytes = NaiveProtocol.EncryptOrDecryptBytes(true, settings.Key, reqbytes);
+            var reqPath = string.Format(settings.UrlFormat, settings.Path, HttpUtil.UrlEncode(Convert.ToBase64String(reqbytes)));
+            if (isHttp) {
+                return ConnectHttpChunked(settings, settings.Key, reqPath, settings.Encryption, ct);
+            } else {
+                return ConnectWebSocket(settings, settings.Key, reqPath, settings.Encryption, ct);
+            }
         }
 
         private static async Task<IMsgStream> ConnectWebSocket(ConnectingSettings settings,
@@ -256,7 +255,7 @@ namespace NaiveSocks
         {
             var r = await Connect(inConnection);
             if (r.Ok) {
-                await inConnection.HandleAndPutStream((IAdapter)OutAdapter ?? InAdapter, r.Stream, r.WhenCanRead);
+                await inConnection.HandleAndPutStream(Adapter, r.Stream, r.WhenCanRead);
             } else {
                 await inConnection.HandleAndGetStream(r);
             }
@@ -284,10 +283,10 @@ namespace NaiveSocks
                     var reply = await readReplyTask.CAF();
                     if (reply.status != 0) {
                         result.Channel.Dispose();
-                        return new ConnectResult((IAdapter)OutAdapter ?? InAdapter, ConnectResultEnum.Failed);
+                        return new ConnectResult(Adapter, ConnectResultEnum.Failed);
                     }
                 }
-                return new ConnectResult((IAdapter)OutAdapter ?? InAdapter, ConnectResultEnum.Conneceted, new MsgStreamToMyStream(result.Channel)) { WhenCanRead = readReplyTask };
+                return new ConnectResult(Adapter, ConnectResultEnum.Conneceted, new MsgStreamToMyStream(result.Channel)) { WhenCanRead = readReplyTask };
             } catch (Exception) {
                 result.Dispose();
                 throw;
@@ -304,15 +303,15 @@ namespace NaiveSocks
         {
             var req = request.Value;
             if (req.additionalString.IsNullOrEmpty() || req.additionalString == "connect") {
-                if (InAdapter == null && GotRemoteInConnection == null) {
+                if (Adapter == null && ConnectionHandler == null) {
                     await request.Reply(new NaiveProtocol.Reply(AddrPort.Empty, 255, "noinadapter")).CAF();
                     return;
                 }
                 var inc = new InConnection(this, req, request.Channel);
-                if (GotRemoteInConnection != null) {
-                    await GotRemoteInConnection(inc).CAF();
+                if (ConnectionHandler != null) {
+                    await ConnectionHandler(inc);
                 } else {
-                    await InAdapter.Controller.HandleInConnection(inc).CAF();
+                    await Adapter.Controller.HandleInConnection(inc).CAF();
                 }
             } else if (req.additionalString == "speedtest") {
                 await HandleSpeedTest(request.Channel);
@@ -376,8 +375,6 @@ namespace NaiveSocks
             }
             await ch.SendMsg(new NaiveProtocol.Reply(AddrPort.Empty, 0, "dns_ok:" + string.Join<IPAddress>("|", addrs)).ToBytes());
         }
-
-        private Encoding ASCII => Encoding.ASCII;
 
         private async Task HandleSpeedTest(Channel ch)
         {
@@ -616,7 +613,7 @@ namespace NaiveSocks
             Stopwatch sw;
             bool lz4;
 
-            public InConnection(NaiveMChannels ncs, NaiveProtocol.Request req, Channel channel) : base(ncs.InAdapter)
+            public InConnection(NaiveMChannels ncs, NaiveProtocol.Request req, Channel channel) : base(ncs.Adapter)
             {
                 Ncs = ncs;
                 Channel = channel;

@@ -26,6 +26,9 @@ namespace NaiveSocksAndroid
     {
         LinearLayout connParent;
         List<ItemView> displayingViews = new List<ItemView>();
+        List<int> toBeRemoved = new List<int>();
+        List<InConnection> toBeAdded = new List<InConnection>();
+
         private ContextThemeWrapper themeWrapper;
 
         private bool sorting = true;
@@ -114,8 +117,8 @@ namespace NaiveSocksAndroid
                             "]");
                     var conns = controller.InConnections;
                     CheckListChanges(conns);
-                    UpdateItemViews();
                 }
+                UpdateItemViews();
             } else {
                 if (InfoStrSupport)
                     ChangeInfoStr("[no controller]");
@@ -128,6 +131,22 @@ namespace NaiveSocksAndroid
 
         private void UpdateItemViews()
         {
+            foreach (var i in toBeRemoved) {
+                var view = displayingViews[i];
+                displayingViews.RemoveAt(i);
+                connParent.RemoveViewAt(i);
+            }
+            toBeRemoved.Clear();
+
+            if (toBeAdded.Count > 0) toBeAdded.Sort((a, b) => a.Id - b.Id);
+            foreach (var item in toBeAdded) {
+                var newView = new ItemView(themeWrapper) { Connection = item };
+                newView.lastTime = lastUpdateTime;
+                displayingViews.Add(newView);
+                connParent.AddView(newView);
+            }
+            toBeAdded.Clear();
+
             animateActions.Clear();
             Action<Action<float>> registerAnimation = (action) => {
                 if (animator == null) {
@@ -172,28 +191,20 @@ namespace NaiveSocksAndroid
             }
         }
 
-        private void CheckListChanges(List<InConnection> conns)
+        private void CheckListChanges(Dictionary<int, InConnection> conns)
         {
             for (int i = displayingViews.Count - 1; i >= 0; i--) {
                 ItemView view = displayingViews[i];
-                bool found = false;
-                foreach (var item in conns) {
-                    if (object.ReferenceEquals(view.Connection, item)) {
-                        found = true;
-                        break;
-                    }
-                }
-                if (!found) {
+                if (!conns.ContainsKey(view.Connection.Id)) {
                     if (view.pendingRemoving) {
-                        displayingViews.RemoveAt(i);
-                        connParent.RemoveView(view);
+                        toBeRemoved.Add(i);
                     } else {
                         view.pendingRemoving = true;
                     }
                 }
             }
 
-            foreach (var item in conns) {
+            foreach (var item in conns.Values) {
                 bool found = false;
                 foreach (var view in displayingViews) {
                     if (object.ReferenceEquals(view.Connection, item)) {
@@ -202,10 +213,7 @@ namespace NaiveSocksAndroid
                     }
                 }
                 if (!found) {
-                    var newView = new ItemView(themeWrapper) { Connection = item };
-                    newView.lastTime = lastUpdateTime;
-                    displayingViews.Add(newView);
-                    connParent.AddView(newView);
+                    toBeAdded.Add(item);
                 }
             }
         }

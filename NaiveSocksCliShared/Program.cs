@@ -128,7 +128,7 @@ Usage: {NAME_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FILE] [--config-
                 lock (CmdConsole.ConsoleOnStdIO.Lock) {
                     var p = MyStream.TotalCopiedPackets;
                     var b = MyStream.TotalCopiedBytes;
-                    Console.Title = $"{controller.InConnections.Count}/{controller.TotalHandledConnections} current/total connections" +
+                    Console.Title = $"{controller.RunningConnections}/{controller.TotalHandledConnections} current/total connections" +
                         $" | relayed {p:N0} Δ{p - lastPackets:N0} packets / {b:N0} Δ{b - lastBytes:N0} bytes - {NAME}";
                     lastPackets = p;
                     lastBytes = b;

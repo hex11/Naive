@@ -63,7 +63,7 @@ namespace NaiveSocks
 
         Logging.Level LoggingLevel => CurrentConfig.LoggingLevel;
 
-        public List<InConnection> InConnections = new List<InConnection>();
+        public Dictionary<int, InConnection> InConnections = new Dictionary<int, InConnection>();
         public object InConnectionsLock => InConnections;
 
         private int _totalHandledConnections, _failedConnections;
@@ -677,7 +677,7 @@ namespace NaiveSocks
                 lock (InConnectionsLock) {
                     inc.InAdapter.GetAdapter().CreatedConnections++;
                     _totalHandledConnections++;
-                    InConnections.Add(inc);
+                    InConnections.Add(inc.Id, inc);
                     NewConnection?.Invoke(inc);
                 }
             } catch (Exception e) {
@@ -701,7 +701,7 @@ namespace NaiveSocks
                 lock (InConnectionsLock) {
                     if (inc.ConnectResult?.Result != ConnectResultEnum.Conneceted)
                         _failedConnections++;
-                    InConnections.Remove(inc);
+                    InConnections.Remove(inc.Id);
                     EndConnection?.Invoke(inc);
                 }
             } catch (Exception e) {

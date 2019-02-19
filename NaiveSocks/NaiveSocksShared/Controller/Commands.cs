@@ -124,7 +124,10 @@ namespace NaiveSocks
                 var con = command.Console;
                 string action = command.ArgOrNull(0);
                 if (action == null || action == "list") {
-                    var arr = controller.InConnections.ToArray();
+                    InConnection[] arr;
+                    lock (controller.InConnectionsLock)
+                        arr = controller.InConnections.Values.ToArray();
+                    Array.Sort(arr, (a, b) => a.Id - b.Id);
                     var sb = new StringBuilder(64);
                     foreach (var item in arr) {
                         if (item.IsHandled) {
@@ -168,12 +171,7 @@ namespace NaiveSocks
                         var id = Int32.Parse(command.args[i]);
                         InConnection conneciton = null;
                         lock (controller.InConnectionsLock) {
-                            foreach (var item in controller.InConnections) {
-                                if (item.Id == id) {
-                                    conneciton = item;
-                                    break;
-                                }
-                            }
+                            controller.InConnections.TryGetValue(id, out conneciton);
                         }
                         if (conneciton == null) {
                             con.WriteLine("connection #" + id + " not found");
@@ -186,7 +184,7 @@ namespace NaiveSocks
                 } else if (action == "stopall") {
                     InConnection[] arr;
                     lock (controller.InConnectionsLock) {
-                        arr = controller.InConnections.ToArray();
+                        arr = controller.InConnections.Values.ToArray();
                     }
                     con.WriteLine("stopping all connections, IDs: " + string.Join(", ", arr.Select(x => x.Id.ToString())));
                     foreach (var item in arr) {
