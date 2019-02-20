@@ -165,7 +165,7 @@ namespace NaiveSocks
                                 con.Write(" -> '" + handler + "'\n", ConsoleColor.Cyan);
                         }
                     }
-                    command.WriteLine($"({arr.Length} connections)");
+                    command.WriteLine($"({arr.Length} running / {controller.TotalHandledConnections} handled / {controller.TotalFailedConnections} failed)");
                 } else if (action == "stop") {
                     for (int i = 1; i < command.args.Length; i++) {
                         var id = Int32.Parse(command.args[i]);

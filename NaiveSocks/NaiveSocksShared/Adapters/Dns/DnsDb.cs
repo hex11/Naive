@@ -256,12 +256,15 @@ namespace NaiveSocks
             domains.Add(r.Domain);
             do {
                 var item = docs.Current;
-                if (selectedExpire < item["Expire"].AsDateTime) {
+                DateTime newExpire = item["Expire"].AsDateTime;
+                if (selectedExpire < newExpire) {
                     selectedDoc = item;
+                    selectedExpire = newExpire;
                     selected = domains.Count;
                 }
                 domains.Add(item["_id"].AsString);
             } while (docs.MoveNext());
+            docs.Dispose();
             if (selectedDoc != null) r = Record.FromDocument(selectedDoc);
 
             var sb = new StringBuilder();
@@ -334,16 +337,15 @@ namespace NaiveSocks
         private Record GetFirstOrNull(IEnumerable<BsonDocument> docs, out IEnumerator<BsonDocument> enumerator)
         {
             Record doc;
-            using (var e = docs.GetEnumerator()) {
+            var e = docs.GetEnumerator();
+            if (e.MoveNext()) {
+                doc = Record.FromDocument(e.Current);
                 if (e.MoveNext()) {
-                    doc = Record.FromDocument(e.Current);
-                    if (e.MoveNext()) {
-                        enumerator = e;
-                        return doc;
-                    }
-                } else {
-                    doc = null;
+                    enumerator = e;
+                    return doc;
                 }
+            } else {
+                doc = null;
             }
             enumerator = null;
             return doc;

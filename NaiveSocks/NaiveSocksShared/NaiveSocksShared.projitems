@@ -20,6 +20,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\Naive0\Naive0.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\Naive0\Naive0InAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\Naive0\Naive0OutAdapter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Adapters\Router\AbpProcessor.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\Ss\SsInAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\Web\WebBaseAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\Web\WebFileAdapter.cs" />
@@ -51,7 +52,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\Direct\DirectOutAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\NNetworkAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\Socks\SocksOutAdapter.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Adapters\RouterAdapter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Adapters\Router\RouterAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\Ss\SsOutAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\Web\WebConAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\Socks\Socks5Client.cs" />
