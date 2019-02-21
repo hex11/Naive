@@ -59,6 +59,12 @@ namespace NaiveSocksAndroid
             Native.Init(service);
         }
 
+        const string ClientIp = "172.31.1.2";
+        const string RouterIp = "172.31.1.1";
+
+        const string ClientIp6 = "fd11:4514:1919::2";
+        const string RouterIp6 = "fd11:4514:1919::1";
+
         public BgService Bg { get; }
         public bool Running { get; private set; }
         public VpnConfig VpnConfig { get; set; }
@@ -116,10 +122,11 @@ namespace NaiveSocksAndroid
             var builder = new VpnService.Builder(Bg)
                 .SetSession("NaiveSocks VPN bridge")
                 .SetMtu(VpnConfig.Mtu)
-                .AddAddress("172.31.1.1", 24)
+                .AddAddress(ClientIp, 24)
+                .AddDnsServer(RouterIp)
                 .AddRoute("0.0.0.0", 0);
             if (VpnConfig.Ipv6) {
-                builder.AddAddress("fd11:4514:1919::1", 126);
+                builder.AddAddress(ClientIp6, 126);
                 builder.AddRoute("::", 0);
             }
             foreach (var item in VpnConfig.RemoteDns) {
@@ -153,9 +160,8 @@ namespace NaiveSocksAndroid
             }
 
             pfd = builder.Establish();
-            var fd = pfd.Fd;
             Running = true;
-            Logging.info("VPN established, fd=" + fd);
+            Logging.info("VPN established, fd=" + pfd.Fd);
 
             string dnsgw = null;
             if (VpnConfig.DnsGw.IsNullOrEmpty() == false) {
@@ -163,7 +169,7 @@ namespace NaiveSocksAndroid
             } else if (VpnConfig.LocalDnsPort > 0) {
                 dnsgw = "127.0.0.1:" + VpnConfig.LocalDnsPort;
             }
-            StartTun2Socks(fd, "127.0.0.1:" + socksInAdapter.listen.Port, dnsgw);
+            StartTun2Socks(pfd, "127.0.0.1:" + socksInAdapter.listen.Port, dnsgw);
         }
 
         private void InitLocalDns(Controller controller)
@@ -197,13 +203,13 @@ namespace NaiveSocksAndroid
             adapter.Start();
         }
 
-        private void StartTun2Socks(int fd, string socksAddr, string dnsgw)
+        private void StartTun2Socks(ParcelFileDescriptor fd, string socksAddr, string dnsgw)
         {
             string sockPath = "t2s_sock_path";
-            var arg = "--netif-ipaddr 172.31.1.2"
+            var arg = "--netif-ipaddr " + RouterIp
                          + " --netif-netmask 255.255.255.0"
                          + " --socks-server-addr " + socksAddr
-                         + " --tunfd " + fd
+                         + " --tunfd " + fd.Fd
                          + " --tunmtu " + VpnConfig.Mtu
                          + " --sock-path " + sockPath
                          + " --loglevel 3"
@@ -212,23 +218,23 @@ namespace NaiveSocksAndroid
                 arg += " --dnsgw " + dnsgw;
             }
             if (VpnConfig.Ipv6) {
-                arg += " --netif-ip6addr fd11:4514:1919::2";
+                arg += " --netif-ip6addr " + RouterIp6;
             }
             var filesDir = AppConfig.FilesDir;
             StartProcess(Native.GetLibFullPath(Native.SsTun2Socks), arg, filesDir);
             int delay = 100;
             while (true) {
-                if (Native.SendFd(Path.Combine(filesDir, sockPath), fd)) {
+                if (Native.SendFd(Path.Combine(filesDir, sockPath), fd.FileDescriptor)) {
                     Logging.info($"sendfd OK.");
                     break;
                 }
-                Logging.info($"Failed to sendfd. Waiting for {delay} ms and retry.");
-                Thread.Sleep(delay);
-                delay *= 3;
-                if (delay > 3000) {
+                if (delay > 2000) {
                     Logging.error("Gived up to sendfd");
                     return;
                 }
+                Logging.info($"Wait for {delay} ms and retry sendfd.");
+                Thread.Sleep(delay);
+                delay *= 3;
             }
         }
 
@@ -277,10 +283,7 @@ namespace NaiveSocksAndroid
         {
             // native binaries from shadowsocks-android release apk (too lazy to compile):
             // https://github.com/shadowsocks/shadowsocks-android/releases
-            // (v4.7.0)
-
-            // to send TUN file descriptor to tun2socks.
-            public const string SsJniHelper = "libjni-helper.so";
+            // (v4.7.1)
 
             // tun -> socks. (executable)
             public const string SsTun2Socks = "libtun2socks.so";
@@ -297,29 +300,20 @@ namespace NaiveSocksAndroid
                 return Path.Combine(NativeDir, libName);
             }
 
-            [DllImport(SsJniHelper)]
-            public static extern int ancil_send_fd(int sock, int fd);
-
             public static string NativeDir;
 
-            public static bool SendFd(string sockPath, int tunFd)
+            public static bool SendFd(string sockPath, Java.IO.FileDescriptor fd)
             {
-                var fd = Syscall.socket(UnixAddressFamily.AF_UNIX, UnixSocketType.SOCK_STREAM, 0);
-                if (fd < 0) {
-                    Logging.warning("Sendfd: socket() failed.");
-                    return false;
-                }
+                var socket = new LocalSocket();
                 try {
-                    if (Syscall.connect(fd, new SockaddrUn(sockPath)) == -1) {
-                        Logging.warning("Sendfd: connect() failed.");
-                        return false;
-                    }
-                    if (ancil_send_fd(fd, tunFd) != 0) {
-                        Logging.warning("Sendfd: ancil_send_fd() failed.");
-                        return false;
-                    }
+                    socket.Connect(new LocalSocketAddress(sockPath, LocalSocketAddress.Namespace.Filesystem));
+                    socket.SetFileDescriptorsForSend(new Java.IO.FileDescriptor[] { fd });
+                    socket.OutputStream.Write(new byte[] { 42 });
+                } catch (Exception e) {
+                    Logging.warning("sendfd: " + e.Message);
+                    return false;
                 } finally {
-                    Syscall.close(fd);
+                    socket.Close();
                 }
                 return true;
             }
