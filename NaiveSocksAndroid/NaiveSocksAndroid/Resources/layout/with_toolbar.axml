@@ -1,38 +1,31 @@
 <?xml version="1.0" encoding="utf-8"?>
-<android.support.wear.widget.BoxInsetLayout
-    xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
-    android:layout_height="match_parent"
-    android:layout_width="match_parent">
-	<android.support.design.widget.CoordinatorLayout
-		xmlns:android="http://schemas.android.com/apk/res/android"
-		xmlns:app="http://schemas.android.com/apk/res-auto"
-		android:background="@android:color/white"
+<android.support.design.widget.CoordinatorLayout
+	xmlns:android="http://schemas.android.com/apk/res/android"
+	xmlns:app="http://schemas.android.com/apk/res-auto"
+	android:background="@android:color/white"
+	android:layout_width="match_parent"
+	android:layout_height="match_parent"
+	android:id="@+id/topview">
+	<LinearLayout
+		android:orientation="vertical"
+		android:layout_width="match_parent"
+		android:layout_height="match_parent">
+
+	<android.support.v7.widget.Toolbar
+	android:id="@+id/toolbar"
+	android:layout_width="match_parent"
+	android:layout_height="wrap_content"
+	android:minHeight="?attr/actionBarSize"
+	android:background="?attr/colorPrimary"
+	android:theme="@android:style/ThemeOverlay.Material.Dark.ActionBar"
+	android:popupTheme="@android:style/ThemeOverlay.Material.Light"/>
+
+	<FrameLayout
+		android:id="@+id/realContent"
+		app:layout_behavior="@string/appbar_scrolling_view_behavior"
 		android:layout_width="match_parent"
 		android:layout_height="match_parent"
-		android:id="@+id/topview"
-		app:boxedEdges="all">
-	  <LinearLayout
-		  android:orientation="vertical"
-		  android:layout_width="match_parent"
-		  android:layout_height="match_parent">
+		android:layout_weight="1"/>
 
-		<android.support.v7.widget.Toolbar
-		android:id="@+id/toolbar"
-		android:layout_width="match_parent"
-		android:layout_height="wrap_content"
-		android:minHeight="?attr/actionBarSize"
-		android:background="?attr/colorPrimary"
-		android:theme="@android:style/ThemeOverlay.Material.Dark.ActionBar"
-		android:popupTheme="@android:style/ThemeOverlay.Material.Light"/>
-
-		<FrameLayout
-			android:id="@+id/realContent"
-			app:layout_behavior="@string/appbar_scrolling_view_behavior"
-			android:layout_width="match_parent"
-			android:layout_height="match_parent"
-			android:layout_weight="1"/>
-
-	  </LinearLayout>
-	</android.support.design.widget.CoordinatorLayout>
-</android.support.wear.widget.BoxInsetLayout>
+	</LinearLayout>
+</android.support.design.widget.CoordinatorLayout>
