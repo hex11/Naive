@@ -14,6 +14,8 @@ namespace NaiveSocks
     {
         public string dir { get; set; }
 
+        public string dir_hosts { get; set; }
+
         public string allow { get; set; }
         private bool allow_list, allow_create, allow_edit, allow_netdl;
 
@@ -121,7 +123,14 @@ namespace NaiveSocks
                 p.Url_path = index;
             }
             try {
-                string dirPath = Controller.ProcessFilePath(dir);
+                string dirPath = null;
+                if (dir_hosts != null) {
+                    var rr = WebSvrHelper.CheckPath(Controller.ProcessFilePath(dir_hosts), p.Host, out var hostPath);
+                    if (rr == WebSvrHelper.PathResult.Directory) {
+                        dirPath = hostPath;
+                    }
+                }
+                if (dirPath == null) dirPath = Controller.ProcessFilePath(dir);
                 WebSvrHelper.PathResult r = WebSvrHelper.CheckPath(dirPath, p.Url_path, out var fsFilePath);
                 if (p.Url_qstr == "dlstatus" && (r == WebSvrHelper.PathResult.File || r == WebSvrHelper.PathResult.NotFound)) {
                     p.Handled = true;

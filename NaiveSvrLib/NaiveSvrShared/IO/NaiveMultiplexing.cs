@@ -641,7 +641,7 @@ namespace NaiveSocks
                             logUnexpectedOpcode(opcode);
                         return;
                     }
-                    Logging.warning("block send");
+                    //Logging.warning("block send");
                     SetBlockingSend(true);
                 } else if (opcode == Opcode.ResumeSend) {
                     if (IsClosed) {
@@ -649,7 +649,7 @@ namespace NaiveSocks
                             logUnexpectedOpcode(opcode);
                         return;
                     }
-                    Logging.warning("resume send");
+                    //Logging.warning("resume send");
                     SetBlockingSend(false);
                 } else {
                     Logging.warning($"{this} BUG?: unknown opcode: {opcode}");

@@ -128,7 +128,7 @@ namespace NaiveSocks
                     Logger.info($"unhandled proxy request (no 'out'): {p.Method} {p.Url}");
                     return AsyncHelper.CompletedTask;
                 }
-                return handleHttp(p);
+                return handleHttpProxy(p);
             } else {
                 return HandleWeb(p);
             }
@@ -148,10 +148,11 @@ namespace NaiveSocks
                     if ((r.host.IsNull || (p.Host != null && r.host.IsOrContains(p.Host)))
                             && (r.location == null || IsInLocation(p.Url_path, r.location))) {
                         var oldPath = p.Url_path;
-                        if (r.chroot && r.location != null)
+                        if (r.chroot && r.location != null) {
                             p.Url_path = p.Url_path.Substring(r.location.Length);
-                        if (p.Url_path.Length == 0)
-                            p.Url_path = "/";
+                            if (p.Url_path.StartsWith("/", StringComparison.Ordinal) == false)
+                                p.Url_path = "/" + p.Url_path;
+                        }
                         try {
                             foreach (var item in r.to) {
                                 if (await HandleByAdapter(p, item))
@@ -164,7 +165,7 @@ namespace NaiveSocks
                 }
             }
             if (webouts == null) {
-                Logger.info($"unhandled web request (no 'webouts'/'hosts'?): {p.Method} {p.Url}");
+                Logger.info($"unhandled web request (no webroutes/webouts/hosts?): {p.Method} {p.Url}");
                 return;
             }
             await HandleByAdapters(p, webouts);
@@ -201,7 +202,7 @@ namespace NaiveSocks
 
         static IMyStream getStream(HttpConnection p) => p.myStream;
 
-        private async Task handleHttp(HttpConnection p)
+        private async Task handleHttpProxy(HttpConnection p)
         {
             p.EnableKeepAlive = false;
 
@@ -245,7 +246,7 @@ namespace NaiveSocks
             int totalReqs = 0;
 
             AddrPort dest = parseUrl(p.Url, out var realurl, out var isHttps);
-        connnectDest:
+            connnectDest:
             int destReqs = 0;
             string p_HttpVersion = null;
             string state = null;

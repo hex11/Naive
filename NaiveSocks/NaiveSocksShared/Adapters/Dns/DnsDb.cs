@@ -255,6 +255,10 @@ namespace NaiveSocks
             BsonDocument selectedDoc = null;
             domains.Add(r.Domain);
             do {
+                if (domains.Count == 32) {
+                    domains.Add("...");
+                    break;
+                }
                 var item = docs.Current;
                 DateTime newExpire = item["Expire"].AsDateTime;
                 if (selectedExpire < newExpire) {

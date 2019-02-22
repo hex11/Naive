@@ -106,7 +106,7 @@ namespace Naive.HttpSvr
         public int requestCount = 0;
         public int RequestCount => requestCount;
 
-        public string ServerHeader = "NaiveServer";
+        public string ServerHeader; // = "NaiveServer";
 
         public event Action<HttpConnection> ConnectionBegin;
         public event Action<HttpConnection> ConnectionStateChanged;

@@ -17,7 +17,7 @@ namespace NaiveSocks
 
         public class PathSettings : Settings
         {
-            public string format { get; set; } = @"token=(?<token>[\w%]*)";
+            public string format { get; set; } = @"(token=)?(?<token>[\w%]+)";
             public string key { get; set; }
             public Dictionary<string, AdapterRef> networks { get; set; }
             public AdapterRef network { get; set; }
