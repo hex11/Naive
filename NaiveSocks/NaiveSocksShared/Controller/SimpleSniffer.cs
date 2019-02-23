@@ -34,14 +34,16 @@ namespace NaiveSocks
 
             try {
                 var bs = _bs;
+                var http = false;
                 foreach (var item in httpMethods) {
                     if (Match(bs, item) && bs.GetOrZero(item.Length) == ' ') {
                         bs.SubSelf(item.Length + 1);
-                        Http = "HTTP?";
+                        http = true;
                         break;
                     }
                 }
-                if (Http != null) {
+                if (http) {
+                    Protocol = "HTTP?";
                     var begin = Find(bs, (byte)' ');
                     if (begin != -1) {
                         begin += 1;
@@ -51,12 +53,20 @@ namespace NaiveSocks
                             if (len == -1)
                                 len = Find(bs.Sub(0, Math.Min(bs.Len, 10)), (byte)'\n');
                             if (len != -1) {
-                                Http = Encoding.ASCII.GetString(bs.Bytes, bs.Offset, len);
+                                Protocol = Encoding.ASCII.GetString(bs.Bytes, bs.Offset, len);
                             }
                         }
                     }
                 }
-            } catch (Exception e) {
+            } catch (Exception) {
+            }
+
+            if (Protocol != null) return;
+
+            if (Match(_bs, "SSH-")) {
+                Protocol = "SSH";
+            } else if (Match(_bs, "\x13BitTorrent protocol")) {
+                Protocol = "BitTorrent";
             }
         }
 
@@ -97,7 +107,7 @@ namespace NaiveSocks
             }
             sBuf = null;
             return;
-        CONTINUE_READ:
+            CONTINUE_READ:
             serverDone = false;
             return;
         }
@@ -109,7 +119,7 @@ namespace NaiveSocks
 
         bool TlsError;
 
-        string Http;
+        string Protocol;
 
         TlsStream.ClientHello Tls;
 
@@ -151,8 +161,8 @@ namespace NaiveSocks
                     sb.Append("...,");
                 }
                 sb[sb.Length - 1] = ')';
-            } else if (Http != null) {
-                sb.Append(Http);
+            } else if (Protocol != null) {
+                sb.Append(Protocol);
             } else if (!clientDone) {
                 sb.Append("(No Data)");
             } else {
