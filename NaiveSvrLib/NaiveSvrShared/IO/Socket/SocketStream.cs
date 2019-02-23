@@ -12,7 +12,7 @@ using System.Runtime.InteropServices;
 namespace NaiveSocks
 {
 
-    public abstract class SocketStream : MyStream, IMyStreamSync, IMyStreamReadFull, IMyStreamReadFullR, IMyStreamReadR, IMyStreamWriteR
+    public abstract class SocketStream : MyStream, IMyStreamSync, IMyStreamReadFull, IMyStreamReadFullR, IMyStreamReadR, IMyStreamWriteR, IMyStreamDispose
     {
         static SocketStream()
         {
@@ -23,12 +23,18 @@ namespace NaiveSocks
         {
             this.Socket = socket;
             this.EPPair = EPPair.FromSocket(socket);
-            this.Fd = socket.Handle;
         }
 
         public Socket Socket { get; }
 
-        public IntPtr Fd { get; private set; }
+        private IntPtr _fd = (IntPtr)(-1);
+        public IntPtr Fd
+        {
+            get {
+                if (_fd == (IntPtr)(-1)) _fd = Socket.Handle;
+                return _fd;
+            }
+        }
 
         public EPPair EPPair { get; }
 
@@ -48,10 +54,15 @@ namespace NaiveSocks
         public override Task Close()
         {
             Logging.debug($"{this}: close");
-            this.State = MyStreamState.Closed;
-            Fd = new IntPtr(-1);
+            this.State = MyStreamState.Disposed;
+            _fd = (IntPtr)(-1);
             Socket.Close();
             return NaiveUtils.CompletedTask;
+        }
+
+        public Task Dispose()
+        {
+            return Close();
         }
 
         public override Task Shutdown(SocketShutdown direction)

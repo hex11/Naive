@@ -43,15 +43,16 @@ namespace NaiveSocks
     {
         public static async Task<ConnectResult> Connect(IAdapter adapter, AddrPort dest, int timeoutSeconds)
         {
+            Socket socket;
             try {
-                var socket = await NaiveUtils.ConnectTcpAsync(dest, timeoutSeconds * 1000);
-                return new ConnectResult(adapter, MyStream.FromSocket(socket, adapter.GetAdapter().socket_impl));
+                socket = await NaiveUtils.ConnectTcpAsync(dest, timeoutSeconds * 1000);
             } catch (Exception e) {
                 return new ConnectResult(adapter, ConnectResultEnum.Failed) {
                     FailedReason = e.Message,
                     Exception = e
                 };
             }
+            return new ConnectResult(adapter, MyStream.FromSocket(socket, adapter.GetAdapter().socket_impl));
         }
     }
 }

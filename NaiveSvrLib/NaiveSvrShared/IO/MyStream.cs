@@ -81,13 +81,19 @@ namespace NaiveSocks
         AwaitableWrapper WriteAsyncR(BytesSegment bs);
     }
 
+    public interface IMyStreamDispose : IMyStream
+    {
+        Task Dispose();
+    }
+
     public struct MyStreamState
     {
         private const int
             OPEN = 0,
             LOCAL_SHUTDOWN = 1 << 0,
             REMOTE_SHUTDOWN = 1 << 1,
-            CLOSED = LOCAL_SHUTDOWN | REMOTE_SHUTDOWN;
+            CLOSED = LOCAL_SHUTDOWN | REMOTE_SHUTDOWN,
+            DISPOSED = 1 << 2 | CLOSED;
 
         private MyStreamState(int state)
         {
@@ -111,6 +117,8 @@ namespace NaiveSocks
                     return "REMOTE_SHUTDOWN";
                 case CLOSED:
                     return "CLOSED";
+                case DISPOSED:
+                    return "DISPOSED";
                 default:
                     return $"!!UNKNOWN({state})!!";
             }
@@ -124,13 +132,15 @@ namespace NaiveSocks
         public static readonly MyStreamState LocalShutdown = new MyStreamState(LOCAL_SHUTDOWN);
         public static readonly MyStreamState RemoteShutdown = new MyStreamState(REMOTE_SHUTDOWN);
         public static readonly MyStreamState Closed = new MyStreamState(CLOSED);
+        public static readonly MyStreamState Disposed = new MyStreamState(DISPOSED);
 
         public bool IsOpen => state == OPEN;
-        public bool IsClosed => state == CLOSED;
+        public bool IsClosed => Has(CLOSED);
         public bool HasShutdown => Has(LOCAL_SHUTDOWN);
         public bool HasRemoteShutdown => Has(REMOTE_SHUTDOWN);
+        public bool IsDisposed => state == DISPOSED;
 
-        private bool Has(int flag) => (state & flag) != 0;
+        private bool Has(int flag) => (state & flag) == flag;
 
         public static bool operator ==(MyStreamState s1, MyStreamState s2) => s1.state == s2.state;
         public static bool operator !=(MyStreamState s1, MyStreamState s2) => s1.state != s2.state;
@@ -401,11 +411,15 @@ namespace NaiveSocks
                 throw new ArgumentOutOfRangeException(nameof(timeout), "should be -2 (default), -1 (infinity), or >= 0.");
             if (timeout == -2)
                 timeout = 10 * 1000;
-            if (stream.State.IsClosed)
+            if (stream is IMyStreamDispose) {
+                if (stream.State.IsDisposed)
+                    return NaiveUtils.CompletedTask;
+            } else if (stream.State.IsClosed) {
                 return NaiveUtils.CompletedTask;
+            }
             return Task.Run(async () => {
                 try {
-                    var closeTask = stream.Close();
+                    var closeTask = stream is IMyStreamDispose dis ? dis.Dispose() : stream.Close();
                     if (await closeTask.WithTimeout(timeout)) {
                         Logging.warning($"stream closing timed out ({timeout} ms). ({stream})");
                     }
@@ -866,8 +880,8 @@ namespace NaiveSocks
                 throw new Exception();
             }
 
-        //while (pos < bs.Len) {
-        WHILE:
+            //while (pos < bs.Len) {
+            WHILE:
             try {
                 if (!(pos < bs.Len))
                     goto EWHILE;
@@ -882,7 +896,7 @@ namespace NaiveSocks
                 return;
             }
             return;
-        STEP1:
+            STEP1:
             try {
                 var read = awaitable.GetResult();
                 if (read == 0)
@@ -894,8 +908,8 @@ namespace NaiveSocks
                 return;
             }
             goto WHILE;
-        //}
-        EWHILE:
+            //}
+            EWHILE:
             ResetState();
             SetResult(VoidType.Void);
             return;
@@ -1201,8 +1215,10 @@ namespace NaiveSocks
         public Task Shutdown(SocketShutdown direction)
         {
             lock (Another._syncRoot) {
-                Another.recvEOF = true;
-                Another.tcsNewBuffer.SetResult(0);
+                if (Another.recvEOF == false) {
+                    Another.recvEOF = true;
+                    Another.tcsNewBuffer.SetResult(0);
+                }
             }
             return NaiveUtils.CompletedTask;
         }

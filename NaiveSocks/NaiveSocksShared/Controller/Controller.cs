@@ -695,8 +695,8 @@ namespace NaiveSocks
                 await inc.HandleFailed(null);
             }
             var dataStream = inc.DataStream;
-            if (dataStream != null && dataStream.State != MyStreamState.Closed)
-                await MyStream.CloseWithTimeout(dataStream);
+            if (dataStream != null)
+                MyStream.CloseWithTimeout(dataStream).Forget();
             try {
                 lock (InConnectionsLock) {
                     if (inc.ConnectResult?.Result != ConnectResultEnum.Conneceted)

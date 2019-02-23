@@ -19,11 +19,12 @@ namespace NaiveSocks
 
         public YASocket(Socket socket) : base(socket)
         {
+            fd = Fd.ToInt32();
             EnableReadaheadBuffer = false;
             CreateFdR();
         }
 
-        private int fd => Fd.ToInt32();
+        private int fd;
 
         // use two additional fd for thread-safe
         private int fdR = -1; // -1 when not exists
