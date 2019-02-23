@@ -229,13 +229,13 @@ namespace NaiveSocks
             try {
                 var r = GetFirstOrNull(getDocs(ip, false), out var enumerator);
                 if (enumerator != null) {
-                    HandleMultipleItems(enumerator, ref r, out var domains);
-                    Logger?.warning($"multiple domains ({domains}) are resolved to ip ({getIp(ip)}).");
+                    HandleMultipleItems(enumerator, ref r, out var domains, out var count);
+                    Logger?.warning($"{count} domains ({domains}) are resolved to ip ({getIp(ip)}).");
                 } else if (r == null) {
                     r = GetFirstOrNull(getDocs(ip, true), out enumerator);
                     if (enumerator != null) {
-                        HandleMultipleItems(enumerator, ref r, out var domains);
-                        Logger?.warning($"multiple domains ({domains}) were (but not now) resolved to ip ({getIp(ip)}).");
+                        HandleMultipleItems(enumerator, ref r, out var domains, out var count);
+                        Logger?.warning($"{count} domains ({domains}) were (but not now) resolved to ip ({getIp(ip)}).");
                     } else if (r != null) {
                         Logger?.warning($"domain ({r.Domain}) was (but not now) resolved to ip ({getIp(ip)}).");
                     }
@@ -246,7 +246,7 @@ namespace NaiveSocks
             }
         }
 
-        private static void HandleMultipleItems(IEnumerator<BsonDocument> docs, ref Record r, out string domainList)
+        private static void HandleMultipleItems(IEnumerator<BsonDocument> docs, ref Record r, out string domainList, out int count)
         {
             // current enumerator index = 1
             var domains = new List<string>();
@@ -270,6 +270,7 @@ namespace NaiveSocks
             } while (docs.MoveNext());
             docs.Dispose();
             if (selectedDoc != null) r = Record.FromDocument(selectedDoc);
+            count = domains.Count;
 
             var sb = new StringBuilder();
             for (int i = 0; i < domains.Count; i++) {

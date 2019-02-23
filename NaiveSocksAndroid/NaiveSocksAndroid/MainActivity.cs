@@ -332,7 +332,10 @@ namespace NaiveSocksAndroid
         {
             DebugEvent("ReplaceFragment");
             var fm = SupportFragmentManager;
-            fm.BeginTransaction().Replace(R.Id.flContent, frag).Commit();
+            fm.BeginTransaction()
+                .SetTransition(FragmentTransaction.TransitFragmentOpen)
+                .Replace(R.Id.flContent, frag)
+                .Commit();
             curFrag = frag;
         }
 
