@@ -196,13 +196,18 @@ Usage: {NAME_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FILE] [--config-
                     if (cmd.args.Length == 0) {
                         Process.Start("explorer", ".");
                     } else if (cmd.args.Length > 1) {
-                        cmd.statusCode = 1;
-                        cmd.WriteLine("wrong arguments");
+                        goto WRONT_ARG;
                     } else if (cmd.args[0] == "exe") {
                         OpenFolerAndShowFile(Process.GetCurrentProcess().MainModule.FileName);
                     } else if (cmd.args[0] == "config") {
                         OpenFolerAndShowFile(controller.CurrentConfig.FilePath);
+                    } else {
+                        goto WRONT_ARG;
                     }
+                    return;
+                    WRONT_ARG:
+                    cmd.statusCode = 1;
+                    cmd.WriteLine("wrong arguments");
                     void OpenFolerAndShowFile(string fileName) => Process.Start("explorer", $"/select, \"{fileName}\"");
                 }, "Usage: openfolder [exe|config]");
             }
@@ -223,9 +228,9 @@ Usage: {NAME_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FILE] [--config-
                 var line = stdio.ReadLine();
                 sw.Stop();
                 if (line == null) {
-                    Logging.warning("read an EOF from stdin");
+                    Logging.warning("Read an EOF from stdin");
                     if (sw.ElapsedMilliseconds < 50) {
-                        Logging.warning("...in 50 ms. keep running without interactive interface.");
+                        Logging.warning("...in 50 ms. Keep running without interactive interface.");
                         Logging.warning("Please use --no-cli option if the program do not run from a console.");
                         goto WAIT;
                     }

@@ -97,10 +97,10 @@ namespace NaiveSocks
                         }
                         var firstReading = true;
                         goto READ;
-                    READAGAIN:
+                        READAGAIN:
                         ex = null;
                         firstReading = false;
-                    READ:
+                        READ:
                         r = ReadNonblocking(fdR, bs, out var errno);
                         if (r < 0) {
                             if (mode == 3) {
@@ -166,7 +166,7 @@ namespace NaiveSocks
                             }
                         }
                     }
-                END_ASYNC:
+                    END_ASYNC:
                     if (operating) {
                         bufRead.ResetSelf();
                         readState = 0;
@@ -447,7 +447,7 @@ namespace NaiveSocks
                 if (State.HasRemoteShutdown)
                     throw GetStateException();
                 int r = 0;
-            READ_AGAIN:
+                READ_AGAIN:
                 if (ready) {
                     var syncR = ReadNonblocking(bs);
                     if (syncR == 0) {
@@ -673,7 +673,7 @@ namespace NaiveSocks
             mapLock.EnterWriteLock();
             try {
                 if (fdCleanupList.Contains(fd)) {
-                    Logger.warning("Adding fd " + fd + ", which is in cleanupList");
+                    Logger.warning("Adding fd " + fd + " (handler " + handler + "), which is in cleanupList");
                 }
                 mapFdToHandler.Add(fd, handler);
                 //mapFdToHandler[fd] = handler;

@@ -39,9 +39,9 @@ namespace NaiveSocks
 
         public static void NewbieWizard(Command cmd, Controller c, string configFilePath)
         {
-            cmd.Write($"** Naive Setup Wizard **\n\n", ConsoleColor.White);
+            cmd.Write($"##### Naive Very Simple Setup Wizard #####\n\n", ConsoleColor.White);
             var template = cmd.Select("This is:", new Dictionary<string, Func<string>> {
-                ["Client"] = () => {
+                ["Simple Naive client"] = () => {
                     var serverUri = cmd.ReadLine("Server URL (e.g., ws://your.server:8080/): ");
                     var key = cmd.ReadLine("Server key: ");
                     var imux = cmd.ReadLine("Inverse Mux count", "3");
@@ -65,7 +65,7 @@ namespace NaiveSocks
                     };
                     return Nett.Toml.WriteString(config);
                 },
-                ["Server"] = () => {
+                ["Simple Naive server"] = () => {
                     var serverPort = cmd.ReadLine("Server listening port", "8080");
                     var serverPath = cmd.ReadLine("Server path (e.g., /updatews)", "/");
                     var key = cmd.ReadLine("Server key: ");
