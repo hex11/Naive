@@ -13,7 +13,7 @@ namespace NaiveSocks
             }
         }
 
-        public const string Version = "0.3.18.0";
+        public const string Version = "0.3.19.0";
 
         public const bool Debug =
 #if DEBUG
