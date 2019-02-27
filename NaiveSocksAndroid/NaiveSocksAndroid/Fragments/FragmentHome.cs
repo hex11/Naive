@@ -109,8 +109,8 @@ namespace NaiveSocksAndroid
             NewDataItem("Connections", sb => {
                 if (Controller != null) {
                     sb.Append(Controller.RunningConnections).Append(" running, ")
-                        .Append(Controller.TotalHandledConnections).Append(" handled, ")
-                        .Append(Controller.TotalFailedConnections).Append(" failed");
+                        .Append(Controller.TotalFailedConnections).Append(" failed, ")
+                        .Append(Controller.TotalHandledConnections).Append(" handled");
                 } else {
                     sb.Append("(controller is not running)");
                 }

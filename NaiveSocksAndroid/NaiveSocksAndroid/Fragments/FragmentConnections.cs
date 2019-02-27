@@ -28,6 +28,7 @@ namespace NaiveSocksAndroid
         List<ItemView> displayingViews = new List<ItemView>();
         List<int> toBeRemoved = new List<int>();
         List<InConnection> toBeAdded = new List<InConnection>();
+        TextView textView;
 
         private ContextThemeWrapper themeWrapper;
 
@@ -49,6 +50,9 @@ namespace NaiveSocksAndroid
             var view = inflater.CloneInContext(themeWrapper).Inflate(R.Layout.connections, container, false);
 
             connParent = view.FindViewById<LinearLayout>(R.Id.connparent);
+
+            textView = new TextView(themeWrapper);
+            connParent.AddView(textView);
 
             if (AppConfig.Current.GetBool(AppConfig.tip_cxn, true)) {
                 MainActivity.MakeSnackbar(R.String.long_press_cxn_to_stop, Android.Support.Design.Widget.Snackbar.LengthLong)
@@ -109,19 +113,23 @@ namespace NaiveSocksAndroid
             var controller = Controller;
             if (controller != null) {
                 lock (controller.InConnectionsLock) {
+                    var conns = controller.InConnections;
                     if (InfoStrSupport)
                         ChangeInfoStr(
-                            "[" + controller.RunningConnections +
+                            "[" + conns.Count +
                             "/" + controller.TotalFailedConnections +
                             "/" + controller.TotalHandledConnections +
                             "]");
-                    var conns = controller.InConnections;
+                    textView.Text = "(" + conns.Count + " running / "
+                        + controller.TotalFailedConnections + " failed / "
+                        + controller.TotalHandledConnections + " handled)";
                     CheckListChanges(conns);
                 }
                 UpdateItemViews();
             } else {
                 if (InfoStrSupport)
-                    ChangeInfoStr("[no controller]");
+                    ChangeInfoStr(null);
+                textView.Text = "(no controller)";
                 Clear();
             }
         }
@@ -143,7 +151,7 @@ namespace NaiveSocksAndroid
                 var newView = new ItemView(themeWrapper) { Connection = item };
                 newView.lastTime = lastUpdateTime;
                 displayingViews.Add(newView);
-                connParent.AddView(newView);
+                connParent.AddView(newView, displayingViews.Count - 1); // insert before textView
             }
             toBeAdded.Clear();
 
@@ -222,6 +230,7 @@ namespace NaiveSocksAndroid
         {
             lastUpdateTime = -1;
             connParent.RemoveAllViews();
+            connParent.AddView(textView);
             displayingViews.Clear();
         }
 

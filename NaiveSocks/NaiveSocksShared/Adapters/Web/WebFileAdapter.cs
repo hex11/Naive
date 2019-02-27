@@ -125,9 +125,12 @@ namespace NaiveSocks
             try {
                 string dirPath = null;
                 if (dir_hosts != null) {
-                    var rr = WebSvrHelper.CheckPath(Controller.ProcessFilePath(dir_hosts), p.Host, out var hostPath);
+                    string hosts = Controller.ProcessFilePath(dir_hosts);
+                    string host = p.Host;
+                    // TODO: check host for security
+                    var rr = WebSvrHelper.CheckPath(hosts, host, out var hostsSubDir);
                     if (rr == WebSvrHelper.PathResult.Directory) {
-                        dirPath = hostPath;
+                        dirPath = hostsSubDir;
                     }
                 }
                 if (dirPath == null) dirPath = Controller.ProcessFilePath(dir);

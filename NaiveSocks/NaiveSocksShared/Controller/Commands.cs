@@ -165,7 +165,7 @@ namespace NaiveSocks
                                 con.Write(" -> '" + handler + "'\n", ConsoleColor.Cyan);
                         }
                     }
-                    command.WriteLine($"({arr.Length} running / {controller.TotalHandledConnections} handled / {controller.TotalFailedConnections} failed)");
+                    command.WriteLine($"({arr.Length} running / {controller.TotalFailedConnections} failed / {controller.TotalHandledConnections} handled)");
                 } else if (action == "stop") {
                     for (int i = 1; i < command.args.Length; i++) {
                         var id = Int32.Parse(command.args[i]);
@@ -283,14 +283,17 @@ namespace NaiveSocks
                 con.Write("[Threads] ", ConsoleColor.Cyan);
                 command.WriteLine($"{proc.Threads.Count} (workers: {workersMin}-{workersMax}, ports: {portsMin}-{portsMax})");
                 con.Write("[Connections] ", ConsoleColor.Cyan);
-                command.WriteLine($"{controller.RunningConnections} running, {controller.TotalHandledConnections} handled, {controller.TotalFailedConnections} failed");
+                command.WriteLine($"{controller.RunningConnections} running, {controller.TotalFailedConnections} failed, {controller.TotalHandledConnections} handled");
                 con.Write("[Relay Counters] ", ConsoleColor.Cyan);
                 command.WriteLine($"{MyStream.TotalCopiedPackets:N0} packets, {MyStream.TotalCopiedBytes:N0} bytes");
                 con.Write("[Socket Counters]\n", ConsoleColor.Cyan);
                 command.WriteLine($"  {SocketStream.GlobalCounters.StringRead};");
                 command.WriteLine($"  {SocketStream.GlobalCounters.StringWrite}.");
-                con.Write("[ContRunner Counters] ", ConsoleColor.Cyan);
-                command.WriteLine($"{ContinuationRunner.InContextCount}/{ContinuationRunner.OutContextCount}");
+
+                if (command.ArgOrNull(0) == "-v") {
+                    con.Write("[ContRunner Counters] ", ConsoleColor.Cyan);
+                    command.WriteLine($"{ContinuationRunner.InContextCount}/{ContinuationRunner.OutContextCount}");
+                }
             });
             cmdHub.AddCmdHandler(prefix + "config", c => {
                 var con = c.Console;
