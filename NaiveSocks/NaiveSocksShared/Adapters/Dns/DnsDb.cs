@@ -246,7 +246,7 @@ namespace NaiveSocks
             }
         }
 
-        private static void HandleMultipleItems(IEnumerator<BsonDocument> docs, ref Record r, out string domainList, out int count)
+        private static void HandleMultipleItems(IEnumerator<BsonDocument> docs, ref Record r, out string domainList, out string count)
         {
             // current enumerator index = 1
             var domains = new List<string>();
@@ -254,8 +254,10 @@ namespace NaiveSocks
             DateTime selectedExpire = r.Expire;
             BsonDocument selectedDoc = null;
             domains.Add(r.Domain);
+            count = null;
             do {
                 if (domains.Count == 32) {
+                    count = "32+";
                     domains.Add("...");
                     break;
                 }
@@ -270,7 +272,7 @@ namespace NaiveSocks
             } while (docs.MoveNext());
             docs.Dispose();
             if (selectedDoc != null) r = Record.FromDocument(selectedDoc);
-            count = domains.Count;
+            count = count ?? domains.Count.ToString();
 
             var sb = new StringBuilder();
             for (int i = 0; i < domains.Count; i++) {
