@@ -46,3 +46,21 @@ Build status (master branch):
   - [ ] 'direct'
   - [ ] 'socks5'
   - [ ] 'naive'
+
+# Run
+
+### .NET Framework (4.5.1 or above) / Mono
+
+Run `NaiveSocks.exe` in `NaiveSocks_net45.zip/tar.gz` or `NaiveSocks_SingleFile.exe`.
+
+### .NET Core (2.1 or above)
+
+Run `run.sh` or `run.bat` in `NaiveSocks_dotnetcore.zip/tar.gz`.
+
+### Android
+
+Install `NaiveSocksAndroid.apk` and run.
+
+# Configration Example
+
+See [Naivesocks/naivesocks-example.tml](Naivesocks/naivesocks-example.tml)

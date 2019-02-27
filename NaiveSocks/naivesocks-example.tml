@@ -1,63 +1,50 @@
 # NaiveSocks configration file example
 #
-# Using TOML: 
+# Using (modified) TOML: 
 #   https://github.com/toml-lang/toml
+#   https://github.com/hex11/Nett
 #
 # How NaiveSocks works:
-#   [client] (==> ...) ==> [InAdapter] ==> [OutAdapter] ==> (... ==>) [destination]
 #
-
+#   [client] ==> [InAdapter] ==(Controller)==> [OutAdapter] ==> [destination]
+#
+# 1) InAdapter accepts incomming connection (which should indicate a destination).
+# 2) The connection is dispatched to OutAdapter.
+# 3) OutAdapter connects to the destination.
+# 4) Start relaying between the incomming connection and the destination.
 
 ##### BEGIN of local configration example #####
 
-# this is an InAdapter:
+# This is an InAdapter:
 [in.socks5listener]
-#   ^^^^^^^^^^^^^^ InAdapter name
+#   ^^^^^^^^^^^^^^ InAdapter name, which is up to you
 
 type = 'socks'
-# Available InAdapter types: direct, socks, http, naive, ss
+# Available InAdapter types: direct, socks, http, naive, ss, tproxy (Linux only)
 
-local = '127.1:1080' # "127.1" -> "127.0.0.1", "127.257" -> "127.0.1.1"
-# socks5 listening address
+listen = '127.0.0.1:1080'
+# Listening endpoint
 
 out = 'examplenaivec'
-# Name of OutAdapter to connect. default: 'default'
+# Name of OutAdapter that handles incomming connections from this adapter.
 
-# [out.rt]
-# type = 'router'
-# default = 'direct'
-# [[out.rt.rules]]
-# abp = '!abp filter string'
-# abpfile = 'abp_filter_file_path'
-# base64 = false # if abp/abpfile content is base64 encoded
-# eq = 'google.com'
-# wildcard = '*.google.*'
-# regex = '^(www|play)\.google\.com$'
-# port = 80
-## if any one above is match
-# new_host = 'new_dest_host_here' # support regex group: $0, $1, $2...
-# new_dest = 'new_dest:port_here' # same here
-# to = 'adapter_name_or_inline_table_here'
-## every field (even 'to') are optionals
-# [[out.rt.rules]]
-## next rule here...
-
-
-# this is an OutAdapter:
+# This is an OutAdapter:
 [out.examplenaive]
 #    ^^^^^^^^^^^^ OutAdapter name
+
 type = 'naive'
-# naive: Naive Multiplexing protocol over Websocket
+#       ^^^^^ Naive Multiplexing protocol over Websocket
 # Available OutAdapter types: direct, socks, http, ss, naive, router
 
-server = 'example.com:80'
-# Remote NaiveSocks server
+uri = 'ws://example.com/'
+# A URI specifying Naive server address, port and path
+# 'wss://example.com/' indicates using TLS and default port 443
 
 key = 'this is the key'
-# encryption key (default: 'hello, world')
+# Encryption key
 
 ## (Optionals & defaults):
-# path = '/'
+# imux = 1
 # connect_on_start = false
 # pool_min_free = 2
 # pool_concurrency = 32
@@ -65,7 +52,6 @@ key = 'this is the key'
 # connect_delay_multiplier = 2
 # connect_delay_max = 36
 # fastopen = true
-# xum = 1
 
 ##### END of local configration example #####
 
@@ -74,16 +60,17 @@ key = 'this is the key'
 
 [in.naive_listener]
 type = 'naive'
-local = '0:80' # "0" -> "0.0.0.0"
+listen = '0.0.0.0:80'
 key = 'this is the key'
 out = 'direct'
 ## (Optionals & defaults):
 # path = '/'
 
-## no need to declare these default adapters...
+## No need to declare these adapters because they exist by default...
 # [out.direct]
 # type = 'direct'
 # force_dest = '...unless you need this...'
+#
 # [out.fail]
 # type = 'fail'
 # reason = '...or this.'
@@ -94,17 +81,17 @@ out = 'direct'
 
 # [in.whatever]
 # type = 'ss'
-# local = '0:1079'
+# listen = '0.0.0.0:1079'
 # key = 'this is the key'
-# encryption = 'aes-128-ctr' # which is the only encryption currently supported
+# encryption = 'aes-128-ctr'
 # out = 'examplenaivec'
 
 # [in.direct]
 # type = 'direct'
-# local = '0:1078'
+# listen = '0.0.0.0:1078'
 # dest = 'example.com:80'
 # out = { type = 'direct', name = 'direct_inline' }
-## you can use inline table to declare adapters, name is optional.
+## You can use inline table to declare adapters, name is optional.
 
 # [out.direct]
 # type = 'direct'
@@ -113,7 +100,35 @@ out = 'direct'
 
 [out.socks5out]
 type = 'socks5'
-server = '127.1:1080'
+server = '127.0.0.1:1080'
 ## (Optionals):
 # username = 'abc'
 # password = '123'
+
+## 'router' is a type of OutAdatper that handles connections by rules.
+# [out.rt]
+# type = 'router'
+
+# default = 'direct'
+## Redirect a connection to this adapter if it isn't matched by any rule
+
+# rules = [{
+#	abp = 'ABP FILTER STRING'
+#	abpfile = 'ABP FILTER FILE PATH'
+#	abpuri = 'ABP FILTER URI'
+#	base64 = false  # true if abp content is base64 encoded
+#	eq = 'google.com'
+#	wildcard = '*.google.*'
+#	regex = '^(www|play)\.google\.com$'
+#	port = 80
+#
+#	# If ANY one above is matched:
+#	new_host = 'new_dest_host_here'  # supports regex group: $0, $1, $2...
+#	new_dest = 'new_dest:port_here'  # also supports regex group
+#	to = 'adapter_name_or_inline_table_here'
+#
+#	# Every fields (even 'to') are optional
+# },
+# {
+# 	# Next rule here...
+# }]
