@@ -71,7 +71,7 @@ namespace NaiveSocksAndroid
 
         public DnsDb DnsDb => dnsInAdapter?.cacheDns as DnsDb;
 
-        ParcelFileDescriptor pfd;
+        ParcelFileDescriptor _pfd;
 
         IDnsProvider dnsResolver;
         SocksInAdapter socksInAdapter;
@@ -159,9 +159,9 @@ namespace NaiveSocksAndroid
                 InitLocalDns(controller);
             }
 
-            pfd = builder.Establish();
+            _pfd = builder.Establish();
             Running = true;
-            Logging.info("VPN established, fd=" + pfd.Fd);
+            Logging.info("VPN established, fd=" + _pfd.Fd);
 
             string dnsgw = null;
             if (VpnConfig.DnsGw.IsNullOrEmpty() == false) {
@@ -169,7 +169,7 @@ namespace NaiveSocksAndroid
             } else if (VpnConfig.LocalDnsPort > 0) {
                 dnsgw = "127.0.0.1:" + VpnConfig.LocalDnsPort;
             }
-            StartTun2Socks(pfd, "127.0.0.1:" + socksInAdapter.listen.Port, dnsgw);
+            StartTun2Socks(_pfd, "127.0.0.1:" + socksInAdapter.listen.Port, dnsgw);
         }
 
         private void InitLocalDns(Controller controller)
@@ -221,7 +221,12 @@ namespace NaiveSocksAndroid
                 arg += " --netif-ip6addr " + RouterIp6;
             }
             var filesDir = AppConfig.FilesDir;
-            StartProcess(Native.GetLibFullPath(Native.SsTun2Socks), arg, filesDir);
+            StartProcess(Native.GetLibFullPath(Native.SsTun2Socks), arg, filesDir, () => {
+                try {
+                    fd.Close();
+                } catch (Exception) {
+                }
+            });
             int delay = 100;
             while (true) {
                 if (Native.SendFd(Path.Combine(filesDir, sockPath), fd.FileDescriptor)) {
@@ -241,7 +246,7 @@ namespace NaiveSocksAndroid
 
         List<System.Diagnostics.Process> startedProcesses = new List<System.Diagnostics.Process>();
 
-        void StartProcess(string file, string arg, string dir = null)
+        void StartProcess(string file, string arg, string dir, Action onExit)
         {
             Logging.info("Starting process: " + file + "\nArgs: " + arg);
             var psi = new System.Diagnostics.ProcessStartInfo(file, arg);
@@ -252,7 +257,8 @@ namespace NaiveSocksAndroid
             Logging.info($"Process started (pid={proc.Id}): " + file);
             Task.Run(() => {
                 proc.WaitForExit();
-                Logging.info("Process pid=" + proc.Id + " exited with " + proc.ExitCode);
+                Logging.warning("Process pid=" + proc.Id + " exited with code " + proc.ExitCode);
+                onExit?.Invoke();
             });
         }
 
@@ -261,9 +267,11 @@ namespace NaiveSocksAndroid
             KillProcesses();
             if (Running) {
                 Running = false;
-                pfd.Close();
-                pfd.Dispose();
-                pfd = null;
+                try {
+                    _pfd.Close();
+                    _pfd = null;
+                } catch (Exception) {
+                }
             }
         }
 
