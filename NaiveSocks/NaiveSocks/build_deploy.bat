@@ -1,7 +1,5 @@
 @echo off
 
-set nzip=..\..\NaiveZip\NZip\bin\Release\NZip.exe
-
 set bindir=bin\release
 set deploydir=%bindir%\naivesocks
 if not [%1]==[] set deploydir=%1
@@ -19,11 +17,7 @@ copy ..\naivesocks-example.tml %deploydir%\ || goto :failed
 
 echo.
 call :info building single file edition...
-if not exist %nzip% (
-	call :info2 NaiveZip executable not found! ^(%nzip%^)
-	goto :failed
-)
-%nzip% pe %bindir%\NaiveSocks.exe %bindir%\Nett.dll %bindir%\NaiveSvrLib.dll "" %singlefile% || goto :failed
+%bindir%\NaiveSocks.exe --attach-dlls %singlefile% %bindir%\Nett.dll %bindir%\NaiveSvrLib.dll || goto :failed
 
 call :info Finished building deploy!!
 call :info2 [deploy dir]: %deploydir%

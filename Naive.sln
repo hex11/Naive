@@ -48,6 +48,7 @@ Global
 		dns\DNSShared\DNSShared.projitems*{489d2bc7-5344-4cba-bbe0-f104f955199c}*SharedItemsImports = 4
 		NaiveSocksCliShared\NaiveSocksCliShared.projitems*{489d2bc7-5344-4cba-bbe0-f104f955199c}*SharedItemsImports = 4
 		NaiveSocks\NaiveSocksShared\NaiveSocksShared.projitems*{489d2bc7-5344-4cba-bbe0-f104f955199c}*SharedItemsImports = 4
+		NaiveZip\NZipShared\NZipShared.projitems*{489d2bc7-5344-4cba-bbe0-f104f955199c}*SharedItemsImports = 4
 		NaiveZip\NZipShared\NZipShared.projitems*{a8493ec4-38ac-45bf-9a52-d3822a962bd6}*SharedItemsImports = 13
 		NaiveSvrLib\NaiveConsoleShared\NaiveConsoleShared.projitems*{a92bc4fa-7794-4694-a814-74f3ced1cfad}*SharedItemsImports = 13
 		NaiveSvrLib\NaiveConsoleShared\NaiveConsoleShared.projitems*{b6fdce48-2582-4cbc-b1ed-4a6952e183d2}*SharedItemsImports = 4

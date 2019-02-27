@@ -10,7 +10,7 @@ using System.Linq;
 
 namespace NaiveSocks
 {
-    internal class Program
+    internal class NaiveSocksCli
     {
         public static string configFileName = "naivesocks.tml";
         public static string configFilePath = configFileName;
@@ -57,11 +57,11 @@ Usage: {NAME_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FILE] [--config-
         [--force-jit[-async]] [--socket-impl (1|2|fa|ya)]
         [--cmd CMDLINE...]";
 
-        private static bool __magic_is_packed;
+        internal static bool __magic_is_packed;
 
         public static Controller Controller { get; private set; }
 
-        private static void Main(string[] args)
+        internal static void Main(string[] args)
         {
             Console.Title = NAME;
             //Logging.HistroyEnabled = false;
@@ -259,7 +259,7 @@ Usage: {NAME_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FILE] [--config-
             Logging.info("Running ForceJit...");
             Stopwatch sw = Stopwatch.StartNew();
             try {
-                var result = Naive.HttpSvr.ForceJit.ForceJitAssembly(typeof(Program).Assembly, typeof(ForceJit).Assembly);
+                var result = Naive.HttpSvr.ForceJit.ForceJitAssembly(typeof(NaiveSocksCli).Assembly, typeof(ForceJit).Assembly);
                 Logging.info($"ForceJit spent {sw.ElapsedMilliseconds:N0} ms to complete.");
                 Logging.info($"ForceJit result: {result.Types} types, {result.Ctors} ctors and {result.Methods} methods have been JITed. {result.Errors} errors.");
             } catch (Exception e) {

@@ -37,7 +37,7 @@ namespace Naive.Console
                 }
             }, "Usage: help [COMMAND_NAME]");
             AddCmdHandler("echo", (c) => {
-                c.WriteLine(c.arg);
+                c.WriteLine(string.Join(" ", c.args));
             });
         }
 

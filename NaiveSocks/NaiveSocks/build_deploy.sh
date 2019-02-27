@@ -1,7 +1,5 @@
 #!/bin/bash
 
-nzip=../../NaiveZip/NZip/bin/Release/NZip.exe
-
 bindir=bin/Release
 deploydir=bin/Deploy
 
@@ -10,7 +8,6 @@ singlefile="$deploydir/NaiveSocks_SingleFile.exe"
 packname="NaiveSocks_net45"
 
 binaries=("NaiveSocks.exe" "NaiveSvrLib.dll" "Nett.dll" "LiteDB.dll")
-deploy_binaries=()
 
 function has() {
 	return hash $* 2>/dev/null
@@ -35,10 +32,14 @@ STEP copy binarys...
 
 mkdir -p "$deploydir"
 
+dll_paths=()
+
+counter=0
 for f in "${binaries[@]}"; do
 	echo copy $f
 	cp "$bindir/$f" "$deploydir/"
-	deploy_binaries+=("$deploydir/$f")
+	[[ $counter -gt 0 ]] && dll_paths+=("$deploydir/$f")
+	let counter++
 done
 
 STEP copy configration example...
@@ -47,12 +48,8 @@ cp ../naivesocks-example.tml "$deploydir/"
 
 STEP pack single file edition...
 
-if [ -f $nzip ]; then
-	has mono && MONO=mono || MONO=""
-	$MONO $nzip pe "${deploy_binaries[@]}" "" "$singlefile"
-else
-	echo "The NaiveZip executable not found! ($nzip)"
-fi
+has mono && MONO=mono || MONO=""
+$MONO "$deploydir/${binaries[0]}" --attach-dlls "$singlefile" "${dll_paths[@]}"
 
 if getopts "u:" opt; then
 	to_upload="$OPTARG"

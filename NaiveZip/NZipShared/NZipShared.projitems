@@ -6,10 +6,13 @@
     <SharedGUID>a8493ec4-38ac-45bf-9a52-d3822a962bd6</SharedGUID>
   </PropertyGroup>
   <PropertyGroup Label="Configuration">
-    <Import_RootNamespace>FSZip</Import_RootNamespace>
+    <Import_RootNamespace>NZip</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Magic.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)MagicExe.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)NZip.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)NZipCLI.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)SimpleJson.cs" />
   </ItemGroup>
 </Project>

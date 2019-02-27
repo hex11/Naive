@@ -8,7 +8,7 @@ using System.IO.Compression;
 using System.Collections;
 using System.Runtime.Serialization;
 using System.Threading.Tasks;
-using FSZSimpleJsonNS;
+using NZipSimpleJsonNS;
 using System.Linq;
 
 namespace NZip
@@ -172,7 +172,7 @@ namespace NZip
         {
             var files = from x in inputfiles
                         let fi = new FileInfo(x)
-                        select new AddingFSFile() {
+                        select new AddingFile() {
                             file = () => File.OpenRead(x),
                             lwt = fi.LastWriteTimeUtc,
                             name = getName(rootdir, fi)
@@ -180,7 +180,7 @@ namespace NZip
             Create(output, files, debugoutput);
         }
 
-        public static void Create(Stream output, IEnumerable<AddingFSFile> filesToAdd, TextWriter debugoutput = null)
+        public static void Create(Stream output, IEnumerable<AddingFile> filesToAdd, TextWriter debugoutput = null)
         {
             var header = new PkgHeader();
             header.NZipMinVersion = 1;
@@ -191,31 +191,31 @@ namespace NZip
             int lengthsum = (int)output.Position;
             int i = 0;
             foreach (var x in filesToAdd) {
-                var fsfi = new NZFileinfo();
-                fsfi.name = x.name;
-                debugoutput?.WriteLine("[{1}/{2}] \"{0}\"", fsfi.name, i + 1, (filesToAdd as ICollection)?.Count.ToString() ?? "NaN");
-#if DOTNET45
+                var nfi = new NZFileinfo();
+                nfi.name = x.name;
+                debugoutput?.WriteLine("[{1}/{2}] \"{0}\"", nfi.name, i + 1, (filesToAdd as ICollection)?.Count.ToString() ?? "NaN");
+#if NET45
                 using (var gz = new GZipStream(output, CompressionLevel.Optimal, true)) {
 #else
                 using (var gz = new GZipStream(output, CompressionMode.Compress, true)) {
 #endif
                     using (var file = x.file()) {
-                        fsfi.length = file.Length;
+                        nfi.length = file.Length;
                         CopyStream(file, gz);
                     }
                 }
-                fsfi.pos = lengthsum;
-                var temp = (int)output.Position;
-                fsfi.ziplen = temp - lengthsum;
-                fsfi.lwt = ConvertDateTimeInt(x.lwt);
-                files.Add(fsfi);
-                lengthsum = temp;
+                nfi.pos = lengthsum;
+                var curPos = (int)output.Position;
+                nfi.ziplen = curPos - lengthsum;
+                nfi.lwt = ConvertDateTimeInt(x.lwt);
+                files.Add(nfi);
+                lengthsum = curPos;
                 i++;
             }
             header.Files = files.ToArray();
-            header.CreateTime = ConvertDateTimeInt(DateTime.Now);
+            header.CreateTime = ConvertDateTimeInt(DateTime.UtcNow);
             debugoutput?.WriteLine("[Finishing] Writing PkgInfo...");
-            using (var ms = new MemoryStream(16 * 1024)) {
+            using (var ms = new MemoryStream(4 * 1024)) {
                 using (var gz = new GZipStream(ms, CompressionMode.Compress, true)) {
                     SerializePkgHeader(header, gz);
                 }
@@ -354,30 +354,30 @@ namespace NZip
             }
         }
 
+        static readonly DateTime ZeroTime = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+
         public static DateTime ConvertIntDateTime(double d)
         {
-            DateTime startTime = TimeZone.CurrentTimeZone.ToLocalTime(new DateTime(1970, 1, 1));
-            return startTime.AddMilliseconds(d);
+            return ZeroTime.AddMilliseconds(d);
         }
 
         public static long ConvertDateTimeInt(DateTime time)
         {
-            DateTime startTime = TimeZone.CurrentTimeZone.ToLocalTime(new DateTime(1970, 1, 1, 0, 0, 0, 0));
-            return (time.Ticks - startTime.Ticks) / 10000;
+            return (time.ToUniversalTime().Ticks - ZeroTime.Ticks) / 10000;
         }
     }
 
-    public class AddingFSFile
+    public class AddingFile
     {
         public string name;
         public Func<Stream> file;
         public DateTime lwt;
 
-        public AddingFSFile()
+        public AddingFile()
         {
         }
 
-        public AddingFSFile(string filePath, string name)
+        public AddingFile(string filePath, string name)
         {
             this.name = name;
             file = () => File.OpenRead(filePath);

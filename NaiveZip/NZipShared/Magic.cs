@@ -5,9 +5,9 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Naive
+namespace NZip
 {
-    class Magic
+    public class Magic
     {
         static string magic = "D0C415F9-4125-412D-943C-37E78AFAE221_\0_                                _\0";
         static byte[] magic_bytes => magic.encode("utf-16");
@@ -38,11 +38,21 @@ namespace Naive
             return magic.Substring(magicBstart, magic[magicBcountPos]);
         }
 
-        public static byte[] genExe(char magicCh, bool? isGuiMode = null, string magicB = null)
+        public static byte[] genExe(char magicCh, bool? setGuiMode = null, string magicB = null, int exeLength = -1)
         {
-            var exe = File.ReadAllBytes(GetSelfPath());
-            if (isGuiMode != null)
-                setSubsystem(exe, isGuiMode.Value ? (byte)2 : (byte)3);
+            byte[] exe;
+            if (exeLength == -1) {
+                exe = File.ReadAllBytes(GetSelfPath());
+            } else {
+                exe = new byte[exeLength];
+                using (var fs = File.Open(GetSelfPath(), FileMode.Open, FileAccess.Read, FileShare.ReadWrite)) {
+                    if (fs.Read(exe, 0, exe.Length) != exe.Length) {
+                        throw new Exception();
+                    }
+                }
+            }
+            if (setGuiMode != null)
+                setSubsystem(exe, setGuiMode.Value ? (byte)2 : (byte)3);
             var strbytes = magic_bytes;
             var strbytes2 = genMagicBytes(magicCh, magicB);
             var pos = exe.Locate(strbytes)[0];
@@ -52,12 +62,15 @@ namespace Naive
             return exe;
         }
 
+        static string _selfPath;
+
         public static string GetSelfPath()
         {
-            return System.Reflection.Assembly.GetExecutingAssembly().Location;
+            if (_selfPath == null) _selfPath = System.Reflection.Assembly.GetExecutingAssembly().Location;
+            return _selfPath;
         }
 
-        public static void WriteExe(string path, char magicCh, bool isGuiMode = true)
+        public static void WriteExe(string path, char magicCh, bool? isGuiMode = null)
         {
             var exe = genExe(magicCh, isGuiMode);
             var tmpFilePath = path + ".new";
