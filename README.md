@@ -1,15 +1,9 @@
-[**Download Releases**](https://github.com/hex11/Naive/releases)
-or
-[Latest build on Appveyor](https://ci.appveyor.com/project/hex11/naive/build/artifacts)
+Build status:
 
-Build status (latest commit):
+[![Appveyor build status](https://ci.appveyor.com/api/projects/status/brdxtqcek50ny38b?svg=true)](https://ci.appveyor.com/project/hex11/naive) (latest commit)
+[![Appveyor build status](https://ci.appveyor.com/api/projects/status/brdxtqcek50ny38b/branch/master?svg=true)](https://ci.appveyor.com/project/hex11/naive/branch/master) (master branch)
 
-[![Appveyor build status](https://ci.appveyor.com/api/projects/status/brdxtqcek50ny38b?svg=true)](https://ci.appveyor.com/project/hex11/naive)
-
-Build status (master branch):
-
-[![Appveyor build status](https://ci.appveyor.com/api/projects/status/brdxtqcek50ny38b/branch/master?svg=true)](https://ci.appveyor.com/project/hex11/naive/branch/master)
-
+[**GitHub Releases**](https://github.com/hex11/Naive/releases)
 
 # Feature & Future
 
@@ -47,7 +41,12 @@ Build status (master branch):
   - [ ] 'socks5'
   - [ ] 'naive'
 
-# Run
+# Download & Run
+
+Download from
+[**GitHub Releases**](https://github.com/hex11/Naive/releases)
+or
+[Latest build on Appveyor](https://ci.appveyor.com/project/hex11/naive/build/artifacts)
 
 ### .NET Framework (4.5.1 or above) / Mono
 
@@ -63,4 +62,4 @@ Install `NaiveSocksAndroid.apk` and run.
 
 # Configration Example
 
-See [Naivesocks/naivesocks-example.tml](Naivesocks/naivesocks-example.tml)
+See [NaiveSocks/naivesocks-example.tml](NaiveSocks/naivesocks-example.tml)
