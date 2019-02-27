@@ -10,55 +10,20 @@ using Nett;
 
 namespace NaiveSocks
 {
-    public class Controller
+    public partial class Controller
     {
         public LoadedConfig CurrentConfig = new LoadedConfig();
+
+        private ConfigLoader configLoader;
 
         public List<InAdapter> InAdapters => CurrentConfig.InAdapters;
         public List<OutAdapter> OutAdapters => CurrentConfig.OutAdapters;
 
         public Logger Logger { get; } = new Logger();
 
-        public class LoadedConfig
+        public Controller()
         {
-            public List<InAdapter> InAdapters = new List<InAdapter>();
-            public List<OutAdapter> OutAdapters = new List<OutAdapter>();
-
-            public Dictionary<string, string> Aliases = new Dictionary<string, string>();
-
-            public string[] DebugFlags;
-
-            public string SocketImpl;
-
-            public Logging.Level LoggingLevel;
-
-            public string FilePath;
-            public string WorkingDirectory = ".";
-
-            public int FailedCount;
-
-            public TomlTable TomlTable;
-        }
-
-        public class ConfigFile
-        {
-            public string Content;
-            public string Path;
-
-            public static ConfigFile FromPath(string path)
-            {
-                return new ConfigFile {
-                    Content = File.ReadAllText(path, Encoding.UTF8),
-                    Path = path
-                };
-            }
-
-            public static ConfigFile FromContent(string content)
-            {
-                return new ConfigFile {
-                    Content = content
-                };
-            }
+            configLoader = new ConfigLoader(this.Logger);
         }
 
         Logging.Level LoggingLevel => CurrentConfig.LoggingLevel;
@@ -71,15 +36,9 @@ namespace NaiveSocks
         public int TotalFailedConnections => _failedConnections;
         public int RunningConnections => InConnections.Count;
 
-        public Dictionary<string, Type> RegisteredInTypes = new Dictionary<string, Type>();
-        public Dictionary<string, Type> RegisteredOutTypes = new Dictionary<string, Type>();
-        public Dictionary<string, Func<TomlTable, InAdapter>> RegisteredInCreators = new Dictionary<string, Func<TomlTable, InAdapter>>();
-        public Dictionary<string, Func<TomlTable, OutAdapter>> RegisteredOutCreators = new Dictionary<string, Func<TomlTable, OutAdapter>>();
-
         public event Action<InConnection> NewConnection;
         public event Action<InConnection> EndConnection;
 
-        public event Action<TomlTable> ConfigTomlLoading;
         public event Action<TomlTable> ConfigTomlLoaded;
 
         public Func<ConfigFile> FuncGetConfigFile;
@@ -92,83 +51,6 @@ namespace NaiveSocks
             if (WorkingDirectory?.Length == 0 || WorkingDirectory == "." || Path.IsPathRooted(input))
                 return input;
             return Path.Combine(WorkingDirectory, input);
-        }
-
-        public Controller()
-        {
-            RegisterBuiltInTypes();
-        }
-
-        private void RegisterBuiltInTypes()
-        {
-            RegisteredInTypes.Add("direct", typeof(DirectInAdapter));
-            RegisteredInTypes.Add("tproxy", typeof(TProxyInAdapter));
-            RegisteredInTypes.Add("socks", typeof(SocksInAdapter));
-            RegisteredInTypes.Add("socks5", typeof(SocksInAdapter));
-            RegisteredInTypes.Add("http", typeof(HttpInAdapter));
-            RegisteredInTypes.Add("tlssni", typeof(TlsSniInAdapter));
-            RegisteredInTypes.Add("naive", typeof(NaiveMInAdapter));
-            RegisteredInTypes.Add("naivec", typeof(NaiveMInAdapter));
-            RegisteredInTypes.Add("naive0", typeof(Naive0InAdapter));
-            RegisteredInTypes.Add("ss", typeof(SsInAdapter));
-            RegisteredInTypes.Add("dns", typeof(DnsInAdapter));
-
-            RegisteredOutTypes.Add("direct", typeof(DirectOutAdapter));
-            RegisteredOutTypes.Add("socks", typeof(SocksOutAdapter));
-            RegisteredOutTypes.Add("socks5", typeof(SocksOutAdapter));
-            RegisteredOutTypes.Add("http", typeof(HttpOutAdapter));
-            RegisteredOutTypes.Add("naive", typeof(NaiveMOutAdapter));
-            RegisteredOutTypes.Add("naivec", typeof(NaiveMOutAdapter));
-            RegisteredOutTypes.Add("naive0", typeof(Naive0OutAdapter));
-            RegisteredOutTypes.Add("ss", typeof(SsOutAdapter));
-            RegisteredOutTypes.Add("dns", typeof(DnsOutAdapter));
-            RegisteredOutTypes.Add("webcon", typeof(WebConAdapter));
-            RegisteredOutTypes.Add("webfile", typeof(WebFileAdapter));
-
-            RegisteredOutTypes.Add("router", typeof(RouterAdapter));
-            RegisteredOutTypes.Add("fail", typeof(FailAdapter));
-            RegisteredOutTypes.Add("nnetwork", typeof(NNetworkAdapter));
-        }
-
-        public void GenerateDocument(TextWriter tw)
-        {
-            List<Type> types = new List<Type>();
-            foreach (var item in RegisteredInTypes.Keys.Union(RegisteredOutTypes.Keys)) {
-                {
-                    if (RegisteredInTypes.TryGetValue(item, out var type)) {
-                        if (types.Contains(type)) {
-                            tw.WriteLine($"[InAdatper alias '{item}' - {type.Name}]");
-                        } else {
-                            types.Add(type);
-                            tw.WriteLine($"[InAdatper type '{item}' - {type.Name}]");
-                            GenerateDocument(tw, type);
-                        }
-                        tw.WriteLine();
-                    }
-                }
-                {
-                    if (RegisteredOutTypes.TryGetValue(item, out var type)) {
-                        if (types.Contains(type)) {
-                            tw.WriteLine($"[OutAdatper alias '{item}' - {type.Name}]");
-                        } else {
-                            types.Add(type);
-                            tw.WriteLine($"[OutAdatper type '{item}' - {type.Name}]");
-                            GenerateDocument(tw, type);
-                        }
-                        tw.WriteLine();
-                    }
-                }
-            }
-        }
-
-        public void GenerateDocument(TextWriter tw, Type type)
-        {
-            var props = type.GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
-            foreach (var item in props) {
-                if (item.CanWrite && item.GetCustomAttributes(typeof(NotConfAttribute), false).Any() == false) {
-                    tw.WriteLine($"({item.PropertyType.Name})\t{item.Name}");
-                }
-            }
         }
 
         public void LoadConfigFileOrWarning(string path, bool now = true)
@@ -224,7 +106,7 @@ namespace NaiveSocks
 
         public void LoadConfig(ConfigFile configFile)
         {
-            SetCurrentConfig(LoadConfig(configFile, null) ?? CurrentConfig);
+            SetCurrentConfig(configLoader.LoadConfig(configFile, null) ?? CurrentConfig);
             Logger.info($"configuration loaded. {InAdapters.Count} InAdapters, {OutAdapters.Count} OutAdapters.");
             if (CurrentConfig.FailedCount > 0)
                 Logger.warning($"And {CurrentConfig.FailedCount} ERRORs");
@@ -241,189 +123,6 @@ namespace NaiveSocks
             ConfigTomlLoaded?.Invoke(loadedConfig.TomlTable);
         }
 
-        private LoadedConfig LoadConfig(ConfigFile cf, LoadedConfig newcfg)
-        {
-            var toml = cf.Content;
-            newcfg = newcfg ?? new LoadedConfig();
-            if (cf.Path != null) {
-                newcfg.FilePath = cf.Path;
-                newcfg.WorkingDirectory = Path.GetDirectoryName(cf.Path);
-            }
-            Config t;
-            TomlTable tomlTable;
-            var refs = new List<AdapterRef>();
-            try {
-                var tomlSettings = TomlSettings.Create(cfg => cfg
-                        .AllowNonstandard(true)
-                        .ConfigureType<IPEndPoint>(type => type
-                            .WithConversionFor<TomlString>(convert => convert
-                                .ToToml(custom => custom.ToString())
-                                .FromToml(tmlString => Utils.CreateIPEndPoint(tmlString.Value))))
-                        .ConfigureType<AddrPort>(type => type
-                            .WithConversionFor<TomlString>(convert => convert
-                                .ToToml(custom => custom.ToString())
-                                .FromToml(tmlString => AddrPort.Parse(tmlString.Value))))
-                        .ConfigureType<AdapterRef>(type => type
-                            .WithConversionFor<TomlString>(convert => convert
-                                .ToToml(custom => custom.Ref.ToString())
-                                .FromToml(tmlString => {
-                                    var a = new AdapterRef { IsName = true, Ref = tmlString.Value };
-                                    refs.Add(a);
-                                    return a;
-                                }))
-                            .WithConversionFor<TomlTable>(convert => convert
-                                .FromToml(tml => {
-                                    var a = new AdapterRef { IsTable = true, Ref = tml };
-                                    refs.Add(a);
-                                    return a;
-                                })))
-                        .ConfigureType<AdapterRefOrArray>(type => type
-                            .WithConversionFor<TomlString>(convert => convert
-                                .FromToml(tmlString => {
-                                    var a = new AdapterRefOrArray { obj = tmlString.Get<AdapterRef>() };
-                                    return a;
-                                }))
-                            .WithConversionFor<TomlTable>(convert => convert
-                                .FromToml(tmlTable => {
-                                    var a = new AdapterRefOrArray { obj = tmlTable.Get<AdapterRef>() };
-                                    return a;
-                                }))
-                            .WithConversionFor<TomlArray>(convert => convert
-                                .FromToml(tmlTable => {
-                                    var a = new AdapterRefOrArray { obj = tmlTable.Get<AdapterRef[]>() };
-                                    return a;
-                                }))
-                            .WithConversionFor<TomlTableArray>(convert => convert
-                                .FromToml(tmlTable => {
-                                    var a = new AdapterRefOrArray { obj = tmlTable.Get<AdapterRef[]>() };
-                                    return a;
-                                })))
-                        .ConfigureType<StringOrArray>(type => type
-                            .WithConversionFor<TomlString>(convert => convert
-                                .FromToml(tmlString => {
-                                    return new StringOrArray { obj = tmlString.Get<string>() };
-                                }))
-                            .WithConversionFor<TomlTable>(convert => convert
-                                .FromToml(tmlTable => {
-                                    return new StringOrArray { obj = tmlTable.Get<string>() };
-                                }))
-                            .WithConversionFor<TomlArray>(convert => convert
-                                .FromToml(tmlArray => {
-                                    return new StringOrArray { obj = tmlArray.Get<string[]>() };
-                                })))
-                    );
-                tomlTable = Toml.ReadString(toml, tomlSettings);
-                t = tomlTable.Get<Config>();
-            } catch (Exception e) {
-                Logger.exception(e, Logging.Level.Error, "TOML Error");
-                return null;
-            }
-
-            ConfigTomlLoading?.Invoke(tomlTable);
-
-            newcfg.TomlTable = tomlTable;
-            newcfg.SocketImpl = t.socket_impl;
-            newcfg.LoggingLevel = t.log_level;
-            newcfg.Aliases = t.aliases;
-            newcfg.DebugFlags = t?.debug?.flags ?? new string[0];
-
-            int failedCount = 0;
-            if (t.@in != null)
-                foreach (var item in t.@in) {
-                    try {
-                        var tt = item.Value;
-                        var adapter = NewRegisteredInType(tt, item.Key);
-                        newcfg.InAdapters.Add(adapter);
-                    } catch (Exception e) {
-                        Logger.exception(e, Logging.Level.Error, $"TOML table 'in.{item.Key}':");
-                        failedCount++;
-                    }
-                }
-            if (t.@out != null)
-                foreach (var item in t.@out) {
-                    try {
-                        var tt = item.Value;
-                        var adapter = NewRegisteredOutType(tt, item.Key);
-                        newcfg.OutAdapters.Add(adapter);
-                    } catch (Exception e) {
-                        Logger.exception(e, Logging.Level.Error, $"TOML table 'out.{item.Key}':");
-                        failedCount++;
-                    }
-                }
-            foreach (var r in refs.Where(x => x.IsTable)) {
-                var tt = r.Ref as TomlTable;
-                try {
-                    string name = null;
-                    if (tt.TryGetValue("name", out string n)) {
-                        name = n;
-                    }
-                    if (name == null) {
-                        int i = 0;
-                        do {
-                            name = $"_{tt["type"].Get<string>()}_" + ((i++ == 0) ? "" : i.ToString());
-                        } while (newcfg.OutAdapters.Any(x => x.Name == name));
-                    }
-                    var adapter = NewRegisteredOutType(tt, name);
-                    r.Adapter = adapter;
-                    newcfg.OutAdapters.Add(adapter);
-                } catch (Exception e) {
-                    Logger.exception(e, Logging.Level.Error, $"TOML inline table:");
-                    failedCount++;
-                }
-            }
-            bool notExistAndNeed(string name) =>
-                    newcfg.OutAdapters.Any(x => x.Name == name) == false
-                        /* && refs.Any(x => x.IsName && x.Ref as string == name) */;
-            if (notExistAndNeed("direct")) {
-                newcfg.OutAdapters.Add(new DirectOutAdapter() { Name = "direct" });
-            }
-            if (notExistAndNeed("fail")) {
-                newcfg.OutAdapters.Add(new FailAdapter() { Name = "fail" });
-            }
-            foreach (var r in refs) {
-                if (r.IsName) {
-                    r.Adapter = FindAdapter<IAdapter>(newcfg, r.Ref as string, -1);
-                }
-            }
-            newcfg.FailedCount = failedCount;
-            return newcfg;
-        }
-
-        private void SetLogger(Adapter adapter)
-        {
-            adapter.Logger.ParentLogger = this.Logger;
-            adapter.Logger.Stamp = adapter.Name;
-        }
-
-        private InAdapter NewRegisteredInType(TomlTable tt, string name)
-            => NewRegisteredAdapter(RegisteredInTypes, RegisteredInCreators, tt, name);
-
-        private OutAdapter NewRegisteredOutType(TomlTable tt, string name)
-            => NewRegisteredAdapter(RegisteredOutTypes, RegisteredOutCreators, tt, name);
-
-        private T NewRegisteredAdapter<T>(Dictionary<string, Type> types, Dictionary<string, Func<TomlTable, T>> creators,
-            TomlTable tt, string name) where T : Adapter
-        {
-            var instance = NewRegisteredType<T>(types, creators, tt);
-            instance.Name = name;
-            SetLogger(instance);
-            instance.SetConfig(tt);
-            return instance;
-        }
-
-        private T NewRegisteredType<T>(Dictionary<string, Type> types, Dictionary<string, Func<TomlTable, T>> creators, TomlTable table)
-            where T : class
-        {
-            var strType = table.Get<string>("type");
-            if (types.TryGetValue(strType, out var type) == false) {
-                if (creators.TryGetValue(strType, out var ctor) == false) {
-                    throw new Exception($"type '{strType}' as '{typeof(T)}' not found");
-                }
-                return ctor.Invoke(table) ?? throw new Exception($"creator '{strType}' returns null");
-            }
-            return table.Get(type) as T;
-        }
-
         public void Reload() => Reload(null);
         public void Reload(ConfigFile configFile)
         {
@@ -431,7 +130,7 @@ namespace NaiveSocks
             var newCfgFile = GetConfigFileOrLog(configFile);
             if (newCfgFile == null)
                 return;
-            var newCfg = LoadConfig(newCfgFile, null);
+            var newCfg = configLoader.LoadConfig(newCfgFile, null);
             if (newCfg == null) {
                 error("failed to load the new configuration.");
                 info("still running with previous configuration.");
@@ -501,7 +200,7 @@ namespace NaiveSocks
         public void AddInAdapter(InAdapter adap, bool init)
         {
             InAdapters.Add(adap);
-            SetLogger(adap);
+            adap.SetLogger(Logger);
             //adap.SetConfig(null);
             if (init) {
                 InitAdapter(adap);
@@ -762,31 +461,6 @@ namespace NaiveSocks
         {
             if (LoggingLevel <= level)
                 Logger.log(str, level);
-        }
-    }
-
-    public class Config
-    {
-        public string socket_impl { get; set; }
-        public Logging.Level log_level { get; set; } =
-#if DEBUG
-            Logging.Level.None;
-#else
-            Logging.Level.Info;
-#endif
-
-        public string dir { get; set; }
-
-        public DebugSection debug { get; set; }
-
-        public Dictionary<string, string> aliases { get; set; }
-
-        public Dictionary<string, TomlTable> @in { get; set; }
-        public Dictionary<string, TomlTable> @out { get; set; }
-
-        public class DebugSection
-        {
-            public string[] flags { get; set; }
         }
     }
 }

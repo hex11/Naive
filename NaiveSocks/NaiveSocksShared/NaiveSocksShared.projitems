@@ -31,7 +31,10 @@
     <Compile Include="$(MSBuildThisFileDirectory)Compression\LZ4\LZ4Codec.Unsafe64.Dirty.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Compression\LZ4\LZ4Codec.Unsafe64HC.Dirty.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Compression\LZ4\LZ4Filter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Controller\Config.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Controller\ConfigLoader.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Controller\FileDownloader.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Controller\Types.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Encryption\Crc32.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Encryption\Speck.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Encryption\Chacha20.cs" />

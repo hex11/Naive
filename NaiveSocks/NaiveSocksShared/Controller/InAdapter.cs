@@ -290,6 +290,12 @@ namespace NaiveSocks
             }
         }
 
+        internal void SetLogger(Logger parent)
+        {
+            Logger.ParentLogger = parent;
+            Logger.Stamp = Name;
+        }
+
         public override string ToString()
         {
             return ToString(true);

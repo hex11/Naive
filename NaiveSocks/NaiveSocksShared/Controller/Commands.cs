@@ -117,7 +117,7 @@ namespace NaiveSocks
         {
             cmdHub.AddCmdHandler(prefix + "dumptypes", command => {
                 var sw = new StringWriter();
-                controller.GenerateDocument(sw);
+                Types.Current.GenerateDocument(sw);
                 command.Write(sw.ToString());
             });
             cmdHub.AddCmdHandler(prefix + "c", command => {
