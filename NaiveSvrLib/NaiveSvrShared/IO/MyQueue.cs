@@ -26,17 +26,15 @@ namespace Naive.HttpSvr
 
         public void Enqueue(T val)
         {
-            try {
-                if (arr.Length == count) {
-                    var newarr = new T[arr.Length * 4];
-                    for (int i = 0; i < count; i++) {
-                        newarr[i] = PeetAtInternal(i);
-                    }
-                    arr = newarr;
-                    firstIndex = 0;
-                }
-            } catch (NullReferenceException) {
+            if (arr == null) {
                 arr = new T[4];
+            } else if (arr.Length == count) {
+                var newarr = new T[arr.Length * 4];
+                for (int i = 0; i < count; i++) {
+                    newarr[i] = PeetAtInternal(i);
+                }
+                arr = newarr;
+                firstIndex = 0;
             }
             arr[(firstIndex + count) % arr.Length] = val;
             count++;
@@ -58,15 +56,15 @@ namespace Naive.HttpSvr
 
         public bool TryDequeue(out T val)
         {
-            return TryDequeueImpl(false, out val);
+            return DequeueCore(false, out val);
         }
 
         public bool TryPeek(out T val)
         {
-            return TryDequeueImpl(true, out val);
+            return DequeueCore(true, out val);
         }
 
-        public bool TryDequeueImpl(bool peek, out T val)
+        public bool DequeueCore(bool peek, out T val)
         {
             if (count == 0) {
                 val = default(T);
@@ -75,8 +73,12 @@ namespace Naive.HttpSvr
             val = arr[firstIndex];
             if (!peek) {
                 arr[firstIndex] = default(T); // to release references
-                firstIndex = (firstIndex + 1) % arr.Length;
                 count--;
+                if (count == 0) {
+                    firstIndex = 0;
+                } else {
+                    firstIndex = (firstIndex + 1) % arr.Length;
+                }
             }
             return true;
         }

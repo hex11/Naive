@@ -268,7 +268,7 @@ namespace NaiveSocks
             IConnectionHandler adapter = outAdapterRef.Adapter as IConnectionHandler;
             if (adapter == null)
                 if (LoggingLevel <= Logging.Level.Warning)
-                    warning($"out adapter ({outAdapterRef}) not found");
+                    warning($"null out adapter reference ({outAdapterRef})");
             return HandleInConnection(inc, adapter);
         }
 

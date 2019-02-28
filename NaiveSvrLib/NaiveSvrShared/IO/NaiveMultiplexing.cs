@@ -921,13 +921,13 @@ namespace NaiveSocks
     public class AsyncQueue<T>
     {
         private ReusableAwaiter<T> awaiter = new ReusableAwaiter<T>();
-        private Queue<T> queue = new Queue<T>();
+        private MyQueue<T> queue = new MyQueue<T>();
         private bool isWaiting = false;
 
         public int Count => queue.Count;
 
         private SpinLock _lock = new SpinLock(false);
-        private const int lockTimeout = 1000;
+        private const int lockTimeout = 3000;
 
         public bool IsWaiting => isWaiting;
 

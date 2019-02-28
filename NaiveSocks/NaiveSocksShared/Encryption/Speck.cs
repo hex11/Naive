@@ -127,7 +127,7 @@ namespace NaiveSocks
                             ksb[i] = counter;
                             if (++counter.v1 == 0)
                                 ++counter.v0;
-                            ksb[i] = Cipher.encrypt_128_128(keys, ksb[i]);
+                            Cipher.encrypt_128_128(keys, &ksb[i]);
                         }
                     }
                     var count = len < remainningKeystream ? len : remainningKeystream;
@@ -210,7 +210,7 @@ namespace NaiveSocks
                                 ksb[i] = counter;
                                 if (++counter.v1 == 0)
                                     ++counter.v0;
-                                ksb[i] = Cipher.encrypt_64_128(keys, ksb[i]);
+                                Cipher.encrypt_64_128(keys, &ksb[i]);
                             }
                         }
                         var count = end - pos;
@@ -318,13 +318,11 @@ namespace NaiveSocks
                 return keys;
             }
 
-            public static QWords128 encrypt_128_128(Keys128128 keySchedules, QWords128 plaintext)
+            public static void encrypt_128_128(Keys128128 keySchedules, QWords128* plaintext)
             {
                 var keys = keySchedules.keys;
-                var cv1 = plaintext.v1;
-                var cv0 = plaintext.v0;
-                // for (int i = 0; i < ROUNDS128128; i++) {
-                // var key = keys[i];
+                var cv1 = plaintext->v1;
+                var cv0 = plaintext->v0;
                 foreach (var key in keys) {
                     const int WORDSIZE = 64;
                     cv1 = (cv1 >> 8) | (cv1 << (WORDSIZE - 8)); // x = ROTR(x, 8)
@@ -333,13 +331,14 @@ namespace NaiveSocks
                     cv0 = (cv0 << 3) | (cv0 >> (WORDSIZE - 3)); // y = ROTL(y, 3)
                     cv0 ^= cv1;
                 }
-                return new QWords128 { v1 = cv1, v0 = cv0 };
+                plaintext->v1 = cv1;
+                plaintext->v0 = cv0;
             }
 
-            public static DWords64 encrypt_64_128(uint32[] keySchedules, DWords64 plaintext)
+            public static void encrypt_64_128(uint32[] keySchedules, DWords64* plaintext)
             {
-                var cv1 = plaintext.v1;
-                var cv0 = plaintext.v0;
+                var cv1 = plaintext->v1;
+                var cv0 = plaintext->v0;
                 foreach (var item in keySchedules) {
                     const int WORDSIZE = 32;
                     cv1 = (cv1 >> 8) | (cv1 << (WORDSIZE - 8)); // x = ROTR(x, 8)
@@ -348,7 +347,8 @@ namespace NaiveSocks
                     cv0 = (cv0 << 3) | (cv0 >> (WORDSIZE - 3)); // y = ROTL(y, 3)
                     cv0 ^= cv1;
                 }
-                return new DWords64 { v1 = cv1, v0 = cv0 };
+                plaintext->v1 = cv1;
+                plaintext->v0 = cv0;
             }
         }
     }

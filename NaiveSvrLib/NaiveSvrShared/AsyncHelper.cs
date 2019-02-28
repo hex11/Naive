@@ -743,6 +743,9 @@ namespace Naive.HttpSvr
 
         public static void Run(Action cont)
         {
+            if (cont == null)
+                throw new ArgumentNullException(nameof(cont));
+
             if (InRunnerContext) {
                 if (CurrentContext == null)
                     CurrentContext = new Context();

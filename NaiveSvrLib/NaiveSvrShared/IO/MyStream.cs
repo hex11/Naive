@@ -529,7 +529,11 @@ namespace NaiveSocks
             public IMyStream Left { get; }
             public IMyStream Right { get; }
 
-            public Task WhenCanReadFromLeft { get; set; }
+            public Task WhenCanReadFromLeft
+            {
+                get { return CopierFromLeft.WhenCanRead; }
+                set { CopierFromLeft.WhenCanRead = value; }
+            }
 
             public Copier CopierFromLeft { get; }
             public Copier CopierFromRight { get; }
@@ -576,15 +580,6 @@ namespace NaiveSocks
                 const int forceCloseTimeout = 10 * 1000;
                 try {
                     var readFromRight = CopierFromRight.CopyAndShutdown();
-                    var whenCanReadFromLeft = this.WhenCanReadFromLeft;
-                    if (whenCanReadFromLeft != null) {
-                        try {
-                            await whenCanReadFromLeft.CAF();
-                        } catch (Exception e) {
-                            Logger?.exception(e, Logging.Level.Warning, $"awaiting WhenCanReadFromLeft ({left.SafeToStr()} <-> {right.SafeToStr()})");
-                            return;
-                        }
-                    }
                     var readFromLeft = CopierFromLeft.CopyAndShutdown();
                     var tasks = new Task[] { readFromRight, readFromLeft };
                     string stringFromTask(Task t) => t == readFromRight ? $"{right} -> {left}" : $"{left} -> {right}";
@@ -639,6 +634,8 @@ namespace NaiveSocks
             public BytesCounter CounterR { get; set; }
             public BytesCounter CounterW { get; set; }
 
+            public Task WhenCanRead;
+
             public int Progress { get; private set; }
 
             public event Action<Copier, BytesSegment> OnRead;
@@ -655,6 +652,8 @@ namespace NaiveSocks
 
             public async Task Copy(int bs, bool shutdown)
             {
+                if (WhenCanRead != null) await WhenCanRead;
+
                 IMsgStream msgStream = (From as MsgStreamToMyStream)?.MsgStream;
                 if (bs == -1) bs = defaultBufferSize;
                 Naive.HttpSvr.BytesSegment buf;

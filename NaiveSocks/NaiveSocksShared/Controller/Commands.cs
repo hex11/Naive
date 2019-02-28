@@ -918,21 +918,46 @@ namespace NaiveSocks
                 }
             }),
             new TestItem("DnsDb query by domain 10,000 times", (ctx) => {
-                var db = new DnsDb("performance-test.db");
-                db.Init();
-                for (int i = 0; i < 10000; i++) {
-                    db.QueryByName(NaiveUtils.Random.Next(0, 20000).ToString(), out var val);
+                using (var db = new DnsDb("performance-test.db")) {
+                    db.Init();
+                    for (int i = 0; i < 10000; i++) {
+                        db.QueryByName(NaiveUtils.Random.Next(0, 20000).ToString(), out var val);
+                    }
                 }
             }),
             new TestItem("DnsDb query by ip 10,000 times", (ctx) => {
-                var db = new DnsDb("performance-test.db");
-                db.Init();
-                for (int i = 0; i < 10000; i++) {
-                    db.QueryByIp((uint)NaiveUtils.Random.Next(0, 50000));
+                using (var db = new DnsDb("performance-test.db")) {
+                    db.Init();
+                    for (int i = 0; i < 10000; i++) {
+                        db.QueryByIp((uint)NaiveUtils.Random.Next(0, 50000));
+                    }
                 }
             }),
             new TestItem("DnsDb delete test file", (ctx) => {
                 File.Delete("performance-test.db");
+            }),
+            new TestItem("AsyncQueue dequeue (no waiting) 1,000,000 times", (ctx) => {
+                var q = new AsyncQueue<object>();
+                AsyncHelper.Run(async () => {
+                    for (int i = 0; i < 1_000_000; i++) {
+                        q.Enqueue(null);
+                        await q.DequeueAsync(out _);
+                    }
+                }).Wait();
+            }),
+            new TestItem("AsyncQueue dequeue (waiting) 1,000,000 times", (ctx) => {
+                var q = new AsyncQueue<object>();
+                var read = AsyncHelper.Run(async () => {
+                    for (int i = 0; i < 1_000_000; i++) {
+                        await q.DequeueAsync(out _);
+                    }
+                });
+                AsyncHelper.Run(async () => {
+                    for (int i = 0; i < 1_000_000; i++) {
+                        q.Enqueue(null);
+                    }
+                });
+                read.Wait();
             }),
         };
 

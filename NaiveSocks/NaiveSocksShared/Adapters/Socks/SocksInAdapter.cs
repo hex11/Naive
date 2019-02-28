@@ -55,6 +55,7 @@ namespace NaiveSocks
             private readonly EPPair _eppair;
             private readonly SocksInAdapter _adapter;
             private readonly IMyStream _stream;
+            private AdapterRef outRef;
 
             public SocksInConnection(TcpClient tcp, SocksInAdapter adapter) : base(adapter)
             {
@@ -70,52 +71,48 @@ namespace NaiveSocks
                     methods |= Socks5Server.Methods.UsernamePassword;
                 socks5svr.AcceptMethods = methods;
 
-                var outRef = adapter._noAuthOut;
+                outRef = adapter._noAuthOut;
 
-                socks5svr.Auth = (s) => {
-                    if (s.Username.IsNullOrEmpty() && s.Password.IsNullOrEmpty() && adapter._allowNoAuth)
+                socks5svr.Auth = Auth;
+            }
+
+            private bool Auth(Socks5Server s)
+            {
+                if (s.Username.IsNullOrEmpty() && s.Password.IsNullOrEmpty() && _adapter._allowNoAuth)
+                    return true;
+                foreach (var x in _adapter.users) {
+                    if ((x.name ?? "") == s.Username && (x.passwd ?? "") == s.Password) {
+                        outRef = x.@out ?? _adapter.@out;
                         return true;
-                    foreach (var x in adapter.users) {
-                        if ((x.name ?? "") == s.Username && (x.passwd ?? "") == s.Password) {
-                            outRef = x.@out ?? adapter.@out;
-                            return true;
-                        }
                     }
-                    adapter.Logger.warning("Auth failed: " + _eppair.RemoteEP);
-                    return false;
-                };
-                socks5svr.RequestingToConnect = async (s) => {
-                    this.Dest.Host = s.TargetAddr;
-                    this.Dest.Port = s.TargetPort;
-                    this.DataStream = s.Stream;
-                    if (adapter.rdns?.Adapter is DnsInAdapter dnsIn) {
-                        try {
-                            dnsIn.HandleRdns(this);
-                        } catch (Exception e) {
-                            adapter.Logger.exception(e, Logging.Level.Error, "rdns handling");
-                        }
-                    }
-                    if (adapter.fastreply)
-                        await OnConnectionResult(new ConnectResult(null, ConnectResultEnum.Conneceted)).CAF();
-                    NaiveUtils.RunAsyncTask(async () => {
-                        try {
-                            await _adapter.Controller.HandleInConnection(this, outRef);
-                        } finally {
-                            MyStream.CloseWithTimeout(_stream).Forget();
-                        }
-                    }).Forget();
-                };
+                }
+                _adapter.Logger.warning("Auth failed: " + _eppair.RemoteEP);
+                return false;
             }
 
             public async void Start()
             {
                 try {
-                    if (!await socks5svr.ProcessAsync()) {
-                        MyStream.CloseWithTimeout(socks5svr.Stream).Forget();
+                    if (!await socks5svr.ProcessAsync())
+                        return;
+                    this.Dest.Host = socks5svr.TargetAddr;
+                    this.Dest.Port = socks5svr.TargetPort;
+                    this.DataStream = _stream;
+                    if (_adapter.rdns?.Adapter is DnsInAdapter dnsIn) {
+                        try {
+                            dnsIn.HandleRdns(this);
+                        } catch (Exception e) {
+                            _adapter.Logger.exception(e, Logging.Level.Error, "rdns handling");
+                        }
                     }
+                    if (_adapter.fastreply)
+                        await OnConnectionResult(new ConnectResult(null, ConnectResultEnum.Conneceted)).CAF();
+
+                    await _adapter.Controller.HandleInConnection(this, outRef);
                 } catch (Exception e) {
                     _adapter.Logger.exception(e, Logging.Level.Warning, "listener");
-                    MyStream.CloseWithTimeout(socks5svr.Stream).Forget();
+                } finally {
+                    MyStream.CloseWithTimeout(_stream).Forget();
                 }
             }
 

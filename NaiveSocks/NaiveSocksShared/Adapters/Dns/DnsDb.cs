@@ -9,7 +9,7 @@ using Naive.HttpSvr;
 
 namespace NaiveSocks
 {
-    public class DnsDb : ICacheDns
+    public class DnsDb : ICacheDns, IDisposable
     {
         public Naive.HttpSvr.Logger Logger;
 
@@ -356,6 +356,11 @@ namespace NaiveSocks
             }
             enumerator = null;
             return doc;
+        }
+
+        public void Dispose()
+        {
+            liteDb?.Dispose();
         }
 
         public class Record

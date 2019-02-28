@@ -74,7 +74,12 @@ namespace NaiveSocks
                     succeedMethod = 2;
                 }
             }
-            await WriteMethodSelectionMessage(succeedMethod);
+
+            buf[0] = 0x05;
+            buf[1] = succeedMethod;
+            await Stream.WriteAsyncR(new BytesSegment(buf, 0, 2));
+            Status = Socks5Status.WaitingForRequest;
+
             if (succeedMethod == 0xff)
                 return false;
             if (succeedMethod == 2) {
@@ -100,24 +105,12 @@ namespace NaiveSocks
                     return false;
             }
             //Console.WriteLine($"(socks5) {Client.Client.RemoteEndPoint} handshake.");
-            await processRequests();
-            return true;
-        }
 
-        private void checkVersion(byte version)
-        {
-            if (version != 5)
-                throw getException("not supported socks version");
-        }
-
-        private async Task processRequests()
-        {
-            var b = new byte[4];
-            await ReadFullAsyncR(b, 4);
-            checkVersion(b[0]);
-            var cmd = (ReqCmd)b[1];
-            var rsv = b[2];
-            var addrType = (AddrType)b[3];
+            await ReadFullAsyncR(buf, 4);
+            checkVersion(buf[0]);
+            var cmd = (ReqCmd)buf[1];
+            var rsv = buf[2];
+            var addrType = (AddrType)buf[3];
             string addrString = null;
             switch (addrType) {
                 case AddrType.IPv4Address:
@@ -139,25 +132,25 @@ namespace NaiveSocks
             TargetAddr = addrString;
             if (addrString == null) {
                 await WriteReply(Rep.Address_type_not_supported);
-            } else if (cmd == ReqCmd.Connect) {
-                await ReadFullAsyncR(b, 2);
-                TargetPort = b[0] << 8;
-                TargetPort |= b[1];
-                Status = Socks5Status.ProcessingRequest;
-                await RequestingToConnect?.Invoke(this).NoNRE();
-            } else {
-                await WriteReply(Rep.Command_not_supported);
+                return false;
             }
+            if (cmd != ReqCmd.Connect) {
+                await WriteReply(Rep.Command_not_supported);
+                return false;
+            }
+
+            await ReadFullAsyncR(buf, 2);
+            TargetPort = buf[0] << 8;
+            TargetPort |= buf[1];
+            Status = Socks5Status.ProcessingRequest;
+
+            return true;
         }
 
-        public Task<int> ReadAsync(byte[] bytes, int offset, int size)
+        private void checkVersion(byte version)
         {
-            return Stream.ReadAsync(bytes, offset, size);
-        }
-
-        public Task WriteAsync(byte[] bytes, int offset, int size)
-        {
-            return Stream.WriteAsync(bytes, offset, size);
+            if (version != 5)
+                throw getException("not supported socks version");
         }
 
         public async Task WriteConnectionResult(IPEndPoint ep, Rep rep)
@@ -172,16 +165,6 @@ namespace NaiveSocks
             }
         }
 
-        private async Task WriteMethodSelectionMessage(byte method)
-        {
-            if (Status >= Socks5Status.WaitingForRequest)
-                throw getException("Socks5 Method Selection Message has been already sent.");
-            buf[0] = 0x05;
-            buf[1] = method;
-            await Stream.WriteAsyncR(new BytesSegment(buf, 0, 2));
-            Status = Socks5Status.WaitingForRequest;
-        }
-
         public AwaitableWrapper WriteReply(Rep rep) => WriteReply(rep, AddrType.IPv4Address, null, 0);
 
         public AwaitableWrapper WriteReply(Rep rep, AddrType atyp, byte[] addr, int port)
@@ -190,6 +173,8 @@ namespace NaiveSocks
                 throw getException("Socks5 reply has been already sent.");
             }
             Status = Socks5Status.ReplySent;
+            var buf = this.buf;
+            this.buf = null;
             buf[0] = (0x05);
             buf[1] = ((byte)rep);
             buf[2] = (0x00);
