@@ -209,7 +209,7 @@ namespace NaiveSocks
             if (counter.Length != blockSize)
                 throw new Exception("counter size != block size");
             if (EcbTransform.CanTransformMultipleBlocks) {
-                encryptedCounterSize *= 16;
+                encryptedCounterSize = 1024;
                 counterBlocks = new byte[encryptedCounterSize];
             }
             encryptedCounterBlocks = new byte[encryptedCounterSize];

@@ -334,7 +334,7 @@ namespace Naive.HttpSvr
             }
         }
 
-        const int blocksPerPass = 16;
+        const int blocksPerPass = 64;
 
         private static readonly byte[] zeroesBytes = new byte[16 * blocksPerPass];
 
