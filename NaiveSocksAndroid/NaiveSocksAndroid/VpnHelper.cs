@@ -44,6 +44,8 @@ namespace NaiveSocksAndroid
 
         public string DnsGw { get; set; }
 
+        public bool UdpRelay { get; set; } = true;
+
         public int Mtu { get; set; } = 1500;
 
         public bool Ipv6 { get; set; } = false;
@@ -157,6 +159,15 @@ namespace NaiveSocksAndroid
 
             if (VpnConfig.LocalDnsPort > 0) {
                 InitLocalDns(controller);
+            }
+
+            if (VpnConfig.UdpRelay) {
+                var relay = new UdpRelay() {
+                    Name = "VPNUDP",
+                    listen = new IPEndPoint(IPAddress.Loopback, VpnConfig.SocksPort),
+                    redirect_dns = new IPEndPoint(IPAddress.Loopback, VpnConfig.LocalDnsPort)
+                };
+                AddInAdapter(controller, relay);
             }
 
             _pfd = builder.Establish();
