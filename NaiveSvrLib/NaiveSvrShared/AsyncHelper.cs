@@ -700,6 +700,57 @@ namespace Naive.HttpSvr
         }
     }
 
+    public sealed class BeginEndAwaiter : IAwaiter<IAsyncResult>
+    {
+        static readonly Action COMPLETED = () => { };
+
+        private Action _continuation;
+        private IAsyncResult _ar;
+
+        public bool IsCompleted => _continuation == COMPLETED;
+
+        public IAsyncResult GetResult()
+        {
+            var ar = _ar;
+            _continuation = null;
+            _ar = null;
+            return ar;
+        }
+
+        public void OnCompleted(Action continuation)
+        {
+            var r = Interlocked.CompareExchange(ref _continuation, continuation, null);
+            if (r == null) {
+                // it havn't completed, continuation registered.
+            } else if (r == COMPLETED) {
+                // it have completed, run the continuation now.
+                ContinuationRunner.Run(continuation);
+            } else {
+                throw new Exception("a continuation was already registered");
+            }
+        }
+
+        public void UnsafeOnCompleted(Action continuation) => OnCompleted(continuation);
+        public BeginEndAwaiter GetAwaiter() => this;
+
+        private static AsyncCallback _callback;
+
+        public static AsyncCallback Callback => _callback ?? (_callback = CallbackImpl);
+
+        static void CallbackImpl(IAsyncResult ar)
+        {
+            var thiz = ar.AsyncState as BeginEndAwaiter;
+            thiz._ar = ar;
+            var r = Interlocked.Exchange(ref thiz._continuation, COMPLETED);
+            if (r != null) {
+                // continuation is registered before completed, run it now.
+                ContinuationRunner.Run(r);
+            } else {
+                // completed before continuation registered.
+            }
+        }
+    }
+
     public static class ContinuationRunner
     {
         [ThreadStatic]

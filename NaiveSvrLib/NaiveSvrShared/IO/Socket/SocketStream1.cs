@@ -97,8 +97,20 @@ namespace NaiveSocks
         ReusableAwaiter<VoidType>.BeginEndStateMachine<SocketStream1, BytesSegment> raW;
         ReusableAwaiter<VoidType>.BeginEndStateMachine<SocketStream1, ArraySegment<byte>[]> raWm;
 
+        BeginEndAwaiter bea = new BeginEndAwaiter();
+
         protected override AwaitableWrapper<int> ReadAsyncRImpl(BytesSegment bs)
         {
+            //return new AwaitableWrapper<int>(AsyncHelper.Run(async () => {
+            //    this.Socket.BeginReceive(bs.Bytes, bs.Offset, bs.Len, SocketFlags.None, BeginEndAwaiter.Callback, bea);
+            //    var read = Socket.EndReceive(await bea);
+            //    this.OnAsyncReadCompleted(read);
+            //    if (read == 0)
+            //        this.State |= MyStreamState.RemoteShutdown;
+            //    return read;
+            //}));
+
+            //// The above code was used to test BeginEndAwaiter, it works well, but the following code should be faster.
             if (raR == null)
                 raR = new ReusableAwaiter<int>.BeginEndStateMachine<SocketStream1, BytesSegment>(this, ReadBeginMethod, ReadEndMethod);
             return new AwaitableWrapper<int>(raR.Start(bs));
