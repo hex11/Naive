@@ -608,6 +608,7 @@ namespace NaiveSocks
 
         public static Lazy<Epoller> LazyGlobalEpoller = new Lazy<Epoller>(() => {
             var e = new Epoller();
+            e.Logger.Stamp = "epoll";
             e.InitEpoll();
             new Thread(e.Run) { Name = "GlobalEpoll" }.Start();
             return e;
@@ -617,6 +618,7 @@ namespace NaiveSocks
 
         public static Lazy<Epoller> LazyGlobalEpollerW = new Lazy<Epoller>(() => {
             var e = new Epoller();
+            e.Logger.Stamp = "epollW";
             e.InitEpoll();
             new Thread(e.Run) { Name = "GlobalEpollW" }.Start();
             return e;
@@ -641,7 +643,7 @@ namespace NaiveSocks
         private Dictionary<int, IEpollHandler> mapFdToHandler = new Dictionary<int, IEpollHandler>();
         private HashSet<int> fdCleanupList = new HashSet<int>();
 
-        private Logger Logger = new Logger() { ParentLogger = Logging.RootLogger };
+        public Logger Logger = new Logger() { ParentLogger = Logging.RootLogger };
 
         public int[] GetFds() => mapFdToHandler.Keys.ToArray();
 
@@ -650,8 +652,7 @@ namespace NaiveSocks
         public void InitEpoll()
         {
             ep = EpollCreate();
-            Logger.Stamp = "ep" + ep;
-            Logger.debug("epoll_create succeed.");
+            Logger.debug("epoll_create succeed. fd=" + ep);
         }
 
         public void Run()
