@@ -340,19 +340,19 @@ namespace Naive.HttpSvr
 
         public static Action<BytesView> GetAesStreamFilter(bool isEncrypt, byte[] key) // is actually AES OFB
         {
-            int keySize = key.Length * 8, blockSize = 128;
-            int blockBytesSize = blockSize / 8;
-            int encryptedZerosSize = blockBytesSize;
+            uint keySize = (uint)key.Length * 8, blockSize = 128;
+            uint blockBytesSize = blockSize / 8;
+            uint encryptedZerosSize = blockBytesSize;
             byte[] buf = new byte[blockSize / 8];
             BytesView bvBuf = new BytesView(buf);
             var aesalg = new AesCryptoServiceProvider();
             aesalg.Mode = CipherMode.CBC; // to generate OFB keystream, use CBC with all zeros byte array as input.
-            aesalg.KeySize = keySize;
-            aesalg.BlockSize = blockSize;
+            aesalg.KeySize = (int)keySize;
+            aesalg.BlockSize = (int)blockSize;
             aesalg.Key = key;
             ICryptoTransform enc = null;
             byte[] keystreamBuffer = null;
-            int keystreamBufferPos = 0;
+            uint keystreamBufferPos = 0;
             return bv => {
                 if (enc == null) {
                     if (isEncrypt) {
@@ -360,11 +360,11 @@ namespace Naive.HttpSvr
                         bv.Set(aesalg.IV);
                         bv = bv.nextNode;
                     } else {
-                        aesalg.IV = bv.GetBytes(0, blockBytesSize);
-                        for (int i = 0; i < bv.len - blockBytesSize; i++) {
+                        aesalg.IV = bv.GetBytes(0, (int)blockBytesSize);
+                        for (uint i = 0; i < bv.len - blockBytesSize; i++) {
                             bv[i] = bv[i + blockBytesSize];
                         }
-                        bv.len -= blockBytesSize;
+                        bv.len -= (int)blockBytesSize;
                     }
                     enc = aesalg.CreateEncryptor();
                     if (enc.CanTransformMultipleBlocks) {
@@ -376,24 +376,24 @@ namespace Naive.HttpSvr
                 unsafe {
                     fixed (byte* ksBuf = keystreamBuffer)
                         do {
-                            var pos = bv.offset;
-                            var end = pos + bv.len;
+                            var pos = (uint)bv.offset;
+                            var end = pos + (uint)bv.len;
                             if (bv.bytes == null)
                                 throw new ArgumentNullException("bv.bytes");
                             if (bv.bytes.Length < end)
                                 throw new ArgumentException("bv.bytes.Length < offset + len");
                             fixed (byte* bytes = bv.bytes)
                                 while (pos < end) {
-                                    var remainningTmp = encryptedZerosSize - keystreamBufferPos;
+                                    var remainningTmp = (uint)encryptedZerosSize - keystreamBufferPos;
                                     if (remainningTmp == 0) {
                                         remainningTmp = encryptedZerosSize;
                                         keystreamBufferPos = 0;
-                                        enc.TransformBlock(zeroesBytes, 0, encryptedZerosSize, keystreamBuffer, 0);
+                                        enc.TransformBlock(zeroesBytes, 0, (int)encryptedZerosSize, keystreamBuffer, 0);
                                     }
                                     var tmpEnd = pos + remainningTmp;
                                     var thisEnd = end < tmpEnd ? end : tmpEnd;
                                     var thisCount = thisEnd - pos;
-                                    NaiveUtils.XorBytesUnsafe(ksBuf + keystreamBufferPos, bytes + pos, thisCount);
+                                    NaiveUtils.XorBytesUnsafe(ksBuf + keystreamBufferPos, bytes + pos, (uint)thisCount);
                                     keystreamBufferPos += thisCount;
                                     pos += thisCount;
                                 }

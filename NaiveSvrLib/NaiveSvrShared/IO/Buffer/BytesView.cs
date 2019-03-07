@@ -131,7 +131,16 @@ namespace Naive.HttpSvr
         public byte this[int index]
         {
             get {
-                if (index < 0) throw new ArgumentOutOfRangeException(nameof(index));
+                return this[(uint)index];
+            }
+            set {
+                this[(uint)index] = value;
+            }
+        }
+
+        public byte this[uint index]
+        {
+            get {
                 var pos = 0;
                 var curnode = this;
                 do {
@@ -143,7 +152,6 @@ namespace Naive.HttpSvr
                 throw new ArgumentOutOfRangeException();
             }
             set {
-                if (index < 0) throw new ArgumentOutOfRangeException(nameof(index));
                 var pos = 0;
                 var curnode = this;
                 do {
@@ -153,6 +161,7 @@ namespace Naive.HttpSvr
                     }
                     pos += curnode.len;
                 } while ((curnode = curnode.nextNode) != null);
+                throw new ArgumentOutOfRangeException();
             }
         }
 

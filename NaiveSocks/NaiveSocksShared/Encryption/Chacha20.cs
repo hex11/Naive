@@ -167,7 +167,7 @@ namespace NaiveSocks
         }
 
         const int KeystreamBufferSize = 64;
-        int keystreamBufferPos = KeystreamBufferSize;
+        uint keystreamBufferPos = KeystreamBufferSize;
 
         protected override void IVSetup(byte[] IV)
         {
@@ -177,8 +177,8 @@ namespace NaiveSocks
         public override void Update(BytesSegment bs)
         {
             bs.CheckAsParameter();
-            var pos = bs.Offset;
-            var end = pos + bs.Len;
+            var pos = (uint)bs.Offset;
+            var end = pos + (uint)bs.Len;
             var ksb = ctx->keyStreamBuffer;
             fixed (byte* bytes = bs.Bytes) {
                 while (pos < end) {

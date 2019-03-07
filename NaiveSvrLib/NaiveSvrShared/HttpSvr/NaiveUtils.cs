@@ -288,16 +288,13 @@ namespace Naive.HttpSvr
         static void ThrowIfLessThanZero(int value, string argName)
         {
             if (value < 0)
-                throw new ArgumentOutOfRangeException(argName, argName + " can not less than zero");
+                throw new ArgumentOutOfRangeException(argName, argName + " cannot be less than zero");
         }
 
         public static void CopyBytes(byte[] src, int srcOffset, byte[] dst, int dstOffset, int count)
         {
-            if (count > 4096) {
+            if (count > 8) {
                 Buffer.BlockCopy(src, srcOffset, dst, dstOffset, count);
-                return;
-            } else if (count > 128) {
-                Array.Copy(src, srcOffset, dst, dstOffset, count);
             } else {
                 for (int i = 0; i < count; i++) {
                     dst[dstOffset++] = src[srcOffset++];
@@ -305,12 +302,11 @@ namespace Naive.HttpSvr
             }
         }
 
-        public static unsafe void XorBytes(byte[] src, int srcOffset, byte[] dst, int dstOffset, int count)
+        public static unsafe void XorBytes(byte[] src, int srcOffset, byte[] dst, int dstOffset, uint count)
         {
             if ((srcOffset | dstOffset | count) < 0) {
                 ThrowIfLessThanZero(srcOffset, nameof(srcOffset));
                 ThrowIfLessThanZero(dstOffset, nameof(dstOffset));
-                ThrowIfLessThanZero(count, nameof(count));
             }
             if (src == null)
                 throw new ArgumentNullException(nameof(src));
@@ -327,10 +323,10 @@ namespace Naive.HttpSvr
             }
         }
 
-        public static unsafe void XorBytesUnsafe(byte* src, byte* dst, int count)
+        public static unsafe void XorBytesUnsafe(byte* src, byte* dst, uint count)
         {
             if (count < 8) {
-                for (int i = 0; i < count; i++) {
+                for (uint i = 0; i < count; i++) {
                     dst[i] ^= src[i];
                 }
             } else {
@@ -342,44 +338,64 @@ namespace Naive.HttpSvr
             }
         }
 
-        private static unsafe void XorBytes64Unsafe(byte* src, byte* dst, int count)
+        private static unsafe void XorBytes64Unsafe(byte* src, byte* dst, uint count)
         {
             const int BLOCK_SIZE = 8;
-            int blockCount = count / BLOCK_SIZE;
+            //// Tried aligning dst to block size to improve performance, but failed.
+            //var align = 8 - (uint)((long)dst % 8);
+            //if (align > 0) {
+            //    for (uint i = 0; i < align; i++) {
+            //        dst[i] ^= src[i];
+            //    }
+            //    src += align;
+            //    dst += align;
+            //    count -= align;
+            //}
+
+            uint blockCount = count / BLOCK_SIZE;
             if (blockCount > 0) {
                 var pBlockSrc = (long*)src;
                 var pBlockDst = (long*)dst;
-                int i = 0;
+                var pBlockDstEnd = pBlockDst + blockCount;
                 do {
-                    pBlockDst[i] ^= pBlockSrc[i];
-                } while (++i < blockCount);
-                int xored = blockCount * BLOCK_SIZE;
-                src += xored;
-                dst += xored;
+                    *pBlockDst ^= *pBlockSrc;
+                    pBlockSrc++; pBlockDst++;
+                } while (pBlockDst < pBlockDstEnd);
+                uint xored = blockCount * BLOCK_SIZE;
+                src = (byte*)pBlockSrc;
+                dst = (byte*)pBlockDst;
                 count -= xored;
+                //for (uint i = 0; i < blockCount; i++) {
+                //    pBlockDst[i] ^= pBlockSrc[i];
+                //}
+                //uint xored = blockCount * BLOCK_SIZE;
+                //src += xored;
+                //dst += xored;
+                //count -= xored;
             }
-            for (int i = 0; i < count; i++) {
+            for (uint i = 0; i < count; i++) {
                 dst[i] ^= src[i];
             }
         }
 
-        public static unsafe void XorBytes32Unsafe(byte* src, byte* dst, int count)
+        public static unsafe void XorBytes32Unsafe(byte* src, byte* dst, uint count)
         {
             const int BLOCK_SIZE = 4;
-            int blockCount = count / BLOCK_SIZE;
+            uint blockCount = count / BLOCK_SIZE;
             if (blockCount > 0) {
                 var pBlockSrc = (int*)src;
                 var pBlockDst = (int*)dst;
-                int i = 0;
+                var pBlockDstEnd = pBlockDst + blockCount;
                 do {
-                    pBlockDst[i] ^= pBlockSrc[i];
-                } while (++i < blockCount);
-                int xored = blockCount * BLOCK_SIZE;
-                src += xored;
-                dst += xored;
+                    *pBlockDst ^= *pBlockSrc;
+                    pBlockSrc++; pBlockDst++;
+                } while (pBlockDst < pBlockDstEnd);
+                uint xored = blockCount * BLOCK_SIZE;
+                src = (byte*)pBlockSrc;
+                dst = (byte*)pBlockDst;
                 count -= xored;
             }
-            for (int i = 0; i < count; i++) {
+            for (uint i = 0; i < count; i++) {
                 dst[i] ^= src[i];
             }
         }
@@ -916,11 +932,11 @@ namespace Naive.HttpSvr
                 }
             }
 
-        OK:
+            OK:
             timeSpan = TimeSpan.FromSeconds(seconds);
             return true;
 
-        FAIL:
+            FAIL:
             timeSpan = TimeSpan.Zero;
             return false;
         }

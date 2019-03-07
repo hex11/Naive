@@ -189,9 +189,9 @@ namespace NaiveSocks
         private byte[] counterBlocks;
         public ICryptoTransform EcbTransform;
         private int blockSize;
-        private int encryptedCounterSize;
-        private byte[] encryptedCounterBlocks;
-        private int encryptedCounterPos;
+        private uint keystreamSize;
+        private byte[] keystream;
+        private uint encryptedCounterPos;
 
         public override int IVLength { get; }
 
@@ -205,38 +205,45 @@ namespace NaiveSocks
         {
             var counter = IV;
             counterBlocks = Counter = counter;
-            encryptedCounterSize = blockSize = IVLength;
+            blockSize = IVLength;
             if (counter.Length != blockSize)
                 throw new Exception("counter size != block size");
             if (EcbTransform.CanTransformMultipleBlocks) {
-                encryptedCounterSize = 1024;
-                counterBlocks = new byte[encryptedCounterSize];
+                keystreamSize = 1024;
+                counterBlocks = new byte[keystreamSize];
+            } else {
+                keystreamSize = (uint)IVLength;
             }
-            encryptedCounterBlocks = new byte[encryptedCounterSize];
-            encryptedCounterPos = encryptedCounterSize;
+            keystream = new byte[keystreamSize];
+            encryptedCounterPos = keystreamSize;
         }
 
         public override unsafe void Update(BytesSegment bs)
         {
-            int i = bs.Offset;
-            int end = i + bs.Len;
+            uint i = (uint)bs.Offset;
+            uint len = (uint)bs.Len;
+            uint end = i + len;
             var realEncryptedCounterPos = this.encryptedCounterPos;
-            this.encryptedCounterPos = (realEncryptedCounterPos + bs.Len) % encryptedCounterSize;
-            fixed (byte* encCtr = encryptedCounterBlocks)
+            this.encryptedCounterPos = (realEncryptedCounterPos + (uint)bs.Len) % keystreamSize;
+            fixed (byte* encCtr = keystream)
             fixed (byte* bytes = bs.Bytes)
                 while (i < end) {
-                    var unusedEncryptedCounter = encryptedCounterSize - realEncryptedCounterPos;
+                    var unusedEncryptedCounter = keystreamSize - realEncryptedCounterPos;
                     if (unusedEncryptedCounter == 0) {
                         realEncryptedCounterPos = 0;
-                        for (int j = 0; j < encryptedCounterSize; j += blockSize) {
-                            NaiveUtils.CopyBytes(Counter, 0, counterBlocks, j, blockSize);
+                        if (keystreamSize > blockSize) {
+                            for (int j = 0; j < keystreamSize; j += blockSize) {
+                                Buffer.BlockCopy(Counter, 0, counterBlocks, j, blockSize);
+                                IncrementCounter();
+                            }
+                        } else {
                             IncrementCounter();
                         }
-                        EcbTransform.TransformBlock(counterBlocks, 0, encryptedCounterSize, encryptedCounterBlocks, 0);
-                        unusedEncryptedCounter = encryptedCounterSize;
+                        EcbTransform.TransformBlock(counterBlocks, 0, (int)keystreamSize, keystream, 0);
+                        unusedEncryptedCounter = keystreamSize;
                     }
-                    var blockEnd = i + unusedEncryptedCounter;
-                    int blocksEnd = (blockEnd < end) ? blockEnd : end;
+                    uint blockEnd = i + unusedEncryptedCounter;
+                    uint blocksEnd = (blockEnd < end) ? blockEnd : end;
                     var count = blocksEnd - i;
 
                     NaiveUtils.XorBytesUnsafe(encCtr + realEncryptedCounterPos, bytes + i, count);
@@ -296,11 +303,11 @@ namespace NaiveSocks
                 var thisBlockEnd = (feedEnd < end) ? feedEnd : end;
                 var count = thisBlockEnd - pos;
                 if (IsEncrypting) {
-                    NaiveUtils.XorBytes(feedingBack, feedingPos, bs.Bytes, pos, count);
+                    NaiveUtils.XorBytes(feedingBack, feedingPos, bs.Bytes, pos, (uint)count);
                     NaiveUtils.CopyBytes(bs.Bytes, pos, toBeFeedBack, feedingPos, count);
                 } else {
                     NaiveUtils.CopyBytes(bs.Bytes, pos, toBeFeedBack, feedingPos, count);
-                    NaiveUtils.XorBytes(feedingBack, feedingPos, bs.Bytes, pos, count);
+                    NaiveUtils.XorBytes(feedingBack, feedingPos, bs.Bytes, pos, (uint)count);
                 }
                 pos += count;
                 feedingPos += count;
