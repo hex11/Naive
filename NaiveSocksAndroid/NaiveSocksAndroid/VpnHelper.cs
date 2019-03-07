@@ -20,6 +20,7 @@ using System.Net;
 using NaiveSocks;
 using System.Net.Sockets;
 using LiteDB;
+using System.Diagnostics;
 
 namespace NaiveSocksAndroid
 {
@@ -68,7 +69,10 @@ namespace NaiveSocksAndroid
         const string RouterIp6 = "fd11:4514:1919::1";
 
         public BgService Bg { get; }
-        public bool Running { get; private set; }
+
+        public bool Running => _running != 0;
+        private int _running = 0; // in order to use Interlocked.Exchange
+
         public VpnConfig VpnConfig { get; set; }
 
         public DnsDb DnsDb => dnsInAdapter?.cacheDns as DnsDb;
@@ -171,7 +175,7 @@ namespace NaiveSocksAndroid
             }
 
             _pfd = builder.Establish();
-            Running = true;
+            _running = 1;
             Logging.info("VPN established, fd=" + _pfd.Fd);
 
             string dnsgw = null;
@@ -180,7 +184,7 @@ namespace NaiveSocksAndroid
             } else if (VpnConfig.LocalDnsPort > 0) {
                 dnsgw = "127.0.0.1:" + VpnConfig.LocalDnsPort;
             }
-            StartTun2Socks(_pfd, "127.0.0.1:" + socksInAdapter.listen.Port, dnsgw);
+            StartTun2Socks("127.0.0.1:" + socksInAdapter.listen.Port, dnsgw);
         }
 
         private void InitLocalDns(Controller controller)
@@ -214,13 +218,13 @@ namespace NaiveSocksAndroid
             adapter.Start();
         }
 
-        private void StartTun2Socks(ParcelFileDescriptor fd, string socksAddr, string dnsgw)
+        private void StartTun2Socks(string socksAddr, string dnsgw)
         {
             string sockPath = "t2s_sock_path";
             var arg = "--netif-ipaddr " + RouterIp
                          + " --netif-netmask 255.255.255.0"
                          + " --socks-server-addr " + socksAddr
-                         + " --tunfd " + fd.Fd
+                         + " --tunfd " + _pfd.Fd
                          + " --tunmtu " + VpnConfig.Mtu
                          + " --sock-path " + sockPath
                          + " --loglevel 3"
@@ -232,21 +236,33 @@ namespace NaiveSocksAndroid
                 arg += " --netif-ip6addr " + RouterIp6;
             }
             var filesDir = AppConfig.FilesDir;
-            StartProcess(Native.GetLibFullPath(Native.SsTun2Socks), arg, filesDir, () => {
-                try {
-                    fd.Close();
-                } catch (Exception) {
+            var startTime = DateTime.UtcNow;
+            StartProcess(Native.GetLibFullPath(Native.SsTun2Socks), arg, filesDir, (proc) => {
+                if (Running && proc.ExitCode != 0) {
+                    if (DateTime.UtcNow - startTime < TimeSpan.FromSeconds(5)) {
+                        Logging.warning("tun2socks crashed in 5 seconds, no restarting.");
+                        Stop();
+                    }
+                    Logging.warning("sleep 1s and restart tun2socks");
+                    AsyncHelper.SetTimeout(1000, () => {
+                        try {
+                            StartTun2Socks(socksAddr, dnsgw);
+                        } catch (Exception e) {
+                            Logging.exception(e, Logging.Level.Error, "restarting tun2socks");
+                        }
+                    });
+                } else {
+                    Stop();
                 }
             });
             int delay = 100;
             while (true) {
-                if (Native.SendFd(Path.Combine(filesDir, sockPath), fd.FileDescriptor)) {
+                if (Native.SendFd(Path.Combine(filesDir, sockPath), _pfd.FileDescriptor)) {
                     Logging.info($"sendfd OK.");
                     break;
                 }
                 if (delay > 2000) {
-                    Logging.error("Gived up to sendfd");
-                    return;
+                    throw new Exception("failed to sendfd");
                 }
                 Logging.info($"Wait for {delay} ms and retry sendfd.");
                 Thread.Sleep(delay);
@@ -257,7 +273,7 @@ namespace NaiveSocksAndroid
 
         List<System.Diagnostics.Process> startedProcesses = new List<System.Diagnostics.Process>();
 
-        void StartProcess(string file, string arg, string dir, Action onExit)
+        void StartProcess(string file, string arg, string dir, Action<System.Diagnostics.Process> onExit)
         {
             Logging.info("Starting process: " + file + "\nArgs: " + arg);
             var psi = new System.Diagnostics.ProcessStartInfo(file, arg);
@@ -269,15 +285,14 @@ namespace NaiveSocksAndroid
             Task.Run(() => {
                 proc.WaitForExit();
                 Logging.warning("Process pid=" + proc.Id + " exited with code " + proc.ExitCode);
-                onExit?.Invoke();
+                onExit?.Invoke(proc);
             });
         }
 
         public void Stop()
         {
-            KillProcesses();
-            if (Running) {
-                Running = false;
+            if (Interlocked.Exchange(ref _running, 0) != 0) {
+                KillProcesses();
                 try {
                     _pfd.Close();
                     _pfd = null;
@@ -288,14 +303,16 @@ namespace NaiveSocksAndroid
 
         private void KillProcesses()
         {
-            foreach (var item in startedProcesses) {
-                try {
-                    item.Kill();
-                } catch (Exception) {
-                    ;
+            lock (startedProcesses) {
+                foreach (var item in startedProcesses) {
+                    try {
+                        item.Kill();
+                    } catch (Exception) {
+                        ;
+                    }
                 }
+                startedProcesses.Clear();
             }
-            startedProcesses.Clear();
         }
 
         static class Native
