@@ -25,6 +25,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\UdpRelay.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\Web\WebBaseAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\Web\WebFileAdapter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Adapters\Web\WebTestAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Compression\LZ4\LZ4Codec.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Compression\LZ4\LZ4Codec.Unsafe.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Compression\LZ4\LZ4Codec.Unsafe32.Dirty.cs" />
@@ -67,7 +68,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)Utils.cs" />
   </ItemGroup>
   <ItemGroup>
-    <Folder Include="$(MSBuildThisFileDirectory)Adapters\Web\" />
     <Folder Include="$(MSBuildThisFileDirectory)Adapters\Socks\" />
     <Folder Include="$(MSBuildThisFileDirectory)Adapters\NaiveM\" />
   </ItemGroup>

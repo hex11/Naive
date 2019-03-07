@@ -230,14 +230,20 @@ namespace Naive.HttpSvr
             EndResponseAsync().RunSync();
         }
 
-        public virtual async Task EndResponseAsync()
+        public Task EndResponseAsync()
+        {
+            return EndResponseAsync(null);
+        }
+
+        public virtual async Task EndResponseAsync(string writecontent)
         {
             if (ConnectionState == States.ResponseEnded)
                 throw new Exception("endResponse(): connectionStatus is already ResponseEnded");
             this.Handled = true;
             checkInputData();
-            await outputWriter.FlushAsync().CAF();
-            await outputStream.FlushAsync().CAF();
+            if (writecontent != null)
+                await outputWriter.WriteAsync(writecontent).CAF();
+            await outputWriter.FlushAsync().CAF(); // it will also flush its base stream
             await outputStream.CloseAsync().CAF();
             ConnectionState = States.ResponseEnded;
         }
@@ -442,7 +448,7 @@ namespace Naive.HttpSvr
                     }
                 }
             }
-        DONE:
+            DONE:
 
             var len = cur;
             RawRequestBytesLength = len;

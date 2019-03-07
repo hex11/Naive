@@ -26,10 +26,48 @@ namespace NaiveSocks
         public StringOrArray gzip_wildcard { get; set; }
         public bool gzip_listpage { get; set; } = true;
 
+        public ListMode list_mode { get; set; } = ListMode.auto;
+
+        public enum ListMode
+        {
+            auto, // simple for curl, rich for others
+            simple,
+            rich,
+        }
+
         protected override void GetDetail(GetDetailContext ctx)
         {
             base.GetDetail(ctx);
             ctx.AddField("dir", dir);
+        }
+
+        public override void SetConfig(TomlTable toml)
+        {
+            base.SetConfig(toml);
+            if (allow != null) {
+                foreach (var item in allow.Split(' ', ',')) {
+                    if (item.IsNullOrEmpty())
+                        continue;
+                    if (item == "list") {
+                        allow_list = true;
+                    } else if (item == "create") {
+                        allow_create = true;
+                    } else if (item == "edit") {
+                        allow_edit = true;
+                    } else if (item == "netdl") {
+                        allow_netdl = true;
+                    } else if (item == "all") {
+                        Logger.warning("please use 'ALL' instead of 'all' in allow.");
+                    } else if (item == "ALL") {
+                        allow_list = true;
+                        allow_create = true;
+                        allow_edit = true;
+                        allow_netdl = true;
+                    } else {
+                        Logger.warning($"unknown '{item}' in allow");
+                    }
+                }
+            }
         }
 
         object tmplLock = new object();
@@ -78,42 +116,77 @@ namespace NaiveSocks
                 return p.writeAsync(sb.ToString());
             }
             if (p.Method == "POST") {
-                if (p.ParseUrlQstr()["upload"] != "0") {
-                    return HandleUpload(p, realPath);
-                }
-                return AsyncHelper.CompletedTask;
+                return HandleUpload(p, realPath);
             } else {
                 return HandleDirList(p, realPath);
             }
         }
 
-        public override void SetConfig(TomlTable toml)
+        private Task HandleDirList(HttpConnection pp, string path, string infoText = null)
         {
-            base.SetConfig(toml);
-            if (allow != null) {
-                foreach (var item in allow.Split(' ', ',')) {
-                    if (item.IsNullOrEmpty())
-                        continue;
-                    if (item == "list") {
-                        allow_list = true;
-                    } else if (item == "create") {
-                        allow_create = true;
-                    } else if (item == "edit") {
-                        allow_edit = true;
-                    } else if (item == "netdl") {
-                        allow_netdl = true;
-                    } else if (item == "all") {
-                        Logger.warning("please use 'ALL' instead of 'all' in allow.");
-                    } else if (item == "ALL") {
-                        allow_list = true;
-                        allow_create = true;
-                        allow_edit = true;
-                        allow_netdl = true;
-                    } else {
-                        Logger.warning($"unknown '{item}' in allow");
+            if (list_mode == ListMode.simple
+                || (list_mode == ListMode.auto && pp.GetReqHeader("User-Agent").StartsWith("curl/"))) {
+                return SimpleList(pp, path, infoText);
+            } else {
+                return RichList(pp, path, infoText);
+            }
+        }
+
+        private Task SimpleList(HttpConnection pp, string path, string infoText)
+        {
+            var sb = new StringBuilder(128);
+            int dirs = 0, files = 0;
+            foreach (var dir in Directory.EnumerateDirectories(path)) {
+                sb.Append("[dir]\t").Append(Path.GetFileName(dir)).Append("/\r\n");
+                dirs++;
+            }
+            foreach (var file in Directory.EnumerateFiles(path)) {
+                sb.Append("[file]\t").Append(Path.GetFileName(file)).Append("\r\n");
+                files++;
+            }
+            if (sb.Length > 0) sb.Append("\r\n");
+            sb.Append("[stat]\t").Append(dirs).Append(" dir(s), ").Append(files).Append(" file(s)\r\n");
+            if (infoText != null) {
+                sb.Append("[info]\t").Append(infoText).Append("\r\n");
+            } else if (pp.Url_qstr == "help") {
+                sb.Append("[help]\tcurl [-F <OPTION>]... <DIR_URL>\r\n" +
+                    "\tOptions:\r\n" +
+                    "\tfile=@FILE_TO_UPLOAD  mkdir=DIR_NAME  cp=\"(FROM...) TO\"\r\n" +
+                    "\tmv=\"(FROM...) TO\"  rm=\"(FILE|DIR)...\"  netdl=\"URL [FILENAME]\"\r\n" +
+                    "\ttextFileName=NEW_TEXT_FILE_NAME  textContent=NEW_TEXT_FILE_CONTENT\r\n");
+            } else if (allow_create || allow_edit) {
+                sb.Append("[tip]\tGET with ?help\r\n");
+            }
+            pp.setContentTypeTextPlain();
+            return pp.EndResponseAsync(sb.ToString());
+        }
+
+        private Task RichList(HttpConnection pp, string path, string infoText)
+        {
+            lock (tmplLock) {
+                var tmpl = Controller.ProcessFilePath(this.tmpl);
+                if (tmpl != null && File.Exists(tmpl)) {
+                    var fi = new FileInfo(tmpl);
+                    DateTime lwt = fi.LastWriteTimeUtc;
+                    if (_tmplLwt != lwt) {
+                        _tmpl = new NaiveTemplate.Template(File.ReadAllText(tmpl, Encoding.UTF8)).TrimExcess();
+                        _tmplLwt = lwt;
                     }
+                } else {
+                    _tmpl = null;
                 }
             }
+            var dat = new Dictionary<string, object>();
+            if (data != null)
+                foreach (var item in data)
+                    dat.Add(item.Key, item.Value);
+            if (infoText != null) {
+                dat["info"] = infoText;
+            }
+            dat["can_upload"] = allow_create | allow_edit;
+            if (gzip_listpage)
+                pp.outputStream.EnableGzipIfClientSupports();
+            return WebSvrHelper.WriteDirListPage(pp, path, _tmpl, new NaiveTemplate.TemplaterData(dat));
         }
 
         public override async Task HandleRequestAsyncImpl(HttpConnection p)
@@ -239,7 +312,7 @@ namespace NaiveSocks
             string saveFileName = null;
             string encoding = "utf-8";
             while (await reader.ReadNextPartHeader()) {
-                if (reader.CurrentPartName == "files") {
+                if (reader.CurrentPartName == "file") {
                     var fileName = reader.CurrentPartFileName;
                     if (!CheckPathForWriting(path, fileName, out info, out var realPath))
                         goto FAIL;
@@ -295,7 +368,7 @@ namespace NaiveSocks
                     }
                     Logger.info($"uploaded text '{saveFileName}' by {p.myStream}.");
                     count++;
-                } else if (reader.CurrentPartName == "dirName") {
+                } else if (reader.CurrentPartName == "mkdir") {
                     var dirName = await reader.ReadAllTextAsync();
                     if (!CheckPathForWriting(path, dirName, out info, out var realPath))
                         goto FAIL;
@@ -307,7 +380,7 @@ namespace NaiveSocks
                     }
                     Logger.info($"created dir '{dirName}' by {p.myStream}.");
                     count++;
-                } else if (reader.CurrentPartName == "delFile") {
+                } else if (reader.CurrentPartName == "rm") {
                     var delFile = await reader.ReadAllTextAsync();
                     if (!CheckPathForWriting(path, delFile, out info, out var realPath, out var r))
                         goto FAIL;
@@ -442,7 +515,7 @@ namespace NaiveSocks
                         }
                         count++;
                     }
-                } else if (reader.CurrentPartName == "rm") {
+                } else if (reader.CurrentPartName == "rmm") {
                     var unparsed = await reader.ReadAllTextAsync();
                     var args = Naive.Console.Command.SplitArguments(unparsed);
                     if (args.Length == 0) {
@@ -540,33 +613,5 @@ namespace NaiveSocks
         }
 
         private static string strMissingPermission(string perm) => $"'{perm}' is not in the allowed list";
-
-        private Task HandleDirList(HttpConnection pp, string path, string infoText = null)
-        {
-            lock (tmplLock) {
-                var tmpl = Controller.ProcessFilePath(this.tmpl);
-                if (tmpl != null && File.Exists(tmpl)) {
-                    var fi = new FileInfo(tmpl);
-                    DateTime lwt = fi.LastWriteTimeUtc;
-                    if (_tmplLwt != lwt) {
-                        _tmpl = new NaiveTemplate.Template(File.ReadAllText(tmpl, Encoding.UTF8)).TrimExcess();
-                        _tmplLwt = lwt;
-                    }
-                } else {
-                    _tmpl = null;
-                }
-            }
-            var dat = new Dictionary<string, object>();
-            if (data != null)
-                foreach (var item in data)
-                    dat.Add(item.Key, item.Value);
-            if (infoText != null) {
-                dat["info"] = infoText;
-            }
-            dat["can_upload"] = allow_create | allow_edit;
-            if (gzip_listpage)
-                pp.outputStream.EnableGzipIfClientSupports();
-            return WebSvrHelper.WriteDirListPage(pp, path, _tmpl, new NaiveTemplate.TemplaterData(dat));
-        }
     }
 }
