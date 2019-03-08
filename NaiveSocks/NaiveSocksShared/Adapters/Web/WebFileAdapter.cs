@@ -209,14 +209,11 @@ namespace NaiveSocks
                 if (dirPath == null) dirPath = Controller.ProcessFilePath(dir);
                 WebSvrHelper.PathResult r = WebSvrHelper.CheckPath(dirPath, p.Url_path, out var fsFilePath);
                 if (p.Url_qstr == "dlstatus" && (r == WebSvrHelper.PathResult.File || r == WebSvrHelper.PathResult.NotFound)) {
-                    p.Handled = true;
-                    p.setContentTypeTextPlain();
                     if (downloadTasks.TryGetValue(fsFilePath, out var dlTask)) {
+                        p.Handled = true;
+                        p.setContentTypeTextPlain();
                         await p.writeLineAsync(dlTask.StatusText);
-                    } else {
-                        await p.writeLineAsync("E: task not found.");
                     }
-                    return;
                 } else if (r == WebSvrHelper.PathResult.File) {
                     p.Handled = true;
                     p.ResponseStatusCode = "200 OK";

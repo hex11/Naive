@@ -162,64 +162,75 @@ namespace NaiveSocks
             private static TomlSettings CreateTomlSettings(List<AdapterRef> refs)
             {
                 return TomlSettings.Create(cfg => cfg
-                                            .AllowNonstandard(true)
-                                            .ConfigureType<IPEndPoint>(type => type
-                                                .WithConversionFor<TomlString>(convert => convert
-                                                    .ToToml(custom => custom.ToString())
-                                                    .FromToml(tmlString => Utils.CreateIPEndPoint(tmlString.Value))))
-                                            .ConfigureType<AddrPort>(type => type
-                                                .WithConversionFor<TomlString>(convert => convert
-                                                    .ToToml(custom => custom.ToString())
-                                                    .FromToml(tmlString => AddrPort.Parse(tmlString.Value))))
-                                            .ConfigureType<AdapterRef>(type => type
-                                                .WithConversionFor<TomlString>(convert => convert
-                                                    .ToToml(custom => custom.Ref.ToString())
-                                                    .FromToml(tmlString => {
-                                                        var a = new AdapterRef { IsName = true, Ref = tmlString.Value };
-                                                        refs.Add(a);
-                                                        return a;
-                                                    }))
-                                                .WithConversionFor<TomlTable>(convert => convert
-                                                    .FromToml(tml => {
-                                                        var a = new AdapterRef { IsTable = true, Ref = tml };
-                                                        refs.Add(a);
-                                                        return a;
-                                                    })))
-                                            .ConfigureType<AdapterRefOrArray>(type => type
-                                                .WithConversionFor<TomlString>(convert => convert
-                                                    .FromToml(tmlString => {
-                                                        var a = new AdapterRefOrArray { obj = tmlString.Get<AdapterRef>() };
-                                                        return a;
-                                                    }))
-                                                .WithConversionFor<TomlTable>(convert => convert
-                                                    .FromToml(tmlTable => {
-                                                        var a = new AdapterRefOrArray { obj = tmlTable.Get<AdapterRef>() };
-                                                        return a;
-                                                    }))
-                                                .WithConversionFor<TomlArray>(convert => convert
-                                                    .FromToml(tmlTable => {
-                                                        var a = new AdapterRefOrArray { obj = tmlTable.Get<AdapterRef[]>() };
-                                                        return a;
-                                                    }))
-                                                .WithConversionFor<TomlTableArray>(convert => convert
-                                                    .FromToml(tmlTable => {
-                                                        var a = new AdapterRefOrArray { obj = tmlTable.Get<AdapterRef[]>() };
-                                                        return a;
-                                                    })))
-                                            .ConfigureType<StringOrArray>(type => type
-                                                .WithConversionFor<TomlString>(convert => convert
-                                                    .FromToml(tmlString => {
-                                                        return new StringOrArray { obj = tmlString.Get<string>() };
-                                                    }))
-                                                .WithConversionFor<TomlTable>(convert => convert
-                                                    .FromToml(tmlTable => {
-                                                        return new StringOrArray { obj = tmlTable.Get<string>() };
-                                                    }))
-                                                .WithConversionFor<TomlArray>(convert => convert
-                                                    .FromToml(tmlArray => {
-                                                        return new StringOrArray { obj = tmlArray.Get<string[]>() };
-                                                    })))
-                                        );
+                        .AllowNonstandard(true)
+                        .ConfigureType<IPEndPoint>(type => type
+                            .WithConversionFor<TomlString>(convert => convert
+                                .ToToml(custom => custom.ToString())
+                                .FromToml(tmlString => Utils.CreateIPEndPoint(tmlString.Value))))
+                        .ConfigureType<AddrPort>(type => type
+                            .WithConversionFor<TomlString>(convert => convert
+                                .ToToml(custom => custom.ToString())
+                                .FromToml(tmlString => AddrPort.Parse(tmlString.Value))))
+                        .ConfigureType<AdapterRef>(type => type
+                            .WithConversionFor<TomlString>(convert => convert
+                                .ToToml(custom => custom.Ref.ToString())
+                                .FromToml(tmlString => {
+                                    var a = new AdapterRef { IsName = true, Ref = tmlString.Value };
+                                    refs.Add(a);
+                                    return a;
+                                }))
+                            .WithConversionFor<TomlTable>(convert => convert
+                                .FromToml(tml => {
+                                    var a = new AdapterRef { IsTable = true, Ref = tml };
+                                    refs.Add(a);
+                                    return a;
+                                })))
+                        .ConfigureType<AdapterRefOrArray>(type => type
+                            .WithConversionFor<TomlString>(convert => convert
+                                .FromToml(tmlString => {
+                                    var str = tmlString.Value;
+                                    if (str.Contains('|')) {
+                                        var splits = str.Split('|');
+                                        var aarr = new AdapterRef[splits.Length];
+                                        for (int i = 0; i < splits.Length; i++) {
+                                            var a = new AdapterRef { IsName = true, Ref = splits[i] };
+                                            refs.Add(a);
+                                            aarr[i] = a;
+                                        }
+                                        return new AdapterRefOrArray { obj = aarr };
+                                    } else {
+                                        return new AdapterRefOrArray { obj = tmlString.Get<AdapterRef>() };
+                                    }
+                                }))
+                            .WithConversionFor<TomlTable>(convert => convert
+                                .FromToml(tmlTable => {
+                                    var a = new AdapterRefOrArray { obj = tmlTable.Get<AdapterRef>() };
+                                    return a;
+                                }))
+                            .WithConversionFor<TomlArray>(convert => convert
+                                .FromToml(tmlTable => {
+                                    var a = new AdapterRefOrArray { obj = tmlTable.Get<AdapterRef[]>() };
+                                    return a;
+                                }))
+                            .WithConversionFor<TomlTableArray>(convert => convert
+                                .FromToml(tmlTable => {
+                                    var a = new AdapterRefOrArray { obj = tmlTable.Get<AdapterRef[]>() };
+                                    return a;
+                                })))
+                        .ConfigureType<StringOrArray>(type => type
+                            .WithConversionFor<TomlString>(convert => convert
+                                .FromToml(tmlString => {
+                                    return new StringOrArray { obj = tmlString.Get<string>() };
+                                }))
+                            .WithConversionFor<TomlTable>(convert => convert
+                                .FromToml(tmlTable => {
+                                    return new StringOrArray { obj = tmlTable.Get<string>() };
+                                }))
+                            .WithConversionFor<TomlArray>(convert => convert
+                                .FromToml(tmlArray => {
+                                    return new StringOrArray { obj = tmlArray.Get<string[]>() };
+                                })))
+                    );
             }
         }
     }

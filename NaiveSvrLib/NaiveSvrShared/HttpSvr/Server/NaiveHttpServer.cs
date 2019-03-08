@@ -29,7 +29,7 @@ namespace Naive.HttpSvr
 
     public abstract class NaiveHttpServer : IHttpRequestHandler
     {
-        public List<NaiveHttpListener> Listeners = new List<NaiveHttpListener>();
+        public List<Listener> Listeners = new List<Listener>();
 
         public IHttpRequestHandler handler;
 
@@ -59,29 +59,29 @@ namespace Naive.HttpSvr
             handler = this;
         }
 
-        public NaiveHttpListener AddListener(int port)
+        public Listener AddListener(int port)
         {
             return AddListener(new IPEndPoint(IPAddress.Any, port));
         }
 
-        public NaiveHttpListener AddListener(IPAddress address, int port)
+        public Listener AddListener(IPAddress address, int port)
         {
             return AddListener(new IPEndPoint(address, port));
         }
 
-        public NaiveHttpListener AddListener(IPEndPoint ipEndPoint)
+        public Listener AddListener(IPEndPoint ipEndPoint)
         {
             return AddListener(new TcpListener(ipEndPoint));
         }
 
-        public NaiveHttpListener AddListener(string stringAddress, int port)
+        public Listener AddListener(string stringAddress, int port)
         {
             return AddListener(IPAddress.Parse(stringAddress), port);
         }
 
-        public NaiveHttpListener AddListener(TcpListener listener)
+        public Listener AddListener(TcpListener listener)
         {
-            var fsl = new NaiveHttpListener(this, listener);
+            var fsl = new Listener(this, listener);
             Listeners.Add(fsl);
             return fsl;
         }
@@ -101,7 +101,7 @@ namespace Naive.HttpSvr
             return Task.WhenAll(tasks);
         }
 
-        public Task RunOne(NaiveHttpListener listener) => listener.Listen();
+        public Task RunOne(Listener listener) => listener.Listen();
 
         /// <summary>
         /// Is any listener running.
@@ -131,10 +131,10 @@ namespace Naive.HttpSvr
         /// <summary>
         /// write 500 error page
         /// </summary>
-        public virtual async Task errorPage(HttpConnection p, Exception e)
+        public virtual Task errorPage(HttpConnection p, Exception e)
         {
             p.ResponseStatusCode = "500 Internal Server Error";
-            await p.writeAsync("<h1>500 Internal Server Error</h1>"
+            return p.writeAsync("<h1>500 Internal Server Error</h1>"
                 + $"<h2>{HttpUtil.HtmlEncode(e.GetType().FullName)}</h2>"
                 + $"<pre>{HttpUtil.HtmlEncode(e.Message)}</pre>");
         }
@@ -179,7 +179,7 @@ namespace Naive.HttpSvr
             Logger.exception(ex, Logging.Level.Error, $"({p.myStream}) httpConnection processing");
         }
 
-        public class NaiveHttpListener
+        public class Listener
         {
             public TcpListener tcpListener { get; }
             public NaiveHttpServer server { get; }
@@ -188,7 +188,7 @@ namespace Naive.HttpSvr
             public bool LogInfo { get; set; } = false;
             public Logger Logger => server.Logger;
 
-            public NaiveHttpListener(NaiveHttpServer server, TcpListener tcpListener)
+            public Listener(NaiveHttpServer server, TcpListener tcpListener)
             {
                 this.server = server;
                 this.tcpListener = tcpListener;

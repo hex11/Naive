@@ -5,51 +5,49 @@ namespace Naive.HttpSvr
 {
     public abstract class HttpAuthFilter : IHttpRequestHandler
     {
-        public Encoding AuthBase64Encoding = new UTF8Encoding(false, false);
         public void HandleRequest(HttpConnection p)
         {
-            var authInfo = GetAuthInfo(p, AuthBase64Encoding);
+            var authInfo = HttpAuth.Parse(p);
             Auth(p, authInfo);
         }
 
-        public static HttpAuthInfo GetAuthInfo(HttpConnection p, Encoding base64Encoding)
-        {
-            string auth = p.RequestHeaders[HttpHeaders.KEY_Authorization] as string;
-            var info = new HttpAuthInfo();
-            info.RawAuthString = auth;
-            if (auth != null && auth.Length > 0) {
-                if (auth.StartsWith("Basic")) {
-                    var base64str = auth.Substring(5);
-                    info.DecodedAuthString = base64Encoding.GetString(Convert.FromBase64String(base64str));
-                    var splits = info.DecodedAuthString.Split(new[] { ':' }, 2);
-                    info.Username = splits[0];
-                    if (splits.Length == 2)
-                        info.Passwd = splits[1];
-                }
-            }
-            return info;
-        }
+        public abstract void Auth(HttpConnection p, string authInfo);
 
-        public static void SetUnauthorizedHeader(HttpConnection p)
+        public event Action<HttpAuthFilter, HttpConnection, string> Unauthorized;
+        protected virtual void OnUnauthorized(HttpConnection p, string auth)
         {
-            p.ResponseStatusCode = "401 Unauthorized";
-            p.ResponseHeaders[HttpHeaders.KEY_WWW_Authenticate] = "basic";
-        }
-
-        public abstract void Auth(HttpConnection p, HttpAuthInfo authInfo);
-
-        public event Action<HttpAuthFilter, HttpConnection, HttpAuthInfo> Unauthorized;
-        protected virtual void OnUnauthorized(HttpConnection p, HttpAuthInfo authInfo)
-        {
-            Unauthorized?.Invoke(this, p, authInfo);
+            Unauthorized?.Invoke(this, p, auth);
         }
     }
 
-    public class HttpAuthInfo
+    public static class HttpAuth
     {
-        public string RawAuthString;
-        public string DecodedAuthString;
-        public string Username;
-        public string Passwd;
+        public static string Parse(HttpConnection p)
+        {
+            string auth = p.GetReqHeader(HttpHeaders.KEY_Authorization);
+            if (auth != null && auth.StartsWith("Basic")) {
+                var base64str = auth.Substring(5);
+                return NaiveUtils.UTF8Encoding.GetString(Convert.FromBase64String(base64str));
+            }
+            return null;
+        }
+
+        public static void Split(string str, out string user, out string passwd)
+        {
+            var userend = str.IndexOf(':');
+            if (userend == -1) {
+                user = str;
+                passwd = null;
+            } else {
+                user = str.Substring(0, userend);
+                passwd = str.Substring(userend, str.Length - userend);
+            }
+        }
+
+        public static void SetUnauthorizedHeader(HttpConnection p, string realm)
+        {
+            p.ResponseStatusCode = "401 Unauthorized";
+            p.ResponseHeaders[HttpHeaders.KEY_WWW_Authenticate] = "Basic realm=\"" + realm + "\"";
+        }
     }
 }

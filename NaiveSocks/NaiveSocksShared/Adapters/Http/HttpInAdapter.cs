@@ -24,11 +24,11 @@ namespace NaiveSocks
             public bool chroot { get; set; }
         }
 
-        public Dictionary<string, AdapterRef[]> hosts { get; set; }
+        public Dictionary<string, AdapterRefOrArray> hosts { get; set; }
 
         public WebRoute[] webroutes { get; set; }
 
-        public AdapterRef[] webouts { get; set; }
+        public AdapterRefOrArray webouts { get; set; }
 
         public bool logging { get; set; }
         public bool verbose { get; set; }
@@ -41,18 +41,17 @@ namespace NaiveSocks
         public override void SetConfig(TomlTable toml)
         {
             base.SetConfig(toml);
-            if (toml.TryGetValue<AdapterRef>("webout", out var ada)) {
-                var newarr = new AdapterRef[1 + (webouts?.Length ?? 0)];
-                newarr[0] = ada;
-                if (webouts?.Length > 0) {
-                    Array.Copy(webouts, 0, newarr, 1, webouts.Length);
-                }
-                webouts = newarr;
+            if (toml.TryGetValue<AdapterRefOrArray>("webout", out var ada)) {
+                webouts = ada;
             }
             if (webroutes != null) {
                 var troutes = toml.Get<TomlTableArray>(nameof(webroutes)).Items;
                 for (int i = 0; i < webroutes.Length; i++) {
                     var r = webroutes[i];
+                    var host = r.host; // it's a property
+                    host.TrySplit('|', true);
+                    host.TrySplit(',', true);
+                    r.host = host;
                     if (troutes[i].TryGetValue<string>("location_chroot", out var v)) {
                         r.location = v;
                         r.chroot = true;
@@ -66,6 +65,7 @@ namespace NaiveSocks
         {
             base.OnInit();
             httpServer = new HttpServer(this);
+            httpServer.Logger = this.Logger;
         }
 
         HttpInAdapter newInstance;
@@ -104,25 +104,7 @@ namespace NaiveSocks
             if (logging)
                 Logger.info($"[{p.Id}({p.requestCount})] {p.Method} {p.Url}");
             if (p.Method == "CONNECT") {
-                if (@out == null) {
-                    Logger.info($"unhandled tunnel request (no 'out'): {p.Method} {p.Url}");
-                    return AsyncHelper.CompletedTask;
-                }
-                p.EnableKeepAlive = false;
-                var dest = AddrPort.Parse(p.Url);
-                var stream = p.SwitchProtocol();
-                var mystream = getStream(p);
-                string str = "(tunnel) " + p.epPair.ToString();
-                var inc = InConnection.Create(this, dest, async (r) => {
-                    if (r.Ok) {
-                        await mystream.WriteAsync(ConnectedResponse);
-                        return mystream;
-                    } else {
-                        mystream.Close().Forget();
-                        return null;
-                    }
-                }, () => str);
-                return HandleIncommingConnection(inc);
+                return handleConnectProxy(p);
             } else if (p.Url.StartsWith("http://") || p.Url.StartsWith("https://")) {
                 if (@out == null) {
                     Logger.info($"unhandled proxy request (no 'out'): {p.Method} {p.Url}");
@@ -134,8 +116,51 @@ namespace NaiveSocks
             }
         }
 
+        private Task handleConnectProxy(HttpConnection p)
+        {
+            if (@out == null) {
+                Logger.info($"unhandled tunnel request (no 'out'): {p.Method} {p.Url}");
+                return AsyncHelper.CompletedTask;
+            }
+            p.EnableKeepAlive = false;
+            var dest = AddrPort.Parse(p.Url);
+            var stream = p.SwitchProtocol();
+            var mystream = getStream(p);
+            string str = "(tunnel) " + p.epPair.ToString();
+            var inc = InConnection.Create(this, dest, async (r) => {
+                if (r.Ok) {
+                    await mystream.WriteAsync(ConnectedResponse);
+                    return mystream;
+                } else {
+                    mystream.Close().Forget();
+                    return null;
+                }
+            }, () => str);
+            return HandleIncommingConnection(inc);
+        }
+
         async Task HandleWeb(HttpConnection p)
         {
+            if (webroutes != null) {
+                foreach (var r in webroutes) {
+                    if ((r.host.IsNull || (p.Host != null && r.host.IsOrContains(p.Host)))
+                            && (r.location == null || IsInLocation(p.Url_path, r.location))) {
+                        var oldPath = p.Url_path;
+                        if (r.chroot && r.location != null) {
+                            var isLastSlash = r.location[r.location.Length - 1] == '/';
+                            p.Url_path = p.Url_path.Substring(r.location.Length - (isLastSlash ? 1 : 0));
+                            if (p.Url_path.StartsWith("/", StringComparison.Ordinal) == false)
+                                p.Url_path = "/" + p.Url_path;
+                        }
+                        try {
+                            if (await HandleByAdapters(p, r.to))
+                                return;
+                        } finally {
+                            p.Url_path = oldPath;
+                        }
+                    }
+                }
+            }
             var host = p.Host;
             if (host != null && hosts != null) {
                 if (hosts.TryGetValue(host, out var outs)) {
@@ -143,59 +168,40 @@ namespace NaiveSocks
                         return;
                 }
             }
-            if (webroutes != null) {
-                foreach (var r in webroutes) {
-                    if ((r.host.IsNull || (p.Host != null && r.host.IsOrContains(p.Host)))
-                            && (r.location == null || IsInLocation(p.Url_path, r.location))) {
-                        var oldPath = p.Url_path;
-                        if (r.chroot && r.location != null) {
-                            p.Url_path = p.Url_path.Substring(r.location.Length);
-                            if (p.Url_path.StartsWith("/", StringComparison.Ordinal) == false)
-                                p.Url_path = "/" + p.Url_path;
-                        }
-                        try {
-                            foreach (var item in r.to) {
-                                if (await HandleByAdapter(p, item))
-                                    return;
-                            }
-                        } finally {
-                            p.Url_path = oldPath;
-                        }
-                    }
-                }
+            if (webouts.IsNull == false) {
+                if (await HandleByAdapters(p, webouts))
+                    return;
             }
-            if (webouts == null) {
-                Logger.info($"unhandled web request (no webroutes/webouts/hosts?): {p.Method} {p.Url}");
-                return;
-            }
-            await HandleByAdapters(p, webouts);
+
+            if (hosts == null && webroutes == null && webouts.IsNull)
+                Logger.info($"unhandled web request (no webroutes/hosts/webouts): {p.Method} {p.Url}");
+            else
+                Logger.info($"unhandled web request: {p.Method} {p.Url}");
         }
 
         bool IsInLocation(string path, string location)
         {
             if (path.StartsWith(location))
-                if (path.Length == location.Length || path[location.Length] == '/')
+                if (path.Length == location.Length || location[location.Length - 1] == '/' || path[location.Length] == '/')
                     return true;
             return false;
         }
 
-        async Task<bool> HandleByAdapters(HttpConnection p, AdapterRef[] adapters)
+        Task<bool> HandleByAdapters(HttpConnection p, AdapterRefOrArray adapters)
+        {
+            return HandleByAdapters(p, adapters, Logger);
+        }
+
+        public static async Task<bool> HandleByAdapters(HttpConnection p, AdapterRefOrArray adapters, Logger logger)
         {
             foreach (var adaRef in adapters) {
-                if (await HandleByAdapter(p, adaRef))
-                    return true;
-            }
-            return false;
-        }
-
-        async Task<bool> HandleByAdapter(HttpConnection p, AdapterRef adaRef)
-        {
-            if (!(adaRef.Adapter is IHttpRequestAsyncHandler ihrah)) {
-                Logger.warning($"adapter ({adaRef}) is not a http handler.");
-            } else {
-                await ihrah.HandleRequestAsync(p);
-                if (p.Handled)
-                    return true;
+                if (!(adaRef.Adapter is IHttpRequestAsyncHandler ihrah)) {
+                    logger.warning($"adapter ({adaRef}) is not a http handler.");
+                } else {
+                    await ihrah.HandleRequestAsync(p);
+                    if (p.Handled)
+                        return true;
+                }
             }
             return false;
         }

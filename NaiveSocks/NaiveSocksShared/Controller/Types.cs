@@ -48,6 +48,7 @@ namespace NaiveSocks
             RegisteredOutTypes.Add("webcon", typeof(WebConAdapter));
             RegisteredOutTypes.Add("webfile", typeof(WebFileAdapter));
             RegisteredOutTypes.Add("webtest", typeof(WebTestAdapter));
+            RegisteredOutTypes.Add("webauth", typeof(WebAuthAdapter));
 
             RegisteredOutTypes.Add("router", typeof(RouterAdapter));
             RegisteredOutTypes.Add("fail", typeof(FailAdapter));

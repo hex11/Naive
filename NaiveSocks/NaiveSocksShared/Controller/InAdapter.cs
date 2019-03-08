@@ -100,6 +100,21 @@ namespace NaiveSocks
 
         public bool IsOrContains(string str) => (AsString != null && str == AsString) || AsArray?.Contains(str) == true;
 
+        public bool TrySplit(char seperator, bool trim)
+        {
+            var str = AsString;
+            if (str == null) return false;
+            if (str.Contains(seperator) == false) return false;
+            var arr = str.Split(new[] { seperator }, StringSplitOptions.None);
+            if (trim) {
+                for (int i = 0; i < arr.Length; i++) {
+                    arr[i] = arr[i].Trim();
+                }
+            }
+            obj = arr;
+            return true;
+        }
+
         public Enumerator GetEnumerator()
         {
             return new Enumerator(this);

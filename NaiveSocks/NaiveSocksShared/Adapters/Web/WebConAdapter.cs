@@ -15,6 +15,7 @@ namespace NaiveSocks
     class WebConAdapter : WebBaseAdapter, ICanReload
     {
         public string passwd { get; set; }
+        public bool no_passwd { get; set; }
 
         public string[] page_path { get; set; } = new[] { "/", "/webcon", "/webcon.html" };
         public string[] ws_path { get; set; } = new[] { "/admin/consolews", "/webcon.ws" };
@@ -37,8 +38,8 @@ namespace NaiveSocks
         protected override void OnStart()
         {
             base.OnStart();
-            if (passwd.IsNullOrEmpty()) {
-                Logger.warning("passwd is null or empty!");
+            if (passwd.IsNullOrEmpty() && no_passwd == false) {
+                Logger.warning("'passwd' is null or empty while 'no_passwd' is false!");
             }
             if (consoleHub == null) {
                 consoleHub = new ConsoleHub();
@@ -102,37 +103,41 @@ namespace NaiveSocks
         private async Task ws(HttpConnection p)
         {
             var wss = new WebSocketServer(p);
-            var realPasswd = passwd;
-            var aesEnabled = false;
-            wss.AddToManaged();
-            if (!(await wss.HandleRequestAsync(false).CAF()).IsConnected)
-                return;
-            if (p.ParseUrlQstr()["encryption"] == "1") {
-                wss.ApplyAesStreamFilter(GetMD5FromString(realPasswd));
-                await wss.StartVerify(true).CAF();
-            }
-            int chances = 3;
-            while (true) {
-                await wss.SendStringAsync("passwd:\r\n");
-                var passwd = await wss.RecvString();
-                if (passwd == null)
+            if (!no_passwd) {
+                var realPasswd = passwd;
+                var aesEnabled = false;
+                wss.AddToManaged();
+                if (!(await wss.HandleRequestAsync(false).CAF()).IsConnected)
                     return;
-                if (!aesEnabled && passwd == "__AesStreamFilter__") {
+                if (p.ParseUrlQstr()["encryption"] == "1") {
                     wss.ApplyAesStreamFilter(GetMD5FromString(realPasswd));
-                    await wss.StartVerify(false);
-                    continue;
+                    await wss.StartVerify(true).CAF();
                 }
-                if (passwd == realPasswd) {
-                    break;
-                } else {
-                    Logger.warning($"{(passwd.Length == 0 ? "empty" : "wrong")} passwd from {p.myStream}");
-                    if (--chances <= 0) {
-                        await wss.SendStringAsync("session end.\r\n");
+                int chances = 3;
+                while (true) {
+                    await wss.SendStringAsync("passwd:\r\n");
+                    var passwd = await wss.RecvString();
+                    if (passwd == null)
                         return;
+                    if (!aesEnabled && passwd == "__AesStreamFilter__") {
+                        wss.ApplyAesStreamFilter(GetMD5FromString(realPasswd));
+                        await wss.StartVerify(false);
+                        continue;
+                    }
+                    if (passwd == realPasswd) {
+                        break;
+                    } else {
+                        Logger.warning($"{(passwd.Length == 0 ? "empty" : "wrong")} passwd from {p.myStream}");
+                        if (--chances <= 0) {
+                            await wss.SendStringAsync("session end.\r\n");
+                            return;
+                        }
                     }
                 }
+                await wss.SendStringAsync("success.\r\n");
+            } else {
+                await wss.SendStringAsync("success (no passwd).\r\n");
             }
-            await wss.SendStringAsync("success.\r\n");
 
             var concli = new ConClient(wss);
             new Thread(() => {

@@ -23,7 +23,9 @@ Build status:
   - [x] [ABP Filter](https://adblockplus.org/filter-cheatsheet) support
   - [x] Auto download ABP Filters from URL
 - [x] Web server
+  - [x] "Virtual host" / path rules support
   - [x] 'webfile' - Static website / file server
+  - [x] 'webauth' - Basic HTTP authentication
   - [x] 'webcon' - Web console
   - [ ] Advanced configuration UI
 - [x] Linux

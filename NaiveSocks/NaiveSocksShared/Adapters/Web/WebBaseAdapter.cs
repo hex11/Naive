@@ -13,7 +13,11 @@ namespace NaiveSocks
         public virtual NaiveHttpServerAsync HttpSvr
         {
             get {
-                return _httpSvr ?? (_httpSvr = new HttpSvrImpl(this));
+                if (_httpSvr == null) {
+                    _httpSvr = new HttpSvrImpl(this);
+                    _httpSvr.Logger = Logger;
+                }
+                return _httpSvr;
             }
         }
 
