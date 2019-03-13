@@ -11,6 +11,7 @@ namespace NaiveSocks
     public class UdpRelay : InAdapterWithListenField
     {
         public IPEndPoint redirect_dns { get; set; }
+        public bool verbose { get; set; }
 
         Socket listenUdp;
 
@@ -53,7 +54,8 @@ namespace NaiveSocks
                     if (cur > read) dest = null;
                     var clientEp = (IPEndPoint)tmpEp;
                     bool redns = redirect_dns != null && dest.Port == 53;
-                    Logger.debugForce((read - cur) + " B from " + clientEp + " dest " + (dest ?? (object)"(null)") + (redns ? " (dns)" : null));
+                    if (verbose)
+                        Logger.debugForce((read - cur) + " B from " + clientEp + " dest " + (dest ?? (object)"(null)") + (redns ? " (dns)" : null));
                     if (redns) dest = redirect_dns;
 
                     bool v;
@@ -77,14 +79,18 @@ namespace NaiveSocks
                     } else {
                         ActiveConnection(cxn);
                     }
-                    cxn.Send(new BytesSegment(buffer, cur, read - cur));
+                    try {
+                        cxn.Send(new BytesSegment(buffer, cur, read - cur));
+                    } catch (Exception e) {
+                        Logger.warning("sending from " + clientEp + " dest " + dest + ": " + e.Message);
+                    }
                 }
             } catch (Exception e) {
                 if (listenUdp != null)
                     Logger.exception(e, Naive.HttpSvr.Logging.Level.Error, "listener");
             } finally {
                 listenUdp?.Close();
-                if (buffer != null) BufferPool.GlobalPut(buffer);
+                //if (buffer != null) BufferPool.GlobalPut(buffer);
             }
         }
 
@@ -159,7 +165,8 @@ namespace NaiveSocks
                         EndPoint tmpEp = destEP;
                         remoteUdp.BeginReceiveFrom(buffer, header.Len, UdpBufferSize - header.Len, SocketFlags.None, ref tmpEp, BeginEndAwaiter.Callback, bea);
                         var read = remoteUdp.EndReceiveFrom(await bea, ref tmpEp);
-                        relay.Logger.debugForce(read + " B from dest " + destEP + " to " + clientEP);
+                        if (relay.verbose)
+                            relay.Logger.debugForce(read + " B from dest " + destEP + " to " + clientEP);
                         relay.listenUdp.SendTo(buffer, 0, header.Len + read, SocketFlags.None, clientEP);
                         relay.ActiveConnection(this);
                     }
@@ -168,7 +175,7 @@ namespace NaiveSocks
                         relay.Logger.exception(e, Logging.Level.Error, "receiving packet from dest " + destEP + " to " + clientEP);
                 } finally {
                     RemoveAndClose();
-                    if (buffer != null) BufferPool.GlobalPut(buffer);
+                    //if (buffer != null) BufferPool.GlobalPut(buffer);
                 }
             }
 
@@ -176,7 +183,8 @@ namespace NaiveSocks
             {
                 var tmp = Interlocked.Exchange(ref remoteUdp, null);
                 if (tmp == null) return;
-                relay.Logger.debugForce("close connection " + clientEP + " <-> " + destEP);
+                if (relay.verbose)
+                    relay.Logger.debugForce("close connection " + clientEP + " <-> " + destEP);
                 relay.RemoveConnection(this);
                 tmp?.Close();
             }
