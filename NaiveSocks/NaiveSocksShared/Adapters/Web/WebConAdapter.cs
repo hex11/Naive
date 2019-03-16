@@ -58,7 +58,7 @@ namespace NaiveSocks
                 if (page_file != null && File.Exists(page_file)) {
                     return writePageFile(p);
                 } else {
-                    return p.writeAsync(webconHtml);
+                    return p.EndResponseAsync(webconHtml);
                 }
             }
             return NaiveUtils.CompletedTask;

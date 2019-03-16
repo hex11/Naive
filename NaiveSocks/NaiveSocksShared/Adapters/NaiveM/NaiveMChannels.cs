@@ -15,7 +15,8 @@ namespace NaiveSocks
     {
         public IAdapter Adapter;
 
-        public Func<InConnection, Task> ConnectionHandler;
+        public IAdapter ConnectionHandler;
+        public Func<InConnection, Task> OnIncomming;
 
         public Logger Logger;
         public bool LogDest;
@@ -308,8 +309,10 @@ namespace NaiveSocks
                     return;
                 }
                 var inc = new InConnection(this, req, request.Channel);
-                if (ConnectionHandler != null) {
-                    await ConnectionHandler(inc);
+                if (OnIncomming != null) {
+                    await OnIncomming(inc);
+                } else if (ConnectionHandler != null) {
+                    await Adapter.Controller.HandleInConnection(inc, ConnectionHandler as IConnectionHandler);
                 } else {
                     await Adapter.Controller.HandleInConnection(inc).CAF();
                 }
@@ -367,9 +370,10 @@ namespace NaiveSocks
             var name = req.additionalString.Substring("dns:".Length);
             IPAddress[] addrs = null;
             try {
-                // TODO: pass DnsRequest to a dns resolver and return more info to the client
-                addrs = await Dns.GetHostAddressesAsync(name);
-            } catch (Exception) {
+                var r = await (ConnectionHandler as IDnsProvider).ResolveName(new DnsRequest() { Name = name, Type = DnsRequestType.AnAAAA });
+                addrs = r.Addresses;
+            } catch (Exception e) {
+                Logger?.exception(e, Logging.Level.Warning, $"handling dns request '{name}' from '{ch}'");
                 await ch.SendMsg(new NaiveProtocol.Reply(AddrPort.Empty, 1, "dns_failed").ToBytes());
                 return;
             }
@@ -490,7 +494,7 @@ namespace NaiveSocks
         public async Task<DnsResponse> DnsQuery(DnsRequest req)
         {
             if (IPAddress.TryParse(req.Name, out var addr))
-                return new DnsResponse { Addresses = new[] { addr } };
+                return new DnsResponse(addr);
             var resMsg = await Request(new NaiveProtocol.Request(AddrPort.Empty, "dns:" + req.Name) {
                 extraStrings = new string[] {
                     ((int)req.Type).ToString()
@@ -501,7 +505,7 @@ namespace NaiveSocks
                 var str = response.additionalString.Substring(7);
                 var addrs = from x in str.Split('|') select IPAddress.Parse(x);
                 // TODO: try receive TTL from the server
-                return new DnsResponse { Addresses = addrs.ToArray() };
+                return new DnsResponse(addrs.ToArray());
             } else if (response.additionalString == "dns_failed") {
                 throw new Exception("remote returned an error");
             } else {

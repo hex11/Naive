@@ -116,11 +116,10 @@ namespace NaiveSocks
                     }
                     var nms = new NaiveMChannels(new NaiveMultiplexing(msgStream)) {
                         Adapter = this,
-                        InConnectionFastCallback = fastopen
+                        InConnectionFastCallback = fastopen,
+                        Logger = this.Logger
                     };
-                    if (settings.@out != null) {
-                        nms.ConnectionHandler = x => this.Controller.HandleInConnection(x, settings.@out as IConnectionHandler);
-                    }
+                    nms.ConnectionHandler = (settings.@out != null) ? settings.@out.Adapter : @out.Adapter;
                     nms.NetworkProvider = settings.GetNetwork;
                     lock (nmsList)
                         nmsList.Add(nms);

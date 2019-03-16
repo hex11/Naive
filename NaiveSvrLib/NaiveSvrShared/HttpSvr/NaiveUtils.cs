@@ -1433,6 +1433,87 @@ namespace Naive.HttpSvr
         {
             return !(a1 == a2);
         }
+
+        public static bool TryParseIpv4WithMask(string str, out uint ip, out int masklen)
+        {
+            // "1.2.3.4/24" -> 0x04030201, 24
+            var slash = str.IndexOf('/');
+            if (slash <= 0) goto FAIL;
+            if (!TryParseUInt(str, slash + 1, str.Length, out var mlen)) goto FAIL;
+            masklen = (int)mlen;
+            if (!TryParseIpv4(str, 0, slash, out ip)) goto FAIL;
+            return true;
+
+            FAIL:
+            ip = 0;
+            masklen = 0;
+            return false;
+        }
+
+        public static bool TryParseIpv4(string str, out uint ip)
+        {
+            return TryParseIpv4(str, 0, str.Length, out ip);
+        }
+
+        public static bool TryParseIpv4(string str, int offset, int end, out uint ip)
+        {
+            // "1.2.3.4" -> 0x04030201
+            // also supports "a" "a.b" "a.b.c" forms
+            if (offset >= end) goto FAIL;
+            uint r = 0;
+            int bitoffset = 0;
+            int byteCharCount = 0;
+            for (; offset < end; offset++) {
+                if (bitoffset == 32) goto FAIL;
+                var ch = str[offset];
+                if (ch == '.') {
+                    if (byteCharCount == 0) goto FAIL;
+                    if (!TryParseUInt(str, offset - byteCharCount, offset, out var num)) goto FAIL;
+                    r |= (num << bitoffset);
+                    if (num < 255) {
+                        bitoffset += 8;
+                    } else {
+                        bitoffset = 32;
+                    }
+                    num = 0;
+                    byteCharCount = 0;
+                } else if (ch < '0' || ch > '9') {
+                    goto FAIL;
+                } else {
+                    byteCharCount++;
+                }
+            }
+            if (!TryParseUInt(str, offset - byteCharCount, offset, out var lastNum)) goto FAIL;
+            r |= (lastNum << bitoffset);
+            ip = r;
+            return true;
+
+            FAIL:
+            ip = 0;
+            return false;
+        }
+
+        private static bool TryParseUInt(string str, int offset, int end, out uint result)
+        {
+            if (offset >= end) goto FAIL;
+
+            uint num = 0;
+            for (; offset < end; offset++) {
+                var ch = str[offset];
+                if (ch < '0' || ch > '9') {
+                    goto FAIL;
+                } else {
+                    var digit = (uint)(ch - '0');
+                    num = num * 10 + digit;
+                }
+            }
+            result = num;
+            return true;
+
+            FAIL:
+            result = 0;
+            return false;
+        }
     }
 
     public class ObjectPool<T> where T : class

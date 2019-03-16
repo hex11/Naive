@@ -28,7 +28,7 @@ namespace NaiveSocks
 
         private static async Task<DnsResponse> ResolveNameCore(DnsRequest req)
         {
-            return new DnsResponse { Addresses = await Dns.GetHostAddressesAsync(req.Name) };
+            return new DnsResponse(await Dns.GetHostAddressesAsync(req.Name));
         }
 
         protected override void GetDetail(GetDetailContext ctx)

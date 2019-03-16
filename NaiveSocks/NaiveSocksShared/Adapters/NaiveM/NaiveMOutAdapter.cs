@@ -361,7 +361,7 @@ namespace NaiveSocks
                     nms.Adapter = adapter;
                     nms.Logger = Logger;
                     nms.LogDest = adapter.log_dest;
-                    nms.ConnectionHandler = (inc) => {
+                    nms.OnIncomming = (inc) => {
                         Logger.info($"inbound {(inc as NaiveMChannels.InConnection)?.Channel}" +
                                         $" (dest={inc.Dest}) redirecting to 127.1");
                         adapter.CheckPool();

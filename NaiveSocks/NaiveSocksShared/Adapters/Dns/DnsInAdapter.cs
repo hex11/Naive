@@ -290,9 +290,7 @@ namespace NaiveSocks
 
         async Task<DnsResponse> UnionWarpper(ResolveTask rt)
         {
-            return new DnsResponse {
-                Addresses = ((await rt.A).Addresses ?? emptyIps).Union((await rt.AAAA).Addresses ?? emptyIps).ToArray()
-            };
+            return new DnsResponse(((await rt.A).Addresses ?? emptyIps).Union((await rt.AAAA).Addresses ?? emptyIps).ToArray());
         }
 
         private static void ipFilter(IPAddress[] ips, ref uint[] ipLongs, ref Ip6[] ips6)

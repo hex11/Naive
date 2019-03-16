@@ -33,7 +33,7 @@ namespace NaiveSocks
     public enum DnsRequestType
     {
         A = 1,
-        AAAA = 2 ,
+        AAAA = 2,
         AnAAAA = 3
     }
 
@@ -41,6 +41,17 @@ namespace NaiveSocks
     {
         public IPAddress[] Addresses;
         public int? TTL;
+
+        public DnsResponse(IPAddress singleAddress) : this(new IPAddress[] { singleAddress })
+        {
+        }
+
+        public DnsResponse(IPAddress[] addresses)
+        {
+            Addresses = addresses;
+        }
+
+        public static readonly DnsResponse Empty = new DnsResponse(new IPAddress[] { });
     }
 
     public interface IConnectionProvider

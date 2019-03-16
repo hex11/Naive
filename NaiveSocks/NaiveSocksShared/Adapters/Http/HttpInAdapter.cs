@@ -281,10 +281,9 @@ namespace NaiveSocks
                 }
                 if (!r.Ok) {
                     p.setStatusCode("502 Bad Gateway");
-                    await p.writeAsync("<h1>502 Bad Gateway</h1>" + HttpUtil.HtmlEncode(r.FailedReason));
                     p.keepAlive = false;
                     // TODO: Keepalive
-                    await p.EndResponseAsync();
+                    await p.EndResponseAsync("<h1>502 Bad Gateway</h1>" + HttpUtil.HtmlEncode(r.FailedReason));
                     return;
                 }
                 var cr = _cr.Value;

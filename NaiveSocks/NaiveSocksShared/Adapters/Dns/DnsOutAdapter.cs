@@ -82,7 +82,7 @@ namespace NaiveSocks
                     ttl = ttl.HasValue ? Math.Min(newTtl, ttl.Value) : newTtl;
                 }
             }
-            return new DnsResponse { Addresses = arr, TTL = ttl };
+            return new DnsResponse(arr) { TTL = ttl };
         }
     }
 }
