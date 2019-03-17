@@ -22,6 +22,15 @@ namespace NaiveSocks
         const int MaxConnections = 128;
         const int UdpBufferSize = 64 * 1024;
 
+        int sentPackets, receivedPackets;
+
+        protected override void GetDetail(GetDetailContext ctx)
+        {
+            base.GetDetail(ctx);
+            ctx.AddField("sent", sentPackets);
+            ctx.AddField("recv", receivedPackets);
+        }
+
         protected override void OnStart()
         {
             base.OnStart();
@@ -47,8 +56,10 @@ namespace NaiveSocks
                 buffer = BufferPool.GlobalGet(UdpBufferSize);
                 while (true) {
                     EndPoint tmpEp = anyEp;
-                    listenUdp.BeginReceiveFrom(buffer, 0, UdpBufferSize, SocketFlags.None, ref tmpEp, BeginEndAwaiter.Callback, bea);
-                    var read = listenUdp.EndReceiveFrom(await bea, ref tmpEp);
+                    var socket = listenUdp;
+                    socket.BeginReceiveFrom(buffer, 0, UdpBufferSize, SocketFlags.None, ref tmpEp, BeginEndAwaiter.Callback, bea);
+                    var read = socket.EndReceiveFrom(await bea, ref tmpEp);
+                    Interlocked.Increment(ref receivedPackets);
                     var cur = 0;
                     var dest = ParseHeader(buffer, ref cur);
                     if (cur > read) dest = null;
@@ -63,6 +74,8 @@ namespace NaiveSocks
                     lock (list)
                         v = map.TryGetValue(clientEp, out cxn);
                     if (v && dest.Equals(cxn.destEP) == false) {
+                        if (verbose)
+                            Logger.debugForce("dest changed (" + cxn.destEP + " -> " + dest + ") from " + clientEp);
                         v = false;
                         cxn.RemoveAndClose();
                     }
@@ -81,6 +94,7 @@ namespace NaiveSocks
                     }
                     try {
                         cxn.Send(new BytesSegment(buffer, cur, read - cur));
+                        Interlocked.Increment(ref sentPackets);
                     } catch (Exception e) {
                         Logger.warning("sending from " + clientEp + " dest " + dest + ": " + e.Message);
                     }
@@ -139,6 +153,8 @@ namespace NaiveSocks
 
             public LinkedListNode<Connection> node;
 
+            int recv;
+
             public Connection(UdpRelay relay, IPEndPoint clientEP, IPEndPoint destEP)
             {
                 this.node = new LinkedListNode<Connection>(this);
@@ -156,6 +172,15 @@ namespace NaiveSocks
             public async void StartReceive(BytesSegment header)
             {
                 // Note that header should not be used after any awaiting.
+
+                AsyncHelper.SetTimeout(this, 15 * 1000, (x) => {
+                    if (x.recv == 0) {
+                        if (relay.verbose)
+                            relay.Logger.debugForce("timed out from dest " + destEP + " to " + clientEP);
+                        x.RemoveAndClose();
+                    }
+                });
+
                 var bea = new BeginEndAwaiter();
                 byte[] buffer = null;
                 try {
@@ -163,11 +188,15 @@ namespace NaiveSocks
                     header.CopyTo(buffer);
                     while (true) {
                         EndPoint tmpEp = destEP;
-                        remoteUdp.BeginReceiveFrom(buffer, header.Len, UdpBufferSize - header.Len, SocketFlags.None, ref tmpEp, BeginEndAwaiter.Callback, bea);
-                        var read = remoteUdp.EndReceiveFrom(await bea, ref tmpEp);
+                        var socket = remoteUdp;
+                        socket.BeginReceiveFrom(buffer, header.Len, UdpBufferSize - header.Len, SocketFlags.None, ref tmpEp, BeginEndAwaiter.Callback, bea);
+                        var read = socket.EndReceiveFrom(await bea, ref tmpEp);
+                        recv++;
+                        Interlocked.Increment(ref relay.receivedPackets);
                         if (relay.verbose)
                             relay.Logger.debugForce(read + " B from dest " + destEP + " to " + clientEP);
                         relay.listenUdp.SendTo(buffer, 0, header.Len + read, SocketFlags.None, clientEP);
+                        Interlocked.Increment(ref relay.sentPackets);
                         relay.ActiveConnection(this);
                     }
                 } catch (Exception e) {
