@@ -8,6 +8,7 @@ using System.Threading;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Text;
+using System.Net;
 
 namespace NaiveSocks
 {
@@ -79,6 +80,18 @@ namespace NaiveSocks
     public interface IMyStreamWriteR : IMyStream
     {
         AwaitableWrapper WriteAsyncR(BytesSegment bs);
+    }
+
+    public interface IUdpSocket : IMyStream
+    {
+        AwaitableWrapper WriteToAsyncR(BytesSegment bs, IPEndPoint ep);
+        AwaitableWrapper<ReceiveFromResult> ReadFromAsyncR(BytesSegment bs, IPEndPoint ep);
+    }
+
+    public struct ReceiveFromResult
+    {
+        public IPEndPoint From;
+        public int Read;
     }
 
     public interface IMyStreamDispose : IMyStream

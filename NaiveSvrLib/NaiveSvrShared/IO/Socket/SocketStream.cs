@@ -8,11 +8,13 @@ using System.Threading;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Net;
 
 namespace NaiveSocks
 {
 
-    public abstract class SocketStream : MyStream, IMyStreamSync, IMyStreamReadFull, IMyStreamReadFullR, IMyStreamReadR, IMyStreamWriteR, IMyStreamDispose
+    public abstract class SocketStream : MyStream, IMyStreamSync, IMyStreamReadFull,
+        IMyStreamReadFullR, IMyStreamReadR, IMyStreamWriteR, IMyStreamDispose, IUdpSocket
     {
         static SocketStream()
         {
@@ -98,7 +100,7 @@ namespace NaiveSocks
         public int ReadaheadBufferSize { get; set; } = DefaultReadaheadBufferSize;
         BytesSegment readaheadBuffer;
 
-        int socketAvailable;
+        protected int socketAvailable;
 
         void removeAvailable(int read)
         {
@@ -333,7 +335,7 @@ namespace NaiveSocks
 
         public override Task WriteAsync(BytesSegment bs)
         {
-            var rSync = TryWriteSync(bs);
+            var rSync = TryWriteNonblocking(bs);
             if (rSync == bs.Len) {
                 Interlocked.Increment(ref ctr.Wsync);
                 return NaiveUtils.CompletedTask;
@@ -346,7 +348,7 @@ namespace NaiveSocks
 
         public AwaitableWrapper WriteAsyncR(BytesSegment bs)
         {
-            var rSync = TryWriteSync(bs);
+            var rSync = TryWriteNonblocking(bs);
             if (rSync == bs.Len) {
                 Interlocked.Increment(ref ctr.Wsync);
                 return AwaitableWrapper.GetCompleted();
@@ -360,12 +362,53 @@ namespace NaiveSocks
             return new AwaitableWrapper(WriteAsyncImpl(bs));
         }
 
-        protected virtual int TryWriteSync(BytesSegment bs)
+        protected virtual int TryWriteNonblocking(BytesSegment bs)
         {
             if (Socket.Poll(0, SelectMode.SelectWrite)) {
                 return Socket.Send(bs.Bytes, bs.Offset, bs.Len, SocketFlags.None);
             }
             return 0;
+        }
+
+        ReusableAwaiter<ReceiveFromResult>.BeginEndStateMachine<SocketStream> raRf;
+        //ReusableAwaiter<VoidType>.BeginEndStateMachine<SocketStream> raWt;
+
+        public virtual AwaitableWrapper WriteToAsyncR(BytesSegment bs, IPEndPoint ep)
+        {
+            var raWt = new ReusableAwaiter<VoidType>.BeginEndStateMachine<SocketStream>(this,
+                    (thiz, ar) => {
+                        var r = thiz.Socket.EndSendTo(ar);
+                        if (ar.CompletedSynchronously)
+                            Interlocked.Add(ref ctr.Wsync, r);
+                        else
+                            Interlocked.Add(ref ctr.Wasync, r);
+                        return r;
+                    });
+            raWt.Reset();
+            Socket.BeginSendTo(bs.Bytes, bs.Offset, bs.Len, SocketFlags.None, ep, raWt.ArgCallback, raWt.ArgState);
+            return new AwaitableWrapper(raWt);
+        }
+
+        EndPoint readfromEp;
+
+        public virtual AwaitableWrapper<ReceiveFromResult> ReadFromAsyncR(BytesSegment bs, IPEndPoint ep)
+        {
+            if (raRf == null)
+                raRf = new ReusableAwaiter<ReceiveFromResult>.BeginEndStateMachine<SocketStream>(this,
+                    (thiz, ar) => {
+                        var from = thiz.readfromEp;
+                        thiz.readfromEp = null;
+                        var read = thiz.Socket.EndReceiveFrom(ar, ref from);
+                        if (ar.CompletedSynchronously)
+                            Interlocked.Add(ref ctr.Rsync, read);
+                        else
+                            Interlocked.Add(ref ctr.Rasync, read);
+                        return new ReceiveFromResult { From = (IPEndPoint)from, Read = read };
+                    });
+            raRf.Reset();
+            readfromEp = ep;
+            Socket.BeginReceiveFrom(bs.Bytes, bs.Offset, bs.Len, SocketFlags.None, ref readfromEp, raRf.ArgCallback, raRf.ArgState);
+            return new AwaitableWrapper<ReceiveFromResult>(raRf);
         }
 
         public static bool EnableUnderlyingCalls { get; set; } = false;

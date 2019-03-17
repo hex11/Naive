@@ -40,6 +40,11 @@ namespace NaiveSocks
             return TaskHelper.FromAsyncTrim(this, bs, WriteBeginMethod, WriteEndMethod);
         }
 
+        private static IAsyncResult WriteBeginMethod(SocketStream1 thisRef, BytesSegment args, AsyncCallback callback, object state)
+        {
+            return thisRef.Socket.BeginSend(args.Bytes, args.Offset, args.Len, SocketFlags.None, callback, state);
+        }
+
         private static VoidType WriteEndMethod(SocketStream1 thisRef, IAsyncResult asyncResult)
         {
             if (asyncResult.CompletedSynchronously)
@@ -48,11 +53,6 @@ namespace NaiveSocks
                 Interlocked.Increment(ref ctr.Wasync);
             thisRef.Socket.EndSend(asyncResult);
             return VoidType.Void;
-        }
-
-        private static IAsyncResult WriteBeginMethod(SocketStream1 thisRef, BytesSegment args, AsyncCallback callback, object state)
-        {
-            return thisRef.Socket.BeginSend(args.Bytes, args.Offset, args.Len, SocketFlags.None, callback, state);
         }
 
         public Task WriteMultipleAsync(BytesView bv)
@@ -93,11 +93,9 @@ namespace NaiveSocks
             return VoidType.Void;
         }
 
-        ReusableAwaiter<int>.BeginEndStateMachine<SocketStream1, BytesSegment> raR;
-        ReusableAwaiter<VoidType>.BeginEndStateMachine<SocketStream1, BytesSegment> raW;
-        ReusableAwaiter<VoidType>.BeginEndStateMachine<SocketStream1, ArraySegment<byte>[]> raWm;
-
-        BeginEndAwaiter bea = new BeginEndAwaiter();
+        ReusableAwaiter<int>.BeginEndStateMachine<SocketStream1> raR;
+        ReusableAwaiter<VoidType>.BeginEndStateMachine<SocketStream1> raW;
+        ReusableAwaiter<VoidType>.BeginEndStateMachine<SocketStream1> raWm;
 
         protected override AwaitableWrapper<int> ReadAsyncRImpl(BytesSegment bs)
         {
@@ -112,23 +110,29 @@ namespace NaiveSocks
 
             //// The above code was used to test BeginEndAwaiter, it works well, but the following code should be faster.
             if (raR == null)
-                raR = new ReusableAwaiter<int>.BeginEndStateMachine<SocketStream1, BytesSegment>(this, ReadBeginMethod, ReadEndMethod);
-            return new AwaitableWrapper<int>(raR.Start(bs));
+                raR = new ReusableAwaiter<int>.BeginEndStateMachine<SocketStream1>(this, ReadEndMethod);
+            raR.Reset();
+            ReadBeginMethod(this, bs, raR.ArgCallback, raR.ArgState);
+            return raR.ToWrapper();
         }
 
         public override AwaitableWrapper WriteAsyncRImpl(BytesSegment bs)
         {
             if (raW == null)
-                raW = new ReusableAwaiter<VoidType>.BeginEndStateMachine<SocketStream1, BytesSegment>(this, WriteBeginMethod, WriteEndMethod);
-            return new AwaitableWrapper(raW.Start(bs));
+                raW = new ReusableAwaiter<VoidType>.BeginEndStateMachine<SocketStream1>(this, WriteEndMethod);
+            raW.Reset();
+            WriteBeginMethod(this, bs, raW.ArgCallback, raW.ArgState);
+            return new AwaitableWrapper(raW);
         }
 
         public AwaitableWrapper WriteMultipleAsyncR(BytesView bv)
         {
             if (raWm == null)
-                raWm = new ReusableAwaiter<VoidType>.BeginEndStateMachine<SocketStream1, ArraySegment<byte>[]>(this, WriteMultipleBegin, WriteMultipleEnd);
+                raWm = new ReusableAwaiter<VoidType>.BeginEndStateMachine<SocketStream1>(this, WriteMultipleEnd);
+            raWm.Reset();
             ArraySegment<byte>[] bufList = PrepareWriteMultiple(bv);
-            return new AwaitableWrapper(raWm.Start(bufList));
+            WriteMultipleBegin(this, bufList, raWm.ArgCallback, raWm.ArgState);
+            return new AwaitableWrapper(raWm);
         }
     }
 

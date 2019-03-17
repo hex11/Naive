@@ -345,29 +345,28 @@ namespace Naive.HttpSvr
 
         public ReusableAwaiter<T> CAF() => this;
 
+        public AwaitableWrapper<T> ToWrapper() => new AwaitableWrapper<T>(this);
+
         public async Task<T> CreateTask()
         {
             return await this;
         }
 
-        public class BeginEndStateMachine<TInstance, TArgs> : ReusableAwaiter<T>
+        public class BeginEndStateMachine<TInstance> : ReusableAwaiter<T>
         {
             TInstance _thisRef;
-            Func<TInstance, TArgs, AsyncCallback, object, IAsyncResult> _beginMethod;
             Func<TInstance, IAsyncResult, T> _endMethod;
 
-            public BeginEndStateMachine(TInstance thisRef, Func<TInstance, TArgs, AsyncCallback, object, IAsyncResult> beginMethod,
-            Func<TInstance, IAsyncResult, T> endMethod)
+            public BeginEndStateMachine(TInstance thisRef, Func<TInstance, IAsyncResult, T> endMethod)
             {
                 _thisRef = thisRef;
-                _beginMethod = beginMethod;
                 _endMethod = endMethod;
             }
 
-            private static readonly AsyncCallback _callback = Callback;
-            private static void Callback(IAsyncResult ar)
+            private static readonly AsyncCallback _callback = CallbackImpl;
+            private static void CallbackImpl(IAsyncResult ar)
             {
-                var thiz = (BeginEndStateMachine<TInstance, TArgs>)ar.AsyncState;
+                var thiz = (BeginEndStateMachine<TInstance>)ar.AsyncState;
                 thiz.InstanceCallback(ar);
             }
 
@@ -383,12 +382,8 @@ namespace Naive.HttpSvr
                 SetResult(result);
             }
 
-            public ReusableAwaiter<T> Start(TArgs args)
-            {
-                Reset();
-                _beginMethod(_thisRef, args, _callback, this);
-                return this;
-            }
+            public AsyncCallback ArgCallback => _callback;
+            public object ArgState => this;
         }
     }
 

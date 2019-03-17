@@ -13,7 +13,7 @@ namespace NaiveSocks
         public IPEndPoint redirect_dns { get; set; }
         public bool verbose { get; set; }
 
-        Socket listenUdp;
+        SocketStream listenUdp;
 
         // map client endpoints to connections
         Dictionary<IPEndPoint, Connection> map = new Dictionary<IPEndPoint, Connection>();
@@ -52,18 +52,17 @@ namespace NaiveSocks
             var anyEp = new IPEndPoint(0, 0);
             listenUdp = CreateUdpSocket();
             try {
-                listenUdp.Bind(listen);
+                listenUdp.Socket.Bind(listen);
                 buffer = BufferPool.GlobalGet(UdpBufferSize);
                 while (true) {
-                    EndPoint tmpEp = anyEp;
                     var socket = listenUdp;
-                    socket.BeginReceiveFrom(buffer, 0, UdpBufferSize, SocketFlags.None, ref tmpEp, BeginEndAwaiter.Callback, bea);
-                    var read = socket.EndReceiveFrom(await bea, ref tmpEp);
+                    var r = await socket.ReadFromAsyncR(new BytesSegment(buffer, 0, UdpBufferSize), anyEp);
+                    var read = r.Read;
+                    var clientEp = r.From;
                     Interlocked.Increment(ref receivedPackets);
                     var cur = 0;
                     var dest = ParseHeader(buffer, ref cur);
                     if (cur > read) dest = null;
-                    var clientEp = (IPEndPoint)tmpEp;
                     bool redns = redirect_dns != null && dest.Port == 53;
                     if (verbose)
                         Logger.debugForce((read - cur) + " B from " + clientEp + " dest " + (dest ?? (object)"(null)") + (redns ? " (dns)" : null));
@@ -88,15 +87,15 @@ namespace NaiveSocks
                                 list.Last.Value.RemoveAndClose();
                             }
                         }
-                        cxn.StartReceive(new BytesSegment(buffer, 0, cur));
+                        cxn.StartReceive(new BytesSegment(buffer, 0, read), cur);
                     } else {
                         ActiveConnection(cxn);
-                    }
-                    try {
-                        cxn.Send(new BytesSegment(buffer, cur, read - cur));
-                        Interlocked.Increment(ref sentPackets);
-                    } catch (Exception e) {
-                        Logger.warning("sending from " + clientEp + " dest " + dest + ": " + e.Message);
+                        try {
+                            await cxn.Send(new BytesSegment(buffer, cur, read - cur));
+                            Interlocked.Increment(ref sentPackets);
+                        } catch (Exception e) {
+                            Logger.warning("sending from " + clientEp + " dest " + dest + ": " + e.Message);
+                        }
                     }
                 }
             } catch (Exception e) {
@@ -124,7 +123,7 @@ namespace NaiveSocks
             }
         }
 
-        static Socket CreateUdpSocket() => new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+        static SocketStream CreateUdpSocket() => new SocketStream1(new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp));
 
         // move to the first
         void ActiveConnection(Connection c)
@@ -149,7 +148,7 @@ namespace NaiveSocks
         {
             public UdpRelay relay;
             public IPEndPoint clientEP, destEP;
-            public Socket remoteUdp;
+            public SocketStream remoteUdp;
 
             public LinkedListNode<Connection> node;
 
@@ -164,14 +163,14 @@ namespace NaiveSocks
                 this.remoteUdp = CreateUdpSocket();
             }
 
-            public void Send(BytesSegment bs)
+            public AwaitableWrapper Send(BytesSegment bs)
             {
-                remoteUdp.SendTo(bs.Bytes, bs.Offset, bs.Len, SocketFlags.None, destEP);
+                return remoteUdp.WriteToAsyncR(bs, destEP);
             }
 
-            public async void StartReceive(BytesSegment header)
+            public async void StartReceive(BytesSegment firstpacket, int headerLen)
             {
-                // Note that header should not be used after any awaiting.
+                // Note that firstpacket should not be used after any awaiting.
 
                 AsyncHelper.SetTimeout(this, 15 * 1000, (x) => {
                     if (x.recv == 0) {
@@ -184,18 +183,21 @@ namespace NaiveSocks
                 var bea = new BeginEndAwaiter();
                 byte[] buffer = null;
                 try {
+                    int len = firstpacket.Len;
                     buffer = BufferPool.GlobalGet(UdpBufferSize);
-                    header.CopyTo(buffer);
+                    firstpacket.CopyTo(buffer);
+
+                    await Send(new BytesSegment(buffer, headerLen, len - headerLen));
+                    Interlocked.Increment(ref relay.sentPackets);
+
                     while (true) {
-                        EndPoint tmpEp = destEP;
-                        var socket = remoteUdp;
-                        socket.BeginReceiveFrom(buffer, header.Len, UdpBufferSize - header.Len, SocketFlags.None, ref tmpEp, BeginEndAwaiter.Callback, bea);
-                        var read = socket.EndReceiveFrom(await bea, ref tmpEp);
+                        var r = await remoteUdp.ReadFromAsyncR(new BytesSegment(buffer, headerLen, UdpBufferSize - headerLen), destEP);
+                        len = headerLen + r.Read;
                         recv++;
                         Interlocked.Increment(ref relay.receivedPackets);
                         if (relay.verbose)
-                            relay.Logger.debugForce(read + " B from dest " + destEP + " to " + clientEP);
-                        relay.listenUdp.SendTo(buffer, 0, header.Len + read, SocketFlags.None, clientEP);
+                            relay.Logger.debugForce(r.Read + " B from dest " + destEP + " to " + clientEP);
+                        await relay.listenUdp.WriteToAsyncR(new BytesSegment(buffer, 0, len), clientEP);
                         Interlocked.Increment(ref relay.sentPackets);
                         relay.ActiveConnection(this);
                     }

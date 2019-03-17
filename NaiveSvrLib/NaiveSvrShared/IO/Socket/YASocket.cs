@@ -265,7 +265,7 @@ namespace NaiveSocks
             await WriteAsyncRImpl(bs);
         }
 
-        protected override int TryWriteSync(BytesSegment bs)
+        protected override int TryWriteNonblocking(BytesSegment bs)
         {
             bs.CheckAsParameter();
             lock (raRead) {
@@ -890,6 +890,12 @@ namespace NaiveSocks
 
         [DllImport(LIBC, SetLastError = true)]
         public unsafe static extern int send(int sockfd, byte* buf, int count, int flags);
+
+        [DllImport(LIBC, SetLastError = true)]
+        public unsafe static extern int recvfrom(int sockfd, void* buf, uint len, int flags, void* src_addr, ushort* addrlen);
+
+        [DllImport(LIBC, SetLastError = true)]
+        public unsafe static extern int sendto(int sockfd, void* buf, uint len, int flags, void* dest_addr, ushort* addrlen);
 
         [DllImport(LIBC, SetLastError = true)]
         public static extern int dup([In]int fd);
