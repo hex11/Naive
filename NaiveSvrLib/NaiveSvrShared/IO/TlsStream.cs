@@ -39,7 +39,7 @@ namespace NaiveSocks
         public async Task<ClientHello> ReadClientHello()
         {
             var recordHeader = new BytesSegment(new byte[5]);
-            await RealBaseStream.ReadFullAsync(recordHeader);
+            await RealBaseStream.ReadFullAsyncR(recordHeader);
             MyStreamWrapper.Queue = recordHeader;
             ushort ver = 0;
             int recordPayloadLength = GetRecordPayloadLength(recordHeader, ref ver);
@@ -47,7 +47,7 @@ namespace NaiveSocks
             var record = new BytesSegment(new byte[5 + recordPayloadLength]);
             recordHeader.CopyTo(record);
             var msg = record.Sub(5);
-            await RealBaseStream.ReadFullAsync(msg);
+            await RealBaseStream.ReadFullAsyncR(msg);
             MyStreamWrapper.Queue = record;
             var ch = new ClientHello();
             ParseClientHello(msg, ref ch);

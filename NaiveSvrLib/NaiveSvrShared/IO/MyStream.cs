@@ -44,11 +44,6 @@ namespace NaiveSocks
         int Read(BytesSegment bs);
     }
 
-    public interface IMyStreamReadFull : IMyStream
-    {
-        Task ReadFullAsync(BytesSegment bs);
-    }
-
     public interface IMyStreamReadFullR : IMyStream
     {
         AwaitableWrapper ReadFullAsyncR(BytesSegment bs);
@@ -802,22 +797,12 @@ namespace NaiveSocks
                 return myStream.ReadAsync(buf, offset, count).RunSync();
         }
 
-        public static Task ReadFullAsync(this IMyStream myStream, BytesSegment bs)
-        {
-            if (myStream is IMyStreamReadFull imsrf)
-                return imsrf.ReadFullAsync(bs);
-            else
-                return ReadFullImpl(myStream, bs);
-        }
-
         public static AwaitableWrapper ReadFullAsyncR(this IMyStream myStream, BytesSegment bs)
         {
             if (myStream is IMyStreamReadFullR fullR)
                 return fullR.ReadFullAsyncR(bs);
-            else if (myStream is IMyStreamReadFull full)
-                return new AwaitableWrapper(full.ReadFullAsync(bs));
             else
-                return new AwaitableWrapper(ReadFullImpl(myStream, bs));
+                return new AwaitableWrapper(new ReadFullRStateMachine().Start(myStream, bs));
         }
 
         public static async Task ReadFullImpl(IMyStream myStream, BytesSegment bs)

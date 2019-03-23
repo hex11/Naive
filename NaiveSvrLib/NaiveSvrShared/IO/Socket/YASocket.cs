@@ -10,7 +10,10 @@ using Naive.HttpSvr;
 
 namespace NaiveSocks
 {
-    public class YASocket : SocketStream, IEpollHandler, IMyStreamReadFullR, IMyStreamNoBuffer
+    /// <summary>
+    /// Yet async socket wrapper using Linux epoll
+    /// </summary>
+    public class YASocket : SocketStream, IEpollHandler, IMyStreamNoBuffer
     {
         public static bool isX86 = true;
         public static bool Debug = false;
@@ -334,7 +337,7 @@ namespace NaiveSocks
 
         private int readArg;
 
-        protected override unsafe int TryReadSync(BytesSegment bs)
+        protected override unsafe int TryReadNonblocking(BytesSegment bs)
         {
             if (!ready)
                 return 0;
@@ -428,13 +431,7 @@ namespace NaiveSocks
             return new AwaitableWrapper<BytesSegment>(raReadNB);
         }
 
-        protected override async Task ReadFullAsyncImpl(BytesSegment bs)
-        {
-            await ReadFullAsyncR(bs);
-            return;
-        }
-
-        public AwaitableWrapper ReadFullAsyncR(BytesSegment bs)
+        public override AwaitableWrapper ReadFullAsyncR(BytesSegment bs)
         {
             if (Debug)
                 Logging.debugForce(this + ": ReadFullAsyncR()");
@@ -449,15 +446,21 @@ namespace NaiveSocks
                 int r = 0;
                 READ_AGAIN:
                 if (ready) {
-                    var syncR = ReadNonblocking(bs);
-                    if (syncR == 0) {
-                        throw GetReadFullException(bs.Len, r);
-                        // or it will hang.
-                    } else if (syncR > 0) {
+                    var syncR = ReadNonblocking(bs.Sub(r));
+                    if (syncR != -1) {
+                        if (syncR == 0) {
+                            throw GetReadFullException(bs.Len, r);
+                            // or it will hang.
+                        }
                         r += syncR;
+                        if (r == bs.Len) {
+                            Interlocked.Increment(ref ctr.Rsync);
+                            return AwaitableWrapper.GetCompleted();
+                        } else {
+                            goto READ_AGAIN;
+                            // ensure the socket is not ready
+                        }
                     }
-                    if (r == bs.Len)
-                        return AwaitableWrapper.GetCompleted();
                 }
                 if (!fdRAdded) {
                     fdRAdded = true;
@@ -473,6 +476,7 @@ namespace NaiveSocks
                 if (Debug)
                     Logging.debugForce(this + ": wait for epoll");
             }
+            Interlocked.Increment(ref ctr.Rasync);
             return new AwaitableWrapper(raReadFull);
         }
 

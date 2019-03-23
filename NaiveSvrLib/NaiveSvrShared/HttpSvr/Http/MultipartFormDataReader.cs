@@ -90,12 +90,12 @@ namespace Naive.HttpSvr
                 firstBoundaryRead = true;
             }
             var twoBytes = new byte[2];
-            await myStream.ReadFullAsync(twoBytes);
+            await myStream.ReadFullAsyncR(twoBytes);
             bool noMoreParts = false;
             if (twoBytes[0] == '-' && twoBytes[1] == '-') {
                 noMoreParts = true;
                 // read the last CRLF to buf
-                await myStream.ReadFullAsync(twoBytes);
+                await myStream.ReadFullAsyncR(twoBytes);
             }
             if (twoBytes[0] != '\r' || twoBytes[1] != '\n')
                 throw new Exception($"unexcepted data: {twoBytes[0]}({(char)twoBytes[0]}), {twoBytes[1]}({(char)twoBytes[1]})");
