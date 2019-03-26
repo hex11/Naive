@@ -391,8 +391,12 @@ namespace NaiveSocks
                     var buf = new byte[32 * 1024];
                     new Random().NextBytes(buf);
                     try {
+                        int sync = 0;
                         while (true) {
-                            await ch.SendMsg(buf).CAF();
+                            if (sync >= 128) { await Task.Yield(); sync = 0; }
+                            var task = ch.SendMsg(buf).CAF();
+                            if (task.GetAwaiter().IsCompleted) sync++; else sync = 0;
+                            await task;
                         }
                     } catch (Exception) {
                     }
@@ -400,8 +404,10 @@ namespace NaiveSocks
                     long downloadedBytes = 0;
                     long lastReportMs = 0;
                     Stopwatch sw = Stopwatch.StartNew();
+                    int sync = 0;
                     while (true) {
-                        var msg = await ch.RecvMsgR(null);
+                        if (sync >= 128) { await Task.Yield(); sync = 0; }
+                        var msg = await ch.RecvMsgR(null).SyncCounter(ref sync);
                         if (msg.IsEOF)
                             break;
                         var len = msg.Data.tlen;
@@ -779,7 +785,7 @@ namespace NaiveSocks
             if (BaseStream is IMyStreamMultiBuffer bvs && tlen > 128) {
                 var bv = new BytesView(chunkHeader) { nextNode = msg.Data };
                 bv.lastNode.nextNode = new BytesView(NaiveUtils.CRLFBytes);
-                return bvs.WriteMultipleAsync(bv);
+                return bvs.WriteMultipleAsyncR(bv).ToTask();
             } else {
                 var bufferSize = chunkHeader.Length + tlen + 2;
                 var buffer = new byte[bufferSize];

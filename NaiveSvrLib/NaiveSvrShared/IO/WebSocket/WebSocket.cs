@@ -334,7 +334,7 @@ namespace Naive.HttpSvr
 
         private async Task _loopR()
         {
-        START:
+            START:
             var optionalBuffer = await _loopR_request;
 
             try {
@@ -342,7 +342,7 @@ namespace Naive.HttpSvr
                 BytesView bv = new BytesView();
                 var wf = new FrameValue();
 
-            REREAD:
+                REREAD:
 
                 var stream = BaseStream;
                 var buf = _read_buf;
@@ -654,7 +654,7 @@ namespace Naive.HttpSvr
 
         public void BeginSendMsg(byte opcode, byte[] buf, int begin, int len) => SendMsgAsync(opcode, buf, begin, len);
 
-        private const int SendBufSizeMax = 32 * 1024;
+        private const int SendBufSizeMax = 32 * 1024 + 8; // extra 8 bytes to fit header when payload length is 32 KiB
 
         BytesView _sendMsgBvCache;
 
@@ -685,10 +685,7 @@ namespace Naive.HttpSvr
                 _sendMsgBvCache = null;
                 sendMsgBv.Set(sendMsgBuf, 0, bufcur);
                 sendMsgBv.nextNode = bv;
-                if (stream is IMyStreamMultiBufferR msmbr)
-                    await msmbr.WriteMultipleAsyncR(sendMsgBv);
-                else
-                    await msmb.WriteMultipleAsync(sendMsgBv);
+                await msmb.WriteMultipleAsyncR(sendMsgBv);
                 sendMsgBv.Reset();
                 _sendMsgBvCache = sendMsgBv;
                 BufferPool.GlobalPut(sendMsgBuf);

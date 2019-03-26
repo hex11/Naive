@@ -465,7 +465,7 @@ namespace Naive.HttpSvr
 
     public struct AwaitableWrapper<T> : INotifyCompletion, ICriticalNotifyCompletion
     {
-        public static readonly object COMPLETED = new object();
+        static readonly object COMPLETED = new object();
         object awaitable;
         T result;
 
@@ -581,11 +581,22 @@ namespace Naive.HttpSvr
         {
             return new Exception("should not happend! awaitable=" + awaitable);
         }
+
+        public Task<T> ToTask()
+        {
+            if (awaitable is Task<T> task) return task;
+            return TaskWrapper();
+        }
+
+        async Task<T> TaskWrapper()
+        {
+            return await this;
+        }
     }
 
     public struct AwaitableWrapper : INotifyCompletion, ICriticalNotifyCompletion
     {
-        public static readonly object COMPLETED = new object();
+        static readonly object COMPLETED = new object();
         object awaitable;
 
         public static AwaitableWrapper GetCompleted() => new AwaitableWrapper { awaitable = COMPLETED };
@@ -692,6 +703,17 @@ namespace Naive.HttpSvr
         private Exception WrongAwaitableType()
         {
             return new Exception("should not happend! awaitable=" + awaitable);
+        }
+
+        public Task ToTask()
+        {
+            if (awaitable is Task task) return task;
+            return TaskWrapper();
+        }
+
+        async Task TaskWrapper()
+        {
+            await this;
         }
     }
 

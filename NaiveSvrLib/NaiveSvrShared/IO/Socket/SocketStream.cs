@@ -404,7 +404,7 @@ namespace NaiveSocks
             if (osPlatform == PlatformID.Unix) {
                 underlyingReadImpl = (s, bs) => {
                     bs.CheckAsParameter();
-                    return LinuxNative.RecvToBsThrows((int)s.Fd, bs, 0);
+                    return Linux.Syscall.RecvToBsThrows((int)s.Fd, bs, 0);
                 };
             } else if (osPlatform == PlatformID.Win32NT) {
                 underlyingReadImpl = (s, bs) => {

@@ -55,6 +55,8 @@ namespace Naive.HttpSvr
             this.nextNode = null;
         }
 
+        public BytesSegment Segment => new BytesSegment(bytes, offset, len);
+
         public BytesView Clone()
         {
             return new BytesView(bytes, offset, len) { nextNode = nextNode };

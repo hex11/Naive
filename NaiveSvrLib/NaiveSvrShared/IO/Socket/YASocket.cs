@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Naive.HttpSvr;
+using NaiveSocks.Linux;
 
 namespace NaiveSocks
 {
@@ -14,6 +15,7 @@ namespace NaiveSocks
     /// Yet async socket wrapper using Linux epoll
     /// </summary>
     public class YASocket : SocketStream, IEpollHandler, IMyStreamNoBuffer
+        //, IMyStreamMultiBuffer // currently not working
     {
         public static bool isX86 = true;
         public static bool Debug = false;
@@ -62,9 +64,9 @@ namespace NaiveSocks
 
         private int DupFdThrows(int fd)
         {
-            var r = LinuxNative.dup(fd);
+            var r = Syscall.dup(fd);
             if (r < 0)
-                throw LinuxNative.GetExceptionWithErrno(nameof(LinuxNative.dup));
+                throw Syscall.GetExceptionWithErrno(nameof(Syscall.dup));
             return r;
         }
 
@@ -126,7 +128,7 @@ namespace NaiveSocks
                                 else
                                     State |= MyStreamState.RemoteShutdown;
                             }
-                            ex = LinuxNative.GetExceptionWithErrno(nameof(LinuxNative.recv), errno);
+                            ex = Syscall.GetExceptionWithErrno(nameof(Syscall.recv), errno);
                         } else {
                             if (r == 0) {
                                 if (mode == 3) {
@@ -206,12 +208,14 @@ namespace NaiveSocks
                     }
                 } else if (s == GlobalEpollerW) {
                     GlobalEpollerW.RemoveFd(fdW);
-                    int r;
                     BytesSegment bs;
+                    BytesView bv;
                     bool wrongState;
                     lock (raRead) {
                         bs = bufWrite;
+                        bv = bufWriteM;
                         bufWrite.ResetSelf();
+                        bufWriteM = null;
                         wrongState = State.HasShutdown;
                     }
                     if (wrongState) {
@@ -220,27 +224,40 @@ namespace NaiveSocks
                         return;
                     }
                     Interlocked.Increment(ref ctr.Wasync);
-                    r = LinuxNative.SendFromBs(fdW, bs, MSG_FLAGS.DONTWAIT);
-                    if (r < 0) {
-                        var errno = LinuxNative.GetErrno();
-                        fdW_Close();
-                        lock (raRead) {
-                            State = MyStreamState.Closed;
-                            TryCleanUp_NoLock();
-                        }
-                        var ex = LinuxNative.GetExceptionWithErrno(nameof(LinuxNative.write), errno);
-                        raWrite.SetException(ex);
-                    } else if (bs.Len != r) {
-                        if (r == 0) {
+                    if (bv == null) {
+                        var r = Syscall.SendFromBs(fdW, bs, MSG_FLAGS.DONTWAIT);
+                        if (r < 0) {
+                            var errno = Syscall.GetErrno();
                             fdW_Close();
-                            raWrite.SetException(new Exception("send() returns 0, event: " + e));
+                            lock (raRead) {
+                                State = MyStreamState.Closed;
+                                TryCleanUp_NoLock();
+                            }
+                            var ex = Syscall.GetExceptionWithErrno(nameof(Syscall.write), errno);
+                            raWrite.SetException(ex);
+                        } else if (bs.Len != r) {
+                            if (r == 0) {
+                                fdW_Close();
+                                raWrite.SetException(new Exception("send() returns 0, event: " + e));
+                            } else {
+                                bufWrite = bs.Sub(r);
+                                GlobalEpollerW.AddFd(fdW, EPOLL_EVENTS.OUT | EPOLL_EVENTS.ONESHOT, this, true);
+                            }
                         } else {
-                            bufWrite = bs.Sub(r);
-                            GlobalEpollerW.AddFd(fdW, EPOLL_EVENTS.OUT | EPOLL_EVENTS.ONESHOT, this);
+                            fdW_Close();
+                            raWrite.SetResult(0);
                         }
                     } else {
-                        fdW_Close();
-                        raWrite.SetResult(0);
+                        if (Syscall.SendFromBv(fdW, ref bv, MSG_FLAGS.DONTWAIT, out var errno)) {
+                            fdW_Close();
+                            raWrite.SetResult(0);
+                        } else if (errno != 0) {
+                            fdW_Close();
+                            var ex = Syscall.GetExceptionWithErrno(nameof(Syscall.write), errno);
+                        } else {
+                            bufWriteM = bv;
+                            GlobalEpollerW.AddFd(fdW, EPOLL_EVENTS.OUT | EPOLL_EVENTS.ONESHOT, this, true);
+                        }
                     }
                 } else {
                     throw new Exception("unexpected source Epoller!");
@@ -258,8 +275,8 @@ namespace NaiveSocks
             if (fdRAdded) {
                 throw new Exception("Should not close fdR when it's added to epoll.");
             }
-            if (LinuxNative.close(fdR) != 0)
-                throw LinuxNative.GetExceptionWithErrno("close");
+            if (Syscall.close(fdR) != 0)
+                throw Syscall.GetExceptionWithErrno("close");
             fdR = -1;
         }
 
@@ -274,7 +291,7 @@ namespace NaiveSocks
             lock (raRead) {
                 if (State.HasShutdown)
                     throw GetStateException();
-                var r = LinuxNative.SendFromBs(fd, bs, MSG_FLAGS.DONTWAIT, out var errno);
+                var r = Syscall.SendFromBs(fd, bs, MSG_FLAGS.DONTWAIT, out var errno);
                 if (errno == 0) {
                     return r;
                 } else if (errno == 11) {
@@ -282,13 +299,14 @@ namespace NaiveSocks
                 } else {
                     State = MyStreamState.Closed;
                     TryCleanUp_NoLock();
-                    throw LinuxNative.GetExceptionWithErrno("send", errno);
+                    throw Syscall.GetExceptionWithErrno("send", errno);
                 }
             }
         }
 
         private ReusableAwaiter<VoidType> raWrite = new ReusableAwaiter<VoidType>();
         private BytesSegment bufWrite;
+        private BytesView bufWriteM;
 
         public override AwaitableWrapper WriteAsyncRImpl(BytesSegment bs)
         {
@@ -311,10 +329,41 @@ namespace NaiveSocks
             return new AwaitableWrapper(raWrite);
         }
 
+        public AwaitableWrapper WriteMultipleAsyncR(BytesView bv)
+        {
+            //return WriteAsyncR(bv.GetBytes());
+
+            if (bv.nextNode == null) return WriteAsyncR(bv.Segment);
+            foreach (var item in bv) {
+                bv.Segment.CheckAsParameter();
+            }
+            lock (raRead) {
+                if (State.HasShutdown)
+                    throw GetStateException();
+                if (Syscall.SendFromBv(fd, ref bv, MSG_FLAGS.DONTWAIT, out var errno)) {
+                    Interlocked.Increment(ref ctr.Wsync);
+                    return AwaitableWrapper.GetCompleted();
+                }
+                if (errno != 0 && errno != 11) throw Syscall.GetExceptionWithErrno("sendmsg", errno);
+                if (fdW != -1) {
+                    string msg = this + ": another writing task is in progress.";
+                    Logging.logWithStackTrace(msg, Logging.Level.Error);
+                    Logging.warning("Continuation: " + raWrite.GetContinuationInfo());
+                    throw new Exception(msg);
+                }
+                raWrite.Reset();
+                bufWriteM = bv;
+                // Create fdW and add to epoll. fdW will be removed and closed by HandleEvent().
+                fdW = DupFdThrows(fd);
+                GlobalEpollerW.AddFd(fdW, EPOLL_EVENTS.OUT | EPOLL_EVENTS.ONESHOT, this);
+            }
+            return new AwaitableWrapper(raWrite);
+        }
+
         void fdW_Close()
         {
-            if (LinuxNative.close(fdW) == -1) {
-                throw LinuxNative.GetExceptionWithErrno("close");
+            if (Syscall.close(fdW) == -1) {
+                throw Syscall.GetExceptionWithErrno("close");
             }
             fdW = -1;
         }
@@ -495,14 +544,14 @@ namespace NaiveSocks
             } else {
                 if (Debug)
                     Logging.debugForce(this + ": recv() throws " + errno);
-                throw LinuxNative.GetExceptionWithErrno("recv", errno);
+                throw Syscall.GetExceptionWithErrno("recv", errno);
             }
         }
 
         private static int ReadNonblocking(int fd, BytesSegment bs, out int errno)
         {
-            int r = LinuxNative.RecvToBs(fd, bs, MSG_FLAGS.DONTWAIT);
-            errno = r < 0 ? LinuxNative.GetErrno() : 0;
+            int r = Syscall.RecvToBs(fd, bs, MSG_FLAGS.DONTWAIT);
+            errno = r < 0 ? Syscall.GetErrno() : 0;
             return r;
         }
 
@@ -517,14 +566,14 @@ namespace NaiveSocks
                 } else if (errno == 11) {
                     fdRsync = DupFdThrows(fd);
                 } else {
-                    throw LinuxNative.GetExceptionWithErrno("recv", errno);
+                    throw Syscall.GetExceptionWithErrno("recv", errno);
                 }
             }
             try {
-                return LinuxNative.RecvToBsThrows(fdRsync, bs, 0);
+                return Syscall.RecvToBsThrows(fdRsync, bs, 0);
             } finally {
-                if (LinuxNative.close(fdRsync) == -1)
-                    Logging.warning(this + " close fdRsync errno " + LinuxNative.GetErrno());
+                if (Syscall.close(fdRsync) == -1)
+                    Logging.warning(this + " close fdRsync errno " + Syscall.GetErrno());
             }
         }
 
@@ -551,8 +600,8 @@ namespace NaiveSocks
                 }
                 if ((State.Value | flag.Value) != State.Value) {
                     State |= flag;
-                    if (LinuxNative.shutdown(fd, how) == -1) {
-                        int errno = LinuxNative.GetErrno();
+                    if (Syscall.shutdown(fd, how) == -1) {
+                        int errno = Syscall.GetErrno();
                         if (errno != 107) // ENOTCONN
                             Logging.warning(this + ": shutdown(how=" + how + ") errno " + errno);
                     }
@@ -580,9 +629,9 @@ namespace NaiveSocks
             cleanedUp = true;
             if (!fdRAdded && fdR != -1)
                 fdR_Close_NoLock();
-            var r = LinuxNative.shutdown(fd, 2);
+            var r = Syscall.shutdown(fd, 2);
             if (r == -1) {
-                int errno = LinuxNative.GetErrno();
+                int errno = Syscall.GetErrno();
                 if (errno != 107) // ENOTCONN
                     Logging.warning(this + ": shutdown() errno " + errno);
             }
@@ -664,7 +713,7 @@ namespace NaiveSocks
             PollLoop(ep);
         }
 
-        public void AddFd(int fd, EPOLL_EVENTS events, IEpollHandler handler)
+        public void AddFd(int fd, EPOLL_EVENTS events, IEpollHandler handler, bool noCleanupWarning = false)
         {
             if (handler == null)
                 throw new ArgumentNullException(nameof(handler));
@@ -677,7 +726,7 @@ namespace NaiveSocks
             };
             mapLock.EnterWriteLock();
             try {
-                if (fdCleanupList.Contains(fd)) {
+                if (fdCleanupList.Contains(fd) && !noCleanupWarning) {
                     Logger.warning("Adding fd " + fd + " (handler " + handler + "), which is in cleanupList");
                 }
                 mapFdToHandler.Add(fd, handler);
@@ -686,8 +735,8 @@ namespace NaiveSocks
                 mapLock.ExitWriteLock();
             }
             unsafe {
-                if (LinuxNative.epoll_ctl(ep, EPOLL_CTL.ADD, fd, ev) != 0) {
-                    LinuxNative.ThrowWithErrno(nameof(LinuxNative.epoll_ctl));
+                if (Syscall.epoll_ctl(ep, EPOLL_CTL.ADD, fd, ev) != 0) {
+                    Syscall.ThrowWithErrno(nameof(Syscall.epoll_ctl));
                 }
             }
         }
@@ -702,8 +751,8 @@ namespace NaiveSocks
                     events = events,
                     u32a = fd
                 };
-                if (LinuxNative.epoll_ctl(ep, EPOLL_CTL.MOD, fd, ev) != 0) {
-                    LinuxNative.ThrowWithErrno(nameof(LinuxNative.epoll_ctl));
+                if (Syscall.epoll_ctl(ep, EPOLL_CTL.MOD, fd, ev) != 0) {
+                    Syscall.ThrowWithErrno(nameof(Syscall.epoll_ctl));
                 }
             }
         }
@@ -718,8 +767,8 @@ namespace NaiveSocks
                     events = events,
                     u32a = fd
                 };
-                if (LinuxNative.epoll_ctl(ep, EPOLL_CTL.MOD, fd, ev) != 0) {
-                    return LinuxNative.GetErrno();
+                if (Syscall.epoll_ctl(ep, EPOLL_CTL.MOD, fd, ev) != 0) {
+                    return Syscall.GetErrno();
                 }
             }
             return 0;
@@ -734,8 +783,8 @@ namespace NaiveSocks
             try {
                 unsafe {
                     var ev = default(epoll_event);
-                    if (LinuxNative.epoll_ctl(ep, EPOLL_CTL.DEL, fd, ev) != 0) {
-                        LinuxNative.ThrowWithErrno(nameof(LinuxNative.epoll_ctl));
+                    if (Syscall.epoll_ctl(ep, EPOLL_CTL.DEL, fd, ev) != 0) {
+                        Syscall.ThrowWithErrno(nameof(Syscall.epoll_ctl));
                     }
                 }
 
@@ -755,9 +804,9 @@ namespace NaiveSocks
             try {
                 unsafe {
                     var ev = default(epoll_event);
-                    if (LinuxNative.epoll_ctl(ep, EPOLL_CTL.DEL, fd, ev) != 0) {
-                        var errno = LinuxNative.GetErrno();
-                        Logger.warning("RemoveFdNotThrows " + fd + " error " + errno + " " + LinuxNative.GetErrString(errno));
+                    if (Syscall.epoll_ctl(ep, EPOLL_CTL.DEL, fd, ev) != 0) {
+                        var errno = Syscall.GetErrno();
+                        Logger.warning("RemoveFdNotThrows " + fd + " error " + errno + " " + Syscall.GetErrString(errno));
                         return errno;
                     }
                 }
@@ -787,12 +836,12 @@ namespace NaiveSocks
             ContinuationRunner.Context.Begin();
             var events = stackalloc epoll_event[MAX_EVENTS];
             while (true) {
-                var eventCount = LinuxNative.epoll_wait(ep, events, MAX_EVENTS, -1);
+                var eventCount = Syscall.epoll_wait(ep, events, MAX_EVENTS, -1);
                 if (eventCount < 0) {
-                    var errno = LinuxNative.GetErrno();
+                    var errno = Syscall.GetErrno();
                     if (errno == 4) // Interrupted system call
                         continue;
-                    LinuxNative.ThrowWithErrno(nameof(LinuxNative.epoll_wait), errno);
+                    Syscall.ThrowWithErrno(nameof(Syscall.epoll_wait), errno);
                 }
                 if (Debug)
                     Logger.debugForce("eventcount " + eventCount);
@@ -830,12 +879,12 @@ namespace NaiveSocks
             ContinuationRunner.Context.Begin();
             var events = stackalloc epoll_event_16[MAX_EVENTS];
             while (true) {
-                var eventCount = LinuxNative.epoll_wait(ep, events, MAX_EVENTS, -1);
+                var eventCount = Syscall.epoll_wait(ep, events, MAX_EVENTS, -1);
                 if (eventCount < 0) {
-                    var errno = LinuxNative.GetErrno();
+                    var errno = Syscall.GetErrno();
                     if (errno == 4) // Interrupted system call
                         continue;
-                    LinuxNative.ThrowWithErrno(nameof(LinuxNative.epoll_wait), errno);
+                    Syscall.ThrowWithErrno(nameof(Syscall.epoll_wait), errno);
                 }
                 if (Debug)
                     Logger.debugForce("eventcount " + eventCount);
@@ -870,275 +919,366 @@ namespace NaiveSocks
 
         private static int EpollCreate()
         {
-            var ep = LinuxNative.epoll_create(MAX_EVENTS);
+            var ep = Syscall.epoll_create(MAX_EVENTS);
             if (ep < 0) {
-                LinuxNative.ThrowWithErrno(nameof(LinuxNative.epoll_create));
+                Syscall.ThrowWithErrno(nameof(Syscall.epoll_create));
             }
 
             return ep;
         }
     }
 
-    internal static class LinuxNative
+    namespace Linux
     {
-        private const string LIBC = "libc";
-
-        [DllImport(LIBC, SetLastError = true)]
-        public unsafe static extern int read([In]int fd, [In]byte* buf, [In]int count);
-
-        [DllImport(LIBC, SetLastError = true)]
-        public unsafe static extern int write([In]int fd, [In]byte* buf, [In]int count);
-
-        [DllImport(LIBC, SetLastError = true)]
-        public unsafe static extern int recv(int sockfd, byte* buf, int count, int flags);
-
-        [DllImport(LIBC, SetLastError = true)]
-        public unsafe static extern int send(int sockfd, byte* buf, int count, int flags);
-
-        [DllImport(LIBC, SetLastError = true)]
-        public unsafe static extern int recvfrom(int sockfd, void* buf, uint len, int flags, void* src_addr, ushort* addrlen);
-
-        [DllImport(LIBC, SetLastError = true)]
-        public unsafe static extern int sendto(int sockfd, void* buf, uint len, int flags, void* dest_addr, ushort* addrlen);
-
-        [DllImport(LIBC, SetLastError = true)]
-        public static extern int dup([In]int fd);
-
-        [DllImport(LIBC, SetLastError = true)]
-        public unsafe static extern int pipe2(int* pipefd, int flags);
-
-        [DllImport(LIBC, SetLastError = true)]
-        public static extern int close([In]int fd);
-
-        [DllImport(LIBC, SetLastError = true)]
-        public static extern int shutdown(int sockfd, int how);
-
-        [DllImport(LIBC, SetLastError = true)]
-        public unsafe static extern int ioctl([In]int fd, [In]uint request, void* ptr);
-
-        [DllImport(LIBC, SetLastError = true)]
-        public unsafe static extern int fcntl(int fd, int cmd, void* arg);
-
-        [DllImport(LIBC, SetLastError = true)]
-        public unsafe static extern int poll(pollfd* fds, uint nfd, int timeout);
-
-        [DllImport(LIBC, SetLastError = true)]
-        public static extern int epoll_create([In]int size);
-
-        [DllImport(LIBC, SetLastError = true)]
-        public unsafe static extern int epoll_wait(int fileDescriptor, void* events, int maxevents, int timeout);
-
-        [DllImport(LIBC, SetLastError = true)]
-        public unsafe static extern int epoll_ctl(int epFd, EPOLL_CTL op, int fd, void* ev);
-
-        public unsafe static int epoll_ctl(int epFd, EPOLL_CTL op, int fd, epoll_event ev)
+        internal static class Syscall
         {
-            if (YASocket.isX86) {
-                return epoll_ctl(epFd, op, fd, &ev);
-            } else {
-                epoll_event_16 evnx86 = new epoll_event_16 { events = ev.events, u64 = ev.u64 };
-                return epoll_ctl(epFd, op, fd, &evnx86);
-            }
-        }
+            private const string LIBC = "libc";
 
-        [DllImport(LIBC, SetLastError = true)]
-        public unsafe static extern sbyte* strerror([In]int errnum);
+            [DllImport(LIBC, SetLastError = true)]
+            public unsafe static extern int read([In]int fd, [In]byte* buf, [In]int count);
 
-        public static int GetErrno() => Marshal.GetLastWin32Error();
+            [DllImport(LIBC, SetLastError = true)]
+            public unsafe static extern int write([In]int fd, [In]byte* buf, [In]int count);
 
-        public static string GetErrString(int errno)
-        {
-            string errStr = " (failed to get error string)";
-            unsafe {
-                var ptr = strerror(errno);
-                if (ptr != (byte*)0) {
-                    errStr = new string(ptr);
+            [DllImport(LIBC, SetLastError = true)]
+            public unsafe static extern int recv(int sockfd, byte* buf, int count, int flags);
+
+            [DllImport(LIBC, SetLastError = true)]
+            public unsafe static extern int send(int sockfd, byte* buf, int count, int flags);
+
+            [DllImport(LIBC, SetLastError = true)]
+            public unsafe static extern int sendmsg(int sockfd, msghdr* msg, int flags);
+
+            [DllImport(LIBC, SetLastError = true)]
+            public unsafe static extern int recvfrom(int sockfd, void* buf, uint len, int flags, void* src_addr, ushort* addrlen);
+
+            [DllImport(LIBC, SetLastError = true)]
+            public unsafe static extern int sendto(int sockfd, void* buf, uint len, int flags, void* dest_addr, ushort* addrlen);
+
+            [DllImport(LIBC, SetLastError = true)]
+            public static extern int dup([In]int fd);
+
+            [DllImport(LIBC, SetLastError = true)]
+            public unsafe static extern int pipe2(int* pipefd, int flags);
+
+            [DllImport(LIBC, SetLastError = true)]
+            public static extern int close([In]int fd);
+
+            [DllImport(LIBC, SetLastError = true)]
+            public static extern int shutdown(int sockfd, int how);
+
+            [DllImport(LIBC, SetLastError = true)]
+            public unsafe static extern int ioctl([In]int fd, [In]uint request, void* ptr);
+
+            [DllImport(LIBC, SetLastError = true)]
+            public unsafe static extern int fcntl(int fd, int cmd, void* arg);
+
+            [DllImport(LIBC, SetLastError = true)]
+            public unsafe static extern int poll(pollfd* fds, uint nfd, int timeout);
+
+            [DllImport(LIBC, SetLastError = true)]
+            public static extern int epoll_create([In]int size);
+
+            [DllImport(LIBC, SetLastError = true)]
+            public unsafe static extern int epoll_wait(int fileDescriptor, void* events, int maxevents, int timeout);
+
+            [DllImport(LIBC, SetLastError = true)]
+            public unsafe static extern int epoll_ctl(int epFd, EPOLL_CTL op, int fd, void* ev);
+
+            public unsafe static int epoll_ctl(int epFd, EPOLL_CTL op, int fd, epoll_event ev)
+            {
+                if (YASocket.isX86) {
+                    return epoll_ctl(epFd, op, fd, &ev);
                 } else {
-                    errStr = errno + errStr;
+                    epoll_event_16 evnx86 = new epoll_event_16 { events = ev.events, u64 = ev.u64 };
+                    return epoll_ctl(epFd, op, fd, &evnx86);
                 }
             }
-            return errStr;
-        }
 
-        public static void Pipe2(out int fdRead, out int fdWrite, bool blocking = false)
-        {
-            unsafe {
-                var fds = stackalloc int[2];
-                if (pipe2(fds, blocking ? 0 : 0x0004 /* O_NONBLOCK */) != 0)
-                    throw GetExceptionWithErrno("pipe2");
-                fdRead = fds[0];
-                fdWrite = fds[1];
+            [DllImport(LIBC, SetLastError = true)]
+            public unsafe static extern sbyte* strerror([In]int errnum);
+
+            public static int GetErrno() => Marshal.GetLastWin32Error();
+
+            public static string GetErrString(int errno)
+            {
+                string errStr = " (failed to get error string)";
+                unsafe {
+                    var ptr = strerror(errno);
+                    if (ptr != (byte*)0) {
+                        errStr = new string(ptr);
+                    } else {
+                        errStr = errno + errStr;
+                    }
+                }
+                return errStr;
+            }
+
+            public static void Pipe2(out int fdRead, out int fdWrite, bool blocking = false)
+            {
+                unsafe {
+                    var fds = stackalloc int[2];
+                    if (pipe2(fds, blocking ? 0 : 0x0004 /* O_NONBLOCK */) != 0)
+                        throw GetExceptionWithErrno("pipe2");
+                    fdRead = fds[0];
+                    fdWrite = fds[1];
+                }
+            }
+
+            public static unsafe int RecvToBs(int fd, BytesSegment bs, MSG_FLAGS flags)
+            {
+                fixed (byte* buf = &bs.Bytes[bs.Offset]) {
+                    return recv(fd, buf, bs.Len, (int)flags);
+                }
+            }
+
+            public static unsafe int RecvToBs(int fd, BytesSegment bs, MSG_FLAGS flags, out int errno)
+            {
+                errno = 0;
+                var r = RecvToBs(fd, bs, flags);
+                if (r == -1)
+                    errno = GetErrno();
+                return r;
+            }
+
+            public static unsafe int RecvToBsThrows(int fd, BytesSegment bs, MSG_FLAGS flags)
+            {
+                var r = RecvToBs(fd, bs, flags);
+                if (r < 0) {
+                    ThrowWithErrno("recv");
+                }
+                return r;
+            }
+
+            public static unsafe int SendFromBs(int fd, BytesSegment bs, MSG_FLAGS flags, out int errno)
+            {
+                errno = 0;
+                var r = SendFromBs(fd, bs, flags);
+                if (r == -1)
+                    errno = GetErrno();
+                return r;
+            }
+
+            public static unsafe int SendFromBs(int fd, BytesSegment bs, MSG_FLAGS flags)
+            {
+                fixed (byte* buf = &bs.Bytes[bs.Offset]) {
+                    return send(fd, buf, bs.Len, (int)flags);
+                }
+            }
+
+            // returns true if all data sent.
+            public static unsafe bool SendFromBv(int fd, ref BytesView bv, MSG_FLAGS flags, out int errno)
+            {
+                int bufcount = 0;
+                int bytecount = 0;
+                foreach (var item in bv) {
+                    if (item.len <= 0) continue;
+                    bufcount++;
+                    bytecount += item.len;
+                }
+                msghdr msg = new msghdr();
+                var arrIov = stackalloc iovec[bufcount];
+                msg.msg_iov = arrIov;
+                msg.msg_iovlen = bufcount;
+                var arrGch = stackalloc GCHandle[bufcount];
+                {
+                    int i = 0;
+                    foreach (var item in bv) {
+                        if (item.len <= 0) continue;
+                        var h = arrGch[i] = GCHandle.Alloc(item.bytes, GCHandleType.Pinned);
+                        arrIov[i] = new iovec {
+                            iov_base = (byte*)h.AddrOfPinnedObject() + item.offset,
+                            iov_len = (uint)item.len
+                        };
+                        i++;
+                    }
+                }
+                {
+                    var cur = 0;
+                    foreach (var item in bv) {
+                        if (item.len <= 0) continue;
+                        iovec iov = msg.msg_iov[cur];
+                        if (iov.iov_len != item.len) Logging.debugForce($"{cur} wrong len");
+                        for (int i = 0; i < item.len; i++) {
+                            byte a = ((byte*)iov.iov_base)[i];
+                            byte b = item[i];
+                            if (a != b)
+                                Logging.debugForce($"{cur}, {i}, {((ulong)iov.iov_base) + (ulong)i:X}: expected {b} got {a}");
+                        }
+                        cur++;
+                    }
+                }
+                var w = sendmsg(fd, &msg, (int)flags);
+                errno = w == -1 ? Syscall.GetErrno() : 0;
+                for (int i = 0; i < bufcount; i++) {
+                    arrGch[i].Free();
+                }
+                if (w != bytecount) {
+                    var cur = 0;
+                    while (cur < w) {
+                        if (cur + bv.len <= w) {
+                            cur += bv.len;
+                            bv = bv.nextNode;
+                        } else {
+                            bv = bv.Clone();
+                            bv.SubSelf(w - cur);
+                            break;
+                        }
+                    }
+                }
+                Logging.debugForce($"sendmsg sent {w}, remaining {bytecount - w}, total {bytecount}, errno " + errno);
+                return w == bytecount;
+            }
+
+            public static void ThrowWithErrno(string funcName)
+            {
+                throw GetExceptionWithErrno(funcName);
+            }
+
+            public static void ThrowWithErrno(string funcName, int errno)
+            {
+                throw GetExceptionWithErrno(funcName, errno);
+            }
+
+            public static Exception GetExceptionWithErrno(string funcName)
+            {
+                return GetExceptionWithErrno(funcName, GetErrno());
+            }
+
+            public static Exception GetExceptionWithErrno(string funcName, int errno)
+            {
+                return new Exception(funcName + " error " + errno + ": " + GetErrString(errno));
             }
         }
 
-        public static unsafe int RecvToBs(int fd, BytesSegment bs, MSG_FLAGS flags)
+        [StructLayout(LayoutKind.Explicit, Pack = 1, Size = 12)]
+        internal struct epoll_event // for x86 and x86-64
         {
-            fixed (byte* buf = &bs.Bytes[bs.Offset]) {
-                return recv(fd, buf, bs.Len, (int)flags);
-            }
+            [FieldOffset(0)]
+            public EPOLL_EVENTS events;      /* Epoll events */
+
+            [FieldOffset(4)]
+            public long u64;      /* User data variable */
+
+            [FieldOffset(4)]
+            public int u32a;
+
+            [FieldOffset(8)]
+            public int u32b;
         }
 
-        public static unsafe int RecvToBs(int fd, BytesSegment bs, MSG_FLAGS flags, out int errno)
+        [StructLayout(LayoutKind.Explicit, Pack = 1, Size = 16)]
+        internal struct epoll_event_16
         {
-            errno = 0;
-            var r = RecvToBs(fd, bs, flags);
-            if (r == -1)
-                errno = GetErrno();
-            return r;
+            [FieldOffset(0)]
+            public EPOLL_EVENTS events;
+
+            [FieldOffset(8)]
+            public long u64;
+
+            [FieldOffset(8)]
+            public int u32a;
+
+            [FieldOffset(12)]
+            public int u32b;
         }
 
-        public static unsafe int RecvToBsThrows(int fd, BytesSegment bs, MSG_FLAGS flags)
+        internal enum EPOLL_CTL
         {
-            var r = RecvToBs(fd, bs, flags);
-            if (r < 0) {
-                ThrowWithErrno("recv");
-            }
-            return r;
+            ADD = 1,
+            DEL = 2,
+            MOD = 3
         }
 
-        public static unsafe int SendFromBs(int fd, BytesSegment bs, MSG_FLAGS flags, out int errno)
+        [Flags]
+        public enum EPOLL_EVENTS : uint
         {
-            errno = 0;
-            var r = SendFromBs(fd, bs, flags);
-            if (r == -1)
-                errno = GetErrno();
-            return r;
+            IN = 0x001,
+            PRI = 0x002,
+            OUT = 0x004,
+            RDNORM = 0x040,
+            RDBAND = 0x080,
+            WRNORM = 0x100,
+            WRBAND = 0x200,
+            MSG = 0x400,
+            ERR = 0x008,
+            HUP = 0x010,
+            RDHUP = 0x2000,
+            EXCLUSIVE = 1u << 28,
+            WAKEUP = 1u << 29,
+            ONESHOT = 1u << 30,
+            ET = 1u << 31
         }
 
-        public static unsafe int SendFromBs(int fd, BytesSegment bs, MSG_FLAGS flags)
+        struct pollfd
         {
-            fixed (byte* buf = &bs.Bytes[bs.Offset]) {
-                return send(fd, buf, bs.Len, (int)flags);
-            }
+            public int fd;         /* file descriptor */
+            public POLL_EVENTS events;   /* requested events */
+            public POLL_EVENTS revents;  /* returned events */
         }
 
-        public static void ThrowWithErrno(string funcName)
+        [Flags]
+        public enum POLL_EVENTS : uint
         {
-            throw GetExceptionWithErrno(funcName);
+            IN = 0x0001,
+            PRI = 0x0002,
+            OUT = 0x0004,
+            ERR = 0x0008,
+            HUP = 0x0010,
+            NVAL = 0x0020
         }
 
-        public static void ThrowWithErrno(string funcName, int errno)
+        [StructLayout(LayoutKind.Sequential)]
+        public unsafe struct msghdr
         {
-            throw GetExceptionWithErrno(funcName, errno);
+            public void* msg_name;
+            public uint msg_namelen;
+
+            public iovec* msg_iov;
+            public int msg_iovlen;
+
+            public void* msg_control;
+            public int msg_controllen;
+
+            public MSG_FLAGS msg_flags;
         }
 
-        public static Exception GetExceptionWithErrno(string funcName)
+        public unsafe struct iovec
         {
-            return GetExceptionWithErrno(funcName, GetErrno());
+            public void* iov_base;
+            public uint iov_len;
         }
 
-        public static Exception GetExceptionWithErrno(string funcName, int errno)
+        [Flags]
+        public enum MSG_FLAGS : int
         {
-            return new Exception(funcName + " error " + errno + ": " + GetErrString(errno));
-        }
-    }
-
-    [StructLayout(LayoutKind.Explicit, Pack = 1, Size = 12)]
-    internal struct epoll_event // for x86 and x86-64
-    {
-        [FieldOffset(0)]
-        public EPOLL_EVENTS events;      /* Epoll events */
-
-        [FieldOffset(4)]
-        public long u64;      /* User data variable */
-
-        [FieldOffset(4)]
-        public int u32a;
-
-        [FieldOffset(8)]
-        public int u32b;
-    }
-
-    [StructLayout(LayoutKind.Explicit, Pack = 1, Size = 16)]
-    internal struct epoll_event_16
-    {
-        [FieldOffset(0)]
-        public EPOLL_EVENTS events;
-
-        [FieldOffset(8)]
-        public long u64;
-
-        [FieldOffset(8)]
-        public int u32a;
-
-        [FieldOffset(12)]
-        public int u32b;
-    }
-
-    public enum EPOLL_CTL
-    {
-        ADD = 1,
-        DEL = 2,
-        MOD = 3
-    }
-
-    [Flags]
-    public enum EPOLL_EVENTS : uint
-    {
-        IN = 0x001,
-        PRI = 0x002,
-        OUT = 0x004,
-        RDNORM = 0x040,
-        RDBAND = 0x080,
-        WRNORM = 0x100,
-        WRBAND = 0x200,
-        MSG = 0x400,
-        ERR = 0x008,
-        HUP = 0x010,
-        RDHUP = 0x2000,
-        EXCLUSIVE = 1u << 28,
-        WAKEUP = 1u << 29,
-        ONESHOT = 1u << 30,
-        ET = 1u << 31
-    }
-
-    struct pollfd
-    {
-        public int fd;         /* file descriptor */
-        public POLL_EVENTS events;   /* requested events */
-        public POLL_EVENTS revents;  /* returned events */
-    }
-
-    [Flags]
-    public enum POLL_EVENTS : uint
-    {
-        IN = 0x0001,
-        PRI = 0x0002,
-        OUT = 0x0004,
-        ERR = 0x0008,
-        HUP = 0x0010,
-        NVAL = 0x0020
-    }
-
-    [Flags]
-    public enum MSG_FLAGS : int
-    {
-        OOB = 1,
-        PEEK = 2,
-        DONTROUTE = 4,
-        TRYHARD = 4,       /* Synonym for MSG_DONTROUTE for DECnet */
-        CTRUNC = 8,
-        PROBE = 0x10,   /* Do not send. Only probe path f.e. for MTU */
-        TRUNC = 0x20,
-        DONTWAIT = 0x40,    /* Nonblocking io		 */
-        EOR = 0x80, /* End of record */
-        WAITALL = 0x100,    /* Wait for a full request */
-        FIN = 0x200,
-        SYN = 0x400,
-        CONFIRM = 0x800,    /* Confirm path validity */
-        RST = 0x1000,
-        ERRQUEUE = 0x2000,  /* Fetch message from error queue */
-        NOSIGNAL = 0x4000,  /* Do not generate SIGPIPE */
-        MORE = 0x8000,  /* Sender will send more */
-        WAITFORONE = 0x10000,   /* recvmmsg(): block until 1+ packets avail */
-        SENDPAGE_NOTLAST = 0x20000, /* sendpage() internal : not the last page */
-        BATCH = 0x40000, /* sendmmsg(): more messages coming */
-        EOF = FIN,
-        NO_SHARED_FRAGS = 0x80000, /* sendpage() internal : page frags are not shared */
-        ZEROCOPY = 0x4000000,   /* Use user data in kernel path */
-        FASTOPEN = 0x20000000,  /* Send data in TCP SYN */
-        CMSG_CLOEXEC = 0x40000000,	/* Set close_on_exec for file
+            OOB = 1,
+            PEEK = 2,
+            DONTROUTE = 4,
+            TRYHARD = 4,       /* Synonym for MSG_DONTROUTE for DECnet */
+            CTRUNC = 8,
+            PROBE = 0x10,   /* Do not send. Only probe path f.e. for MTU */
+            TRUNC = 0x20,
+            DONTWAIT = 0x40,    /* Nonblocking io		 */
+            EOR = 0x80, /* End of record */
+            WAITALL = 0x100,    /* Wait for a full request */
+            FIN = 0x200,
+            SYN = 0x400,
+            CONFIRM = 0x800,    /* Confirm path validity */
+            RST = 0x1000,
+            ERRQUEUE = 0x2000,  /* Fetch message from error queue */
+            NOSIGNAL = 0x4000,  /* Do not generate SIGPIPE */
+            MORE = 0x8000,  /* Sender will send more */
+            WAITFORONE = 0x10000,   /* recvmmsg(): block until 1+ packets avail */
+            SENDPAGE_NOTLAST = 0x20000, /* sendpage() internal : not the last page */
+            BATCH = 0x40000, /* sendmmsg(): more messages coming */
+            EOF = FIN,
+            NO_SHARED_FRAGS = 0x80000, /* sendpage() internal : page frags are not shared */
+            ZEROCOPY = 0x4000000,   /* Use user data in kernel path */
+            FASTOPEN = 0x20000000,  /* Send data in TCP SYN */
+            CMSG_CLOEXEC = 0x40000000,  /* Set close_on_exec for file
 					   descriptor received through
 					   SCM_RIGHTS */
+        }
     }
 }

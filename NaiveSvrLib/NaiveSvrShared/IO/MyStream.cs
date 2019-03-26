@@ -30,11 +30,6 @@ namespace NaiveSocks
 
     public interface IMyStreamMultiBuffer : IMyStream
     {
-        Task WriteMultipleAsync(BytesView bv);
-    }
-
-    public interface IMyStreamMultiBufferR : IMyStreamMultiBuffer
-    {
         AwaitableWrapper WriteMultipleAsyncR(BytesView bv);
     }
 
@@ -757,17 +752,17 @@ namespace NaiveSocks
 
     public static class MyStreamExt
     {
-        public static Task WriteMultipleAsync(this IMyStream myStream, BytesView bv)
+        public static AwaitableWrapper WriteMultipleAsyncR(this IMyStream myStream, BytesView bv)
         {
             if (myStream is IMyStreamMultiBuffer bvs) {
-                return bvs.WriteMultipleAsync(bv);
+                return bvs.WriteMultipleAsyncR(bv);
             } else {
-                return NaiveUtils.RunAsyncTask(async () => {
+                return new AwaitableWrapper(NaiveUtils.RunAsyncTask(async () => {
                     foreach (var item in bv) {
                         if (item.len > 0)
                             await myStream.WriteAsync(new BytesSegment(item));
                     }
-                });
+                }));
             }
         }
 
@@ -1153,9 +1148,9 @@ namespace NaiveSocks
             return MsgStream.SendMsg(new Msg(new BytesView(bs.Bytes, bs.Offset, bs.Len)));
         }
 
-        public Task WriteMultipleAsync(BytesView bv)
+        public AwaitableWrapper WriteMultipleAsyncR(BytesView bv)
         {
-            return MsgStream.SendMsg(new Msg(bv));
+            return new AwaitableWrapper(MsgStream.SendMsg(new Msg(bv)));
         }
 
         public Task FlushAsync()

@@ -31,16 +31,16 @@ namespace NaiveSocks
                                 arg.UserToken = new ReadUserToken();
                                 return arg;
                             }) {
-                                MaxCount = 32
-                            };
+                            MaxCount = 32
+                        };
                         writeArgPool = new ObjectPool<SocketAsyncEventArgs>(
                             createFunc: () => {
                                 var arg = new SocketAsyncEventArgs();
                                 arg.Completed += WriteCompletedCallback;
                                 return arg;
                             }) {
-                                MaxCount = 16
-                            };
+                            MaxCount = 16
+                        };
                     }
                 }
             }
@@ -141,7 +141,12 @@ namespace NaiveSocks
             return SendAsync(e);
         }
 
-        public Task WriteMultipleAsync(BytesView bv)
+        public AwaitableWrapper WriteMultipleAsyncR(BytesView bv)
+        {
+            return new AwaitableWrapper(WriteMultipleAsyncImpl(bv));
+        }
+
+        private Task WriteMultipleAsyncImpl(BytesView bv)
         {
             if (bv.nextNode == null)
                 return WriteAsync(new BytesSegment(bv));
