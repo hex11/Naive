@@ -27,5 +27,14 @@ namespace NaiveSocks
         public static string CurrentVersion => Version;
         public static string CurrentBuildText => BuildText;
         public static bool CurrentDebug => Debug;
+
+
+        public const string AppName_NoDebug = "NaiveSocks";
+        public const string AppName = AppName_NoDebug +
+#if DEBUG
+                    " (Debug)";
+#else
+                    "";
+#endif
     }
 }

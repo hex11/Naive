@@ -37,22 +37,14 @@ namespace NaiveSocks
             return paths.Distinct().ToArray();
         }
 
-        private const string NAME_NoDebug = "NaiveSocks";
-        private const string NAME = NAME_NoDebug +
-#if DEBUG
-                    " (Debug)";
-#else
-                    "";
-#endif
-
         private static string NameWithVertionText
-            => NAME + " v" + BuildInfo.Version
+            => BuildInfo.AppName + " v" + BuildInfo.Version
                     + (BuildInfo.CurrentBuildText.IsNullOrEmpty() ? null : " " + BuildInfo.CurrentBuildText)
                     + (__magic_is_packed ? " (single file)" : "");
 
         private static string cmdHelpText => $@"{NameWithVertionText}
 
-Usage: {NAME_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FILE] [--config-stdin]
+Usage: {BuildInfo.AppName_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FILE] [--config-stdin]
         [--no-cli] [--no-log-stdout] [--log-file FILE] [--log-stdout-no-time]
         [--force-jit[-async]] [--socket-impl (1|2|fa|ya)]
         [--cmd CMDLINE...]";
@@ -63,7 +55,7 @@ Usage: {NAME_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FILE] [--config-
 
         internal static void Main(string[] args)
         {
-            Console.Title = NAME;
+            Console.Title = BuildInfo.AppName;
             //Logging.HistroyEnabled = false;
             Logging.WriteLogToConsole = false;
             Logging.Logged += (log) => {
@@ -128,8 +120,7 @@ Usage: {NAME_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FILE] [--config-
                 lock (CmdConsole.ConsoleOnStdIO.Lock) {
                     var p = MyStream.TotalCopiedPackets;
                     var b = MyStream.TotalCopiedBytes;
-                    Console.Title = $"{controller.RunningConnections}/{controller.TotalHandledConnections} current/total connections" +
-                        $" | relayed {p:N0} Δ{p - lastPackets:N0} packets / {b:N0} Δ{b - lastBytes:N0} bytes - {NAME}";
+                    Console.Title = $"{controller.RunningConnections}/{controller.TotalHandledConnections} current/total connections | relayed {p:N0} Δ{p - lastPackets:N0} packets / {b:N0} Δ{b - lastBytes:N0} bytes - {BuildInfo.AppName}";
                     lastPackets = p;
                     lastBytes = b;
                 }
@@ -141,7 +132,7 @@ Usage: {NAME_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FILE] [--config-
                     updateTitle();
                 } else {
                     titleUpdateTimer.Change(-1, -1);
-                    Console.Title = NAME;
+                    Console.Title = BuildInfo.AppName;
                 }
             });
             controller.ConfigTomlLoaded += (x) => {
@@ -187,7 +178,7 @@ Usage: {NAME_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FILE] [--config-
                 }
             }
             var cmdHub = new CommandHub();
-            cmdHub.Prompt = $"{NAME}>";
+            cmdHub.Prompt = $"{BuildInfo.AppName}>";
             Commands.AddCommands(cmdHub, controller, null, new string[] { "all" });
             cmdHub.AddCmdHandler("newbie", (cmd) => Commands.NewbieWizard(cmd, controller, specifiedConfigPath ?? configFilePath));
             cmdHub.AddCmdHandler("ver", (cmd) => cmd.WriteLine(NameWithVertionText));
@@ -217,9 +208,9 @@ Usage: {NAME_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FILE] [--config-
             }
 #if NS_WINFORM
             cmdHub.AddCmdHandler("gui", (cmd) => {
-                var form = new GUI.FormConnections();
-                Application.Run(form);
+                WinForm.ControllerForm.RunGuiThread(controller);
             });
+            //WinForm.ControllerForm.RunGuiThread(controller);
 #endif
             if (!ar.ContainsKey("--no-cli")) {
                 var stdio = CmdConsole.StdIO;
@@ -230,7 +221,7 @@ Usage: {NAME_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FILE] [--config-
                 if (line == null) {
                     Logging.warning("Read an EOF from stdin");
                     if (sw.ElapsedMilliseconds < 50) {
-                        Logging.warning("...in 50 ms. Keep running without interactive interface.");
+                        Logging.warning("...within 50 ms. Keep running without interactive interface.");
                         Logging.warning("Please use --no-cli option if the program do not run from a console.");
                         goto WAIT;
                     }
@@ -240,7 +231,7 @@ Usage: {NAME_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FILE] [--config-
                 }
                 Environment.Exit(0);
             }
-        WAIT:
+            WAIT:
             while (true)
                 Thread.Sleep(int.MaxValue);
         }

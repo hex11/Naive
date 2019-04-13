@@ -1,0 +1,16 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects>$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>c2f86be8-e7b9-4111-be36-4021aee54075</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>NaiveSocks.WinForm</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)ConnectionsView.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ControllerForm.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)WinFormController.cs" />
+  </ItemGroup>
+</Project>

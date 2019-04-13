@@ -42,7 +42,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)Encryption\Chacha20.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Controller\Commands.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Controller\Controller.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)GUI\FormConnections.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\Direct\DirectInAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Controller\InAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Controller\InConnection.cs" />
