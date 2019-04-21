@@ -222,12 +222,10 @@ namespace NaiveSocksAndroid
         {
             string sockPath = "t2s_sock_path";
             var arg = "--netif-ipaddr " + RouterIp
-                         + " --netif-netmask 255.255.255.0"
                          + " --socks-server-addr " + socksAddr
-                         + " --tunfd " + _pfd.Fd
                          + " --tunmtu " + VpnConfig.Mtu
                          + " --sock-path " + sockPath
-                         + " --loglevel 3"
+                         + " --loglevel warning"
                          + " --enable-udprelay";
             if (dnsgw != null) {
                 arg += " --dnsgw " + dnsgw;
@@ -319,7 +317,7 @@ namespace NaiveSocksAndroid
         {
             // native binaries from shadowsocks-android release apk (too lazy to compile):
             // https://github.com/shadowsocks/shadowsocks-android/releases
-            // (v4.7.1)
+            // (v4.7.4)
 
             // tun -> socks. (executable)
             public const string SsTun2Socks = "libtun2socks.so";
