@@ -26,6 +26,7 @@ namespace NaiveSocksAndroid
     {
         LinearLayout connParent;
         List<ItemView> displayingViews = new List<ItemView>();
+        Dictionary<int, ItemView> displayingMap = new Dictionary<int, ItemView>();
         List<int> toBeRemoved = new List<int>();
         List<InConnection> toBeAdded = new List<InConnection>();
         TextView textView;
@@ -112,19 +113,16 @@ namespace NaiveSocksAndroid
             base.OnUpdate();
             var controller = Controller;
             if (controller != null) {
+                int running, failed, total;
                 lock (controller.InConnectionsLock) {
                     var conns = controller.InConnections;
-                    if (InfoStrSupport)
-                        ChangeInfoStr(
-                            "[" + conns.Count +
-                            "/" + controller.TotalFailedConnections +
-                            "/" + controller.TotalHandledConnections +
-                            "]");
-                    textView.Text = "(" + conns.Count + " running / "
-                        + controller.TotalFailedConnections + " failed / "
-                        + controller.TotalHandledConnections + " handled)";
+                    running = conns.Count;
+                    failed = controller.TotalFailedConnections;
+                    total = controller.TotalHandledConnections;
                     CheckListChanges(conns);
                 }
+                ChangeInfoStr("[" + running + "/" + failed + "/" + total + "]");
+                textView.Text = "(" + running + " running / " + failed + " failed / " + total + " handled)";
                 UpdateItemViews();
             } else {
                 if (InfoStrSupport)
@@ -141,8 +139,10 @@ namespace NaiveSocksAndroid
         {
             foreach (var i in toBeRemoved) {
                 var view = displayingViews[i];
+                displayingMap.Remove(view.Connection.Id);
                 displayingViews.RemoveAt(i);
-                connParent.RemoveViewAt(i);
+                //connParent.RemoveViewAt(i);
+                connParent.RemoveView(view);
             }
             toBeRemoved.Clear();
 
@@ -150,6 +150,7 @@ namespace NaiveSocksAndroid
             foreach (var item in toBeAdded) {
                 var newView = new ItemView(themeWrapper) { Connection = item };
                 newView.lastTime = lastUpdateTime;
+                displayingMap.Add(item.Id, newView);
                 displayingViews.Add(newView);
                 connParent.AddView(newView, displayingViews.Count - 1); // insert before textView
             }
@@ -187,8 +188,7 @@ namespace NaiveSocksAndroid
                 displayingViews.Sort((a, b) => b.KBps - a.KBps);
                 int pos = 0;
                 foreach (var item in displayingViews) {
-                    if (item.KBps < 0)
-                        break;
+                    if (item.KBps < 0) break;
                     connParent.RemoveView(item);
                     connParent.AddView(item, pos++);
                 }
@@ -213,14 +213,7 @@ namespace NaiveSocksAndroid
             }
 
             foreach (var item in conns.Values) {
-                bool found = false;
-                foreach (var view in displayingViews) {
-                    if (object.ReferenceEquals(view.Connection, item)) {
-                        found = true;
-                        break;
-                    }
-                }
-                if (!found) {
+                if (!displayingMap.ContainsKey(item.Id)) {
                     toBeAdded.Add(item);
                 }
             }
@@ -232,6 +225,7 @@ namespace NaiveSocksAndroid
             connParent.RemoveAllViews();
             connParent.AddView(textView);
             displayingViews.Clear();
+            displayingMap.Clear();
         }
 
         class ItemView : LinearLayout, View.IOnLongClickListener
@@ -261,7 +255,7 @@ namespace NaiveSocksAndroid
             long lastTotalBytes = 0;
             public long lastTime = -1;
 
-            public int KBps;
+            public int KBps = -1;
 
             public bool moreInfo = true;
 
