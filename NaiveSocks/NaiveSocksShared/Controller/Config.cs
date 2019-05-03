@@ -33,8 +33,7 @@ namespace NaiveSocks
 
     public class LoadedConfig
     {
-        public List<InAdapter> InAdapters = new List<InAdapter>();
-        public List<OutAdapter> OutAdapters = new List<OutAdapter>();
+        public List<Adapter> Adapters = new List<Adapter>();
 
         public Dictionary<string, string> Aliases = new Dictionary<string, string>();
 

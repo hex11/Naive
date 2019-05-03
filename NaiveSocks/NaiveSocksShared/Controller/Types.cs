@@ -16,6 +16,8 @@ namespace NaiveSocks
             RegisterBuiltInTypes();
         }
 
+        public Dictionary<string, Type> RegisteredTypes = new Dictionary<string, Type>();
+
         public Dictionary<string, Type> RegisteredInTypes = new Dictionary<string, Type>();
         public Dictionary<string, Type> RegisteredOutTypes = new Dictionary<string, Type>();
         public Dictionary<string, Func<TomlTable, InAdapter>> RegisteredInCreators = new Dictionary<string, Func<TomlTable, InAdapter>>();
@@ -23,66 +25,72 @@ namespace NaiveSocks
 
         private void RegisterBuiltInTypes()
         {
-            RegisteredInTypes.Add("direct", typeof(DirectInAdapter));
-            RegisteredInTypes.Add("tproxy", typeof(TProxyInAdapter));
-            RegisteredInTypes.Add("socks", typeof(SocksInAdapter));
-            RegisteredInTypes.Add("socks5", typeof(SocksInAdapter));
-            RegisteredInTypes.Add("http", typeof(HttpInAdapter));
-            RegisteredInTypes.Add("tlssni", typeof(TlsSniInAdapter));
-            RegisteredInTypes.Add("naive", typeof(NaiveMInAdapter));
-            RegisteredInTypes.Add("naivec", typeof(NaiveMInAdapter));
-            RegisteredInTypes.Add("naive0", typeof(Naive0InAdapter));
-            RegisteredInTypes.Add("ss", typeof(SsInAdapter));
-            RegisteredInTypes.Add("dns", typeof(DnsInAdapter));
-            RegisteredInTypes.Add("udprelay", typeof(UdpRelay));
+            AddInType("direct", typeof(DirectInAdapter));
+            AddOutType("direct", typeof(DirectOutAdapter));
 
-            RegisteredOutTypes.Add("direct", typeof(DirectOutAdapter));
-            RegisteredOutTypes.Add("socks", typeof(SocksOutAdapter));
-            RegisteredOutTypes.Add("socks5", typeof(SocksOutAdapter));
-            RegisteredOutTypes.Add("http", typeof(HttpOutAdapter));
-            RegisteredOutTypes.Add("naive", typeof(NaiveMOutAdapter));
-            RegisteredOutTypes.Add("naivec", typeof(NaiveMOutAdapter));
-            RegisteredOutTypes.Add("naive0", typeof(Naive0OutAdapter));
-            RegisteredOutTypes.Add("ss", typeof(SsOutAdapter));
-            RegisteredOutTypes.Add("dns", typeof(DnsOutAdapter));
-            RegisteredOutTypes.Add("webcon", typeof(WebConAdapter));
-            RegisteredOutTypes.Add("webfile", typeof(WebFileAdapter));
-            RegisteredOutTypes.Add("webtest", typeof(WebTestAdapter));
-            RegisteredOutTypes.Add("webauth", typeof(WebAuthAdapter));
+            AddInType("tproxy", typeof(TProxyInAdapter));
 
-            RegisteredOutTypes.Add("router", typeof(RouterAdapter));
-            RegisteredOutTypes.Add("fail", typeof(FailAdapter));
-            RegisteredOutTypes.Add("nnetwork", typeof(NNetworkAdapter));
+            AddOutType("socks", typeof(SocksOutAdapter));
+            AddOutType("socks5", typeof(SocksOutAdapter));
+            AddInType("socks", typeof(SocksInAdapter));
+            AddInType("socks5", typeof(SocksInAdapter));
+
+            AddOutType("http", typeof(HttpOutAdapter));
+            AddInType("http", typeof(HttpInAdapter));
+
+            AddInType("tlssni", typeof(TlsSniInAdapter));
+
+            AddOutType("naive", typeof(NaiveMOutAdapter));
+            AddOutType("naivec", typeof(NaiveMOutAdapter));
+            AddOutType("naive0", typeof(Naive0OutAdapter));
+            AddInType("naive", typeof(NaiveMInAdapter));
+            AddInType("naivec", typeof(NaiveMInAdapter));
+            AddInType("naive0", typeof(Naive0InAdapter));
+
+            AddOutType("ss", typeof(SsOutAdapter));
+            AddInType("ss", typeof(SsInAdapter));
+
+            AddOutType("dns", typeof(DnsOutAdapter));
+            AddInType("dns", typeof(DnsInAdapter));
+
+            AddOutType("webcon", typeof(WebConAdapter));
+            AddOutType("webfile", typeof(WebFileAdapter));
+            AddOutType("webtest", typeof(WebTestAdapter));
+            AddOutType("webauth", typeof(WebAuthAdapter));
+
+            AddInType("udprelay", typeof(UdpRelay));
+
+            RegisteredTypes.Add("router", typeof(RouterAdapter));
+            RegisteredTypes.Add("fail", typeof(FailAdapter));
+            RegisteredTypes.Add("nnetwork", typeof(NNetworkAdapter));
+        }
+
+        void AddInType(string name, Type type)
+        {
+            RegisteredInTypes.Add(name, type);
+            RegisteredTypes.Add(name + "-in", type);
+        }
+
+        void AddOutType(string name, Type type)
+        {
+            RegisteredOutTypes.Add(name, type);
+            RegisteredTypes.Add(name + "-out", type);
         }
 
         public void GenerateDocument(TextWriter tw)
         {
             List<Type> types = new List<Type>();
-            foreach (var item in RegisteredInTypes.Keys.Union(RegisteredOutTypes.Keys)) {
-                {
-                    if (RegisteredInTypes.TryGetValue(item, out var type)) {
-                        if (types.Contains(type)) {
-                            tw.WriteLine($"[InAdatper alias '{item}' - {type.Name}]");
-                        } else {
-                            types.Add(type);
-                            tw.WriteLine($"[InAdatper type '{item}' - {type.Name}]");
-                            GenerateDocument(tw, type);
-                        }
-                        tw.WriteLine();
-                    }
+            foreach (var item in RegisteredTypes) {
+                var name = item.Key;
+                var type = item.Value;
+                if (types.Contains(type)) {
+                    tw.WriteLine($"[Adatper alias '{name}' - {type.Name}]");
+                } else {
+                    types.Add(type);
+                    tw.WriteLine($"[Adatper type '{name}' - {type.Name}]");
+                    GenerateDocument(tw, type);
                 }
-                {
-                    if (RegisteredOutTypes.TryGetValue(item, out var type)) {
-                        if (types.Contains(type)) {
-                            tw.WriteLine($"[OutAdatper alias '{item}' - {type.Name}]");
-                        } else {
-                            types.Add(type);
-                            tw.WriteLine($"[OutAdatper type '{item}' - {type.Name}]");
-                            GenerateDocument(tw, type);
-                        }
-                        tw.WriteLine();
-                    }
-                }
+                tw.WriteLine();
             }
         }
 

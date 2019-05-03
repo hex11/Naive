@@ -306,25 +306,17 @@ namespace NaiveSocks
                 }
                 c.WriteLine("  Logging Level: " + cfg.LoggingLevel);
                 c.WriteLine();
-                var inadas = cfg.InAdapters.ToArray();
-                Array.Sort(inadas, (a, b) => {
-                    return -a.BytesCountersRW.TotalValue.Bytes.CompareTo(b.BytesCountersRW.TotalValue.Bytes);
-                });
-                c.WriteLine($"  ## InAdapters ({inadas.Length}):");
-                foreach (var item in inadas) {
-                    var str = $"    - '{item.Name}': {item.ToString(false)} -> {item.@out?.ToString() ?? "(No OutAdapter)"}";
-                    con.Write(str);
-                    PrintAdapterInfo(con, item);
-                }
-                c.WriteLine();
-                var outadas = cfg.OutAdapters.ToArray();
-                Array.Sort(outadas, (a, b) => {
-                    return -a.BytesCountersRW.TotalValue.Bytes.CompareTo(b.BytesCountersRW.TotalValue.Bytes);
-                });
-                c.WriteLine($"  ## OutAdapters ({outadas.Length}):");
-                foreach (var item in outadas) {
-                    var str = $"    - '{item.Name}': {item.ToString(false)}";
-                    con.Write(str);
+                var adas = cfg.Adapters.ToArray();
+                //Array.Sort(adas, (a, b) => {
+                //    return -a.BytesCountersRW.TotalValue.Bytes.CompareTo(b.BytesCountersRW.TotalValue.Bytes);
+                //});
+                c.WriteLine($"  ## Adapters ({adas.Length}):");
+                foreach (var item in adas) {
+                    if (item is InAdapter inadap) {
+                        con.Write($"    - '{item.Name}': {item.ToString(false)} -> {inadap.@out?.ToString() ?? "(No 'out')"}");
+                    } else {
+                        con.Write($"    - '{item.Name}': {item.ToString(false)}");
+                    }
                     PrintAdapterInfo(con, item);
                 }
             });
@@ -406,7 +398,7 @@ namespace NaiveSocks
                 }
             });
             cmdHub.AddCmdHandler(prefix + "mtest", cmd => {
-                var adapters = controller.OutAdapters.Select(x => x as NaiveMOutAdapter).Where(x => x != null).ToList();
+                var adapters = controller.Adapters.Select(x => x as NaiveMOutAdapter).Where(x => x != null).ToList();
                 if (adapters.Count == 0) {
                     cmd.WriteLine("NaiveM OutAdapter not found.");
                     return;
@@ -449,21 +441,22 @@ namespace NaiveSocks
                     cmd.WriteLine(pingEnabled ? "start ping" : "stop ping");
                 }
                 List<Task> tasks = new List<Task>();
-                var outs = from x in controller.OutAdapters where x is NaiveMOutAdapter select (x as NaiveMOutAdapter);
+                var outs = from x in controller.Adapters where x is NaiveMOutAdapter select (x as NaiveMOutAdapter);
                 if (keep) {
                     foreach (var item in outs) {
                         item.ping_enabled = pingEnabled;
                     }
                     return;
                 }
-                var ins = from x in controller.InAdapters where x is NaiveMServerBase select x.As<NaiveMServerBase>().nmsList;
+                var ins = from x in controller.Adapters where x is NaiveMServerBase select x.As<NaiveMServerBase>().nmsList;
                 foreach (IEnumerable<NaiveMChannels> item in (from x in outs select from y in x.ncsPool select y.nms).Union(ins)) {
                     foreach (var poolItem in item) {
                         var task = NaiveUtils.RunAsyncTask(async () => {
+                            var stamp = $"'{poolItem.Adapter.Name}' {poolItem?.BaseChannels}";
                             try {
-                                await (poolItem?.Ping((t) => cmd.WriteLine($"{poolItem.BaseChannels}: {t}"), true)).NoNRE();
+                                await (poolItem?.Ping((t) => cmd.WriteLine($"{stamp}: {t}"), true)).NoNRE();
                             } catch (Exception e) {
-                                cmd.WriteLine(Logging.getExceptionText(e, $"{poolItem?.BaseChannels} pinging"));
+                                cmd.WriteLine(Logging.getExceptionText(e, $"{stamp}: pinging"));
                             }
                         });
                         tasks.Add(task);
@@ -474,7 +467,7 @@ namespace NaiveSocks
                 }
             }, "Usage: mping [start|stop]");
             cmdHub.AddCmdHandler(prefix + "dns", cmd => {
-                var adapters = controller.OutAdapters.Select(x => x as IDnsProvider).Where(x => x != null).ToList();
+                var adapters = controller.Adapters.Select(x => x as IDnsProvider).Where(x => x != null).ToList();
                 if (adapters.Count == 0) {
                     cmd.WriteLine("NaiveM OutAdapter not found.");
                     return;

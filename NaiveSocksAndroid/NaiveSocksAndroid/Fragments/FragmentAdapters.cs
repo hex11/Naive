@@ -55,14 +55,10 @@ namespace NaiveSocksAndroid
             connParent.RemoveAllViews();
             var controller = Controller;
             if (controller != null) {
-                var ina = controller.InAdapters;
-                var outa = controller.OutAdapters;
+                var adapters = controller.Adapters;
                 if (InfoStrSupport)
-                    ChangeInfoStr("[" + ina.Count + " + " + outa.Count + "]");
-                foreach (var item in ina) {
-                    AddAdapter(item);
-                }
-                foreach (var item in outa) {
+                    ChangeInfoStr("[" + adapters.Count + "]");
+                foreach (var item in adapters) {
                     AddAdapter(item);
                 }
             } else {

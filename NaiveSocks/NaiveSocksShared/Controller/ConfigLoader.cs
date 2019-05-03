@@ -42,31 +42,37 @@ namespace NaiveSocks
                 Logger = logger;
             }
 
+            private Adapter NewRegisteredType(TomlTable tt, string name, string typeName)
+                => NewRegisteredAdapter<Adapter>(null, null, tt, name, typeName);
+
             private InAdapter NewRegisteredInType(TomlTable tt, string name)
                 => NewRegisteredAdapter(Types.RegisteredInTypes, Types.RegisteredInCreators, tt, name);
 
             private OutAdapter NewRegisteredOutType(TomlTable tt, string name)
                 => NewRegisteredAdapter(Types.RegisteredOutTypes, Types.RegisteredOutCreators, tt, name);
 
-            private T NewRegisteredAdapter<T>(Dictionary<string, Type> types, Dictionary<string, Func<TomlTable, T>> creators,
-                TomlTable tt, string name) where T : Adapter
+            private T NewRegisteredAdapter<T>(Dictionary<string, Type> prependTypes, Dictionary<string, Func<TomlTable, T>> creators,
+                TomlTable tt, string name, string typeName = null) where T : Adapter
             {
-                var instance = NewRegisteredType<T>(types, creators, tt);
+                typeName = typeName ?? tt.Get<string>("type") ?? throw new Exception("'type' is not specified.");
+                T instance = null;
+                if (prependTypes != null) instance = NewRegisteredType<T>(typeName, prependTypes, creators, tt);
+                if (instance == null) instance = NewRegisteredType<T>(typeName, Types.RegisteredTypes, null, tt);
+                if (instance == null) throw new Exception($"type '{typeName}' as '{typeof(T)}' not found");
                 instance.Name = name;
                 instance.SetLogger(Logger);
                 instance.SetConfig(tt);
                 return instance;
             }
 
-            private T NewRegisteredType<T>(Dictionary<string, Type> types, Dictionary<string, Func<TomlTable, T>> creators, TomlTable table)
+            private T NewRegisteredType<T>(string typeName, Dictionary<string, Type> types, Dictionary<string, Func<TomlTable, T>> creators, TomlTable table)
                 where T : class
             {
-                var strType = table.Get<string>("type");
-                if (types.TryGetValue(strType, out var type) == false) {
-                    if (creators.TryGetValue(strType, out var ctor) == false) {
-                        throw new Exception($"type '{strType}' as '{typeof(T)}' not found");
+                if (types.TryGetValue(typeName, out var type) == false) {
+                    if (creators == null || creators.TryGetValue(typeName, out var ctor) == false) {
+                        return null;
                     }
-                    return ctor.Invoke(table) ?? throw new Exception($"creator '{strType}' returns null");
+                    return ctor.Invoke(table) ?? throw new Exception($"creator '{typeName}' returns null");
                 }
                 return table.Get(type) as T;
             }
@@ -98,12 +104,33 @@ namespace NaiveSocks
                 newcfg.DebugFlags = t?.debug?.flags ?? new string[0];
 
                 int failedCount = 0;
+                if (tomlTable.TryGetValue<TomlTable>("a", out var tableA)) {
+                    foreach (var pair in tableA) {
+                        var typeName = pair.Key;
+                        if (!(pair.Value is TomlTable table)) {
+                            Logger.error($"TOML path 'a.{typeName}' is not a TOML table.");
+                            continue;
+                        }
+                        foreach (var innerPair in table) {
+                            var name = innerPair.Key;
+                            try {
+                                var tt = (TomlTable)innerPair.Value;
+                                var adapter = NewRegisteredType(tt, name, typeName);
+                                newcfg.Adapters.Add(adapter);
+                            } catch (Exception e) {
+                                Logger.exception(e, Logging.Level.Error, $"TOML table 'a.{typeName}.{name}':");
+                                failedCount++;
+                            }
+                        }
+                    }
+                }
                 if (t.@in != null)
                     foreach (var item in t.@in) {
                         try {
                             var tt = item.Value;
-                            var adapter = NewRegisteredInType(tt, item.Key);
-                            newcfg.InAdapters.Add(adapter);
+                            var name = "in." + item.Key;
+                            var adapter = NewRegisteredInType(tt, name);
+                            newcfg.Adapters.Add(adapter);
                         } catch (Exception e) {
                             Logger.exception(e, Logging.Level.Error, $"TOML table 'in.{item.Key}':");
                             failedCount++;
@@ -113,8 +140,9 @@ namespace NaiveSocks
                     foreach (var item in t.@out) {
                         try {
                             var tt = item.Value;
-                            var adapter = NewRegisteredOutType(tt, item.Key);
-                            newcfg.OutAdapters.Add(adapter);
+                            var name = "out." + item.Key;
+                            var adapter = NewRegisteredOutType(tt, name);
+                            newcfg.Adapters.Add(adapter);
                         } catch (Exception e) {
                             Logger.exception(e, Logging.Level.Error, $"TOML table 'out.{item.Key}':");
                             failedCount++;
@@ -131,30 +159,31 @@ namespace NaiveSocks
                             int i = 0;
                             do {
                                 name = $"_{tt["type"].Get<string>()}_" + ((i++ == 0) ? "" : i.ToString());
-                            } while (newcfg.OutAdapters.Any(x => x.Name == name));
+                            } while (newcfg.Adapters.Any(x => x.Name == name));
                         }
                         var adapter = NewRegisteredOutType(tt, name);
                         r.Adapter = adapter;
-                        newcfg.OutAdapters.Add(adapter);
+                        newcfg.Adapters.Add(adapter);
                     } catch (Exception e) {
                         Logger.exception(e, Logging.Level.Error, $"TOML inline table:");
                         failedCount++;
                     }
                 }
                 bool notExistAndNeed(string name) =>
-                        newcfg.OutAdapters.Any(x => x.Name == name) == false
+                        newcfg.Adapters.Any(x => x.Name == name) == false
                             /* && refs.Any(x => x.IsName && x.Ref as string == name) */;
                 if (notExistAndNeed("direct")) {
-                    newcfg.OutAdapters.Add(new DirectOutAdapter() { Name = "direct" });
+                    newcfg.Adapters.Add(new DirectOutAdapter() { Name = "direct" });
                 }
                 if (notExistAndNeed("fail")) {
-                    newcfg.OutAdapters.Add(new FailAdapter() { Name = "fail" });
+                    newcfg.Adapters.Add(new FailAdapter() { Name = "fail" });
                 }
                 foreach (var r in refs) {
                     if (r.IsName) {
                         r.Adapter = FindAdapter<IAdapter>(newcfg, r.Ref as string, -1);
                     }
                 }
+                newcfg.Adapters.Sort((a, b) => a.Name.CompareTo(b.Name));
                 newcfg.FailedCount = failedCount;
                 return newcfg;
             }

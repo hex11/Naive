@@ -16,8 +16,7 @@ namespace NaiveSocks
 
         private ConfigLoader configLoader;
 
-        public List<InAdapter> InAdapters => CurrentConfig.InAdapters;
-        public List<OutAdapter> OutAdapters => CurrentConfig.OutAdapters;
+        public List<Adapter> Adapters => CurrentConfig.Adapters;
 
         public Logger Logger { get; } = new Logger();
 
@@ -107,7 +106,7 @@ namespace NaiveSocks
         public void LoadConfig(ConfigFile configFile)
         {
             SetCurrentConfig(configLoader.LoadConfig(configFile, null) ?? CurrentConfig);
-            Logger.info($"configuration loaded. {InAdapters.Count} InAdapters, {OutAdapters.Count} OutAdapters.");
+            Logger.info($"configuration loaded. {Adapters.Count} Adapters.");
             if (CurrentConfig.FailedCount > 0)
                 Logger.warning($"And {CurrentConfig.FailedCount} ERRORs");
         }
@@ -136,12 +135,12 @@ namespace NaiveSocks
                 info("still running with previous configuration.");
                 return;
             }
-            info($"new configuration loaded. {newCfg.InAdapters.Count} InAdapters, {newCfg.OutAdapters.Count} OutAdapters.");
+            info($"new configuration loaded. {newCfg.Adapters.Count} Adapters.");
             var oldCfg = CurrentConfig;
-            var oldCanReload = InAdapters.Union<Adapter>(OutAdapters)
+            var oldCanReload = newCfg.Adapters
                                         .Select(x => x as ICanReload)
                                         .Where(x => x != null).ToList();
-            var newCanReload = newCfg.InAdapters.Union<Adapter>(newCfg.OutAdapters)
+            var newCanReload = newCfg.Adapters
                                         .Select(x => x as ICanReload)
                                         .Where(x => x != null).ToList();
             var oldNewCanReload = oldCanReload.Where(x => {
@@ -170,23 +169,17 @@ namespace NaiveSocks
                 return true;
             }
             int failedCount = 0;
-            foreach (var item in OutAdapters) {
-                info($"OutAdapter '{item.Name}' = {item.ToString(false)}");
-                try {
-                    InitAdapter(item);
-                    item.StartInternal(checkIcr(item));
-                } catch (Exception e) {
-                    Logger.exception(e, Logging.Level.Error, $"starting OutAdapter '{item.Name}' = {item}");
-                    failedCount++;
+            foreach (var item in Adapters) {
+                if (item is InAdapter inadap) {
+                    info($"Adapter '{item.Name}' = {item.ToString(false)} -> {inadap.@out?.ToString() ?? "(No 'out')"}");
+                } else {
+                    info($"Adapter '{item.Name}' = {item.ToString(false)}");
                 }
-            }
-            foreach (var item in InAdapters) {
-                info($"InAdapter '{item.Name}' = {item.ToString(false)} -> {item.@out?.Adapter?.Name?.Quoted() ?? "(No OutAdapter)"}");
                 try {
                     InitAdapter(item);
                     item.StartInternal(checkIcr(item));
                 } catch (Exception e) {
-                    Logger.exception(e, Logging.Level.Error, $"starting InAdapter '{item.Name}' = {item}");
+                    Logger.exception(e, Logging.Level.Error, $"starting Adapter '{item.Name}' = {item}");
                     failedCount++;
                 }
             }
@@ -199,7 +192,7 @@ namespace NaiveSocks
 
         public void AddInAdapter(InAdapter adap, bool init)
         {
-            InAdapters.Add(adap);
+            Adapters.Add(adap);
             adap.SetLogger(Logger);
             //adap.SetConfig(null);
             if (init) {
@@ -215,14 +208,9 @@ namespace NaiveSocks
         public void Stop() => Stop(CurrentConfig, null);
         private void Stop(LoadedConfig config, List<ICanReload> listNotCallStop)
         {
-            foreach (var item in config.InAdapters) {
+            foreach (var item in config.Adapters) {
                 var reloading = item is ICanReload icr && listNotCallStop?.Contains(icr) == true;
-                info($"stopping{(reloading ? " (reloading)" : "")} InAdapter: {item}");
-                item.StopInternal(!reloading);
-            }
-            foreach (var item in config.OutAdapters) {
-                var reloading = item is ICanReload icr && listNotCallStop?.Contains(icr) == true;
-                info($"stopping{(reloading ? " (reloading)" : "")} OutAdapter: '{item.Name}' {item}");
+                info($"stopping{(reloading ? " (reloading)" : "")} Adapter: '{item.Name}' {item}");
                 item.StopInternal(!reloading);
             }
             Logger.info($"=====Adapters Stopped=====");
@@ -443,8 +431,14 @@ namespace NaiveSocks
                     throw new Exception("alias loop?");
                 return FindAdapter<T>(cfg, new_name, ttl - 1);
             }
-            return cfg.OutAdapters.Find(a => a.Name == name) as T
-                ?? cfg.InAdapters.Find(a => a.Name == name) as T;
+            foreach (var item in cfg.Adapters) {
+                if (item.Name == name) return item as T;
+            }
+            name = "out." + name;
+            foreach (var item in cfg.Adapters) {
+                if (item.Name == name) return item as T;
+            }
+            return null;
         }
 
         public AdapterRef AdapterRefFromName(string name)
