@@ -434,9 +434,13 @@ namespace NaiveSocks
             foreach (var item in cfg.Adapters) {
                 if (item.Name == name) return item as T;
             }
-            name = "out." + name;
+            var name2 = "out." + name;
             foreach (var item in cfg.Adapters) {
-                if (item.Name == name) return item as T;
+                if (item.Name == name2) return item as T;
+            }
+            name2 = "in." + name;
+            foreach (var item in cfg.Adapters) {
+                if (item.Name == name2) return item as T;
             }
             return null;
         }
