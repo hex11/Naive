@@ -18,7 +18,6 @@ namespace NaiveSocks
         public bool no_passwd { get; set; }
 
         public string[] page_path { get; set; } = new[] { "/", "/webcon", "/webcon.html" };
-        public string[] ws_path { get; set; } = new[] { "/admin/consolews", "/webcon.ws" };
 
         public string page_file { get; set; }
 
@@ -50,9 +49,10 @@ namespace NaiveSocks
 
         public override Task HandleRequestAsyncImpl(HttpConnection p)
         {
-            if (ws_path.Contains(p.Url_path))
-                return ws(p);
             if (page_path.Contains(p.Url_path)) {
+                if (WebSocketServer.IsWebSocketRequest(p)) {
+                    return ws(p);
+                }
                 p.Handled = true;
                 p.setStatusCode("200 OK");
                 if (page_file != null && File.Exists(page_file)) {
@@ -216,6 +216,10 @@ namespace NaiveSocks
 			margin: 2px;
 			padding: 2px;
 		}
+
+		#consoleinput {
+			font-family: Consolas, monospace;
+		}
 	</style>
 </head>
 
@@ -310,7 +314,7 @@ namespace NaiveSocks
 				return;
 			if (window.location.protocol == 'http:' || window.location.protocol == 'https:') {
 				var url = (window.location.protocol == 'https:' ? 'wss://' : 'ws://')
-					+ window.location.host + '/webcon.ws';
+					+ window.location.host + window.location.pathname;
 				eleInputUrl.value = url;
 				// ws = connectTo(url);
 			}

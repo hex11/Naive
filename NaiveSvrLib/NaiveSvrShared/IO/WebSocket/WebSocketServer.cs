@@ -36,6 +36,8 @@ namespace Naive.HttpSvr
                                             : $"{{WsSvr on {epPair}}}";
         }
 
+        public static bool IsWebSocketRequest(HttpConnection p) => p.GetReqHeader("Upgrade") == "websocket";
+
         public Task<WsHandleRequestResult> HandleRequestAsync() => HandleRequestAsync(true);
 
         public async Task<WsHandleRequestResult> HandleRequestAsync(bool enterRecvLoop)
