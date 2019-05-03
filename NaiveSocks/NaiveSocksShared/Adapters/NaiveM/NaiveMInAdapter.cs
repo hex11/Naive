@@ -15,6 +15,7 @@ namespace NaiveSocks
 
         public Dictionary<string, PathSettings> path_settings { get; set; }
 
+        [ConfType]
         public class PathSettings : Settings
         {
             public string format { get; set; } = @"(token=)?(?<token>[\w%]+)";

@@ -17,6 +17,7 @@ namespace NaiveSocks
 
         public AdapterRef rdns { get; set; }
 
+        [ConfType]
         public struct User
         {
             public string name { get; set; }

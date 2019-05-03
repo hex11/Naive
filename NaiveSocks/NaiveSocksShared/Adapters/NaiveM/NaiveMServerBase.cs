@@ -17,7 +17,9 @@ namespace NaiveSocks
 
         public class Settings
         {
+            [NotConf]
             public byte[] realKey { get; set; }
+            [NotConf]
             public Func<string, INetwork> networkProvider { get; set; }
             public int imux_max { get; set; } = -1;
             public AdapterRef @out { get; set; }

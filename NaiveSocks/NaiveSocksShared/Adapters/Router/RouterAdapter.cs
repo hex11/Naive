@@ -30,6 +30,7 @@ namespace NaiveSocks
 
         CancellationTokenSource ctsOnStop = new CancellationTokenSource();
 
+        [ConfType]
         public class Rule
         {
             public string abp { get; set; }

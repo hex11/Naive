@@ -1,8 +1,10 @@
-﻿using Nett;
+﻿using Naive.Console;
+using Nett;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 
 namespace NaiveSocks
@@ -77,31 +79,97 @@ namespace NaiveSocks
             RegisteredTypes.Add(name + "-out", type);
         }
 
-        public void GenerateDocument(TextWriter tw)
+        public void GenerateDocument(CmdConsole tw)
         {
-            List<Type> types = new List<Type>();
-            foreach (var item in RegisteredTypes) {
-                var name = item.Key;
-                var type = item.Value;
-                if (types.Contains(type)) {
-                    tw.WriteLine($"[Adatper alias '{name}' - {type.Name}]");
-                } else {
-                    types.Add(type);
-                    tw.WriteLine($"[Adatper type '{name}' - {type.Name}]");
-                    GenerateDocument(tw, type);
-                }
-                tw.WriteLine();
+            var types = from x in RegisteredTypes.Keys group x by RegisteredTypes[x];
+            var othertypes = new List<Type>();
+            foreach (var item in types) {
+                var type = item.Key;
+                tw.Write($"[Adatper type {type.Name} - '{string.Join("\', \'", item)}']\n", ConsoleColor.White);
+                GenerateDocument(tw, type, othertypes);
+                tw.WriteLine("");
+            }
+            foreach (var type in othertypes) {
+                tw.Write($"[type {type.Name}]\n", ConsoleColor.White);
+                GenerateDocument(tw, type, othertypes);
+                tw.WriteLine("");
             }
         }
 
-        public void GenerateDocument(TextWriter tw, Type type)
+        private static void GenerateDocument(CmdConsole tw, Type type, List<Type> othertypes)
         {
-            var props = type.GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
-            foreach (var item in props) {
-                if (item.CanWrite && item.GetCustomAttributes(typeof(NotConfAttribute), false).Any() == false) {
-                    tw.WriteLine($"({item.PropertyType.Name})\t{item.Name}");
+            var props = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
+            foreach (var prop in props) {
+                if (prop.CanWrite && prop.GetCustomAttributes(typeof(NotConfAttribute), false).Any() == false) {
+                    PrintProperty(tw, prop);
+                    var propType = prop.PropertyType;
+                    if (othertypes != null) {
+                        CheckType(othertypes, propType);
+                    }
                 }
             }
+        }
+
+        private static void CheckType(List<Type> othertypes, Type type, int depth = 5)
+        {
+            if (type.GetCustomAttributes(typeof(ConfTypeAttribute), false).Any()) {
+                if (othertypes.Contains(type) == false) {
+                    othertypes.Add(type);
+                }
+            }
+            if (depth < 0) return;
+            if (type.IsGenericType) {
+                foreach (var item in type.GenericTypeArguments) {
+                    CheckType(othertypes, item, depth - 1);
+                }
+            }
+            if (type.HasElementType) {
+                CheckType(othertypes, type.GetElementType(), depth - 1);
+            }
+        }
+
+        public void GenerateDocument(CmdConsole tw, Type type)
+        {
+            GenerateDocument(tw, type, null);
+        }
+
+        private static void PrintProperty(CmdConsole tw, PropertyInfo item)
+        {
+            tw.Write($"  {item.Name,-18}  ");
+            tw.Write(TypeToString(item.PropertyType) + "\n", ConsoleColor.Cyan);
+        }
+
+        private static string TypeToString(Type type)
+        {
+            if (type == typeof(int)) return "int";
+            if (type == typeof(long)) return "long";
+            if (type == typeof(bool)) return "bool";
+            if (type == typeof(string)) return "string";
+
+            if (type.IsGenericType) {
+                string name;
+                if (type.GetGenericTypeDefinition() == typeof(Dictionary<,>)) {
+                    name = "Dict";
+                } else {
+                    name = type.Name;
+                    name = name.Substring(0, name.IndexOf('`'));
+                }
+                var sb = new StringBuilder();
+                sb.Append(name).Append('<');
+                int i = 0;
+                foreach (var item in type.GetGenericArguments()) {
+                    if (i++ > 0) sb.Append(", ");
+                    sb.Append(TypeToString(item));
+                }
+                sb.Append('>');
+                return sb.ToString();
+            }
+
+            if (type.IsArray) {
+                return TypeToString(type.GetElementType()) + "[]";
+            }
+
+            return type.Name;
         }
     }
 }

@@ -13,6 +13,7 @@ namespace NaiveSocks
 {
     public class HttpInAdapter : InAdapterWithListener, IHttpRequestAsyncHandler, IConnectionHandler, ICanReload
     {
+        [ConfType]
         public struct WebRoute
         {
             public StringOrArray host { get; set; }

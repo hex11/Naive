@@ -173,6 +173,11 @@ namespace NaiveSocks
     {
     }
 
+    [System.AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct, Inherited = false, AllowMultiple = false)]
+    sealed class ConfTypeAttribute : Attribute
+    {
+    }
+
     public abstract class Adapter : IAdapter
     {
         [NotConf]
