@@ -633,6 +633,7 @@ namespace Naive.HttpSvr
         public Task SendMsgAsync(byte opcode, BytesView bv) => SendMsgAsync(opcode, bv, true);
         public Task SendMsgAsync(byte opcode, BytesView bv, bool fin)
         {
+            if (ConnectionState == States.Opening) throw new InvalidOperationException("cannot send message while the websocket is opening.");
             lock (_lockLatestSendTask) {
                 if (_latestSendTask == null || _latestSendTask.IsCompleted) {
                     return _latestSendTask = _sendMsgAsync(opcode, bv, fin);

@@ -103,12 +103,12 @@ namespace NaiveSocks
         private async Task ws(HttpConnection p)
         {
             var wss = new WebSocketServer(p);
+            wss.AddToManaged();
+            if (!(await wss.HandleRequestAsync(false).CAF()).IsConnected)
+                return;
             if (!no_passwd) {
                 var realPasswd = passwd;
                 var aesEnabled = false;
-                wss.AddToManaged();
-                if (!(await wss.HandleRequestAsync(false).CAF()).IsConnected)
-                    return;
                 if (p.ParseUrlQstr()["encryption"] == "1") {
                     wss.ApplyAesStreamFilter(GetMD5FromString(realPasswd));
                     await wss.StartVerify(true).CAF();
@@ -182,7 +182,7 @@ namespace NaiveSocks
 			position: sticky;
 			padding: 2px;
 			background: white;
-			opacity: 0.7;
+			/* opacity: 0.7; */
 		}
 
 		.bottombar:focus{

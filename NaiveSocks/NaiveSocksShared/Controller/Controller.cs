@@ -137,7 +137,7 @@ namespace NaiveSocks
             }
             info($"new configuration loaded. {newCfg.Adapters.Count} Adapters.");
             var oldCfg = CurrentConfig;
-            var oldCanReload = newCfg.Adapters
+            var oldCanReload = oldCfg.Adapters
                                         .Select(x => x as ICanReload)
                                         .Where(x => x != null).ToList();
             var newCanReload = newCfg.Adapters
