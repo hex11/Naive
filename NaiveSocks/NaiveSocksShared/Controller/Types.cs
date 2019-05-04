@@ -55,16 +55,22 @@ namespace NaiveSocks
             AddOutType("dns", typeof(DnsOutAdapter));
             AddInType("dns", typeof(DnsInAdapter));
 
-            AddOutType("webcon", typeof(WebConAdapter));
-            AddOutType("webfile", typeof(WebFileAdapter));
-            AddOutType("webtest", typeof(WebTestAdapter));
-            AddOutType("webauth", typeof(WebAuthAdapter));
+            AddType("webcon", typeof(WebConAdapter));
+            AddType("webfile", typeof(WebFileAdapter));
+            AddType("webtest", typeof(WebTestAdapter));
+            AddType("webauth", typeof(WebAuthAdapter));
+            AddType("webrelay", typeof(WebRelay));
 
             AddInType("udprelay", typeof(UdpRelay));
 
-            RegisteredTypes.Add("router", typeof(RouterAdapter));
-            RegisteredTypes.Add("fail", typeof(FailAdapter));
-            RegisteredTypes.Add("nnetwork", typeof(NNetworkAdapter));
+            AddType("router", typeof(RouterAdapter));
+            AddType("fail", typeof(FailAdapter));
+            AddType("nnetwork", typeof(NNetworkAdapter));
+        }
+
+        void AddType(string name, Type type)
+        {
+            RegisteredTypes.Add(name, type);
         }
 
         void AddInType(string name, Type type)
