@@ -91,8 +91,18 @@ namespace NaiveSocks
         }
     }
 
-    public struct StringOrArray
+    public struct StringOrArray : IEnumerable<string>
     {
+        public StringOrArray(string str)
+        {
+            obj = str;
+        }
+
+        public StringOrArray(string[] arr)
+        {
+            obj = arr;
+        }
+
         public object obj;
         public string AsString => obj as string;
         public string[] AsArray => obj as string[];
@@ -119,6 +129,10 @@ namespace NaiveSocks
         {
             return new Enumerator(this);
         }
+
+        IEnumerator<string> IEnumerable<string>.GetEnumerator() => GetEnumerator();
+
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
         public struct Enumerator : IEnumerator<string>
         {

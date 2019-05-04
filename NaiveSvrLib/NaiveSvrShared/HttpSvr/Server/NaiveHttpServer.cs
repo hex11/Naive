@@ -179,6 +179,11 @@ namespace Naive.HttpSvr
             Logger.exception(ex, Logging.Level.Error, $"({p.myStream}) httpConnection processing");
         }
 
+        public class TlsConfig
+        {
+            // TODO
+        }
+
         public class Listener
         {
             public TcpListener tcpListener { get; }
@@ -187,6 +192,8 @@ namespace Naive.HttpSvr
             public bool IsRunning { get; private set; } = false;
             public bool LogInfo { get; set; } = false;
             public Logger Logger => server.Logger;
+
+            public TlsConfig Tls { get; set; }
 
             public Listener(NaiveHttpServer server, TcpListener tcpListener)
             {
@@ -199,7 +206,29 @@ namespace Naive.HttpSvr
             public async Task Listen()
             {
                 try {
-                    await _listen();
+                    IsRunning = true;
+                    try {
+                        tcpListener.Start();
+                    } catch (Exception e) {
+                        Logger.error($"starting listening on {localEP}: {e.Message}");
+                        return;
+                    }
+                    if (LogInfo)
+                        Logger.info($"listening on {localEP}");
+                    while (true) {
+                        try {
+                            var client = await tcpListener.AcceptTcpClientAsync();
+                            NaiveUtils.ConfigureSocket(client.Client);
+                            Task.Run(() => server.HandleAcceptedTcp(client)).Forget();
+                        } catch (Exception e) {
+                            if (IsRunning) {
+                                server.logException(e, Logging.Level.Error, $"({localEP}) accepting connection:");
+                                await Task.Delay(300);
+                            } else {
+                                return;
+                            }
+                        }
+                    }
                 } catch (Exception e) {
                     if (IsRunning) {
                         server.logException(e, Logging.Level.Error, $"({localEP}) Run():");
@@ -208,33 +237,6 @@ namespace Naive.HttpSvr
                     IsRunning = false;
                     if (LogInfo)
                         server.log($"({localEP}) listening thread exiting", Logging.Level.Warning);
-                }
-            }
-
-            private async Task _listen()
-            {
-                IsRunning = true;
-                try {
-                    tcpListener.Start();
-                } catch (Exception e) {
-                    Logger.error($"starting listening on {localEP}: {e.Message}");
-                    return;
-                }
-                if (LogInfo)
-                    Logger.info($"listening on {localEP}");
-                while (true) {
-                    try {
-                        var client = await tcpListener.AcceptTcpClientAsync();
-                        NaiveUtils.ConfigureSocket(client.Client);
-                        Task.Run(() => server.HandleAcceptedTcp(client)).Forget();
-                    } catch (Exception e) {
-                        if (IsRunning) {
-                            server.logException(e, Logging.Level.Error, $"({localEP}) accepting connection:");
-                            await Task.Delay(300);
-                        } else {
-                            return;
-                        }
-                    }
                 }
             }
 

@@ -17,11 +17,11 @@ namespace NaiveSocks
         public string passwd { get; set; }
         public bool no_passwd { get; set; }
 
-        public string[] page_path { get; set; } = new[] { "/", "/webcon", "/webcon.html" };
+        public StringOrArray page_path { get; set; } = new StringOrArray(new[] { "/", "/webcon", "/webcon.html" });
 
         public string page_file { get; set; }
 
-        public string[] cmds { get; set; }
+        public StringOrArray cmds { get; set; }
 
         ConsoleHub consoleHub;
 
@@ -43,13 +43,13 @@ namespace NaiveSocks
             if (consoleHub == null) {
                 consoleHub = new ConsoleHub();
                 var cmdHub = consoleHub.CommandHub;
-                Commands.AddCommands(cmdHub, Controller, "", cmds);
+                Commands.AddCommands(cmdHub, Controller, "", cmds.ToArray());
             }
         }
 
         public override Task HandleRequestAsyncImpl(HttpConnection p)
         {
-            if (page_path.Contains(p.Url_path)) {
+            if (page_path.IsOrContains(p.Url_path)) {
                 if (WebSocketServer.IsWebSocketRequest(p)) {
                     return ws(p);
                 }
