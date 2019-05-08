@@ -12,6 +12,8 @@ namespace NaiveSocks
     class WebRelay : WebBaseAdapter
     {
         public string pass { get; set; }
+        public string client_js_path { get; set; } = "/client.js";
+        public string demo_chatroom_path { get; set; } = "/chat";
 
         class Room
         {
@@ -72,8 +74,22 @@ namespace NaiveSocks
 
         public override async Task HandleRequestAsyncImpl(HttpConnection p)
         {
+            if (!WebSocketServer.IsWebSocketRequest(p)) {
+                if (p.Url_path == client_js_path) {
+                    p.Handled = true;
+                    p.setStatusCode("200 OK");
+                    p.setHeader(HttpHeaders.KEY_Content_Type, "text/javascript");
+                    await p.EndResponseAsync(JsClient);
+                    return;
+                }
+                if (p.Url_path == demo_chatroom_path) {
+                    p.Handled = true;
+                    p.setStatusCode("200 OK");
+                    await p.EndResponseAsync(DemoChatRoom);
+                    return;
+                }
+            }
             if (p.ParsedQstr["pass"] != pass) return;
-            if (!WebSocketServer.IsWebSocketRequest(p)) return;
 
             var cli = new Client(p);
             if ((await cli.HandleRequestAsync(false)).IsConnected == false) return;
@@ -128,25 +144,6 @@ namespace NaiveSocks
                                     }
                                     room.Broadcast(str, cli);
                                     cli.SendStringAsync("ok").Forget();
-                                } else if (verb == "getstate") {
-                                    // But it's currently not needed because we actively push changes of states.
-                                    var sb = new StringBuilder();
-                                    sb.Append("ok room state ").Append(room.Token).Append("\n");
-                                    var line = span.CutSelf('\n');
-                                    if (line.len == 0) {
-                                        foreach (var item in room.States) {
-                                            sb.Append(item.Key).Append(':').Append(item.Value).Append('\n');
-                                        }
-                                    } else {
-                                        while (line.len > 0) {
-                                            var key = line.CutSelf(' ').ToString();
-                                            if (!room.States.TryGetValue(key, out var val)) {
-                                                val = "";
-                                            }
-                                            sb.Append(key).Append(':').Append(val).Append('\n');
-                                        }
-                                    }
-                                    cli.SendStringAsync(sb.ToString()).Forget();
                                 } else if (verb == "list") {
                                     var sb = new StringBuilder("ok list\n");
                                     foreach (var c in room.Clients) {
@@ -167,7 +164,7 @@ namespace NaiveSocks
                             }
                         }
                     } else if (cmd == "ping") {
-                        await cli.SendStringAsync("pong");
+                        await cli.SendStringAsync("ok pong");
                     } else if (cmd == "tag") {
                         var verb = firstLine.CutSelf(' ');
                         if (verb == "set") {
@@ -276,5 +273,354 @@ namespace NaiveSocks
                 return span;
             }
         }
+
+        const string JsClient = @"
+var Listeners = function () {
+	this.funcs = [];
+};
+Listeners.prototype.add = function (func) {
+	this.funcs.push(func);
+};
+Listeners.prototype.invoke = function () {
+	for (const f of this.funcs) {
+		f.apply(this, arguments);
+	}
+};
+
+var WebRelayCli = function (url) {
+	var cli = this;
+	var ws = null;
+	var cid = null;
+	var tag = '';
+	var idtag;
+	var updateIdtag = () => idtag = cid + ' ' + tag;
+	var rooms = new Map();
+	var replyHandlers = [];
+	var emptyFunction = function () { };
+	var enqueueReplyHandler = function (func) { replyHandlers.push(func || emptyFunction) };
+	var promiseRequest = function (request, callback) {
+		return new Promise((resolve, reject) => {
+			cli.send(request);
+			enqueueReplyHandler((ok, s, r) => {
+				console.log('request result ' + ok + ': ' + request);
+				if (ok) {
+					var ret = undefined;
+					if (callback) ret = callback(s, r);
+					resolve(ret);
+				} else {
+					reject();
+				}
+			});
+		});
+	};
+
+	Object.defineProperty(this, 'ws', { get: () => ws });
+	Object.defineProperty(this, 'id', { get: () => cid });
+
+	var ClientId = function (room, id, tag) {
+		this.room = room;
+		this.id = id;
+		this.tag = tag || '';
+		this.self = cid == id;
+	};
+
+	this.onopen = new Listeners();
+	this.onclose = new Listeners();
+
+	this.autoReconnect = 3; // null or seconds
+	this.autoRejoin = true;
+
+	var parseStates = function (lines) {
+		var obj = {};
+		lines.pop();
+		for (const l of lines) {
+			let [key, value] = l.split(':');
+			obj[key] = value;
+		}
+		return obj;
+	};
+	var statesToStr = function (obj) {
+		var str = '';
+		for (const key in obj) {
+			if (obj.hasOwnProperty(key)) {
+				let val = obj[key];
+				if (val === null || val === undefined) val = '';
+				val = val.toString();
+				if (val.includes('\n')) throw new Error('values can not include newline');
+				str += key + ':' + val + '\n';
+			}
+		}
+		return str;
+	};
+	var mergeObject = function (source, dest) {
+		for (const key in source) {
+			if (source.hasOwnProperty(key)) {
+				dest[key] = source[key];
+			}
+		}
+	};
+
+	this.open = function () {
+		console.info('ws connecting...');
+		ws = new WebSocket(url);
+		ws.onopen = (e) => {
+			console.log('ws open.');
+		};
+		ws.onmessage = (e) => {
+			console.log('ws received: ', e.data);
+			let lines = e.data.split('\n');
+			let firstLine = lines.shift();
+			let splits = firstLine.split(' ');
+			let cmd = splits[0];
+			if (cmd == 'hello') {
+				cid = splits[1];
+				updateIdtag();
+				if (this.autoRejoin && rooms.size) {
+					rooms.forEach(r => r.join());
+				}
+				this.onopen.invoke();
+			} else if (cmd == 'room') {
+				let verb = splits[1];
+				let rtoken = splits[2];
+				let room = rooms.get(rtoken);
+				let from = new ClientId(room, splits[3], splits[4]);
+				if (verb == 'msg') {
+					room.onmsg.invoke(lines.join('\n'), from);
+				} else if (verb == 'state') {
+					let changedState = parseStates(lines);
+					mergeObject(changedState, room.states);
+					room.onstate.invoke('remote', changedState);
+				} else if (verb == 'join') {
+					room.onlist.invoke('join', from);
+				} else if (verb == 'leave') {
+					room.onlist.invoke('leave', from);
+				}
+			} else if (cmd == 'ok' || cmd == 'fail') {
+				let handler = replyHandlers.shift();
+				handler(cmd == 'ok', splits, lines);
+			}
+		};
+		ws.onerror = (e) => {
+			console.error('ws error: ', e);
+		};
+		ws.onclose = (e) => {
+			rooms.forEach(r => r.joined = false);
+			replyHandlers.forEach(f => f(false, ['closed'], null));
+			replyHandlers = [];
+			if (typeof this.autoReconnect == 'number') {
+				console.info('ws reconnecting in ' + this.autoReconnect + ' seconds.');
+				setTimeout(() => this.open(), this.autoReconnect * 1000);
+			}
+			this.onclose.invoke();
+		};
+	};
+	this.send = function (data) {
+		console.log('ws send: ', data);
+		ws.send(data);
+	};
+	this.room = function (token) {
+		var r = rooms.get(token);
+		if (!r) {
+			r = {
+				joined: false,
+				token: token,
+				msgEcho: false,
+				states: {},
+				sendmsg: function (str) {
+					return promiseRequest('room msg ' + this.token + ' ' + idtag + '\n' + str, () => {
+						if (this.msgEcho) {
+							this.onmsg.invoke(str, new ClientId(this, cid, tag));
+						}
+					});
+				},
+				onmsg: new Listeners(),
+				onstate: new Listeners(),
+				onlist: new Listeners(),
+				setstate: function (states) {
+					var str = 'room state ' + roomToken + ' ' + idtag + '\n' + statesToStr(states);
+					return promiseRequest(str, (s, r) => {
+						mergeObject(states, this.states);
+						this.onstate.invoke('self', states);
+					});
+				},
+				join: function () {
+					if (this.joined == 'joined') return Promise.resolve();
+					if (this.joined) return this.joined;
+					this.joined = promiseRequest('room join ' + this.token + ' ' + idtag, (s, r) => {
+						if (r) this.states = parseStates(r);
+						else this.states = {};
+						this.joined = 'joined';
+						this.onstate.invoke('init', this.states);
+					}).catch(() => {
+						this.joined = false;
+					});
+				},
+				list: function () {
+					return promiseRequest('room list ' + this.token + ' ' + idtag, (s, r) => {
+						r.pop(); // remove the last line that is empty.
+						console.log('list success, members: ', r);
+						let arr = r.map(x => {
+							let [id, tag] = x.split(' ', 2);
+							return new ClientId(this, id, tag);
+						});
+						this.onlist.invoke('list', arr);
+						return arr;
+					});
+				}
+			};
+			rooms.set(token, r);
+		}
+		r.join();
+		return r;
+	};
+	this.ping = function () {
+		let startTime = new Date().getTime();
+		return promiseRequest('ping', function () {
+			return new Date().getTime() - startTime;
+		});
+	};
+	this.open();
+};
+";
+
+        const string DemoChatRoom = @"<!DOCTYPE html>
+<html lang='en'>
+
+<head>
+	<meta charset='UTF-8'>
+	<meta name='viewport' content='width=device-width, initial-scale=1.0'>
+	<meta http-equiv='X-UA-Compatible' content='ie=edge'>
+	<title>Simple Chat Room</title>
+	<style>
+		* {
+			box-sizing: border-box;
+		}
+
+		.btn {
+			display: flex;
+			text-align: center;
+			justify-content: center;
+			align-items: center;
+			transition: all .3s;
+			padding: .3em .5em;
+			min-width: 3em;
+			line-height: 1em;
+			/* margin: .5em; */
+			background: hsl(207, 90%, 54%);
+			color: white;
+			/* border-radius: .3em; */
+			box-shadow: 0 0 .3em gray;
+			cursor: pointer;
+			-ms-user-select: none;
+			-moz-user-select: none;
+			-webkit-user-select: none;
+			user-select: none;
+			position: relative;
+			overflow: hidden;
+		}
+
+		.btn:hover {
+			transition: all .05s;
+			background: hsl(207, 90%, 61%);
+		}
+
+		.btn.btn-down {
+			cursor: default;
+		}
+
+		.btn.btn-down,
+		.btn:active {
+			transition: all .05s;
+			background: hsl(207, 90%, 70%);
+			box-shadow: 0 0 .1em gray;
+		}
+
+		.bar {
+			display: flex;
+		}
+	</style>
+</head>
+
+<body style='display: flex; flex-direction: column; height: 100vh; margin: 0; padding: .3em; font-family: sans-serif;'>
+	<div style='flex: 1; overflow-y: auto;' id='messages'></div>
+	<div class='bar'>
+		<input style='flex: 1;' type='text' id='inputText' />
+		<div class='btn' style='margin-left: .3em;' id='btnSend'>Send</div>
+	</div>
+	<script src='client.js'></script>
+	<script>
+		function Msg(text, sender) {
+			this.text = text;
+			this.sender = sender;
+		}
+
+		function MessagesView(ele) {
+			this.ele = ele;
+		}
+		MessagesView.prototype.add = function (msg) {
+			var p = document.createElement('p');
+			var text = msg.text;
+			if (msg.sender) text = '[' + msg.sender + ']:\n' + text;
+			p.textContent = text;
+			p.style.whiteSpace = 'pre-wrap';
+			this.ele.appendChild(p);
+			p.scrollIntoView();
+		};
+
+		function start(url) {
+			window.msgView = new MessagesView(document.getElementById('messages'));
+			msgView.add(new Msg('* Connecting to ' + url));
+			window.cli = new WebRelayCli(url);
+			var room;
+			cli.onopen.add(function () {
+				room = window.room = cli.room('simple-chat-room');
+				room.msgEcho = true;
+				room.onmsg.add((msg, sender) => {
+					console.info('room msg: ' + msg);
+					msgView.add(new Msg(msg, sender.self ? 'You' : sender.id));
+				});
+				msgView.add(new Msg('* You joined the room. Your ID: ' + cli.id));
+				setTimeout(function () {
+					room.list().then(clis => {
+						clis = clis.filter(x => !x.self);
+						msgView.add(new Msg('* Other ' + clis.length + ' members:\n' + clis.map(x => x.id).join('\n')));
+						room.onlist.add((action, arg) => {
+							if (action == 'join') {
+								msgView.add(new Msg('* A member joined: ' + arg.id));
+							} else if (action == 'leave') {
+								msgView.add(new Msg('* A member left: ' + arg.id));
+							}
+						});
+					});
+				}, 1000);
+			});
+			var btn = document.getElementById('btnSend');
+			var input = document.getElementById('inputText');
+			btn.onclick = function () {
+				var msg = input.value;
+				input.value = '';
+				if (msg.length) {
+					room.sendmsg(msg).then(function () {
+						// msgView.add(new Msg(msg, 'You'));
+					});
+				}
+			};
+			input.onkeypress = function (e) {
+				if (e.keyCode == 13) {
+					e.preventDefault();
+					btn.click();
+				}
+			};
+		}
+		if (window.location.protocol == 'http:' || window.location.protocol == 'https:') {
+			var url = (window.location.protocol == 'https:' ? 'wss://' : 'ws://')
+					+ window.location.host + window.location.pathname;
+			start(url);
+		}
+	</script>
+</body>
+
+</html>
+";
     }
 }
