@@ -105,7 +105,7 @@ namespace NaiveSocks
                     if (cmd == "room") {
                         var verb = firstLine.CutSelf(' ');
                         var rtoken = firstLine.CutSelf(' ').ToString();
-                        if (!CheckClientId(cli, ref firstLine)) continue;
+                        if (!CheckClientId(cli, ref firstLine)) goto FAIL;
                         lock (rooms) { // Use such a big lock to ensure message order.
                             rooms.TryGetValue(rtoken, out var room);
                             if (verb == "join") {
@@ -295,11 +295,13 @@ var WebRelayCli = function (url) {
 	var idtag;
 	var updateIdtag = () => idtag = cid + ' ' + tag;
 	var rooms = new Map();
+	var openingPromise = null;
 	var replyHandlers = [];
 	var emptyFunction = function () { };
 	var enqueueReplyHandler = function (func) { replyHandlers.push(func || emptyFunction) };
 	var promiseRequest = function (request, callback) {
-		return new Promise((resolve, reject) => {
+		return openingPromise.then(() => new Promise((resolve, reject) => {
+			if (typeof request == 'function') request = request();
 			cli.send(request);
 			enqueueReplyHandler((ok, s, r) => {
 				console.log('request result ' + ok + ': ' + request);
@@ -311,8 +313,18 @@ var WebRelayCli = function (url) {
 					reject();
 				}
 			});
-		});
+		}));
 	};
+
+	var createPromise = function () {
+		var resolve, reject;
+		var promise = new Promise(function (res, rej) {
+			resolve = res; reject = rej;
+		});
+		promise.resolve = resolve;
+		promise.reject = reject;
+		return promise;
+	}
 
 	Object.defineProperty(this, 'ws', { get: () => ws });
 	Object.defineProperty(this, 'id', { get: () => cid });
@@ -329,6 +341,8 @@ var WebRelayCli = function (url) {
 
 	this.autoReconnect = 3; // null or seconds
 	this.autoRejoin = true;
+
+	this.reconnectTimes = 0;
 
 	var parseStates = function (lines) {
 		var obj = {};
@@ -362,6 +376,7 @@ var WebRelayCli = function (url) {
 
 	this.open = function () {
 		console.info('ws connecting...');
+		openingPromise = createPromise();
 		ws = new WebSocket(url);
 		ws.onopen = (e) => {
 			console.log('ws open.');
@@ -378,6 +393,7 @@ var WebRelayCli = function (url) {
 				if (this.autoRejoin && rooms.size) {
 					rooms.forEach(r => r.join());
 				}
+				openingPromise.resolve();
 				this.onopen.invoke();
 			} else if (cmd == 'room') {
 				let verb = splits[1];
@@ -407,9 +423,13 @@ var WebRelayCli = function (url) {
 			rooms.forEach(r => r.joined = false);
 			replyHandlers.forEach(f => f(false, ['closed'], null));
 			replyHandlers = [];
+			openingPromise.reject();
 			if (typeof this.autoReconnect == 'number') {
 				console.info('ws reconnecting in ' + this.autoReconnect + ' seconds.');
-				setTimeout(() => this.open(), this.autoReconnect * 1000);
+				setTimeout(() => {
+					this.reconnectTimes++;
+					this.open();
+				}, this.autoReconnect * 1000);
 			}
 			this.onclose.invoke();
 		};
@@ -422,12 +442,12 @@ var WebRelayCli = function (url) {
 		var r = rooms.get(token);
 		if (!r) {
 			r = {
-				joined: false,
+				joined: false, // false, Promise or 'joined'
 				token: token,
 				msgEcho: false,
 				states: {},
 				sendmsg: function (str) {
-					return promiseRequest('room msg ' + this.token + ' ' + idtag + '\n' + str, () => {
+					return promiseRequest(() => 'room msg ' + this.token + ' ' + idtag + '\n' + str, () => {
 						if (this.msgEcho) {
 							this.onmsg.invoke(str, new ClientId(this, cid, tag));
 						}
@@ -437,7 +457,7 @@ var WebRelayCli = function (url) {
 				onstate: new Listeners(),
 				onlist: new Listeners(),
 				setstate: function (states) {
-					var str = 'room state ' + roomToken + ' ' + idtag + '\n' + statesToStr(states);
+					var str = () => 'room state ' + this.token + ' ' + idtag + '\n' + statesToStr(states);
 					return promiseRequest(str, (s, r) => {
 						mergeObject(states, this.states);
 						this.onstate.invoke('self', states);
@@ -446,7 +466,7 @@ var WebRelayCli = function (url) {
 				join: function () {
 					if (this.joined == 'joined') return Promise.resolve();
 					if (this.joined) return this.joined;
-					this.joined = promiseRequest('room join ' + this.token + ' ' + idtag, (s, r) => {
+					return this.joined = promiseRequest(() => 'room join ' + this.token + ' ' + idtag, (s, r) => {
 						if (r) this.states = parseStates(r);
 						else this.states = {};
 						this.joined = 'joined';
@@ -456,7 +476,7 @@ var WebRelayCli = function (url) {
 					});
 				},
 				list: function () {
-					return promiseRequest('room list ' + this.token + ' ' + idtag, (s, r) => {
+					return promiseRequest(() => 'room list ' + this.token + ' ' + idtag, (s, r) => {
 						r.pop(); // remove the last line that is empty.
 						console.log('list success, members: ', r);
 						let arr = r.map(x => {
@@ -484,7 +504,7 @@ var WebRelayCli = function (url) {
 ";
 
         const string DemoChatRoom = @"<!DOCTYPE html>
-<html lang='en'>
+<html lang='en' style='height: 100%;'>
 
 <head>
 	<meta charset='UTF-8'>
@@ -538,11 +558,68 @@ var WebRelayCli = function (url) {
 		.bar {
 			display: flex;
 		}
+
+		.messages {
+			/* display: flex; */
+			flex-direction: column;
+			/* align-items: flex-start; */
+			flex: 1;
+			overflow-y: auto;
+		}
+
+		.msg {
+			text-align: left;
+			white-space: pre-wrap;
+			position: relative;
+			margin: .7em .2em;
+		}
+
+		.msg.info {
+			text-align: center;
+		}
+
+		.msg.info .content {
+			font-size: 80%;
+		}
+
+		.msg.self {
+			text-align: right;
+		}
+
+		.msg .bubble {
+			display: inline-block;
+			position: relative;
+			text-align: left;
+			min-width: 5em;
+			padding: .5em;
+			border-radius: .3em;
+			background: #81d4fa;
+		}
+
+		.msg.info .bubble {
+			background: #eeeeee;
+		}
+
+		.msg.self .bubble {
+			background: #c5e1a5;
+		}
+
+		.msg .sender {
+			font-size: 80%;
+		}
+
+		.msg .time {
+			/* position: absolute; */
+			text-align: right;
+			margin: 0 -.3em -.3em 0;
+			color: #666;
+			font-size: 70%;
+		}
 	</style>
 </head>
 
-<body style='display: flex; flex-direction: column; height: 100vh; margin: 0; padding: .3em; font-family: sans-serif;'>
-	<div style='flex: 1; overflow-y: auto;' id='messages'></div>
+<body style='display: flex; flex-direction: column; height: 100%; margin: 0; padding: .3em; font-family: sans-serif;'>
+	<div class='messages' id='messages'></div>
 	<div class='bar'>
 		<input style='flex: 1;' type='text' id='inputText' />
 		<div class='btn' style='margin-left: .3em;' id='btnSend'>Send</div>
@@ -558,65 +635,112 @@ var WebRelayCli = function (url) {
 			this.ele = ele;
 		}
 		MessagesView.prototype.add = function (msg) {
-			var p = document.createElement('p');
-			var text = msg.text;
-			if (msg.sender) text = '[' + msg.sender + ']:\n' + text;
-			p.textContent = text;
-			p.style.whiteSpace = 'pre-wrap';
+			var p = document.createElement('div');
+			var bubble = document.createElement('div');
+			bubble.className = 'bubble';
+			p.className = 'msg';
+			var content = document.createElement('div');
+			content.className = 'content';
+			content.textContent = msg.text;
+			var time = document.createElement('div');
+			time.className = 'time';
+			time.textContent = new Date().toLocaleTimeString();
+			if (msg.sender) {
+				if (msg.sender.self) {
+					p.classList.add('self');
+				} else {
+					var sender = document.createElement('div');
+					sender.className = 'sender';
+					sender.textContent = msg.sender.id + ':';
+					p.appendChild(sender);
+				}
+			} else {
+				p.classList.add('info');
+			}
+			bubble.appendChild(content);
+			bubble.appendChild(time);
+			p.appendChild(bubble);
 			this.ele.appendChild(p);
 			p.scrollIntoView();
 		};
+		MessagesView.prototype.info = function (text) {
+			this.add(new Msg(text));
+		};
 
-		function start(url) {
-			window.msgView = new MessagesView(document.getElementById('messages'));
-			msgView.add(new Msg('* Connecting to ' + url));
+		var msgView = window.msgView = new MessagesView(document.getElementById('messages'));
+
+		function start(url, roomname) {
+			var roomname = roomname || 'simple-chat-room';
+			msgView.info('Websocket: ' + url + '\nRoom: ' + roomname + '\nConnecting...');
 			window.cli = new WebRelayCli(url);
-			var room;
-			cli.onopen.add(function () {
-				room = window.room = cli.room('simple-chat-room');
-				room.msgEcho = true;
-				room.onmsg.add((msg, sender) => {
-					console.info('room msg: ' + msg);
-					msgView.add(new Msg(msg, sender.self ? 'You' : sender.id));
-				});
-				msgView.add(new Msg('* You joined the room. Your ID: ' + cli.id));
+
+			var room = window.room = cli.room(roomname);
+			room.msgEcho = true;
+			if (!cli.reconnectTimes) room.onmsg.add((msg, sender) => {
+				console.info('room msg: ' + msg);
+				msgView.add(new Msg(msg, sender));
+			});
+			room.join().then(function () {
+				msgView.info('You joined the room. Your ID: ' + cli.id);
 				setTimeout(function () {
 					room.list().then(clis => {
 						clis = clis.filter(x => !x.self);
-						msgView.add(new Msg('* Other ' + clis.length + ' members:\n' + clis.map(x => x.id).join('\n')));
+						msgView.info('Other ' + clis.length + ' members:\n' + clis.map(x => x.id).join('\n'));
 						room.onlist.add((action, arg) => {
 							if (action == 'join') {
-								msgView.add(new Msg('* A member joined: ' + arg.id));
+								msgView.info('A member joined: ' + arg.id);
 							} else if (action == 'leave') {
-								msgView.add(new Msg('* A member left: ' + arg.id));
+								msgView.info('A member left: ' + arg.id);
 							}
 						});
 					});
 				}, 1000);
 			});
-			var btn = document.getElementById('btnSend');
-			var input = document.getElementById('inputText');
-			btn.onclick = function () {
-				var msg = input.value;
-				input.value = '';
-				if (msg.length) {
+
+			cli.onclose.add(function () {
+				msgView.info('Connection closed.');
+			});
+		}
+		var btn = document.getElementById('btnSend');
+		var input = document.getElementById('inputText');
+		btn.onclick = function () {
+			var msg = input.value;
+			input.value = '';
+			if (msg.length) {
+				if (window.room) {
 					room.sendmsg(msg).then(function () {
 						// msgView.add(new Msg(msg, 'You'));
 					});
+				} else {
+					let splits = msg.split(' ');
+					start(splits[0], splits[1]);
 				}
-			};
-			input.onkeypress = function (e) {
-				if (e.keyCode == 13) {
-					e.preventDefault();
-					btn.click();
-				}
-			};
-		}
-		if (window.location.protocol == 'http:' || window.location.protocol == 'https:') {
-			var url = (window.location.protocol == 'https:' ? 'wss://' : 'ws://')
+			}
+		};
+		input.onkeypress = function (e) {
+			if (e.keyCode == 13) {
+				e.preventDefault();
+				btn.click();
+			}
+		};
+		(function () {
+			let url, room;
+			let hash = window.location.hash;
+			if (hash) {
+				let splits = hash.substr(1).split('&');
+				url = splits[0];
+				room = splits[1];
+			}
+			if (!url && (window.location.protocol == 'http:' || window.location.protocol == 'https:')) {
+				url = (window.location.protocol == 'https:' ? 'wss://' : 'ws://')
 					+ window.location.host + window.location.pathname;
-			start(url);
-		}
+			}
+			if (!url) {
+				msgView.info('Cannot determine connection configration.\nPlease input: <url> [room_name]');
+			} else {
+				start(url, room);
+			}
+		})();
 	</script>
 </body>
 
