@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -15,6 +16,8 @@ namespace Naive.HttpSvr
     public static class Logging
     {
         private static object lockLogsHistory = new object();
+
+        public static bool AsyncLogging = false;
 
         public static event LogEventHandler Logged;
 
@@ -98,7 +101,36 @@ namespace Naive.HttpSvr
             RootLogger.log(log);
         }
 
+        // Printing log to console is really slow, so there is "async logging".
+        // TODO: the process cannot quit until the async logging queue flushed.
+        private static Thread _loggingThread;
+        private static BlockingCollection<Log> _logQueue;
+
         private static void _log(Log log)
+        {
+            if (AsyncLogging) {
+                if (_logQueue == null) {
+                    var queue = new BlockingCollection<Log>();
+                    if (Interlocked.CompareExchange(ref _logQueue, queue, null) == null) {
+                        _loggingThread = new Thread(_logThreadMain) { IsBackground = true, Name = "LoggingThread" };
+                        _loggingThread.Start();
+                    }
+                }
+                _logQueue.Add(log);
+            } else {
+                _logCore(log);
+            }
+        }
+
+        private static void _logThreadMain()
+        {
+            while (true) {
+                Log log = _logQueue.Take();
+                _logCore(log);
+            }
+        }
+
+        private static void _logCore(Log log)
         {
             if (HistroyEnabled) {
                 logBuffer.Add(log);

@@ -119,6 +119,7 @@ namespace NaiveSocks
             MyStream.TwoWayCopier.DefaultUseLoggerAsVerboseLogger = IsDebugFlagEnabled("copier_v");
             Channel.Debug = IsDebugFlagEnabled("mux_v");
             YASocket.Debug = IsDebugFlagEnabled("ya_v");
+            Logging.AsyncLogging = IsDebugFlagEnabled("asynclog");
             ConfigTomlLoaded?.Invoke(loadedConfig.TomlTable);
         }
 

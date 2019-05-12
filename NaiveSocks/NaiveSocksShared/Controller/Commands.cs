@@ -365,9 +365,11 @@ namespace NaiveSocks
                     }
                     PrintLogs(command.Console, logs);
                 } else if (cmd == "test") {
+                    var sw = Stopwatch.StartNew();
                     for (int i = 0; i < 10000; i++) {
                         Logging.log("(Log test " + (i + 1) + " of 10000)", Logging.Level.Debug);
                     }
+                    Logging.info($"Logged 10,000 items in {sw.ElapsedMilliseconds:N0} ms");
                 } else {
                     command.WriteLine("wrong arguments.");
                 }
