@@ -1,5 +1,6 @@
 ﻿using Naive.HttpSvr;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Text;
 using System.Threading;
@@ -7,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace Naive.HttpSvr
 {
-    public class MyQueue<T>
+    public class MyQueue<T> : IEnumerable<T>
     {
         private T[] arr;
         private int firstIndex;
@@ -64,7 +65,7 @@ namespace Naive.HttpSvr
             return DequeueCore(true, out val);
         }
 
-        public bool DequeueCore(bool peek, out T val)
+        private bool DequeueCore(bool peek, out T val)
         {
             if (count == 0) {
                 val = default(T);
@@ -110,6 +111,49 @@ namespace Naive.HttpSvr
                 throw new ArgumentOutOfRangeException(nameof(index));
             }
             arr[(firstIndex + index) % arr.Length] = val;
+        }
+
+        public Enumerator GetEnumerator() => new Enumerator(this);
+        IEnumerator<T> IEnumerable<T>.GetEnumerator() => GetEnumerator();
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+        public struct Enumerator : IEnumerator<T>
+        {
+            private readonly MyQueue<T> _queue;
+
+            public Enumerator(MyQueue<T> queue)
+            {
+                _queue = queue;
+                i = 0;
+                Current = default(T);
+            }
+
+            private int i;
+
+            public T Current { get; private set; }
+
+            object IEnumerator.Current => Current;
+
+            public void Dispose()
+            {
+            }
+
+            public bool MoveNext()
+            {
+                if (i < _queue.count) {
+                    Current = _queue.PeekAt(i++);
+                    return true;
+                } else {
+                    Current = default(T);
+                    return false;
+                }
+            }
+
+            public void Reset()
+            {
+                i = 0;
+                Current = default(T);
+            }
         }
     }
 }

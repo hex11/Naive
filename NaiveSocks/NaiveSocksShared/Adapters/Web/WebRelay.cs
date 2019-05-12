@@ -60,10 +60,18 @@ namespace NaiveSocks
         }
 
         Dictionary<string, Room> rooms = new Dictionary<string, Room>();
+        Dictionary<string, Client> clients = new Dictionary<string, Client>();
+
+        MyQueue<AuthItem> idTokens = new MyQueue<AuthItem>();
+
+        struct AuthItem { public string Id, Token; }
 
         public override bool Reloading(object oldInstance)
         {
-            rooms = ((WebRelay)oldInstance).rooms;
+            var old = (WebRelay)oldInstance;
+            rooms = old.rooms;
+            clients = old.clients;
+            idTokens = old.idTokens;
             lock (rooms) {
                 foreach (var r in rooms) {
                     r.Value.Parent = this;
@@ -93,10 +101,43 @@ namespace NaiveSocks
 
             var cli = new Client(p);
             if ((await cli.HandleRequestAsync(false)).IsConnected == false) return;
-            cli.Id = Guid.NewGuid().ToString("d");
+            cli.Id = p.ParsedQstr["id"];
+            var cliToken = p.ParsedQstr["idtoken"];
+            var reuseId = false;
+            if (cli.Id != null) {
+                lock (rooms) {
+                    foreach (var item in idTokens) {
+                        if (item.Id == cli.Id) {
+                            // TODO: If hit, remove and re-add to the queue.
+                            if (item.Token != cliToken) break;
+                            if (clients.TryGetValue(cli.Id, out var oldCli)) {
+                                try {
+                                    oldCli.SendStringAsync("kick-sameid").Forget();
+                                } catch (Exception) { }
+                                oldCli.Close();
+                                RemoveClient(oldCli);
+                            }
+                            reuseId = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            if (!reuseId) {
+                cli.Id = Guid.NewGuid().ToString("d");
+                cliToken = Guid.NewGuid().ToString("d");
+            }
+            lock (rooms) {
+                clients.Add(cli.Id, cli);
+                if (!reuseId) {
+                    if (idTokens.Count >= 50) idTokens.Dequeue();
+                    idTokens.Enqueue(new AuthItem { Id = cli.Id, Token = cliToken });
+                }
+            }
+            AUTHOK:
 
             try {
-                await cli.SendStringAsync("hello " + cli.Id);
+                await cli.SendStringAsync("hello " + cli.Id + " " + cliToken);
                 while (true) {
                     var str = await cli.RecvString();
                     var span = (Span)str;
@@ -187,17 +228,24 @@ namespace NaiveSocks
                 Logger.exception(e, Logging.Level.Warning);
             } finally {
                 lock (rooms) {
-                    foreach (var room in cli.Joined) {
-                        room.Clients.Remove(cli);
-                        if (room.Clients.Count == 0) {
-                            rooms.Remove(room.Token);
-                        } else {
-                            room.Broadcast($"room leave {room.Token} {cli.Token}", cli);
-                        }
-                    }
-                    cli.Joined = null;
+                    RemoveClient(cli);
                 }
             }
+        }
+
+        private void RemoveClient(Client cli)
+        {
+            if (cli.Joined == null) return;
+            foreach (var room in cli.Joined) {
+                room.Clients.Remove(cli);
+                if (room.Clients.Count == 0) {
+                    rooms.Remove(room.Token);
+                } else {
+                    room.Broadcast($"room leave {room.Token} {cli.Token}", cli);
+                }
+            }
+            cli.Joined = null;
+            clients.Remove(cli.Id);
         }
 
         bool CheckClientId(Client cli, ref Span line)
@@ -287,10 +335,12 @@ Listeners.prototype.invoke = function () {
 	}
 };
 
-var WebRelayCli = function (url) {
+var WebRelayCli = function (url, options) {
+	options = options || {};
 	var cli = this;
 	var ws = null;
 	var cid = null;
+	var cidToken = null;
 	var tag = '';
 	var idtag;
 	var updateIdtag = () => idtag = cid + ' ' + tag;
@@ -328,6 +378,16 @@ var WebRelayCli = function (url) {
 
 	Object.defineProperty(this, 'ws', { get: () => ws });
 	Object.defineProperty(this, 'id', { get: () => cid });
+	Object.defineProperty(this, 'idtoken', { get: () => cid + ' ' + cidToken });
+	Object.defineProperty(this, 'tag', { get: () => tag });
+	Object.defineProperty(this, 'options', { get: () => options });
+
+	if (options.idtoken) {
+		console.info('reuse idtoken: ' + options.idtoken);
+		let splits = options.idtoken.split(' ');
+		cid = splits[0];
+		cidToken = splits[1];
+	}
 
 	var ClientId = function (room, id, tag) {
 		this.room = room;
@@ -335,6 +395,13 @@ var WebRelayCli = function (url) {
 		this.tag = tag || '';
 		this.self = cid == id;
 	};
+	ClientId.prototype.toString = function () {
+		if (this.tag) {
+			return '[' + this.tag + '](' + this.id + ')';
+		} else {
+			return '(' + this.id + ')';
+		}
+	}
 
 	this.onopen = new Listeners();
 	this.onclose = new Listeners();
@@ -377,7 +444,13 @@ var WebRelayCli = function (url) {
 	this.open = function () {
 		console.info('ws connecting...');
 		openingPromise = createPromise();
-		ws = new WebSocket(url);
+		let opened = false;
+		let tempUrl = url;
+		if (cidToken) {
+			tempUrl += tempUrl.includes('?') ? '&' : '?';
+			tempUrl += 'id=' + cid + '&idtoken=' + cidToken;
+		}
+		ws = new WebSocket(tempUrl);
 		ws.onopen = (e) => {
 			console.log('ws open.');
 		};
@@ -389,7 +462,9 @@ var WebRelayCli = function (url) {
 			let cmd = splits[0];
 			if (cmd == 'hello') {
 				cid = splits[1];
+				cidToken = splits[2];
 				updateIdtag();
+				opened = true;
 				if (this.autoRejoin && rooms.size) {
 					rooms.forEach(r => r.join());
 				}
@@ -414,6 +489,8 @@ var WebRelayCli = function (url) {
 			} else if (cmd == 'ok' || cmd == 'fail') {
 				let handler = replyHandlers.shift();
 				handler(cmd == 'ok', splits, lines);
+			} else if (cmd == 'kick-sameid') {
+				cidToken = null; // stop using this id.
 			}
 		};
 		ws.onerror = (e) => {
@@ -423,7 +500,7 @@ var WebRelayCli = function (url) {
 			rooms.forEach(r => r.joined = false);
 			replyHandlers.forEach(f => f(false, ['closed'], null));
 			replyHandlers = [];
-			openingPromise.reject();
+			if (!opened) openingPromise.reject();
 			if (typeof this.autoReconnect == 'number') {
 				console.info('ws reconnecting in ' + this.autoReconnect + ' seconds.');
 				setTimeout(() => {
@@ -472,7 +549,9 @@ var WebRelayCli = function (url) {
 						this.joined = 'joined';
 						this.onstate.invoke('init', this.states);
 					}).catch(() => {
+						var p = this.joined;
 						this.joined = false;
+						return p;
 					});
 				},
 				list: function () {
@@ -492,6 +571,12 @@ var WebRelayCli = function (url) {
 		}
 		r.join();
 		return r;
+	};
+	this.settag = function (newtag) {
+		if (newtag.includes(' ')) return Promise.reject('cannot include space.');
+		tag = newtag;
+		updateIdtag();
+		return promiseRequest('tag set ' + newtag);
 	};
 	this.ping = function () {
 		let startTime = new Date().getTime();
@@ -553,6 +638,16 @@ var WebRelayCli = function (url) {
 			transition: all .05s;
 			background: hsl(207, 90%, 70%);
 			box-shadow: 0 0 .1em gray;
+		}
+
+		.textinput {
+			box-shadow: 0 0 .2em gray;
+			border: solid 1px gray;
+		}
+
+		.textinput:focus {
+			box-shadow: 0 0 .2em hsl(207, 90%, 61%);
+			border-color: hsl(207, 90%, 61%);
 		}
 
 		.bar {
@@ -620,8 +715,8 @@ var WebRelayCli = function (url) {
 
 <body style='display: flex; flex-direction: column; height: 100%; margin: 0; padding: .3em; font-family: sans-serif;'>
 	<div class='messages' id='messages'></div>
-	<div class='bar'>
-		<input style='flex: 1;' type='text' id='inputText' />
+	<div class='bar' style='height: 2em;'>
+		<input class='textinput' style='flex: 1; padding: 0 .5em;' type='text' id='inputText' />
 		<div class='btn' style='margin-left: .3em;' id='btnSend'>Send</div>
 	</div>
 	<script src='client.js'></script>
@@ -651,7 +746,7 @@ var WebRelayCli = function (url) {
 				} else {
 					var sender = document.createElement('div');
 					sender.className = 'sender';
-					sender.textContent = msg.sender.id + ':';
+					sender.textContent = msg.sender.toString() + ':';
 					p.appendChild(sender);
 				}
 			} else {
@@ -672,33 +767,46 @@ var WebRelayCli = function (url) {
 		function start(url, roomname) {
 			var roomname = roomname || 'simple-chat-room';
 			msgView.info('Websocket: ' + url + '\nRoom: ' + roomname + '\nConnecting...');
-			window.cli = new WebRelayCli(url);
+			window.cli = new WebRelayCli(url, {
+				idtoken: sessionStorage.getItem('idtoken')
+			});
 
 			var room = window.room = cli.room(roomname);
 			room.msgEcho = true;
-			if (!cli.reconnectTimes) room.onmsg.add((msg, sender) => {
+
+			room.onmsg.add((msg, sender) => {
 				console.info('room msg: ' + msg);
 				msgView.add(new Msg(msg, sender));
 			});
-			room.join().then(function () {
-				msgView.info('You joined the room. Your ID: ' + cli.id);
-				setTimeout(function () {
-					room.list().then(clis => {
-						clis = clis.filter(x => !x.self);
-						msgView.info('Other ' + clis.length + ' members:\n' + clis.map(x => x.id).join('\n'));
-						room.onlist.add((action, arg) => {
-							if (action == 'join') {
-								msgView.info('A member joined: ' + arg.id);
-							} else if (action == 'leave') {
-								msgView.info('A member left: ' + arg.id);
-							}
-						});
-					});
-				}, 1000);
+
+			var listInited = false;
+			room.onlist.add((action, arg) => {
+				if (action == 'list') {
+					arg = arg.filter(x => !x.self);
+					msgView.info('Other ' + arg.length + ' members:\n' + arg.map(x => x.toString()).join('\n'));
+					listInited = true;
+				} else if (listInited) {
+					if (action == 'join') {
+						msgView.info('A member joined: ' + arg.toString());
+					} else if (action == 'leave') {
+						msgView.info('A member left: ' + arg.toString());
+					}
+				}
+			});
+
+			cli.onopen.add(function () {
+				sessionStorage.setItem('idtoken', cli.idtoken);
+				listInited = false;
+				room.join().then(function () {
+					msgView.info('You joined the room. Your ID: ' + cli.id);
+					setTimeout(function () {
+						room.list();
+					}, 1000);
+				});
 			});
 
 			cli.onclose.add(function () {
-				msgView.info('Connection closed.');
+				msgView.info('Connection closed. Reconnecting...');
 			});
 		}
 		var btn = document.getElementById('btnSend');
@@ -707,10 +815,15 @@ var WebRelayCli = function (url) {
 			var msg = input.value;
 			input.value = '';
 			if (msg.length) {
-				if (window.room) {
-					room.sendmsg(msg).then(function () {
-						// msgView.add(new Msg(msg, 'You'));
+				if (msg.startsWith('/nick ')) {
+					let newtag = msg.substr(6);
+					cli.settag(newtag).then(() => {
+						msgView.info('Your new nickname: ' + newtag);
+					}).catch(x => {
+						msgView.info('/nick error: ' + x);
 					});
+				} else if (window.room) {
+					room.sendmsg(msg);
 				} else {
 					let splits = msg.split(' ');
 					start(splits[0], splits[1]);
