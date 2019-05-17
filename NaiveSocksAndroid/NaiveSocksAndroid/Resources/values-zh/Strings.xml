@@ -17,6 +17,7 @@
   <string name="autostart">自动启动</string>
   <string name="editconfig">编辑配置...</string>
   <string name="submenu_restart_kill">重启/杀死</string>
+  <string name="reload_keep_vpn">重载（保持 VPN 运行）</string>
   <string name="restart">重启</string>
   <string name="kill">终止进程</string>
   <string name="autoscroll">自动滚动</string>

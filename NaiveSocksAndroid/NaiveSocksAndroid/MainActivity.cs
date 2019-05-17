@@ -294,7 +294,7 @@ namespace NaiveSocksAndroid
                     stopService();
                     break;
                 case R.Id.nav_reload:
-                    reloadService();
+                    reloadService(false);
                     break;
             }
             if (frag != null) {
@@ -381,11 +381,11 @@ namespace NaiveSocksAndroid
             });
         }
 
-        private void reloadService()
+        private void reloadService(bool noVpn)
         {
             if (isServiceForegroundRunning) {
                 try {
-                    service.Reload();
+                    service.Reload(noVpn);
                 } catch (Exception e) {
                     Logging.exception(e, Logging.Level.Error, "reloading controller");
                 }
@@ -429,6 +429,11 @@ namespace NaiveSocksAndroid
             subMenu.Add(0, 0, 0, R.String.kill)
                 .SetShowAsActionFlags(ShowAsAction.Never);
 
+            if (!inOperation && running) {
+                menu.Add(group, 0, order, R.String.reload_keep_vpn)
+                    .SetShowAsActionFlags(ShowAsAction.Never);
+            }
+
             menu.Add(group, 0, order, R.String.autostart)
                 .SetCheckable(true)
                 .SetChecked(AppConfig.Current.Autostart)
@@ -450,7 +455,7 @@ namespace NaiveSocksAndroid
             } else if (id == R.Id.menu_stop) {
                 stopService();
             } else if (id == R.Id.menu_reload) {
-                reloadService();
+                reloadService(false);
             } else {
                 var title = item.TitleFormatted.ToString();
                 bool EqualsId(string str, int strId) => str == GetString(strId);
@@ -460,6 +465,8 @@ namespace NaiveSocksAndroid
                     StartActivity(new Intent(this, typeof(EditorActivity)).AddFlags(ActivityFlags.NewTask));
                 } else if (EqualsId(title, R.String.submenu_restart_kill)) {
                     // nothing to do
+                } else if (EqualsId(title, R.String.reload_keep_vpn)) {
+                    reloadService(true);
                 } else if (EqualsId(title, R.String.restart)) {
                     NaiveUtils.RunAsyncTask(async () => {
                         await stopService();

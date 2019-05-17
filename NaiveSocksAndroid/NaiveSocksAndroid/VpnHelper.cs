@@ -83,47 +83,15 @@ namespace NaiveSocksAndroid
         SocksInAdapter socksInAdapter;
         DnsInAdapter dnsInAdapter;
 
-        public void StartVpn()
+        public void StartVpn(bool dontKillVpn)
         {
             if ((VpnConfig.Handler == null) == (VpnConfig.Socks == null)) {
                 throw new Exception("Should specify (('Handler' and optional 'SocksPort') or 'Socks') and optional 'DnsResolver'");
             }
 
-            dnsResolver = null;
-            socksInAdapter = null;
+            InitAdapters();
 
-            var controller = Bg.Controller;
-            if (VpnConfig.Handler == null) {
-                socksInAdapter = controller.FindAdapter<SocksInAdapter>(VpnConfig.Socks) ?? throw new Exception($"SocksInAdapter '{VpnConfig.Socks}' not found.");
-            } else {
-                var existVpn = controller.FindAdapter<NaiveSocks.Adapter>("VPN");
-                if (existVpn != null) {
-                    throw new Exception("adapter 'VPN' already exists.");
-                } else {
-                    var handlerRef = controller.AdapterRefFromName(VpnConfig.Handler);
-                    if (handlerRef.Adapter == null) {
-                        throw new Exception("Handler not found.");
-                    }
-                    socksInAdapter = new SocksInAdapter() {
-                        Name = "VPN",
-                        listen = NaiveUtils.ParseIPEndPoint("127.1:" + VpnConfig.SocksPort),
-                        @out = handlerRef
-                    };
-                    AddInAdapter(controller, socksInAdapter);
-                }
-            }
-            if (VpnConfig.DnsResolver != null) {
-                dnsResolver = controller.FindAdapter<NaiveSocks.Adapter>(VpnConfig.DnsResolver) as IDnsProvider;
-                if (dnsResolver == null) {
-                    Logging.warning($"'{VpnConfig.DnsResolver}' is not a DNS resolver!");
-                }
-            } else {
-                dnsResolver = controller.FindAdapter<IDnsProvider>(VpnConfig.Handler);
-            }
-            if (VpnConfig.LocalDnsPort > 0 && dnsResolver == null) {
-                throw new Exception("local dns is enabled but cannot find a dns resolver. Check Handler or DnsResolver in configuration.");
-            }
-            Logging.info("VPN connections handler: " + socksInAdapter.QuotedName);
+            if (dontKillVpn) return;
 
             var builder = new VpnService.Builder(Bg)
                 .SetSession("NaiveSocks VPN bridge")
@@ -161,6 +129,57 @@ namespace NaiveSocksAndroid
             if (!isAnyAllowed)
                 builder.AddDisallowedApplication(me);
 
+            _pfd = builder.Establish();
+            _running = 1;
+            Logging.info("VPN established, fd=" + _pfd.Fd);
+
+            string dnsgw = null;
+            if (VpnConfig.DnsGw.IsNullOrEmpty() == false) {
+                dnsgw = VpnConfig.DnsGw;
+            } else if (VpnConfig.LocalDnsPort > 0) {
+                dnsgw = "127.0.0.1:" + VpnConfig.LocalDnsPort;
+            }
+            StartTun2Socks("127.0.0.1:" + socksInAdapter.listen.Port, dnsgw);
+        }
+
+        private void InitAdapters()
+        {
+            dnsResolver = null;
+            socksInAdapter = null;
+
+            var controller = Bg.Controller;
+            if (VpnConfig.Handler == null) {
+                socksInAdapter = controller.FindAdapter<SocksInAdapter>(VpnConfig.Socks) ?? throw new Exception($"SocksInAdapter '{VpnConfig.Socks}' not found.");
+            } else {
+                var existVpn = controller.FindAdapter<NaiveSocks.Adapter>("VPN");
+                if (existVpn != null) {
+                    throw new Exception("adapter 'VPN' already exists.");
+                } else {
+                    var handlerRef = controller.AdapterRefFromName(VpnConfig.Handler);
+                    if (handlerRef.Adapter == null) {
+                        throw new Exception("Handler not found.");
+                    }
+                    socksInAdapter = new SocksInAdapter() {
+                        Name = "VPN",
+                        listen = NaiveUtils.ParseIPEndPoint("127.1:" + VpnConfig.SocksPort),
+                        @out = handlerRef
+                    };
+                    AddInAdapter(controller, socksInAdapter);
+                }
+            }
+            if (VpnConfig.DnsResolver != null) {
+                dnsResolver = controller.FindAdapter<NaiveSocks.Adapter>(VpnConfig.DnsResolver) as IDnsProvider;
+                if (dnsResolver == null) {
+                    Logging.warning($"'{VpnConfig.DnsResolver}' is not a DNS resolver!");
+                }
+            } else {
+                dnsResolver = controller.FindAdapter<IDnsProvider>(VpnConfig.Handler);
+            }
+            if (VpnConfig.LocalDnsPort > 0 && dnsResolver == null) {
+                throw new Exception("local dns is enabled but cannot find a dns resolver. Check Handler or DnsResolver in configuration.");
+            }
+            Logging.info("VPN connections handler: " + socksInAdapter.QuotedName);
+
             if (VpnConfig.LocalDnsPort > 0) {
                 InitLocalDns(controller);
             }
@@ -173,18 +192,6 @@ namespace NaiveSocksAndroid
                 };
                 AddInAdapter(controller, relay);
             }
-
-            _pfd = builder.Establish();
-            _running = 1;
-            Logging.info("VPN established, fd=" + _pfd.Fd);
-
-            string dnsgw = null;
-            if (VpnConfig.DnsGw.IsNullOrEmpty() == false) {
-                dnsgw = VpnConfig.DnsGw;
-            } else if (VpnConfig.LocalDnsPort > 0) {
-                dnsgw = "127.0.0.1:" + VpnConfig.LocalDnsPort;
-            }
-            StartTun2Socks("127.0.0.1:" + socksInAdapter.listen.Port, dnsgw);
         }
 
         private void InitLocalDns(Controller controller)
