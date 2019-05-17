@@ -184,8 +184,9 @@ namespace NaiveSocks
                 }
 
                 foreach (var kv in queryNames) {
-                    bool reqv4 = (kv.Value & DnsRequestType.A) != 0;
-                    bool reqv6 = (kv.Value & DnsRequestType.AAAA) != 0;
+                    DnsRequestType reqType = kv.Value;
+                    bool reqv4 = (reqType & DnsRequestType.A) != 0;
+                    bool reqv6 = (reqType & DnsRequestType.AAAA) != 0;
                     var strName = kv.Key.ToString();
                     IEnumerable<IPAddress> ips = emptyIps;
                     IpRecord val = new IpRecord();
@@ -197,7 +198,7 @@ namespace NaiveSocks
                     var ips6 = val.ips6;
                     if (!exist || (reqv4 && ipLongs == null) || (reqv6 && ips6 == null)) {
                         var startTime = Logging.getRuntime();
-                        var task = StartResolve(kv.Value, strName, out var newTask);
+                        var task = StartResolve(reqType, strName, out var newTask);
                         try {
                             try {
                                 var resp = await task;
@@ -206,19 +207,24 @@ namespace NaiveSocks
                                 ipFilter(iparr, ref ipLongs, ref ips6);
                             } catch (Exception e) {
                                 if (newTask) {
-                                    Logger.warning("resolving: " + strName + " (" + kv.Value + "): " + e.Message + " (" + (Logging.getRuntime() - startTime) + " ms)");
+                                    Logger.warning("resolving: " + strName + " (" + reqType + "): " + e.Message + " (" + (Logging.getRuntime() - startTime) + " ms)");
                                 }
                                 continue;
                             }
 
                             if (newTask) {
-                                Logger.info("" + strName + " (" + kv.Value + ") -> " + string.Join("|", ips)
+                                Logger.info("" + strName + " (" + reqType + ") -> " + string.Join("|", ips)
                                     + " (" + (Logging.getRuntime() - startTime) + " ms)");
                                 var newExpire = DateTime.Now.AddSeconds(cache_ttl);
+                                // If we requested only A records (not AnAAAA) and an empty result returned, then there's
+                                // really no A records, so we can cache the empty result:
+                                if (reqType == DnsRequestType.A && ipLongs == null) ipLongs = new uint[0];
                                 if (ipLongs != null) {
                                     val.ipLongs = ipLongs;
                                     val.expire = newExpire;
                                 }
+                                // The same reason:
+                                if (reqType == DnsRequestType.AAAA && ips6 == null) ips6 = new Ip6[0];
                                 if (ips6 != null) {
                                     val.ips6 = ips6;
                                     val.expire6 = newExpire;
