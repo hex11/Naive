@@ -35,6 +35,9 @@ namespace NaiveSocks
         public int TotalFailedConnections => _failedConnections;
         public int RunningConnections => InConnections.Count;
 
+        public int StartTimes { get; private set; }
+        public DateTime LastStart { get; private set; }
+
         public event Action<InConnection> NewConnection;
         public event Action<InConnection> EndConnection;
 
@@ -157,18 +160,9 @@ namespace NaiveSocks
         public void Start() => Start(null);
         private void Start(List<ICanReload> oldAdapters)
         {
-            bool checkIcr(IAdapter item)
-            {
-                if (oldAdapters != null && item is ICanReload icr) {
-                    var old = oldAdapters.Find(x => x.Name == icr.Name && x.GetType() == icr.GetType());
-                    if (old != null) {
-                        oldAdapters.Remove(old);
-                        if (icr.Reloading(old))
-                            return false;
-                    }
-                }
-                return true;
-            }
+            StartTimes++;
+            LastStart = DateTime.UtcNow;
+
             int failedCount = 0;
             foreach (var item in Adapters) {
                 if (item is InAdapter inadap) {
@@ -178,7 +172,15 @@ namespace NaiveSocks
                 }
                 try {
                     InitAdapter(item);
-                    item.StartInternal(checkIcr(item));
+                    bool callStart = true;
+                    if (oldAdapters != null && item is ICanReload icr) {
+                        var old = oldAdapters.Find(x => x.Name == icr.Name && x.GetType() == icr.GetType());
+                        if (old != null) {
+                            oldAdapters.Remove(old);
+                            if (icr.Reloading(old)) callStart = false;
+                        }
+                    }
+                    item.StartInternal(callStart);
                 } catch (Exception e) {
                     Logger.exception(e, Logging.Level.Error, $"starting Adapter '{item.Name}' = {item}");
                     failedCount++;

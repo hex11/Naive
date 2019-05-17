@@ -276,8 +276,14 @@ namespace NaiveSocks
                 command.WriteLine(sb.ToString());
                 sb.Clear();
 
-                con.Write("[CPU Time] ", ConsoleColor.Cyan);
-                command.WriteLine(proc.TotalProcessorTime.TotalMilliseconds.ToString("N0") + " ms");
+                con.Write("[Time] ", ConsoleColor.Cyan);
+                var procTime = TimeSpan.FromMilliseconds(Logging.getRuntime());
+                command.WriteLine(procTime.ToString(@"d\.hh\:mm\:ss")
+                    + " since process start, CPU used: " + proc.TotalProcessorTime.TotalMilliseconds.ToString("N0") + " ms");
+                var controllerTime = DateTime.UtcNow - controller.LastStart;
+                if (controller.StartTimes > 1 || controllerTime.TotalSeconds > 30) {
+                    command.WriteLine("       " + controllerTime.ToString(@"d\.hh\:mm\:ss") + " since controller start/reload");
+                }
                 ThreadPool.GetMinThreads(out var workersMin, out var portsMin);
                 ThreadPool.GetMaxThreads(out var workersMax, out var portsMax);
                 con.Write("[Threads] ", ConsoleColor.Cyan);
