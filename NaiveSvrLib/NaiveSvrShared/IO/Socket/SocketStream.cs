@@ -89,8 +89,8 @@ namespace NaiveSocks
         {
             public int Rasync, Rsync, Rbuffer, Wasync, Wsync;
 
-            public string StringRead => $"Read {Rsync + Rasync + Rbuffer} (async {Rasync}, sync completed {Rsync}, from buffer {Rbuffer})";
-            public string StringWrite => $"Write {Wsync + Wasync} (async {Wasync}, sync completed {Wsync})";
+            public string StringRead => $"Read {Rsync + Rasync + Rbuffer:N0} (async {Rasync:N0}, sync completed {Rsync:N0}, from buffer {Rbuffer:N0})";
+            public string StringWrite => $"Write {Wsync + Wasync:N0} (async {Wasync:N0}, sync completed {Wsync:N0})";
         }
 
         const int readaheadScoreMax = 3;

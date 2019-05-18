@@ -271,7 +271,7 @@ namespace NaiveSocks
                 for (int i = 0; i < max; i++) {
                     if (i != 0)
                         sb.Append(" / ");
-                    sb.Append("Gen").Append(i).Append(": ").Append(GC.CollectionCount(i));
+                    sb.Append("Gen").Append(i).Append(": ").Append(GC.CollectionCount(i).ToString("N0"));
                 }
                 command.WriteLine(sb.ToString());
                 sb.Clear();
@@ -281,7 +281,7 @@ namespace NaiveSocks
                 command.WriteLine(procTime.ToString(@"d\.hh\:mm\:ss")
                     + " since process start, CPU used: " + proc.TotalProcessorTime.TotalMilliseconds.ToString("N0") + " ms");
                 var controllerTime = DateTime.UtcNow - controller.LastStart;
-                if (controller.StartTimes > 1 || controllerTime.TotalSeconds > 30) {
+                if (controller.StartTimes > 1 || (controllerTime - procTime) > TimeSpan.FromSeconds(30)) {
                     command.WriteLine("       " + controllerTime.ToString(@"d\.hh\:mm\:ss") + " since controller start/reload");
                 }
                 ThreadPool.GetMinThreads(out var workersMin, out var portsMin);
@@ -289,7 +289,7 @@ namespace NaiveSocks
                 con.Write("[Threads] ", ConsoleColor.Cyan);
                 command.WriteLine($"{proc.Threads.Count} (workers: {workersMin}-{workersMax}, ports: {portsMin}-{portsMax})");
                 con.Write("[Connections] ", ConsoleColor.Cyan);
-                command.WriteLine($"{controller.RunningConnections} running, {controller.TotalFailedConnections} failed, {controller.TotalHandledConnections} handled");
+                command.WriteLine($"{controller.RunningConnections:N0} running, {controller.TotalFailedConnections:N0} failed, {controller.TotalHandledConnections:N0} handled");
                 con.Write("[Relay Counters] ", ConsoleColor.Cyan);
                 command.WriteLine($"{MyStream.TotalCopiedPackets:N0} packets, {MyStream.TotalCopiedBytes:N0} bytes");
                 con.Write("[Socket Counters]\n", ConsoleColor.Cyan);
@@ -298,7 +298,7 @@ namespace NaiveSocks
 
                 if (command.ArgOrNull(0) == "-v") {
                     con.Write("[ContRunner Counters] ", ConsoleColor.Cyan);
-                    command.WriteLine($"{ContinuationRunner.InContextCount}/{ContinuationRunner.OutContextCount}");
+                    command.WriteLine($"{ContinuationRunner.InContextCount:N0}/{ContinuationRunner.OutContextCount:N0}");
                 }
             });
             cmdHub.AddCmdHandler(prefix + "config", c => {
