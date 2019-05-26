@@ -505,10 +505,17 @@ namespace NaiveSocks
                         string toFilePath = toType == WebSvrHelper.PathResult.Directory
                             ? Path.Combine(toPath, Path.GetFileName(from))
                             : toPath;
-                        if (reader.CurrentPartName == "mv") {
-                            MoveOrReplace(fromPath, toFilePath);
-                        } else {
-                            File.Copy(fromPath, toFilePath, true);
+                        // TODO: refine directory moving/copying
+                        try {
+                            if (reader.CurrentPartName == "mv") {
+                                MoveOrReplace(fromPath, toFilePath);
+                            } else {
+                                File.Copy(fromPath, toFilePath, true);
+                            }
+                        } catch (Exception e) {
+                            Logger.exception(e, Logging.Level.Warning, $"file mv/cp from  '{fromPath}' to '{toFilePath}' by {p.myStream}.");
+                            info = "error occurred during file operation at " + from;
+                            goto FAIL;
                         }
                         count++;
                     }
@@ -562,7 +569,7 @@ namespace NaiveSocks
             if (File.Exists(to)) {
                 File.Replace(from, to, null);
             } else {
-                File.Move(from, to);
+                Directory.Move(from, to);
             }
         }
 
