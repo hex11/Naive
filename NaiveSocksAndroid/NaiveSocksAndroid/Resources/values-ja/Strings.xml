@@ -17,6 +17,7 @@
   <string name="autostart">自動起動</string>
   <string name="editconfig">設定を編集...</string>
   <string name="submenu_restart_kill">再起動/キル</string>
+  <string name="reload_kill_vpn">リロード（VPN をキル）</string>
   <string name="restart">再起動</string>
   <string name="kill">強制終了</string>
   <string name="autoscroll">自動スクロール</string>

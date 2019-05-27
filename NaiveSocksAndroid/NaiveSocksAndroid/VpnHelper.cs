@@ -83,7 +83,7 @@ namespace NaiveSocksAndroid
         SocksInAdapter socksInAdapter;
         DnsInAdapter dnsInAdapter;
 
-        public void StartVpn(bool dontKillVpn)
+        public void StartVpn()
         {
             if ((VpnConfig.Handler == null) == (VpnConfig.Socks == null)) {
                 throw new Exception("Should specify (('Handler' and optional 'SocksPort') or 'Socks') and optional 'DnsResolver'");
@@ -91,7 +91,7 @@ namespace NaiveSocksAndroid
 
             InitAdapters();
 
-            if (dontKillVpn) return;
+            if (_pfd != null) return;
 
             var builder = new VpnService.Builder(Bg)
                 .SetSession("NaiveSocks VPN bridge")

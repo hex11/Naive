@@ -4337,7 +4337,7 @@ namespace NaiveSocksAndroid
 			public const int reload = 2131492930;
 			
 			// aapt resource value: 0x7f0c0047
-			public const int reload_controller_only = 2131492935;
+			public const int reload_kill_vpn = 2131492935;
 			
 			// aapt resource value: 0x7f0c0060
 			public const int reloading_error = 2131492960;

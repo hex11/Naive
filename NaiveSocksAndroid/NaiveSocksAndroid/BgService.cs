@@ -226,7 +226,7 @@ namespace NaiveSocksAndroid
                     Controller.Start();
                     Logger.info("controller started.");
                     putLine(GetString(R.String.controller_started));
-                    CheckVPN(false);
+                    CheckVPN();
                 } catch (System.Exception e) {
                     Logger.exception(e, Logging.Level.Error, "loading/starting controller");
                     string msg = GetString(R.String.starting_error) + e.Message;
@@ -241,11 +241,11 @@ namespace NaiveSocksAndroid
             updateNotif(true);
         }
 
-        private void CheckVPN(bool dontKillVpn)
+        private void CheckVPN()
         {
             if (currentConfig?.vpn?.Enabled == true) {
                 Logging.info("Starting VPN");
-                StartVpn(dontKillVpn);
+                StartVpn();
             } else {
                 vpnHelper = null;
             }
@@ -253,7 +253,7 @@ namespace NaiveSocksAndroid
 
         VpnHelper vpnHelper;
 
-        private void StartVpn(bool dontKillVpn)
+        private void StartVpn()
         {
             if (VpnService.Prepare(this) != null) {
                 var activity = ShowingActivity;
@@ -270,7 +270,7 @@ namespace NaiveSocksAndroid
                         vpnHelper = new VpnHelper(this);
                     // else it may be reloading
                     vpnHelper.VpnConfig = currentConfig.vpn;
-                    vpnHelper.StartVpn(dontKillVpn);
+                    vpnHelper.StartVpn();
                 } catch (Exception e) {
                     Logging.exception(e, Logging.Level.Error, "Starting VPN");
                 }
@@ -329,7 +329,7 @@ namespace NaiveSocksAndroid
                     this.ToForeground();
                     break;
                 case Actions.START_VPN:
-                    StartVpn(false);
+                    StartVpn();
                     break;
                 case Actions.STOP:
                 case Actions.STOP_NOTIF:
@@ -384,7 +384,7 @@ namespace NaiveSocksAndroid
             notificationManager.Notify(MainNotificationId, builder.Build());
         }
 
-        public void Reload(bool dontKillVpn = false)
+        public void Reload(bool killVpn = false)
         {
             Task.Run(() => {
                 try {
@@ -398,9 +398,9 @@ namespace NaiveSocksAndroid
                         return;
                     }
                     SetRunningState(true, true);
-                    if (!dontKillVpn) vpnHelper?.Stop();
+                    if (killVpn) vpnHelper?.Stop();
                     Controller.Reload();
-                    CheckVPN(dontKillVpn);
+                    CheckVPN();
                     putLine(GetString(R.String.controller_reloaded));
                 } catch (Exception e) {
                     Logging.exception(e, Logging.Level.Error, "BgService.Reload()");

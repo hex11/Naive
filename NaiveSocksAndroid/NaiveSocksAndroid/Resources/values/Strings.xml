@@ -17,7 +17,7 @@
   <string name="autostart">Autostart</string>
   <string name="editconfig">Edit configuration...</string>
   <string name="submenu_restart_kill">Restart/Kill</string>
-  <string name="reload_keep_vpn">Reload (keep VPN)</string>
+  <string name="reload_kill_vpn">Reload (kill VPN)</string>
   <string name="restart">Restart</string>
   <string name="kill">Kill!</string>
   <string name="autoscroll">Autoscroll</string>
