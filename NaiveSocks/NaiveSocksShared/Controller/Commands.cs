@@ -397,10 +397,10 @@ namespace NaiveSocks
                     } else if (index == 0) {
                         foreach (var item in tests) {
                             if (item.Name.StartsWith("*"))
-                                item.Run(cmd.Console);
+                                item.Run(cmd.Console, controller.WorkingDirectory);
                         }
                     } else {
-                        tests[index - 1].Run(cmd.Console);
+                        tests[index - 1].Run(cmd.Console, controller.WorkingDirectory);
                     }
                     cmd.WriteLine("");
                 }
@@ -661,6 +661,12 @@ namespace NaiveSocks
         struct TestCtx
         {
             public Stopwatch sw;
+            public string workingDir;
+
+            public string GetPath(string path)
+            {
+                return Path.Combine(workingDir, path);
+            }
         }
 
         class TestItem
@@ -674,7 +680,7 @@ namespace NaiveSocks
                 Action = action;
             }
 
-            public void Run(CmdConsole con)
+            public void Run(CmdConsole con, string workingDir)
             {
                 con.Write(Name, Color32.FromConsoleColor(ConsoleColor.Cyan));
                 con.Write("...GC...");
@@ -690,7 +696,7 @@ namespace NaiveSocks
                 con.WriteLine(sw.ElapsedTicks + " ticks.");
                 con.Write("Running...");
                 sw.Restart();
-                Action(new TestCtx { sw = sw });
+                Action(new TestCtx { sw = sw, workingDir = workingDir });
                 sw.Stop();
                 con.Write("\tresult: ");
                 con.Write($"[{sw.ElapsedMilliseconds:N0} ms]", Color32.FromConsoleColor(ConsoleColor.Green));
@@ -906,20 +912,21 @@ namespace NaiveSocks
                 }
             }),
             new TestItem("DnsDb upserts 10,000 items", (ctx) => {
-                var db = new DnsDb("performance-test.db");
-                db.Init();
-                for (int i = 0; i < 10000; i++) {
-                    var r = new IpRecord{
-                        expire = DateTime.Now,
-                        ipLongs = new uint[] {
-                            (uint)NaiveUtils.Random.Next(0, 50000)
-                        }
-                    };
-                    db.Set(i.ToString(), ref r);
+                using (var db = new DnsDb(ctx.GetPath("performance-test.db"))) {
+                    db.Init();
+                    for (int i = 0; i < 10000; i++) {
+                        var r = new IpRecord{
+                            expire = DateTime.Now,
+                            ipLongs = new uint[] {
+                                (uint)NaiveUtils.Random.Next(0, 50000)
+                            }
+                        };
+                        db.Set(i.ToString(), ref r);
+                    }
                 }
             }),
             new TestItem("DnsDb query by domain 10,000 times", (ctx) => {
-                using (var db = new DnsDb("performance-test.db")) {
+                using (var db = new DnsDb(ctx.GetPath("performance-test.db"))) {
                     db.Init();
                     for (int i = 0; i < 10000; i++) {
                         db.QueryByName(NaiveUtils.Random.Next(0, 20000).ToString(), out var val);
@@ -927,7 +934,7 @@ namespace NaiveSocks
                 }
             }),
             new TestItem("DnsDb query by ip 10,000 times", (ctx) => {
-                using (var db = new DnsDb("performance-test.db")) {
+                using (var db = new DnsDb(ctx.GetPath("performance-test.db"))) {
                     db.Init();
                     for (int i = 0; i < 10000; i++) {
                         db.QueryByIp((uint)NaiveUtils.Random.Next(0, 50000));
@@ -935,7 +942,7 @@ namespace NaiveSocks
                 }
             }),
             new TestItem("DnsDb delete test file", (ctx) => {
-                File.Delete("performance-test.db");
+                File.Delete(ctx.GetPath("performance-test.db"));
             }),
             new TestItem("AsyncQueue dequeue (no waiting) 1,000,000 times", (ctx) => {
                 var q = new AsyncQueue<object>();
