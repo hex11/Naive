@@ -230,13 +230,13 @@ namespace NaiveSocks
 
         private async Task MainReadLoop()
         {
-            int syncCount = 0;
+            int loopCount = 0;
             while (!Closed) {
-                if (syncCount > 64) {
-                    syncCount = 0;
+                if (++loopCount == 64) {
+                    loopCount = 0;
                     await Task.Yield();
                 }
-                Msg r = await BaseStream.RecvMsgR(null).SyncCounter(ref syncCount);
+                Msg r = await BaseStream.RecvMsgR(null);
                 if (r.IsEOF)
                     throw new DisconnectedException("EOF Msg.");
                 var frame = Frame.unpack(this, r.Data);

@@ -14,8 +14,7 @@ namespace NaiveSocks
     /// <summary>
     /// Yet async socket wrapper using Linux epoll
     /// </summary>
-    public class YASocket : SocketStream, IEpollHandler, IMyStreamNoBuffer
-        //, IMyStreamMultiBuffer // currently not working
+    public class YASocket : SocketStream, IEpollHandler, IMyStreamNoBuffer, IMyStreamMultiBuffer
     {
         public static bool isX86 = true;
         public static bool Debug = false;
@@ -713,6 +712,9 @@ namespace NaiveSocks
             PollLoop(ep);
         }
 
+        int cleanupWarningLastTime = -5;
+        int cleanupWarningTimes = 0;
+
         public void AddFd(int fd, EPOLL_EVENTS events, IEpollHandler handler, bool noCleanupWarning = false)
         {
             if (handler == null)
@@ -727,7 +729,12 @@ namespace NaiveSocks
             mapLock.EnterWriteLock();
             try {
                 if (fdCleanupList.Contains(fd) && !noCleanupWarning) {
-                    Logger.warning("Adding fd " + fd + " (handler " + handler + "), which is in cleanupList");
+                    var time = WebSocket.CurrentTimeRough;
+                    cleanupWarningTimes++;
+                    if (time - cleanupWarningLastTime >= 5) {
+                        cleanupWarningLastTime = time;
+                        Logger.warning("Adding fd " + fd + " (handler " + handler + "), which is in cleanupList (happend " + cleanupWarningTimes + " times)");
+                    }
                 }
                 mapFdToHandler.Add(fd, handler);
                 //mapFdToHandler[fd] = handler;
@@ -1043,9 +1050,12 @@ namespace NaiveSocks
 
             public static unsafe int RecvToBsThrows(int fd, BytesSegment bs, MSG_FLAGS flags)
             {
+                RETRY:
                 var r = RecvToBs(fd, bs, flags);
                 if (r < 0) {
-                    ThrowWithErrno("recv");
+                    var errno = GetErrno();
+                    if (errno == 4 /* EINTR */ ) goto RETRY;
+                    ThrowWithErrno("recv", errno);
                 }
                 return r;
             }
@@ -1093,21 +1103,6 @@ namespace NaiveSocks
                         i++;
                     }
                 }
-                {
-                    var cur = 0;
-                    foreach (var item in bv) {
-                        if (item.len <= 0) continue;
-                        iovec iov = msg.msg_iov[cur];
-                        if (iov.iov_len != item.len) Logging.debugForce($"{cur} wrong len");
-                        for (int i = 0; i < item.len; i++) {
-                            byte a = ((byte*)iov.iov_base)[i];
-                            byte b = item[i];
-                            if (a != b)
-                                Logging.debugForce($"{cur}, {i}, {((ulong)iov.iov_base) + (ulong)i:X}: expected {b} got {a}");
-                        }
-                        cur++;
-                    }
-                }
                 var w = sendmsg(fd, &msg, (int)flags);
                 errno = w == -1 ? Syscall.GetErrno() : 0;
                 for (int i = 0; i < bufcount; i++) {
@@ -1126,7 +1121,7 @@ namespace NaiveSocks
                         }
                     }
                 }
-                Logging.debugForce($"sendmsg sent {w}, remaining {bytecount - w}, total {bytecount}, errno " + errno);
+                //Logging.debugForce($"sendmsg sent {w} ({bufcount} bufs), remaining {bytecount - w}, total {bytecount}, errno " + errno);
                 return w == bytecount;
             }
 
