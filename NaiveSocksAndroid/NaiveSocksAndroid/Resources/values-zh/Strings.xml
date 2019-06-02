@@ -26,10 +26,11 @@
   <string name="format_starting">{0} 正在启动</string>
   <string name="format_stopping">{0} 正在停止</string>
   <string name="no_config">无配置文件</string>
+  <string name="opened_config">已打开: {0}</string>
   <string name="config_editor">配置编辑器</string>
   <string name="open">打开</string>
   <string name="save">保存</string>
-  <string name="encode_decode">Encode/decode</string>
+  <string name="copy_encoded_text">Copy encoded text</string>
   <string name="file_saved">文件已保存</string>
   <string name="press_again_to_quit">再按一次返回，或者...</string>
   <string name="save_and_quit">保存并关闭</string>

@@ -60,19 +60,25 @@ namespace NaiveSocksAndroid
             SetRealContentView(scrollView);
 
             string[] paths = AppConfig.GetNaiveSocksConfigPaths(this);
-            currentFilePath = paths.FirstOrDefault(x => File.Exists(x));
-            if (currentFilePath != null) {
-                try {
-                    var fileContent = File.ReadAllText(currentFilePath, Encoding.UTF8);
-                    editText.Text = fileContent;
-                } catch (Exception e) {
-                    MakeSnackbar(Resources.GetString(R.String.saving_error) + e.Message, Snackbar.LengthLong).Show();
-                }
-            } else {
-                currentFilePath = paths[0];
-                MakeSnackbar(R.String.no_config, Snackbar.LengthLong).Show();
-            }
+            var path = paths.FirstOrDefault(x => File.Exists(x));
+            if (path == null) currentFilePath = paths[0];
+            OpenFile(path);
             editText.TextChanged += EditText_TextChanged;
+        }
+
+        private void OpenFile(string path)
+        {
+            currentFilePath = path;
+            if (File.Exists(path) == false) {
+                MakeSnackbar(R.String.no_config, Snackbar.LengthLong).Show();
+                return;
+            }
+            try {
+                editText.Text = File.ReadAllText(path, Encoding.UTF8);
+                MakeSnackbar(string.Format(Resources.GetString(R.String.opened_config), path), Snackbar.LengthLong).Show();
+            } catch (Exception e) {
+                MakeSnackbar(Resources.GetString(R.String.saving_error) + e.Message, Snackbar.LengthLong).Show();
+            }
         }
 
         private void EditText_TextChanged(object sender, Android.Text.TextChangedEventArgs e)
@@ -86,7 +92,7 @@ namespace NaiveSocksAndroid
         public override bool OnCreateOptionsMenu(IMenu menu)
         {
             menu.Add(Menu.None, id_save, Menu.None, R.String.save).SetShowAsAction(ShowAsAction.IfRoom);
-            menu.Add(Menu.None, id_encode, Menu.None, R.String.encode_decode).SetShowAsAction(ShowAsAction.Never);
+            menu.Add(Menu.None, id_encode, Menu.None, R.String.copy_encoded_text).SetShowAsAction(ShowAsAction.Never);
             return true;
         }
 
@@ -122,9 +128,8 @@ namespace NaiveSocksAndroid
                 return true;
             } else if (item.ItemId == id_encode) {
                 try {
-                    if (!TryDecode(out var text)) {
-                        Encode(text);
-                    }
+                    TryDecode(out var text);
+                    CopyEncoded(text);
                 } catch (Exception e) {
                     Logging.exception(e, Logging.Level.Error, "config editor decoding/encoding");
                     MakeSnackbar(Resources.GetString(R.String.saving_error) + e.Message, Snackbar.LengthShort).Show();
@@ -165,7 +170,7 @@ namespace NaiveSocksAndroid
             return false;
         }
 
-        private void Encode(string text)
+        private void CopyEncoded(string text)
         {
             var srcBytes = NaiveUtils.GetUTF8Bytes_AllocFromPool(text);
             byte[] gzBytes;
@@ -178,7 +183,10 @@ namespace NaiveSocksAndroid
                 gzBytes = ms.GetBuffer();
                 len = (int)ms.Length;
             }
-            editText.Text = Base64GzTag + Convert.ToBase64String(gzBytes, 0, len);
+            var encoded = Base64GzTag + Convert.ToBase64String(gzBytes, 0, len);
+            var cs = this.GetSystemService(Context.ClipboardService) as ClipboardManager;
+            cs.PrimaryClip = ClipData.NewPlainText("text", encoded);
+            Toast.MakeText(this, R.String.copied, ToastLength.Short).Show();
         }
     }
 }

@@ -26,10 +26,11 @@
   <string name="format_starting">{0}は起動しています</string>
   <string name="format_stopping">{0}は停止しています</string>
   <string name="no_config">設定ファイルがありません</string>
+  <string name="opened_config">開いた: {0}</string>
   <string name="config_editor">設定エディタ</string>
   <string name="open">開く</string>
   <string name="save">保存する</string>
-  <string name="encode_decode">Encode/decode</string>
+  <string name="copy_encoded_text">Copy encoded text</string>
   <string name="file_saved">ファイルが保存されました</string>
   <string name="press_again_to_quit">もう一度押して終了します。または...</string>
   <string name="save_and_quit">保存して終了する</string>

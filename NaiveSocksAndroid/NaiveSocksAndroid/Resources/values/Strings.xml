@@ -26,10 +26,11 @@
   <string name="format_starting">{0} is starting</string>
   <string name="format_stopping">{0} is stopping</string>
   <string name="no_config">No configuation file</string>
+  <string name="opened_config">Opened: {0}</string>
   <string name="config_editor">Config Editor</string>
   <string name="open">Open</string>
   <string name="save">Save</string>
-  <string name="encode_decode">Encode/decode</string>
+  <string name="copy_encoded_text">Copy encoded text</string>
   <string name="file_saved">File saved</string>
   <string name="press_again_to_quit">Press again to quit, or...</string>
   <string name="save_and_quit">Save and quit</string>
