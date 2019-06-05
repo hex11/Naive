@@ -302,12 +302,18 @@ namespace NaiveSocksAndroid
 
             public void Render(Logging.Log log, Logging.Log? prevLog)
             {
-                Color color = getColorFromLevel(log.level) ?? Color.LightGray;
                 string timestamp = "[" + log.time.ToString("HH:mm:ss.fff") + " " + log.levelStr + "]";
-                ssb.Append(timestamp, new BackgroundColorSpan(color), SpanTypes.ExclusiveExclusive);
+
+                Color color = getColorFromLevel(log.level) ?? Color.LightGray;
+                var color2 = color;
+                color2.A = (byte)(color2.A / 2);
+                color2 = AlphaComposite(Color.White, color2);
+                var color1 = AlphaComposite(color2, color);
+
+
+                ssb.Append(timestamp, new BackgroundColorSpan(color1), SpanTypes.ExclusiveExclusive);
                 ssb.Append(log.text);
-                color.A = (byte)(color.A / 2);
-                textView.SetBackgroundColor(color);
+                textView.SetBackgroundColor(color2);
                 textView.SetText(ssb, TextView.BufferType.Spannable);
                 ssb.Clear();
                 int topMargin;
@@ -322,6 +328,23 @@ namespace NaiveSocksAndroid
                     }
                 }
                 textView.LayoutParameters = new LinearLayout.LayoutParams(-1, -2) { TopMargin = topMargin };
+            }
+
+            /// <summary>
+            /// A over B
+            /// </summary>
+            private static Color AlphaComposite(Color b, Color a)
+            {
+                var aa = a.A / 255f;
+                var aar = (255 - a.A) * b.A / (255 * 255f);
+                var alpha = aa + aar;
+                var fac = 1 / alpha;
+                return new Color(
+                    r: (byte)((a.R * aa + b.R * aar) * fac),
+                    g: (byte)((a.G * aa + b.G * aar) * fac),
+                    b: (byte)((a.B * aa + b.B * aar) * fac),
+                    a: (byte)(alpha * 255)
+                    );
             }
 
             public void Reset()

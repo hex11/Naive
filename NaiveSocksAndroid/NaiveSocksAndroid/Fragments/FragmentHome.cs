@@ -23,26 +23,39 @@ namespace NaiveSocksAndroid
             TimerInterval = 2000;
         }
 
-        private LinearLayout linearLayout;
+        private LinearLayout rootLayout;
+
+        private LinearLayout itemsLayout;
 
         StringBuilder _sb = new StringBuilder();
         List<KeyValuePair<TextView, Action<StringBuilder>>> items = new List<KeyValuePair<TextView, Action<StringBuilder>>>();
 
         public override View OnCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState)
         {
-            linearLayout = new LinearLayout(Context);
-            linearLayout.Orientation = Orientation.Vertical;
-            linearLayout.SetPadding(8, 8, 8, 8);
+            var match_parent = ViewGroup.LayoutParams.MatchParent;
+
+            rootLayout = new LinearLayout(Context);
+            rootLayout.Orientation = Orientation.Vertical;
+            rootLayout.SetPadding(8, 0, 8, 0);
+
+            var itemsOuter = new ScrollView(Context);
+            itemsOuter.LayoutParameters = new LinearLayout.LayoutParams(match_parent, 0, 1);
+
+            itemsLayout = new LinearLayout(Context);
+            itemsLayout.Orientation = Orientation.Vertical;
+            itemsLayout.SetPadding(0, 8, 0, 8);
+
+            itemsOuter.AddView(itemsLayout);
+            rootLayout.AddView(itemsOuter);
 
             CreateDataItems();
 
             TextView logTitleView = CreateDataTitleView("Log");
-            linearLayout.AddView(logTitleView);
+            rootLayout.AddView(logTitleView);
             var frame = new FrameLayout(Context);
             frame.Id = 233;
-            var match_parent = ViewGroup.LayoutParams.MatchParent;
             frame.LayoutParameters = new LinearLayout.LayoutParams(match_parent, 0, 1);
-            linearLayout.AddView(frame);
+            rootLayout.AddView(frame);
             var logView = new FragmentLogs() { InHome = true };
             logView.InfoStrChanged += (str) => {
                 if (str == null)
@@ -54,7 +67,7 @@ namespace NaiveSocksAndroid
                 .Replace(frame.Id, logView)
                 .Commit();
 
-            return linearLayout;
+            return rootLayout;
         }
 
         protected override void OnUpdate()
@@ -78,8 +91,8 @@ namespace NaiveSocksAndroid
 
             NewDataItem("Memory", sb => {
                 proc = System.Diagnostics.Process.GetCurrentProcess();
-                sb.Append("GC Memory: ").Append(GC.GetTotalMemory(false).ToString("N0"))
-                    .Append(" / WS: ").Append(proc.WorkingSet64.ToString("N0"));
+                sb.Append("GC Memory: ").Append((GC.GetTotalMemory(false) / 1024).ToString("N0")).Append(" KB")
+                    .Append(" / RSS: ").Append((proc.WorkingSet64 / 1024).ToString("N0")).Append(" KB");
             });
 
             NewDataItem("GC Counters", sb => {
@@ -93,10 +106,18 @@ namespace NaiveSocksAndroid
 
             NewDataItem("Time", sb => {
                 var cpuTime = Android.OS.Process.ElapsedCpuTime;
-                var runTime = SystemClock.ElapsedRealtime() - Android.OS.Process.StartElapsedRealtime;
-                sb.Append("Process running: ").Append(TimeSpan.FromMilliseconds(runTime).ToString(@"d\.hh\:mm\:ss"));
+                var procTimeMs = SystemClock.ElapsedRealtime() - Android.OS.Process.StartElapsedRealtime;
+                var procTime = TimeSpan.FromMilliseconds(procTimeMs);
+                sb.Append("Process running: ").Append(procTime.ToString(@"d\.hh\:mm\:ss"));
                 sb.Append(" / CPU used: ").Append(cpuTime.ToString("N0")).Append(" ms")
-                    .Append(" (").Append(((float)cpuTime / runTime * 100).ToString("N2")).Append("%)");
+                    .Append(" (").Append(((float)cpuTime / procTimeMs * 100).ToString("N2")).Append("%)");
+                var controller = Controller;
+                if (controller != null) {
+                    var controllerTime = DateTime.UtcNow - controller.LastStart;
+                    if (controller.StartTimes > 1 || (controllerTime - procTime) > TimeSpan.FromSeconds(30)) {
+                        sb.Append("\nController running: ").Append(controllerTime.ToString(@"d\.hh\:mm\:ss"));
+                    }
+                }
             });
 
             NewDataItem("Threads", sb => {
@@ -133,8 +154,8 @@ namespace NaiveSocksAndroid
             var c = new TextView(Context);
             c.SetPadding(32, 8, 16, 8);
 
-            linearLayout.AddView(t);
-            linearLayout.AddView(c);
+            itemsLayout.AddView(t);
+            itemsLayout.AddView(c);
 
             items.Add(new KeyValuePair<TextView, Action<StringBuilder>>(c, contentFunc));
         }

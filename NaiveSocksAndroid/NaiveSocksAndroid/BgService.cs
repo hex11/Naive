@@ -247,6 +247,7 @@ namespace NaiveSocksAndroid
                 Logging.info("Starting VPN");
                 StartVpn();
             } else {
+                vpnHelper?.Stop();
                 vpnHelper = null;
             }
         }
@@ -353,7 +354,7 @@ namespace NaiveSocksAndroid
                 case Actions.GC:
                 case Actions.GC_0:
                     var before = GC.GetTotalMemory(false);
-                    GC.Collect(action == Actions.GC ? GC.MaxGeneration : 0);
+                    GC.Collect(action == Actions.GC ? GC.MaxGeneration : 0, GCCollectionMode.Forced, true, true);
                     putLine($"{GetString(R.String.gc_done)} {before:N0} -> {GC.GetTotalMemory(false):N0}");
                     if (!IsForegroundRunning)
                         this.StopSelf();
