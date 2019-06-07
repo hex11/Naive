@@ -8,9 +8,9 @@ namespace NaiveSocks
 {
     public abstract class InConnection : ConnectArgument
     {
-        protected InConnection(IAdapter inAdapter) : base(inAdapter)
+        protected InConnection(IAdapter creator) : base(creator)
         {
-            var adap = inAdapter.GetAdapter();
+            var adap = creator.GetAdapter();
             BytesCountersRW = new BytesCountersRW(adap.BytesCountersRW);
         }
 
@@ -69,7 +69,7 @@ namespace NaiveSocks
 
         public Task<IMyStream> HandleAndGetStream(IAdapter adapter)
         {
-            return HandleAndGetStream(new ConnectResult(adapter, ConnectResultEnum.Conneceted));
+            return HandleAndGetStream(new ConnectResult(adapter, ConnectResultEnum.OK));
         }
 
         public Task HandleFailed(IAdapter adapter)
@@ -79,7 +79,7 @@ namespace NaiveSocks
 
         public async Task HandleAndPutStream(IAdapter outAdapter, IMyStream stream, Task waitForReadFromStream = null)
         {
-            var result = new ConnectResult(outAdapter, ConnectResultEnum.Conneceted) { Stream = stream };
+            var result = new ConnectResult(outAdapter, ConnectResultEnum.OK) { Stream = stream };
             var thisStream = await HandleAndGetStream(result);
             var copier = new MyStream.TwoWayCopier(stream, thisStream) {
                 WhenCanReadFromLeft = waitForReadFromStream,
@@ -89,6 +89,16 @@ namespace NaiveSocks
             EnsureSniffer();
             Sniffer.ListenToCopier(copier.CopierFromRight, copier.CopierFromLeft);
             await copier.Run();
+        }
+
+        public void Dispose()
+        {
+            if (IsHandled == false) {
+                HandleFailed(null);
+            }
+            var dataStream = DataStream;
+            if (dataStream != null)
+                MyStream.CloseWithTimeout(dataStream).Forget();
         }
 
         public virtual string GetInfoStr() => null;
@@ -146,34 +156,34 @@ namespace NaiveSocks
             if (outAdapter != null && (flags & ToStringFlags.OutAdapter) != 0)
                 sb.Append("->'").Append(outAdapter.Name).Append('\'');
             if ((flags & ToStringFlags.Time) != 0)
-                sb.Append(' ').Append("T=").AppendFormat((WebSocket.CurrentTime - CreateTime).ToString("N0"));
+                sb.Append(" T=").AppendFormat((WebSocket.CurrentTime - CreateTime).ToString("N0"));
             if ((flags & ToStringFlags.Bytes) != 0 && BytesCountersRW.TotalValue.Packets > 0)
                 sb.Append(' ').Append(BytesCountersRW.ToString());
             var addition = ((flags & ToStringFlags.AdditionFields) != 0) ? GetInfoStr() : null;
             if (addition != null)
                 sb.Append(' ').Append(addition);
-            sb.Append(' ').Append("dest=").Append(Dest.Host);
+            sb.Append(" dest=").Append(Dest.Host);
             if (DestOriginalName != null) {
                 sb.Append('(').Append(DestOriginalName).Append(')');
             }
             sb.Append(':').Append(Dest.Port);
             if (ConnectResult != null) {
-                if (ConnectResult.Result == ConnectResultEnum.Conneceted) {
+                if (ConnectResult.Result == ConnectResultEnum.OK) {
                     if ((flags & ToStringFlags.OutStream) != 0 && ConnectResult.Stream != null) {
-                        sb.Append(' ').Append("->").Append(ConnectResult.Stream);
+                        sb.Append(" ->").Append(ConnectResult.Stream);
                     }
                 } else if (ConnectResult.Result == ConnectResultEnum.Failed) {
-                    sb.Append(' ').Append("(FAIL)");
+                    sb.Append(" (FAIL)");
                 } else if (ConnectResult.IsRedirected) {
-                    sb.Append(' ').Append("(REDIR->'").Append(ConnectResult.Redirected.Adapter?.Name).Append("')");
+                    sb.Append(" (REDIR->'").Append(ConnectResult.Redirected.Adapter?.Name).Append("')");
                 }
             } else {
-                sb.Append(' ').Append("(...)");
+                sb.Append(" (...)");
             }
             if (IsStoppingRequested)
-                sb.Append(' ').Append("(STOPPING)");
+                sb.Append(" (STOPPING)");
             if (IsFinished)
-                sb.Append(' ').Append("(END)");
+                sb.Append(" (END)");
             sb.Append('}');
         }
 
@@ -298,7 +308,7 @@ namespace NaiveSocks
 
     public enum ConnectResultEnum
     {
-        Conneceted,
+        OK,
         Failed,
     }
 
@@ -320,7 +330,7 @@ namespace NaiveSocks
             Stream = destStream;
         }
 
-        public ConnectResult(IAdapter adapter, IMyStream destStream) : this(adapter, ConnectResultEnum.Conneceted, destStream)
+        public ConnectResult(IAdapter adapter, IMyStream destStream) : this(adapter, ConnectResultEnum.OK, destStream)
         {
         }
 
@@ -339,14 +349,14 @@ namespace NaiveSocks
         public IMyStream Stream;
         public Task WhenCanRead = NaiveUtils.CompletedTask;
 
-        public bool Ok => Result == ConnectResultEnum.Conneceted;
+        public bool Ok => Result == ConnectResultEnum.OK;
 
         public AdapterRef Redirected;
         public bool IsRedirected => Redirected != null;
 
         public void ThrowIfFailed()
         {
-            if (Result != ConnectResultEnum.Conneceted) {
+            if (Result != ConnectResultEnum.OK) {
                 throw Exception ?? new Exception("connect result: failed: " + FailedReason);
             }
         }

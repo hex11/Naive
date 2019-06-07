@@ -168,11 +168,17 @@ namespace NaiveSocks
                 return remoteUdp.WriteToAsyncR(bs, destEP);
             }
 
-            public async void StartReceive(BytesSegment firstpacket, int headerLen)
+            public void StartReceive(BytesSegment firstpacket, int headerLen)
             {
-                // Note that firstpacket should not be used after any awaiting.
+                var buffer = BufferPool.GlobalGet(UdpBufferSize);
+                firstpacket.CopyTo(buffer);
+                StartReceive(buffer, firstpacket.Len, headerLen);
+            }
 
-                AsyncHelper.SetTimeout(this, 15 * 1000, (x) => {
+            private async void StartReceive(byte[] buffer, int len, int headerLen)
+            {
+                // Timed out if no any response from the dest in 30 seconds.
+                AsyncHelper.SetTimeout(this, 30 * 1000, (x) => {
                     if (x.recv == 0) {
                         if (relay.verbose)
                             relay.Logger.debugForce("timed out from dest " + destEP + " to " + clientEP);
@@ -181,12 +187,7 @@ namespace NaiveSocks
                 });
 
                 var bea = new BeginEndAwaiter();
-                byte[] buffer = null;
                 try {
-                    int len = firstpacket.Len;
-                    buffer = BufferPool.GlobalGet(UdpBufferSize);
-                    firstpacket.CopyTo(buffer);
-
                     await Send(new BytesSegment(buffer, headerLen, len - headerLen));
                     Interlocked.Increment(ref relay.sentPackets);
 

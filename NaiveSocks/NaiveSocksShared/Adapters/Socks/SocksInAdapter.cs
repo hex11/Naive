@@ -107,7 +107,7 @@ namespace NaiveSocks
                         }
                     }
                     if (_adapter.fastreply)
-                        await OnConnectionResult(new ConnectResult(null, ConnectResultEnum.Conneceted)).CAF();
+                        await OnConnectionResult(new ConnectResult(null, ConnectResultEnum.OK)).CAF();
 
                     await _adapter.Controller.HandleInConnection(this, outRef);
                 } catch (Exception e) {

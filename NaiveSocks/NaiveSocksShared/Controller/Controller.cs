@@ -381,15 +381,10 @@ namespace NaiveSocks
             inc.RunningHandler = null;
             if (LoggingLevel <= Logging.Level.None)
                 debug($"{inc} End.");
-            if (inc.IsHandled == false) {
-                await inc.HandleFailed(null);
-            }
-            var dataStream = inc.DataStream;
-            if (dataStream != null)
-                MyStream.CloseWithTimeout(dataStream).Forget();
+            inc.Dispose();
             try {
                 lock (InConnectionsLock) {
-                    if (inc.ConnectResult?.Result != ConnectResultEnum.Conneceted)
+                    if (inc.ConnectResult?.Result != ConnectResultEnum.OK)
                         _failedConnections++;
                     InConnections.Remove(inc.Id);
                     EndConnection?.Invoke(inc);

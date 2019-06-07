@@ -287,7 +287,7 @@ namespace NaiveSocks
                         return new ConnectResult(Adapter, ConnectResultEnum.Failed);
                     }
                 }
-                return new ConnectResult(Adapter, ConnectResultEnum.Conneceted, new MsgStreamToMyStream(result.Channel)) { WhenCanRead = readReplyTask };
+                return new ConnectResult(Adapter, ConnectResultEnum.OK, new MsgStreamToMyStream(result.Channel)) { WhenCanRead = readReplyTask };
             } catch (Exception) {
                 result.Dispose();
                 throw;
