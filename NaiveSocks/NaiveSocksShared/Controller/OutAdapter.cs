@@ -8,26 +8,12 @@ namespace NaiveSocks
 {
     public interface IConnectionHandler : IAdapter
     {
+        Task HandleTcpConnection(InConnectionTcp connection);
+    }
+
+    public interface IConnectionHandler2 : IConnectionHandler
+    {
         Task HandleConnection(InConnection connection);
-    }
-
-    public interface IDnsProvider : IAdapter
-    {
-        Task<DnsResponse> ResolveName(DnsRequest req);
-    }
-
-    public class DnsRequest
-    {
-        public string Name;
-        public DnsRequestType Type = DnsRequestType.A;
-
-        int Redirects = 0;
-
-        public Task<DnsResponse> RedirectTo(IDnsProvider dnsProvider)
-        {
-            if (++Redirects > 16) throw new Exception("too many redirects");
-            return dnsProvider.ResolveName(this);
-        }
     }
 
     public enum DnsRequestType
@@ -37,24 +23,36 @@ namespace NaiveSocks
         AnAAAA = 3
     }
 
-    public class DnsResponse
+    public class DnsRequest
+    {
+        public string Name { get; }
+        public DnsRequestType Type { get; }
+
+        public DnsRequest(string name, DnsRequestType type)
+        {
+            Name = name;
+            Type = type;
+        }
+    }
+
+    public class DnsResponse : ConnectResultBase
     {
         public IPAddress[] Addresses;
         public int? TTL;
 
-        public DnsResponse(IPAddress singleAddress) : this(new IPAddress[] { singleAddress })
+        public DnsResponse(IAdapter adapter, IPAddress singleAddress) : this(adapter, new IPAddress[] { singleAddress })
         {
         }
 
-        public DnsResponse(IPAddress[] addresses)
+        public DnsResponse(IAdapter adapter, IPAddress[] addresses) : base(adapter, ConnectResultEnum.OK)
         {
             Addresses = addresses;
         }
 
-        public static readonly DnsResponse Empty = new DnsResponse(new IPAddress[] { });
+        public static DnsResponse Empty(IAdapter adapter) => new DnsResponse(adapter, new IPAddress[] { });
     }
 
-    public interface IConnectionProvider
+    public interface IConnectionDialer
     {
         Task<ConnectResult> Connect(ConnectArgument arg);
     }
@@ -93,10 +91,10 @@ namespace NaiveSocks
 
     public abstract class OutAdapter : Adapter, IConnectionHandler
     {
-        public abstract Task HandleConnection(InConnection connection);
+        public abstract Task HandleTcpConnection(InConnectionTcp connection);
     }
 
-    public abstract class OutAdapter2 : OutAdapter, IConnectionProvider
+    public abstract class OutAdapter2 : OutAdapter, IConnectionDialer, IConnectionHandler2
     {
         public AdapterRef if_failed { get; set; }
 
@@ -119,7 +117,7 @@ namespace NaiveSocks
             }
         }
 
-        public override async Task HandleConnection(InConnection connection)
+        public override async Task HandleTcpConnection(InConnectionTcp connection)
         {
             Exception e = null;
             ConnectResult connectResult = null;
@@ -150,7 +148,7 @@ namespace NaiveSocks
         public static Task<ConnectResult> ConnectWrapper(IConnectionHandler handler, ConnectArgument arg)
         {
             var tcs = new TaskCompletionSource<ConnectResult>();
-            var newinc = InConnection.Create(arg.InAdapter, arg.Dest, async (r) => {
+            var newinc = InConnectionTcp.Create(arg.InAdapter, arg.Dest, async (r) => {
                 if (r.Ok) {
                     var stream = new LoopbackStream();
                     r.Stream = stream;
@@ -165,7 +163,7 @@ namespace NaiveSocks
             newinc.DestOriginalName = arg.DestOriginalName;
             NaiveUtils.RunAsyncTask(async () => {
                 try {
-                    await handler.HandleConnection(newinc).CAF();
+                    await handler.HandleTcpConnection(newinc).CAF();
                 } catch (Exception e) {
                     tcs.SetException(e);
                     return;
@@ -178,13 +176,19 @@ namespace NaiveSocks
             });
             return tcs.Task;
         }
+
+        public virtual Task HandleConnection(InConnection connection)
+        {
+            if (connection is InConnectionTcp tcp) return this.HandleTcpConnection(tcp);
+            else throw new NotSupportedException("cannot handle this type of connection.");
+        }
     }
 
-    public class FailAdapter : OutAdapter, IConnectionProvider, IHttpRequestAsyncHandler
+    public class FailAdapter : OutAdapter, IConnectionDialer, IHttpRequestAsyncHandler
     {
         public string reason { get; set; }
 
-        public override async Task HandleConnection(InConnection connection)
+        public override async Task HandleTcpConnection(InConnectionTcp connection)
         {
             await connection.HandleAndGetStream(GetConnectResult());
         }

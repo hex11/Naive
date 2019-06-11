@@ -7,7 +7,7 @@ using System.Text;
 
 namespace NaiveSocks
 {
-    public class DirectOutAdapter : OutAdapter2, IDnsProvider
+    public class DirectOutAdapter : OutAdapter2
     {
         public AddrPort force_dest { get; set; }
         public int connect_timeout { get; set; } = 10;
@@ -20,22 +20,29 @@ namespace NaiveSocks
             return ConnectHelper.Connect(this, arg.Dest, connect_timeout);
         }
 
-        public Task<DnsResponse> ResolveName(DnsRequest req)
-        {
-            if (redirect_dns != null) return req.RedirectTo((IDnsProvider)redirect_dns.Adapter);
-            return ResolveNameCore(req);
-        }
-
-        private static async Task<DnsResponse> ResolveNameCore(DnsRequest req)
-        {
-            return new DnsResponse(await Dns.GetHostAddressesAsync(req.Name));
-        }
-
         protected override void GetDetail(GetDetailContext ctx)
         {
             base.GetDetail(ctx);
             if (force_dest.IsDefault == false)
                 ctx.AddField("force_dest", force_dest);
+        }
+
+        public override Task HandleConnection(InConnection connection)
+        {
+            if (connection is InConnectionDns dns) {
+                if (redirect_dns != null) {
+                    dns.RedirectTo(redirect_dns);
+                    return NaiveUtils.CompletedTask;
+                }
+                return ResolveNameCore(dns);
+            }
+            return base.HandleConnection(connection);
+        }
+
+        private async Task ResolveNameCore(InConnectionDns dns)
+        {
+            IPAddress[] addresses = await Dns.GetHostAddressesAsync(dns.RequestName);
+            await dns.SetResult(new DnsResponse(this, addresses));
         }
     }
 

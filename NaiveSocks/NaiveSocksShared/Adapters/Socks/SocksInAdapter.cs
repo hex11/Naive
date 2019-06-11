@@ -50,7 +50,7 @@ namespace NaiveSocks
             new SocksInConnection(client, this).Start();
         }
 
-        private class SocksInConnection : InConnection
+        private class SocksInConnection : InConnectionTcp
         {
             private Socks5Server socks5svr;
             private readonly EPPair _eppair;
@@ -117,7 +117,7 @@ namespace NaiveSocks
                 }
             }
 
-            protected override Task OnConnectionResult(ConnectResult result)
+            protected override Task OnConnectionResult(ConnectResultBase result)
             {
                 if (socks5svr != null) {
                     var tmp = socks5svr;

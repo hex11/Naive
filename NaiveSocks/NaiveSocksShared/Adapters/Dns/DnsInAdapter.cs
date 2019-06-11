@@ -14,7 +14,7 @@ namespace NaiveSocks
     public class DnsInAdapter : InAdapterWithListenField
     {
         UdpClient udpClient;
-        IDnsProvider dnsProvider;
+        IAdapter dnsProvider;
 
         public bool verbose { get; set; } = false;
         public int ttl { get; set; } = 30;
@@ -37,12 +37,9 @@ namespace NaiveSocks
                 Logger.error("No 'listen'!");
                 return;
             }
-            if (@out?.Adapter is IDnsProvider provider) {
-                dnsProvider = provider;
-            } else {
-                Logger.error("'out' is not a valid DnsProvider.");
-                return;
-            }
+
+            dnsProvider = @out?.Adapter;
+
             if (cache == "none") {
                 cacheDns = null;
             } else if (cache == "ram") {
@@ -202,9 +199,11 @@ namespace NaiveSocks
                         try {
                             try {
                                 var resp = await task;
-                                var iparr = resp.Addresses;
-                                ips = iparr;
-                                ipFilter(iparr, ref ipLongs, ref ips6);
+                                if (resp != null) {
+                                    var iparr = resp.Addresses;
+                                    ips = iparr;
+                                    ipFilter(iparr, ref ipLongs, ref ips6);
+                                }
                             } catch (Exception e) {
                                 if (newTask) {
                                     Logger.warning("resolving: " + strName + " (" + reqType + "): " + e.Message + " (" + (Logging.getRuntime() - startTime) + " ms)");
@@ -275,7 +274,7 @@ namespace NaiveSocks
                     rt = new ResolveTask();
                     resolvingNames[strName] = rt;
                 }
-                var task = dnsProvider.ResolveName(new DnsRequest { Name = strName, Type = type });
+                var task = Controller.ResolveName(this, AdapterRef.FromAdapter(dnsProvider), new DnsRequest(strName, type));
                 if ((type & DnsRequestType.A) != 0 && rt.A == null) rt.A = task;
                 if ((type & DnsRequestType.AAAA) != 0 && rt.AAAA == null) rt.AAAA = task;
                 newTask = true;
@@ -296,7 +295,7 @@ namespace NaiveSocks
 
         async Task<DnsResponse> UnionWarpper(ResolveTask rt)
         {
-            return new DnsResponse(((await rt.A).Addresses ?? emptyIps).Union((await rt.AAAA).Addresses ?? emptyIps).ToArray());
+            return new DnsResponse(null, ((await rt.A).Addresses ?? emptyIps).Union((await rt.AAAA).Addresses ?? emptyIps).ToArray());
         }
 
         private static void ipFilter(IPAddress[] ips, ref uint[] ipLongs, ref Ip6[] ips6)

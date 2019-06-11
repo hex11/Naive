@@ -52,7 +52,7 @@ namespace NaiveSocks
                         if (logging) {
                             Logger.info($"{socketStream} dest={dest} used={stream.UsedCount}");
                         }
-                        var conn = InConnection.Create(this, dest, s.AsMyStream);
+                        var conn = InConnectionTcp.Create(this, dest, s.AsMyStream);
                         await this.HandleIncommingConnection(conn);
                         if (!await s.TryShutdownForReuse())
                             break;

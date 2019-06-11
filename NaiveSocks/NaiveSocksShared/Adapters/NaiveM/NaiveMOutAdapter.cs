@@ -10,7 +10,7 @@ using System.Text;
 
 namespace NaiveSocks
 {
-    public class NaiveMOutAdapter : OutAdapter2, IInAdapter, ICanReload, IDnsProvider
+    public class NaiveMOutAdapter : OutAdapter2, IInAdapter, ICanReload
     {
         protected override void GetDetail(GetDetailContext ctx)
         {
@@ -294,11 +294,18 @@ namespace NaiveSocks
             return ncs.Connect(arg);
         }
 
-        public async Task<DnsResponse> ResolveName(DnsRequest req)
+        public override Task HandleConnection(InConnection connection)
+        {
+            if (connection is InConnectionDns dns) return ResolveName(dns);
+            return base.HandleConnection(connection);
+        }
+
+        public async Task ResolveName(InConnectionDns dns)
         {
             var ncs = GetPoolItem();
             await ncs.ConnectIfNot();
-            return await ncs.nms.DnsQuery(req);
+            var resp = await ncs.nms.DnsQuery(dns.DnsRequest);
+            await dns.SetResult(resp);
         }
 
         public async Task SpeedTest(Action<string> log)

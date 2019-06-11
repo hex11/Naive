@@ -23,7 +23,7 @@ namespace NaiveSocks
             var epPair = EPPair.FromSocket(socket);
             var dataStream = GetMyStreamFromSocket(socket);
             var dest = Unsafe.GetOriginalDst(socket, Logger);
-            HandleIncommingConnection(InConnection.Create(this, dest, dataStream, epPair.ToString()));
+            HandleIncommingConnection(InConnectionTcp.Create(this, dest, dataStream, epPair.ToString()));
         }
 
         private unsafe static class Unsafe

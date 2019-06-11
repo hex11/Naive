@@ -10,8 +10,12 @@ using Nett;
 
 namespace NaiveSocks
 {
-    public partial class Controller
+    public partial class Controller : IAdapter
     {
+        string IAdapter.Name => "(Controller)";
+        Controller IAdapter.Controller => this;
+        Adapter IAdapter.GetAdapter() => null; // throw new InvalidOperationException("No, I'm controller.");
+
         public LoadedConfig CurrentConfig = new LoadedConfig();
 
         private ConfigLoader configLoader;
@@ -233,7 +237,6 @@ namespace NaiveSocks
         {
             if (inConnection == null)
                 throw new ArgumentNullException(nameof(inConnection));
-
             if (inConnection.InAdapter is IInAdapter ina) {
                 return HandleInConnection(inConnection, ina.@out.Adapter as IConnectionHandler);
             } else {
@@ -274,7 +277,13 @@ namespace NaiveSocks
                 int redirectCount = 0;
                 while (true) {
                     inc.RunningHandler = outAdapter;
-                    await outAdapter.HandleConnection(inc).CAF();
+                    if (outAdapter is IConnectionHandler2 ich2) {
+                        await ich2.HandleConnection(inc).CAF();
+                    } else if (inc is InConnectionTcp tcp) {
+                        await outAdapter.HandleTcpConnection(tcp).CAF();
+                    } else {
+                        throw new Exception($"'{inc.InAdapter.Name}' cannot handle this type of connection.");
+                    }
                     if (inc.IsHandled || !inc.IsRedirected) {
                         break;
                     }
@@ -295,6 +304,7 @@ namespace NaiveSocks
                 }
             } catch (Exception e) {
                 await onConnectionException(inc, e).CAF();
+                throw;
             } finally {
                 await onConnectionEnd(inc).CAF();
             }
@@ -309,7 +319,7 @@ namespace NaiveSocks
 
             if (outAdapter == null) {
                 warning($"'{request.InAdapter.Name}' {request} -> (no out adapter)");
-                result = new ConnectResult(null, "no out adapter");
+                result = new ConnectResult(this, "no out adapter");
                 goto RETURN;
             }
             onConnectionBegin(request, outAdapter);
@@ -319,13 +329,13 @@ namespace NaiveSocks
                     AdapterRef redirected;
                     ConnectResult r;
                     request.RunningHandler = outAdapter;
-                    if (outAdapter is IConnectionProvider cp) {
+                    if (outAdapter is IConnectionDialer cp) {
                         r = await cp.Connect(request).CAF();
                     } else if (outAdapter is IConnectionHandler ch) {
                         r = await OutAdapter2.ConnectWrapper(ch, request).CAF();
                     } else {
                         error($"{outAdapter} implement neither IConnectionProvider nor IConnectionHandler.");
-                        result = new ConnectResult(null, "wrong adapter");
+                        result = new ConnectResult(this, "wrong adapter");
                         goto RETURN;
                     }
                     if (!r.IsRedirected) {
@@ -336,14 +346,14 @@ namespace NaiveSocks
                     redirected = r.Redirected;
                     if (++redirectCount >= 10) {
                         error($"'{request.InAdapter.Name}' {request} too many redirects, last redirect: {outAdapter.Name}");
-                        result = new ConnectResult(null, "too many redirects");
+                        result = new ConnectResult(this, "too many redirects");
                         goto RETURN;
                     }
                     var nextAdapter = redirected.Adapter;
                     if (nextAdapter == null) {
                         warning($"'{request.InAdapter.Name}' {request} was redirected by '{outAdapter.Name}'" +
                                 $" to '{redirected}' which can not be found.");
-                        result = new ConnectResult(null, "redirect not found");
+                        result = new ConnectResult(this, "redirect not found");
                         goto RETURN;
                     }
                     outAdapter = nextAdapter;
@@ -357,6 +367,19 @@ namespace NaiveSocks
             }
             RETURN:
             return new ConnectResponse(result, request);
+        }
+
+        public async Task<DnsResponse> ResolveName(IAdapter creator, AdapterRef handler, DnsRequest request)
+        {
+            var cxn = InConnectionDns.Create(creator, request);
+            await HandleInConnection(cxn, handler);
+            var result = cxn.ConnectResult;
+            if (result?.Ok == false) {
+                if (result.FailedReason != null)
+                    throw new Exception(result.FailedReason);
+                throw new Exception("name resolving failed.");
+            }
+            return result as DnsResponse ?? DnsResponse.Empty(this);
         }
 
         private void onConnectionBegin(InConnection inc, IAdapter outAdapter)
@@ -377,11 +400,10 @@ namespace NaiveSocks
 
         internal async Task onConnectionEnd(InConnection inc)
         {
-            inc.IsFinished = true;
             inc.RunningHandler = null;
             if (LoggingLevel <= Logging.Level.None)
                 debug($"{inc} End.");
-            inc.Dispose();
+            await inc.Finish();
             try {
                 lock (InConnectionsLock) {
                     if (inc.ConnectResult?.Result != ConnectResultEnum.OK)
@@ -398,7 +420,7 @@ namespace NaiveSocks
         {
             Logger.exception(e, Logging.Level.Error, $"Handling {inc}");
             if (inc.IsHandled == false) {
-                await inc.HandleAndGetStream(new ConnectResult(null, ConnectResultEnum.Failed) {
+                await inc.SetResult(new ConnectResultBase(this, ConnectResultEnum.Failed) {
                     FailedReason = $"exception: {e.GetType()}: {e.Message}"
                 });
             }

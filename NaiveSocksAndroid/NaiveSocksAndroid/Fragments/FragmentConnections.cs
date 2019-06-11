@@ -306,8 +306,7 @@ namespace NaiveSocksAndroid
                 }
 
                 sb.Clear();
-                sb.Append('#').Append(conn.Id).Append(' ');
-                conn.ToString(sb, InConnection.ToStringFlags.None);
+                conn.ToString(sb, InConnection.ToStringFlags.Id);
                 if (moreInfo) {
                     sb.AppendLine();
                     sb.Append(conn.GetInfoStr());
@@ -331,7 +330,7 @@ namespace NaiveSocksAndroid
                 if (adap != null)
                     sb.Append(" -> '").Append(adap.Name).Append("'");
                 if (moreInfo) {
-                    var outStream = conn.ConnectResult?.Stream;
+                    var outStream = (conn as InConnectionTcp)?.ConnectResult?.Stream;
                     if (outStream != null) {
                         sb.Append("\n-> ").Append(outStream.ToString());
                     }

@@ -12,7 +12,7 @@ using Naive.HttpSvr;
 
 namespace NaiveSocks
 {
-    class DnsOutAdapter : OutAdapter, IDnsProvider
+    class DnsOutAdapter : OutAdapter, IConnectionHandler2
     {
         public AddrPort server { get; set; }
 
@@ -43,20 +43,40 @@ namespace NaiveSocks
             }
         }
 
-        public override Task HandleConnection(InConnection connection)
+        public override Task HandleTcpConnection(InConnectionTcp connection)
         {
-            throw new Exception("This is just a dns client and cannot handle regular connection.");
+            return HandleConnection(connection as InConnection);
         }
 
-        public async Task<DnsResponse> ResolveName(DnsRequest dr)
+        public Task HandleConnection(InConnection connection)
         {
-            var name = dr.Name;
+            if (connection is InConnectionDns dns) {
+                return ResolveName(dns);
+            } else if (connection is InConnectionTcp) {
+                throw new NotSupportedException("This is just a dns client and cannot handle regular connection.");
+            } else {
+                throw new NotSupportedException();
+            }
+        }
+
+        private async Task ResolveName(InConnectionDns cxn)
+        {
+            var name = cxn.Dest.Host;
             var req = dnsClient.Create();
             var domain = new Domain(name);
-            req.Questions.Add(new Question(domain, dr.Type != DnsRequestType.AAAA ? RecordType.A : RecordType.AAAA));
+            req.Questions.Add(new Question(domain, cxn.RequestType != DnsRequestType.AAAA ? RecordType.A : RecordType.AAAA));
             req.OperationCode = OperationCode.Query;
             req.RecursionDesired = true;
-            var r = await req.Resolve();
+            IResponse r;
+            try {
+                r = await req.Resolve();
+            } catch (ResponseException e) {
+                var emptyResp = DnsResponse.Empty(this);
+                emptyResp.Result = ConnectResultEnum.Failed;
+                emptyResp.FailedReason = e.Message;
+                await cxn.SetResult(emptyResp);
+                return;
+            }
             if (r.ResponseCode != ResponseCode.NoError)
                 Logger.warning("resolving " + name + ": server returns " + r.ResponseCode);
             int count = 0;
@@ -82,7 +102,8 @@ namespace NaiveSocks
                     ttl = ttl.HasValue ? Math.Min(newTtl, ttl.Value) : newTtl;
                 }
             }
-            return new DnsResponse(arr) { TTL = ttl };
+            var resp = new DnsResponse(this, arr) { TTL = ttl };
+            await cxn.SetResult(resp);
         }
     }
 }

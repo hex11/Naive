@@ -24,7 +24,7 @@ namespace NaiveSocks
             var epPair = EPPair.FromSocket(socket);
             var dataStream = GetMyStreamFromSocket(socket);
             var dest = this.dest.WithDefaultPort(listen.Port);
-            HandleIncommingConnection(InConnection.Create(this, dest, dataStream, epPair.ToString()));
+            HandleIncommingConnection(InConnectionTcp.Create(this, dest, dataStream, epPair.ToString()));
         }
     }
 }

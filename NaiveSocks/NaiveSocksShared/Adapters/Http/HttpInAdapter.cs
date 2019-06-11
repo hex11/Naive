@@ -80,7 +80,7 @@ namespace NaiveSocks
             return false;
         }
 
-        public async Task HandleConnection(InConnection connection)
+        public async Task HandleTcpConnection(InConnectionTcp connection)
         {
             var stream = await connection.HandleAndGetStream(this);
             var httpConn = WebBaseAdapter.CreateHttpConnectionFromMyStream(stream, httpServer);
@@ -128,7 +128,7 @@ namespace NaiveSocks
             var stream = p.SwitchProtocol();
             var mystream = getStream(p);
             string str = "(tunnel) " + p.epPair.ToString();
-            var inc = InConnection.Create(this, dest, async (r) => {
+            var inc = InConnectionTcp.Create(this, dest, async (r) => {
                 if (r.Ok) {
                     await mystream.WriteAsync(ConnectedResponse);
                     return mystream;

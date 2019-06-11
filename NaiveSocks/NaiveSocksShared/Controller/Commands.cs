@@ -132,19 +132,21 @@ namespace NaiveSocks
                     foreach (var item in arr) {
                         if (item.IsHandled) {
                             sb.Clear();
-                            var flags = InConnection.ToStringFlags.Default
-                                & ~InConnection.ToStringFlags.Bytes
-                                & ~InConnection.ToStringFlags.AdditionFields
-                                & ~InConnection.ToStringFlags.OutAdapter
-                                & ~InConnection.ToStringFlags.OutStream;
+                            var flags = InConnectionTcp.ToStringFlags.Default
+                                & ~InConnectionTcp.ToStringFlags.Bytes
+                                & ~InConnectionTcp.ToStringFlags.AdditionFields
+                                & ~InConnectionTcp.ToStringFlags.OutAdapter
+                                & ~InConnectionTcp.ToStringFlags.OutStream;
                             item.ToString(sb, flags);
                             command.Write(sb.ToString(), ConsoleColor.White);
                             if (item.ConnectResult?.Adapter != null) {
                                 con.Write(" -> '" + item.ConnectResult.Adapter.Name + "'", ConsoleColor.Cyan);
                             }
-                            IMyStream outStream = item.ConnectResult?.Stream;
-                            if (outStream != null) {
-                                con.Write(" - " + outStream.ToString(), ConsoleColor.Cyan);
+                            if (item is InConnectionTcp tcp) {
+                                IMyStream outStream = tcp.ConnectResult?.Stream;
+                                if (outStream != null) {
+                                    con.Write(" - " + outStream.ToString(), ConsoleColor.Cyan);
+                                }
                             }
                             var rw = item.BytesCountersRW;
                             con.Write("\n R=" + rw.R, ConsoleColor.Green);
@@ -475,23 +477,10 @@ namespace NaiveSocks
                 }
             }, "Usage: mping [start|stop]");
             cmdHub.AddCmdHandler(prefix + "dns", cmd => {
-                var adapters = controller.Adapters.Select(x => x as IDnsProvider).Where(x => x != null).ToList();
-                if (adapters.Count == 0) {
-                    cmd.WriteLine("NaiveM OutAdapter not found.");
-                    return;
-                }
-                IDnsProvider selected;
-                if (adapters.Count == 1) {
-                    selected = adapters.Single();
-                } else {
-                    var selectedId = cmd.Select("IDnsProviders:", adapters.Select(x => x.GetAdapter().ToString(true)).ToList(),
-                            "Select one: ", false);
-                    if (selectedId < 0)
-                        return;
-                    selected = adapters[selectedId];
-                }
+                var selected = AdapterRef.FromAdapter(controller.FindAdapter<IAdapter>(cmd.args[1]));
                 Task.Run(async () => {
-                    foreach (var item in (await selected.ResolveName(new DnsRequest { Name = cmd.args[0] })).Addresses) {
+                    var resp = await controller.ResolveName(null, selected, new DnsRequest(cmd.args[0], DnsRequestType.AnAAAA));
+                    foreach (var item in resp.Addresses) {
                         cmd.WriteLine(item.ToString());
                     }
                 }).Wait(3000);

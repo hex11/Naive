@@ -31,7 +31,7 @@ namespace NaiveSocks
         // Websocket time
         public int CreateTime;
 
-        public Func<InConnection, Task> HandleConnection;
+        public Func<InConnectionTcp, Task> HandleConnection;
 
         public NClient(params string[] tags)
         {
@@ -44,7 +44,7 @@ namespace NaiveSocks
         public override string ToString() => $"{{NClient tags={string.Join(",", tags)} ip={Ip} {(WhenDisconnected.IsCompleted ? " disconnected" : "")}}}";
     }
 
-    public class NNetworkAdapter : WebBaseAdapter, INetwork, IDnsProvider
+    public class NNetworkAdapter : WebBaseAdapter, INetwork
     {
         protected override void GetDetail(GetDetailContext ctx)
         {
@@ -106,7 +106,7 @@ namespace NaiveSocks
 
         static Random rd => NaiveUtils.Random;
 
-        public override async Task HandleConnection(InConnection connection)
+        public override async Task HandleTcpConnection(InConnectionTcp connection)
         {
             var host = connection.Dest.Host;
             var name = TryGetName(host);
@@ -149,23 +149,23 @@ namespace NaiveSocks
             await httpConnection.Process();
         }
 
-        public Task<DnsResponse> ResolveName(DnsRequest req)
-        {
-            //throw new NotImplementedException();
-            var name = TryGetName(req.Name);
-            if (name == null)
-                return (if_notmatch.Adapter as IDnsProvider).ResolveName(req);
-            if (name.Length == 0 || name == list_name)
-                return Task.FromResult(new DnsResponse(new IPAddress((long)listIp)));
-            var clis = FindClientsByName(name);
-            if (clis.Count > 0) {
-                return Task.FromResult(new DnsResponse(clis.Select(x => x.Ip).ToArray()));
-            } else {
-                if (if_notfound == null)
-                    return Task.FromResult(DnsResponse.Empty);
-                return (if_notfound.Adapter as IDnsProvider).ResolveName(req);
-            }
-        }
+        //public Task<DnsResponse> ResolveName(DnsRequest req)
+        //{
+        //    //throw new NotImplementedException();
+        //    var name = TryGetName(req.Name);
+        //    if (name == null)
+        //        return (if_notmatch.Adapter as IDnsProvider).ResolveName(req);
+        //    if (name.Length == 0 || name == list_name)
+        //        return Task.FromResult(new DnsResponse(new IPAddress((long)listIp)));
+        //    var clis = FindClientsByName(name);
+        //    if (clis.Count > 0) {
+        //        return Task.FromResult(new DnsResponse(clis.Select(x => x.Ip).ToArray()));
+        //    } else {
+        //        if (if_notfound == null)
+        //            return Task.FromResult(DnsResponse.Empty);
+        //        return (if_notfound.Adapter as IDnsProvider).ResolveName(req);
+        //    }
+        //}
 
         private string TryGetName(string host)
         {
@@ -225,7 +225,7 @@ namespace NaiveSocks
         public override Task HandleRequestAsyncImpl(HttpConnection p)
         {
             if (p.Url_path == "/" && p.Method == "GET") {
-                var con = p.GetTag("connection") as InConnection;
+                var con = p.GetTag("connection") as InConnectionTcp;
                 return ClientList(p, con);
             } else {
                 p.setStatusCode("404 Not Found");
@@ -233,7 +233,7 @@ namespace NaiveSocks
             }
         }
 
-        public async Task ClientList(HttpConnection p, InConnection con)
+        public async Task ClientList(HttpConnection p, InConnectionTcp con)
         {
             p.setStatusCode("200 OK");
             var sb = new StringBuilder(512);

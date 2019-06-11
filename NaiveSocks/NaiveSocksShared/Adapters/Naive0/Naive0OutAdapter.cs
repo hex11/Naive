@@ -147,7 +147,7 @@ namespace NaiveSocks
             }
         }
 
-        public override async Task HandleConnection(InConnection connection)
+        public override async Task HandleTcpConnection(InConnectionTcp connection)
         {
             RETRY:
             CheckPool();

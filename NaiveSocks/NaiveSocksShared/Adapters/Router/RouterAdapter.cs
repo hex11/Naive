@@ -12,7 +12,7 @@ using System.Threading;
 
 namespace NaiveSocks
 {
-    public class RouterAdapter : OutAdapter, IDnsProvider
+    public class RouterAdapter : OutAdapter, IConnectionHandler2
     {
         public bool logging { get; set; }
         public bool log_uri { get; set; }
@@ -102,7 +102,7 @@ namespace NaiveSocks
         private static bool HandleRule(ConnectArgument x, Rule r, out Match regexMatch)
         {
             regexMatch = null;
-            if (r.is_dns && x is DnsFakeConnectArg)
+            if (r.is_dns && x is InConnectionDns)
                 return true;
             if (x.DestOriginalName != null && HandleRule(r, ref regexMatch, x.DestOriginalName, x.Dest.Port))
                 return true;
@@ -328,7 +328,10 @@ namespace NaiveSocks
             return false;
         }
 
-        public override Task HandleConnection(InConnection connection)
+        public override Task HandleTcpConnection(InConnectionTcp connection)
+            => HandleConnection(connection as InConnection);
+
+        public Task HandleConnection(InConnection connection)
         {
             var sw = Stopwatch.StartNew();
             if (Handle(connection, out var redir)) {
@@ -345,33 +348,6 @@ namespace NaiveSocks
                 Logger.info($"{connection.Redirected} <- {dest} - '{connection.InAdapter?.Name}' ({ms} ms)");
             }
             return AsyncHelper.CompletedTask;
-        }
-
-        class DnsFakeConnectArg : ConnectArgument
-        {
-            public DnsFakeConnectArg() : base(null)
-            {
-            }
-        }
-
-        public Task<DnsResponse> ResolveName(DnsRequest req)
-        {
-            var arg = new DnsFakeConnectArg() { Dest = new AddrPort(req.Name, 53) };
-            AdapterRef adapterRef;
-            if (Handle(arg, out var redir)) {
-                adapterRef = redir;
-            } else {
-                adapterRef = @default;
-            }
-            if (adapterRef.Adapter is FailAdapter) {
-                return Task.FromResult<DnsResponse>(null);
-            }
-            var dnsProvider = adapterRef.Adapter as IDnsProvider;
-            if (dnsProvider == null) {
-                Logger.error($"{adapterRef} is not a DNS resolver.");
-                return Task.FromResult<DnsResponse>(null);
-            }
-            return req.RedirectTo(dnsProvider);
         }
     }
 }

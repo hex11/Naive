@@ -61,7 +61,7 @@ namespace NaiveSocks
                     await dataStream.ReadFullAsyncR(buf.Sub(0, 2)).CAF();
                     int port = buf[0] << 8 | buf[1];
                     var dest = new AddrPort(addrString, port);
-                    await Controller.HandleInConnection(InConnection.Create(this, dest, dataStream, $"remote={remoteEP}")).CAF();
+                    await Controller.HandleInConnection(InConnectionTcp.Create(this, dest, dataStream, $"remote={remoteEP}")).CAF();
                 }
             } catch (Exception e) {
                 Logger.exception(e, Logging.Level.Error, "handling connection");

@@ -79,7 +79,7 @@ namespace NaiveSocksAndroid
 
         ParcelFileDescriptor _pfd;
 
-        IDnsProvider dnsResolver;
+        NaiveSocks.IAdapter dnsResolver;
         SocksInAdapter socksInAdapter;
         DnsInAdapter dnsInAdapter;
 
@@ -168,12 +168,12 @@ namespace NaiveSocksAndroid
                 }
             }
             if (VpnConfig.DnsResolver != null) {
-                dnsResolver = controller.FindAdapter<NaiveSocks.Adapter>(VpnConfig.DnsResolver) as IDnsProvider;
+                dnsResolver = controller.FindAdapter<NaiveSocks.Adapter>(VpnConfig.DnsResolver) as NaiveSocks.IAdapter;
                 if (dnsResolver == null) {
-                    Logging.warning($"'{VpnConfig.DnsResolver}' is not a DNS resolver!");
+                    Logging.warning($"Specified DNS resolver '{VpnConfig.DnsResolver}' is not found!");
                 }
             } else {
-                dnsResolver = controller.FindAdapter<IDnsProvider>(VpnConfig.Handler);
+                dnsResolver = controller.FindAdapter<NaiveSocks.IAdapter>(VpnConfig.Handler);
             }
             if (VpnConfig.LocalDnsPort > 0 && dnsResolver == null) {
                 throw new Exception("local dns is enabled but cannot find a dns resolver. Check Handler or DnsResolver in configuration.");

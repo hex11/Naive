@@ -252,7 +252,7 @@ namespace NaiveSocks
             }
         }
 
-        public async Task HandleInConnection(NaiveSocks.InConnection inConnection)
+        public async Task HandleInConnection(NaiveSocks.InConnectionTcp inConnection)
         {
             var r = await Connect(inConnection);
             if (r.Ok) {
@@ -370,7 +370,7 @@ namespace NaiveSocks
             var name = req.additionalString.Substring("dns:".Length);
             IPAddress[] addrs = null;
             try {
-                var r = await (ConnectionHandler as IDnsProvider).ResolveName(new DnsRequest() { Name = name, Type = DnsRequestType.AnAAAA });
+                var r = await Adapter.Controller.ResolveName(Adapter, AdapterRef.FromAdapter(ConnectionHandler), new DnsRequest(name, DnsRequestType.AnAAAA));
                 addrs = r.Addresses;
             } catch (Exception e) {
                 Logger?.exception(e, Logging.Level.Warning, $"handling dns request '{name}' from '{ch}'");
@@ -500,7 +500,7 @@ namespace NaiveSocks
         public async Task<DnsResponse> DnsQuery(DnsRequest req)
         {
             if (IPAddress.TryParse(req.Name, out var addr))
-                return new DnsResponse(addr);
+                return new DnsResponse(Adapter, addr);
             var resMsg = await Request(new NaiveProtocol.Request(AddrPort.Empty, "dns:" + req.Name) {
                 extraStrings = new string[] {
                     ((int)req.Type).ToString()
@@ -511,7 +511,7 @@ namespace NaiveSocks
                 var str = response.additionalString.Substring(7);
                 var addrs = from x in str.Split('|') select IPAddress.Parse(x);
                 // TODO: try receive TTL from the server
-                return new DnsResponse(addrs.ToArray());
+                return new DnsResponse(Adapter, addrs.ToArray());
             } else if (response.additionalString == "dns_failed") {
                 throw new Exception("remote returned an error");
             } else {
@@ -616,7 +616,7 @@ namespace NaiveSocks
             }
         }
 
-        public class InConnection : NaiveSocks.InConnection
+        public class InConnection : NaiveSocks.InConnectionTcp
         {
             public NaiveMChannels Ncs { get; }
             public Channel Channel { get; }
@@ -632,8 +632,9 @@ namespace NaiveSocks
                 sw = Stopwatch.StartNew();
             }
 
-            protected override async Task OnConnectionResult(ConnectResult result)
+            protected override async Task OnConnectionResult(ConnectResultBase resultBase)
             {
+                var result = resultBase as ConnectResult;
                 var addstr = result.FailedReason;
                 var time = sw.ElapsedMilliseconds + " ms";
                 if (string.IsNullOrEmpty(addstr))

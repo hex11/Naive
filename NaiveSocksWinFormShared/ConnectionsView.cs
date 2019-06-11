@@ -113,7 +113,9 @@ namespace NaiveSocks.WinForm
             vItem.SubItems[idx++].Text = conn.InAdapter?.Name ?? "-";
             vItem.SubItems[idx++].Text = conn.Dest.ToString();
             vItem.SubItems[idx++].Text = conn.RunningHandler?.Name ?? "-";
-            vItem.SubItems[idx++].Text = conn.ConnectResult?.Stream?.ToString() ?? "-";
+            if (conn is InConnectionTcp tcp) {
+                vItem.SubItems[idx++].Text = tcp.ConnectResult?.Stream?.ToString() ?? "-";
+            }
         }
     }
 
