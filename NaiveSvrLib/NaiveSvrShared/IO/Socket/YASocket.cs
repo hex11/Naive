@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -90,6 +91,7 @@ namespace NaiveSocks
                     bool operating = mode != 0;
                     int r = 0;
                     Exception ex = null;
+                    IPEndPoint ep = null;
                     bool closingFdR = false;
                     if (operating) {
                         if (fdR == -1) {
@@ -105,27 +107,41 @@ namespace NaiveSocks
                         ex = null;
                         firstReading = false;
                         READ:
-                        r = ReadNonblocking(fdR, bs, out var errno);
+                        int errno;
+                        if (mode == 4) {
+                            r = Syscall.RecvToBsFrom(fdR, bs, ref ep, MSG_FLAGS.DONTWAIT, out errno);
+                        } else {
+                            r = ReadNonblocking(fdR, bs, out errno);
+                        }
                         if (r < 0) {
                             if (mode == 3) {
                                 BufferPool.GlobalPut(bs.Bytes);
                                 bs.ResetSelf();
                             }
-                            if (errno == 11) {
-                                if (firstReading)
-                                    Logging.warning(this + ": EAGAIN after event " + e + ", ignored.");
-                                if (mode == 2)
-                                    bufRead = bs;
-                                return;
-                            }
-                            if (Debug)
-                                Logging.warning(this + ": recv() error " + errno);
-                            closingFdR = true;
-                            lock (raRead) {
-                                if (HasFlag(e, EPOLL_EVENTS.ERR))
+                            if (IsUdp && HasFlag(e, EPOLL_EVENTS.HUP)) {
+                                if (Debug)
+                                    Logging.warning(this + ": udp recv() hup and error " + errno);
+                                closingFdR = true;
+                                lock (raRead) {
                                     State |= MyStreamState.Closed;
-                                else
-                                    State |= MyStreamState.RemoteShutdown;
+                                }
+                            } else {
+                                if (errno == 11) {
+                                    if (firstReading)
+                                        Logging.warning(this + ": EAGAIN after event " + e + ", ignored.");
+                                    if (mode == 2)
+                                        bufRead = bs;
+                                    return;
+                                }
+                                if (Debug)
+                                    Logging.warning(this + ": recv() error " + errno);
+                                closingFdR = true;
+                                lock (raRead) {
+                                    if (HasFlag(e, EPOLL_EVENTS.ERR))
+                                        State |= MyStreamState.Closed;
+                                    else
+                                        State |= MyStreamState.RemoteShutdown;
+                                }
                             }
                             ex = Syscall.GetExceptionWithErrno(nameof(Syscall.recv), errno);
                         } else {
@@ -152,8 +168,6 @@ namespace NaiveSocks
                                 }
                             }
                         }
-                    } else {
-                        //throw new Exception("should not happen: bs.Bytes == null");
                     }
                     if (HasFlag(e, EPOLL_EVENTS.ERR | EPOLL_EVENTS.HUP)) {
                         closingFdR = true;
@@ -179,6 +193,9 @@ namespace NaiveSocks
                             if (Debug)
                                 Logging.debugForce(this + ": recv() async throws " + ex.Message);
                             switch (mode) {
+                                case 4:
+                                    raReadFrom.TrySetException(ex);
+                                    break;
                                 case 3:
                                     raReadNB.TrySetException(ex);
                                     break;
@@ -193,6 +210,9 @@ namespace NaiveSocks
                             if (Debug)
                                 Logging.debugForce(this + ": recv() async " + r);
                             switch (mode) {
+                                case 4:
+                                    raReadFrom.TrySetResult(new ReceiveFromResult { From = ep, Read = r });
+                                    break;
                                 case 3:
                                     raReadNB.TrySetResult(bs);
                                     break;
@@ -375,6 +395,7 @@ namespace NaiveSocks
         private ReusableAwaiter<int> raRead = new ReusableAwaiter<int>();
         private ReusableAwaiter<VoidType> raReadFull = new ReusableAwaiter<VoidType>();
         private ReusableAwaiter<BytesSegment> raReadNB = new ReusableAwaiter<BytesSegment>();
+        private ReusableAwaiter<ReceiveFromResult> raReadFrom = new ReusableAwaiter<ReceiveFromResult>();
         private BytesSegment bufRead;
 
         private int readState;
@@ -382,6 +403,7 @@ namespace NaiveSocks
         // 1. ReadAsyncR
         // 2. ReadFullAsyncR
         // 3. ReadNBAsyncR
+        // 4. ReadFromAsyncR
 
         private int readArg;
 
@@ -406,6 +428,26 @@ namespace NaiveSocks
 
         bool ready = true;
 
+        private bool addFdToEpoller()
+        {
+            if (!fdRAdded) {
+                fdRAdded = true;
+                GlobalEpoller.AddFd(fdR, PollInEvents, this);
+                // ensure the socket is not ready to read after AddFd, or events may never raise:
+                ready = true;
+                return true;
+            }
+            return false;
+        }
+
+        private void ReadPrecheck()
+        {
+            if (readState != 0)
+                throw GetReadingInProgressException();
+            if (State.HasRemoteShutdown)
+                throw GetStateException();
+        }
+
         protected override AwaitableWrapper<int> ReadAsyncRImpl(BytesSegment bs)
         {
             if (Debug)
@@ -414,23 +456,14 @@ namespace NaiveSocks
                 throw new ArgumentOutOfRangeException("bs.Len");
             bs.CheckAsParameter();
             lock (raRead) {
-                if (readState != 0)
-                    throw GetReadingInProgressException();
-                if (State.HasRemoteShutdown)
-                    throw GetStateException();
+                ReadPrecheck();
                 READ_AGAIN:
                 if (ready) {
                     var r = ReadNonblocking(bs);
                     if (r != -1) // success or EOF.
                         return new AwaitableWrapper<int>(r);
                 }
-                if (!fdRAdded) {
-                    fdRAdded = true;
-                    GlobalEpoller.AddFd(fdR, PollInEvents, this);
-                    // ensure the socket is not ready to read after AddFd, or events may never raise:
-                    ready = true;
-                    goto READ_AGAIN;
-                }
+                if (addFdToEpoller()) goto READ_AGAIN;
                 raRead.Reset();
                 readState = 1;
                 bufRead = bs;
@@ -448,10 +481,7 @@ namespace NaiveSocks
             if (maxSize <= 0)
                 throw new ArgumentOutOfRangeException(nameof(maxSize));
             lock (raRead) {
-                if (readState != 0)
-                    throw GetReadingInProgressException();
-                if (State.HasRemoteShutdown)
-                    throw GetStateException();
+                ReadPrecheck();
                 READ_AGAIN:
                 if (ready) {
                     var bs = new BytesSegment(BufferPool.GlobalGet(maxSize));
@@ -463,13 +493,7 @@ namespace NaiveSocks
                         BufferPool.GlobalPut(bs.Bytes);
                     }
                 }
-                if (!fdRAdded) {
-                    fdRAdded = true;
-                    GlobalEpoller.AddFd(fdR, PollInEvents, this);
-                    // ensure the socket is not ready to read after AddFd, or events may never raise:
-                    ready = true;
-                    goto READ_AGAIN;
-                }
+                if (addFdToEpoller()) goto READ_AGAIN;
                 raReadNB.Reset();
                 readState = 3;
                 readArg = maxSize;
@@ -487,10 +511,7 @@ namespace NaiveSocks
                 throw new ArgumentOutOfRangeException("bs.Len");
             bs.CheckAsParameter();
             lock (raRead) {
-                if (readState != 0)
-                    throw GetReadingInProgressException();
-                if (State.HasRemoteShutdown)
-                    throw GetStateException();
+                ReadPrecheck();
                 int r = 0;
                 READ_AGAIN:
                 if (ready) {
@@ -510,13 +531,7 @@ namespace NaiveSocks
                         }
                     }
                 }
-                if (!fdRAdded) {
-                    fdRAdded = true;
-                    GlobalEpoller.AddFd(fdR, PollInEvents, this);
-                    // ensure the socket is not ready to read after AddFd, or events may never raise:
-                    ready = true;
-                    goto READ_AGAIN;
-                }
+                if (addFdToEpoller()) goto READ_AGAIN;
                 raReadFull.Reset();
                 readState = 2;
                 readArg = bs.Len;
@@ -526,6 +541,51 @@ namespace NaiveSocks
             }
             Interlocked.Increment(ref ctr.Rasync);
             return new AwaitableWrapper(raReadFull);
+        }
+
+        public override AwaitableWrapper<ReceiveFromResult> ReadFromAsyncR(BytesSegment bs, IPEndPoint ep)
+        {
+            if (Debug)
+                Logging.debugForce(this + ": ReadFromAsyncR()");
+            if (bs.Len <= 0)
+                throw new ArgumentOutOfRangeException("bs.Len");
+            bs.CheckAsParameter();
+            lock (raRead) {
+                ReadPrecheck();
+                READ_AGAIN:
+                if (ready) {
+                    var r = ReadNonblockingFrom(bs, ref ep);
+                    if (r != -1) // success or EOF.
+                        return new AwaitableWrapper<ReceiveFromResult>(new ReceiveFromResult { From = ep, Read = r });
+                }
+                if (addFdToEpoller()) goto READ_AGAIN;
+                raReadFrom.Reset();
+                readState = 4;
+                bufRead = bs;
+                readArg = bs.Len; // only for ToString() to print the length
+                if (Debug)
+                    Logging.debugForce(this + ": wait for epoll");
+            }
+            return new AwaitableWrapper<ReceiveFromResult>(raReadFrom);
+        }
+
+        private int ReadNonblockingFrom(BytesSegment bs, ref IPEndPoint ep)
+        {
+            var r = Syscall.RecvToBsFrom(fd, bs, ref ep, MSG_FLAGS.DONTWAIT, out var errno);
+            if (errno == 0) {
+                if (Debug)
+                    Logging.debugForce(this + ": recvfrom() " + r);
+                return r;
+            } else if (errno == 11) { // EAGAIN
+                if (Debug)
+                    Logging.debugForce(this + ": EAGAIN");
+                ready = false;
+                return -1;
+            } else {
+                if (Debug)
+                    Logging.debugForce(this + ": recvfrom() throws " + errno);
+                throw Syscall.GetExceptionWithErrno("recvfrom", errno);
+            }
         }
 
         private int ReadNonblocking(BytesSegment bs)
@@ -957,7 +1017,7 @@ namespace NaiveSocks
             public unsafe static extern int sendmsg(int sockfd, msghdr* msg, int flags);
 
             [DllImport(LIBC, SetLastError = true)]
-            public unsafe static extern int recvfrom(int sockfd, void* buf, uint len, int flags, void* src_addr, ushort* addrlen);
+            public unsafe static extern int recvfrom(int sockfd, void* buf, uint len, int flags, void* src_addr, uint* addrlen);
 
             [DllImport(LIBC, SetLastError = true)]
             public unsafe static extern int sendto(int sockfd, void* buf, uint len, int flags, void* dest_addr, ushort* addrlen);
@@ -1058,6 +1118,26 @@ namespace NaiveSocks
                     ThrowWithErrno("recv", errno);
                 }
                 return r;
+            }
+
+            public static unsafe int RecvToBsFrom(int fd, BytesSegment bs, ref IPEndPoint ep, MSG_FLAGS flags, out int errno)
+            {
+                fixed (byte* buf = &bs.Bytes[bs.Offset]) {
+                    sockaddr_in addr;
+                    uint addrlen = (uint)sizeof(sockaddr_in);
+                    var r = recvfrom(fd, buf, (uint)bs.Len, (int)flags, &addr, &addrlen);
+                    errno = r < 0 ? GetErrno() : 0;
+                    if (addrlen > 0) {
+                        ep = new IPEndPoint(addr.sin_addr, SwapEndian(addr.sin_port));
+                    }
+                    return r;
+                }
+            }
+
+            static ushort SwapEndian(ushort val)
+            {
+                return (ushort)((val & 0xff) << 8
+                    | (val & 0xff00) >> 8);
             }
 
             public static unsafe int SendFromBs(int fd, BytesSegment bs, MSG_FLAGS flags, out int errno)
@@ -1221,6 +1301,14 @@ namespace NaiveSocks
             ERR = 0x0008,
             HUP = 0x0010,
             NVAL = 0x0020
+        }
+
+        public unsafe struct sockaddr_in
+        {
+            public short sin_family;
+            public ushort sin_port;
+            public uint sin_addr;
+            public fixed byte sin_zero[8];
         }
 
         [StructLayout(LayoutKind.Sequential)]

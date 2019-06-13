@@ -24,10 +24,13 @@ namespace NaiveSocks
         protected SocketStream(Socket socket)
         {
             this.Socket = socket;
-            this.EPPair = EPPair.FromSocket(socket);
+            this._ePPair = EPPair.FromSocket(socket);
+            IsUdp = socket.ProtocolType == ProtocolType.Udp;
         }
 
         public Socket Socket { get; }
+
+        public bool IsUdp { get; }
 
         private IntPtr _fd = (IntPtr)(-1);
         public IntPtr Fd
@@ -38,7 +41,8 @@ namespace NaiveSocks
             }
         }
 
-        public EPPair EPPair { get; }
+        private EPPair _ePPair;
+        public EPPair EPPair => _ePPair;
 
         public override string ToString()
         {
@@ -48,7 +52,10 @@ namespace NaiveSocks
             } catch (Exception) {
                 v = " ERROR_GETTING_ADDITIONAL_STRING";
             }
-            return $"{{Socket {EPPair.ToString()} {base.State.ToString()}{v}}}";
+            if (IsUdp) {
+                return $"{{Socket udp={_ePPair.LocalEP} {base.State.ToString()}{v}}}";
+            }
+            return $"{{Socket {_ePPair.ToString()} {base.State.ToString()}{v}}}";
         }
 
         public virtual string GetAdditionalString() => null;
@@ -368,6 +375,8 @@ namespace NaiveSocks
                             Interlocked.Add(ref ctr.Wsync, r);
                         else
                             Interlocked.Add(ref ctr.Wasync, r);
+                        if (thiz._ePPair.LocalEP == null)
+                            thiz._ePPair.LocalEP = (IPEndPoint)thiz.Socket.LocalEndPoint;
                         return r;
                     });
             raWt.Reset();

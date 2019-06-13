@@ -13,7 +13,7 @@ namespace NaiveSocks
 {
     public class DnsInAdapter : InAdapterWithListenField
     {
-        UdpClient udpClient;
+        IUdpSocket udpClient;
         IAdapter dnsProvider;
 
         public bool verbose { get; set; } = false;
@@ -86,10 +86,14 @@ namespace NaiveSocks
         private async void UDPListen()
         {
             try {
-                udpClient = new UdpClient(listen);
+                var anyEP = new IPEndPoint(0, 0);
+                var socket = new Socket(listen.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
+                socket.Bind(listen);
+                udpClient = MyStream.FromSocket(socket);
                 while (true) {
-                    var r = await udpClient.ReceiveAsync();
-                    Task.Run(() => HandleUdpReceiveResult(r)).Forget();
+                    var buffer = BufferPool.GlobalGet(64 * 1024);
+                    var r = await udpClient.ReadFromAsyncR(buffer, anyEP);
+                    Task.Run(() => HandleUdpReceiveResult(r, buffer)).Forget();
                 }
             } catch (Exception e) {
                 Logger.exception(e, Logging.Level.Warning, "UDP listener stopped");
@@ -99,29 +103,35 @@ namespace NaiveSocks
             }
         }
 
-        private async void HandleUdpReceiveResult(UdpReceiveResult r)
+        private async void HandleUdpReceiveResult(ReceiveFromResult r, byte[] buffer)
         {
+            var len = r.Read;
+            var from = r.From;
             if (verbose)
-                Logger.debugForce("DNS message received, length: " + r.Buffer.Length);
+                Logger.debugForce("DNS message received, length: " + len);
             byte[] respArray;
             try {
-                var req = Request.FromArray(r.Buffer);
-                var resp = await HandleDnsRequest(req);
-                respArray = resp.ToArray();
-            } catch (Exception e) {
-                Logger.exception(e, Logging.Level.Error, "processing msg from " + r.RemoteEndPoint);
-                if (r.Buffer.Length < Header.SIZE)
-                    return;
                 try {
-                    Header header = Header.FromArray(r.Buffer);
-                    var resp = new Response();
-                    resp.Id = header.Id;
-                    resp.ResponseCode = ResponseCode.NotImplemented;
+                    var req = Request.FromArray(buffer);
+                    var resp = await HandleDnsRequest(req);
                     respArray = resp.ToArray();
-                } catch (Exception e2) {
-                    Logger.exception(e, Logging.Level.Error, "responding NotImplemented to " + r.RemoteEndPoint);
-                    return;
+                } catch (Exception e) {
+                    Logger.exception(e, Logging.Level.Error, "processing msg from " + from);
+                    if (len < Header.SIZE)
+                        return;
+                    try {
+                        Header header = Header.FromArray(buffer);
+                        var resp = new Response();
+                        resp.Id = header.Id;
+                        resp.ResponseCode = ResponseCode.NotImplemented;
+                        respArray = resp.ToArray();
+                    } catch (Exception e2) {
+                        Logger.exception(e, Logging.Level.Error, "responding NotImplemented to " + from);
+                        return;
+                    }
                 }
+            } finally {
+                BufferPool.GlobalPut(buffer);
             }
             if (udpClient == null) { // the server is stopped
                 if (verbose)
@@ -134,9 +144,9 @@ namespace NaiveSocks
                 var client = udpClient;
                 if (client == null)
                     throw new Exception("UDP server stopped.");
-                await client.SendAsync(respArray, respArray.Length, r.RemoteEndPoint);
+                await client.WriteToAsyncR(new BytesSegment(respArray, 0, respArray.Length), from);
             } catch (Exception e) {
-                Logger.exception(e, Logging.Level.Error, "DNS server failed to send response to " + r.RemoteEndPoint);
+                Logger.exception(e, Logging.Level.Error, "DNS server failed to send response to " + from);
                 return;
             }
         }

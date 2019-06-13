@@ -143,7 +143,7 @@ namespace NaiveSocks
             }
         }
 
-        static SocketStream CreateUdpSocket() => new SocketStream1(new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp));
+        static SocketStream CreateUdpSocket() => MyStream.FromSocket(new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp));
 
         // move to the first
         void ActiveConnection(Connection c)
