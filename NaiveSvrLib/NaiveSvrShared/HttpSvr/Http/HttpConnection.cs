@@ -190,7 +190,6 @@ namespace Naive.HttpSvr
         private async Task _requestingLoop()
         {
             do {
-                ConnectionState = States.Receiving;
                 if (!await _ReceiveNextRequest().CAF())
                     break;
                 ConnectionState = States.Processing;
@@ -270,7 +269,8 @@ namespace Naive.HttpSvr
         public async Task<bool> _ReceiveNextRequest()
         {
             if (!checkInputData())
-                throw new InvalidOperationException("failed on checking input data");
+                throw new InvalidOperationException("cannot receive next request because unread input data exists.");
+            ConnectionState = States.Receiving;
             clearStatus(); // to make them be collected faster
             rawRequestPos = 0;
             try {
