@@ -10,8 +10,11 @@ namespace NaiveSocks
 {
     public class UdpRelay : InAdapterWithListenField
     {
+        const int UdpBufferSize = 64 * 1024;
+
         public IPEndPoint redirect_dns { get; set; }
         public bool verbose { get; set; }
+        public int max_maps { get; set; } = 256;
 
         SocketStream listenUdp;
 
@@ -20,9 +23,6 @@ namespace NaiveSocks
 
         LinkedList<Connection> list = new LinkedList<Connection>();
 
-        const int MaxConnections = 512;
-        const int UdpBufferSize = 64 * 1024;
-
         int sentPackets, receivedPackets;
 
         protected override void GetDetail(GetDetailContext ctx)
@@ -30,6 +30,7 @@ namespace NaiveSocks
             base.GetDetail(ctx);
             ctx.AddField("sent", sentPackets);
             ctx.AddField("recv", receivedPackets);
+            ctx.AddField("maps", map.Count);
         }
 
         protected override void OnStart()
@@ -44,6 +45,12 @@ namespace NaiveSocks
             var tmp = listenUdp;
             listenUdp = null;
             tmp.Close();
+
+            lock (list) {
+                while (list.Last != null) {
+                    list.Last.Value.RemoveAndClose();
+                }
+            }
         }
 
         static readonly IPEndPoint anyEp = new IPEndPoint(0, 0);
@@ -51,17 +58,16 @@ namespace NaiveSocks
         async void Listen()
         {
             var bea = new BeginEndAwaiter();
-            byte[] buffer = null;
             listenUdp = CreateUdpSocket();
             try {
                 listenUdp.Socket.Bind(listen);
-                buffer = BufferPool.GlobalGet(UdpBufferSize);
                 while (true) {
                     var socket = listenUdp;
-                    var r = await socket.ReadFromAsyncR(new BytesSegment(buffer, 0, UdpBufferSize), anyEp);
+                    var r = await socket.ReadFromAsyncR(UdpBufferSize, anyEp);
                     var read = r.Read;
                     var clientEp = r.From;
-                    var cur = 0;
+                    var buffer = r.Buffer.Bytes;
+                    var cur = r.Buffer.Offset;
                     var dest = ParseHeader(buffer, ref cur);
                     if (cur > read) dest = null;
                     bool redns = redirect_dns != null && dest.Port == 53;
@@ -78,7 +84,7 @@ namespace NaiveSocks
                         lock (list) {
                             map.Add(cxn.clientEP, cxn);
                             list.AddFirst(cxn.node);
-                            if (list.Count > MaxConnections) {
+                            if (list.Count > max_maps) {
                                 list.Last.Value.RemoveAndClose();
                             }
                         }
@@ -88,7 +94,6 @@ namespace NaiveSocks
                         ActiveConnection(cxn);
                         try {
                             await cxn.Send(new BytesSegment(buffer, cur, read - cur), dest);
-                            Interlocked.Increment(ref sentPackets);
                         } catch (Exception e) {
                             Logger.warning("sending from " + clientEp + " dest " + dest + ": " + e.Message);
                         }
@@ -199,20 +204,22 @@ namespace NaiveSocks
                     }
                 });
 
-                var buffer = new byte[UdpBufferSize];
-
-                var bea = new BeginEndAwaiter();
                 try {
                     while (true) {
-                        var r = await remoteUdp.ReadFromAsyncR(new BytesSegment(buffer, headerLen, UdpBufferSize - headerLen), anyEp);
-                        var destEP = r.From;
-                        var cur = 0;
-                        relay.BuildHeader(buffer, ref cur, destEP);
+                        var r = await remoteUdp.ReadFromAsyncR(UdpBufferSize - headerLen, anyEp);
                         recv++;
                         Interlocked.Increment(ref relay.receivedPackets);
+                        var destEP = r.From;
                         if (relay.verbose)
                             relay.Logger.debugForce(r.Read + " B from dest " + destEP + " to " + clientEP);
-                        await relay.listenUdp.WriteToAsyncR(new BytesSegment(buffer, 0, headerLen + r.Read), clientEP);
+
+                        var sendBuffer = BufferPool.GlobalGetBs(headerLen + r.Read);
+                        var cur = 0;
+                        relay.BuildHeader(sendBuffer, ref cur, destEP);
+                        r.Buffer.CopyTo(sendBuffer.Sub(headerLen));
+                        BufferPool.GlobalPut(r.Buffer.Bytes);
+                        await relay.listenUdp.WriteToAsyncR(sendBuffer, clientEP);
+                        BufferPool.GlobalPut(sendBuffer.Bytes);
                         relay.ActiveConnection(this);
                     }
                 } catch (Exception e) {
@@ -228,10 +235,14 @@ namespace NaiveSocks
             {
                 var tmp = Interlocked.Exchange(ref remoteUdp, null);
                 if (tmp == null) return;
-                if (relay.verbose)
-                    relay.Logger.debugForce("close connection " + clientEP);
-                relay.RemoveConnection(this);
-                tmp?.Close();
+                try {
+                    if (relay.verbose)
+                        relay.Logger.debugForce("close connection " + clientEP);
+                    relay.RemoveConnection(this);
+                    tmp?.Close();
+                } catch (Exception e) {
+                    relay.Logger.exception(e, Logging.Level.Error, "closing connection");
+                }
             }
         }
     }

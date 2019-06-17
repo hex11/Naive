@@ -125,7 +125,6 @@ namespace Naive.HttpSvr
         {
             if (count > 4096) {
                 Buffer.BlockCopy(src, srcOffset, dst, dstOffset, count);
-                return;
             } else if (count > 128) {
                 Array.Copy(src, srcOffset, dst, dstOffset, count);
             } else {

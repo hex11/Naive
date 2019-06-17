@@ -385,24 +385,29 @@ namespace NaiveSocks
         }
 
         EndPoint readfromEp;
+        byte[] readfromBuffer;
 
-        public virtual AwaitableWrapper<ReceiveFromResult> ReadFromAsyncR(BytesSegment bs, IPEndPoint ep)
+        public virtual AwaitableWrapper<ReceiveFromResult> ReadFromAsyncR(int maxSize, IPEndPoint ep)
         {
             if (raRf == null)
                 raRf = new ReusableAwaiter<ReceiveFromResult>.BeginEndStateMachine<SocketStream>(this,
                     (thiz, ar) => {
                         var from = thiz.readfromEp;
+                        var buf = thiz.readfromBuffer;
                         thiz.readfromEp = null;
+                        thiz.readfromBuffer = null;
                         var read = thiz.Socket.EndReceiveFrom(ar, ref from);
                         if (ar.CompletedSynchronously)
                             Interlocked.Add(ref ctr.Rsync, read);
                         else
                             Interlocked.Add(ref ctr.Rasync, read);
-                        return new ReceiveFromResult { From = (IPEndPoint)from, Read = read };
+                        return new ReceiveFromResult { From = (IPEndPoint)from, Buffer = new BytesSegment(buf, 0, read) };
                     });
             raRf.Reset();
             readfromEp = ep;
-            Socket.BeginReceiveFrom(bs.Bytes, bs.Offset, bs.Len, SocketFlags.None, ref readfromEp, raRf.ArgCallback, raRf.ArgState);
+            var buffer = BufferPool.GlobalGet(maxSize);
+            readfromBuffer = buffer;
+            Socket.BeginReceiveFrom(buffer, 0, maxSize, SocketFlags.None, ref readfromEp, raRf.ArgCallback, raRf.ArgState);
             return new AwaitableWrapper<ReceiveFromResult>(raRf);
         }
 

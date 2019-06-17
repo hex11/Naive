@@ -98,7 +98,7 @@ namespace NaiveSocks
                             ex = GetClosedException();
                             goto END_ASYNC;
                         }
-                        if (mode == 3) {
+                        if (mode == 3 || mode == 4) {
                             bs = BufferPool.GlobalGet(arg);
                         }
                         var firstReading = true;
@@ -113,11 +113,11 @@ namespace NaiveSocks
                         } else {
                             r = ReadNonblocking(fdR, bs, out errno);
                         }
+                        if ((mode == 3 || mode == 4) && r <= 0) {
+                            BufferPool.GlobalPut(bs.Bytes);
+                            bs.ResetSelf();
+                        }
                         if (r < 0) {
-                            if (mode == 3) {
-                                BufferPool.GlobalPut(bs.Bytes);
-                                bs.ResetSelf();
-                            }
                             if (IsUdp && HasFlag(e, EPOLL_EVENTS.HUP)) {
                                 if (Debug)
                                     Logging.warning(this + ": udp recv() hup and error " + errno);
@@ -146,10 +146,6 @@ namespace NaiveSocks
                             ex = Syscall.GetExceptionWithErrno(nameof(Syscall.recv), errno);
                         } else {
                             if (r == 0) {
-                                if (mode == 3) {
-                                    BufferPool.GlobalPut(bs.Bytes);
-                                    bs.ResetSelf();
-                                }
                                 lock (raRead) {
                                     State |= MyStreamState.RemoteShutdown;
                                     closingFdR = true;
@@ -211,7 +207,7 @@ namespace NaiveSocks
                                 Logging.debugForce(this + ": recv() async " + r);
                             switch (mode) {
                                 case 4:
-                                    raReadFrom.TrySetResult(new ReceiveFromResult { From = ep, Read = r });
+                                    raReadFrom.TrySetResult(new ReceiveFromResult { From = ep, Buffer = bs.Sub(0, r) });
                                     break;
                                 case 3:
                                     raReadNB.TrySetResult(bs);
@@ -379,6 +375,19 @@ namespace NaiveSocks
             return new AwaitableWrapper(raWrite);
         }
 
+        public override AwaitableWrapper WriteToAsyncR(BytesSegment bs, IPEndPoint ep)
+        {
+            // simply try to send without blocking.
+            if (ep.AddressFamily == AddressFamily.InterNetwork) {
+                bs.CheckAsParameter();
+                Syscall.SendFromBsTo(fd, bs, ep, MSG_FLAGS.DONTWAIT, out var errno);
+                if (errno == 0) return AwaitableWrapper.GetCompleted();
+            }
+
+            // fallback to base implementation.
+            return base.WriteToAsyncR(bs, ep);
+        }
+
         void fdW_Close()
         {
             if (Syscall.close(fdW) == -1) {
@@ -543,26 +552,27 @@ namespace NaiveSocks
             return new AwaitableWrapper(raReadFull);
         }
 
-        public override AwaitableWrapper<ReceiveFromResult> ReadFromAsyncR(BytesSegment bs, IPEndPoint ep)
+        public override AwaitableWrapper<ReceiveFromResult> ReadFromAsyncR(int maxSize, IPEndPoint ep)
         {
             if (Debug)
                 Logging.debugForce(this + ": ReadFromAsyncR()");
-            if (bs.Len <= 0)
-                throw new ArgumentOutOfRangeException("bs.Len");
-            bs.CheckAsParameter();
+            if (maxSize <= 0)
+                throw new ArgumentOutOfRangeException("maxSize");
             lock (raRead) {
                 ReadPrecheck();
                 READ_AGAIN:
                 if (ready) {
+                    var bs = BufferPool.GlobalGetBs(maxSize);
                     var r = ReadNonblockingFrom(bs, ref ep);
                     if (r != -1) // success or EOF.
-                        return new AwaitableWrapper<ReceiveFromResult>(new ReceiveFromResult { From = ep, Read = r });
+                        return new AwaitableWrapper<ReceiveFromResult>(new ReceiveFromResult { From = ep, Buffer = bs.Sub(0, r) });
+                    else
+                        BufferPool.GlobalPut(bs.Bytes);
                 }
                 if (addFdToEpoller()) goto READ_AGAIN;
                 raReadFrom.Reset();
                 readState = 4;
-                bufRead = bs;
-                readArg = bs.Len; // only for ToString() to print the length
+                readArg = maxSize;
                 if (Debug)
                     Logging.debugForce(this + ": wait for epoll");
             }
@@ -1020,7 +1030,7 @@ namespace NaiveSocks
             public unsafe static extern int recvfrom(int sockfd, void* buf, uint len, int flags, void* src_addr, uint* addrlen);
 
             [DllImport(LIBC, SetLastError = true)]
-            public unsafe static extern int sendto(int sockfd, void* buf, uint len, int flags, void* dest_addr, ushort* addrlen);
+            public unsafe static extern int sendto(int sockfd, void* buf, uint len, int flags, void* dest_addr, uint* addrlen);
 
             [DllImport(LIBC, SetLastError = true)]
             public static extern int dup([In]int fd);
@@ -1127,9 +1137,27 @@ namespace NaiveSocks
                     uint addrlen = (uint)sizeof(sockaddr_in);
                     var r = recvfrom(fd, buf, (uint)bs.Len, (int)flags, &addr, &addrlen);
                     errno = r < 0 ? GetErrno() : 0;
-                    if (addrlen > 0) {
+                    if (addrlen > 0 && addr.sin_family == 2 /* AF_INET */) {
                         ep = new IPEndPoint(addr.sin_addr, SwapEndian(addr.sin_port));
+                    } else { // TODO: IPv6 support
+                        ep = new IPEndPoint(IPAddress.None, 0);
                     }
+                    return r;
+                }
+            }
+
+            public static unsafe int SendFromBsTo(int fd, BytesSegment bs, IPEndPoint ep, MSG_FLAGS flags, out int errno)
+            {
+                fixed (byte* buf = &bs.Bytes[bs.Offset]) {
+                    sockaddr_in addr = new sockaddr_in {
+                        sin_family = 2,
+                        sin_addr = (uint)ep.Address.Address,
+                        sin_port = SwapEndian((ushort)ep.Port)
+                    };
+                    // TODO: IPv6 support
+                    uint addrlen = (uint)sizeof(sockaddr_in);
+                    var r = sendto(fd, buf, (uint)bs.Len, (int)flags, &addr, &addrlen);
+                    errno = r < 0 ? GetErrno() : 0;
                     return r;
                 }
             }

@@ -75,13 +75,14 @@ namespace NaiveSocks
     public interface IUdpSocket : IMyStream
     {
         AwaitableWrapper WriteToAsyncR(BytesSegment bs, IPEndPoint ep);
-        AwaitableWrapper<ReceiveFromResult> ReadFromAsyncR(BytesSegment bs, IPEndPoint ep);
+        AwaitableWrapper<ReceiveFromResult> ReadFromAsyncR(int maxSize, IPEndPoint ep);
     }
 
     public struct ReceiveFromResult
     {
+        public BytesSegment Buffer;
         public IPEndPoint From;
-        public int Read;
+        public int Read => Buffer.Len;
     }
 
     public interface IMyStreamDispose : IMyStream

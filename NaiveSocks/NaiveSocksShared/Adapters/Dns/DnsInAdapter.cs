@@ -91,9 +91,8 @@ namespace NaiveSocks
                 socket.Bind(listen);
                 udpClient = MyStream.FromSocket(socket);
                 while (true) {
-                    var buffer = BufferPool.GlobalGet(64 * 1024);
-                    var r = await udpClient.ReadFromAsyncR(buffer, anyEP);
-                    Task.Run(() => HandleUdpReceiveResult(r, buffer)).Forget();
+                    var r = await udpClient.ReadFromAsyncR(64 * 1024, anyEP);
+                    Task.Run(() => HandleUdpReceiveResult(r)).Forget();
                 }
             } catch (Exception e) {
                 Logger.exception(e, Logging.Level.Warning, "UDP listener stopped");
@@ -103,10 +102,11 @@ namespace NaiveSocks
             }
         }
 
-        private async void HandleUdpReceiveResult(ReceiveFromResult r, byte[] buffer)
+        private async void HandleUdpReceiveResult(ReceiveFromResult r)
         {
             var len = r.Read;
             var from = r.From;
+            var buffer = r.Buffer.Bytes;
             if (verbose)
                 Logger.debugForce("DNS message received, length: " + len);
             byte[] respArray;
