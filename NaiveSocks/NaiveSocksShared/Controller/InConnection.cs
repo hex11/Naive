@@ -41,26 +41,36 @@ namespace NaiveSocks
 
         public virtual IMyStream DataStream { get; set; }
 
-        public async Task HandleAndPutStream(IAdapter outAdapter, IMyStream stream, Task waitForReadFromStream = null)
+        public Task HandleAndPutStream(IAdapter outAdapter, IMyStream stream, Task waitForReadFromStream = null)
         {
-            var result = new ConnectResult(outAdapter, ConnectResultEnum.OK, stream);
-            var thisStream = await HandleAndGetStream(result);
-            var copier = new MyStream.TwoWayCopier(stream, thisStream) {
-                WhenCanReadFromLeft = waitForReadFromStream,
-                Logger = new Logger("->" + outAdapter.Name, InAdapter.GetAdapter().Logger)
-            };
-            copier.SetCounters(outAdapter.GetAdapter().BytesCountersRW, this.BytesCountersRW);
-            EnsureSniffer();
-            Sniffer.ListenToCopier(copier.CopierFromRight, copier.CopierFromLeft);
-            await copier.Run();
+            if (stream == null) throw new ArgumentNullException(nameof(stream));
+
+            var result = new ConnectResult(outAdapter, ConnectResultEnum.OK, stream) { WhenCanRead = waitForReadFromStream };
+            return SetResult(result);
         }
 
         public async Task<IMyStream> HandleAndGetStream(ConnectResult result)
         {
-            if (result.destEP == null)
-                result.destEP = new IPEndPoint(0, 0);
             await SetResult(result);
             return DataStream;
+        }
+
+        protected override async Task OnConnectionResult(ConnectResultBase result)
+        {
+            if (result.Ok) {
+                var r = (ConnectResult)result;
+                if (r.Stream != null) {
+                    var handler = r.Adapter;
+                    var copier = new MyStream.TwoWayCopier(r.Stream, DataStream) {
+                        WhenCanReadFromLeft = r.WhenCanRead,
+                        Logger = new Logger("->" + handler.Name, InAdapter.GetAdapter().Logger)
+                    };
+                    copier.SetCounters(handler.GetAdapter().BytesCountersRW, this.BytesCountersRW);
+                    EnsureSniffer();
+                    Sniffer.ListenToCopier(copier.CopierFromRight, copier.CopierFromLeft);
+                    await copier.Run();
+                }
+            }
         }
 
         public Task<IMyStream> HandleAndGetStream(IAdapter adapter)
@@ -70,11 +80,10 @@ namespace NaiveSocks
 
         protected override Task OnFinish()
         {
-            base.Finish();
             var dataStream = DataStream;
             if (dataStream != null)
                 MyStream.CloseWithTimeout(dataStream).Forget();
-            return NaiveUtils.CompletedTask;
+            return base.OnFinish();
         }
 
         public override void Stop()
@@ -119,6 +128,7 @@ namespace NaiveSocks
                 } else {
                     await _onConnectionCallback(new ConnectResult(null, ConnectResultEnum.Failed));
                 }
+                await base.OnConnectionResult(result);
             }
 
             public override string GetInfoStr()
@@ -291,9 +301,39 @@ namespace NaiveSocks
         {
         }
 
-        protected override Task OnConnectionResult(ConnectResultBase result)
+        internal TaskCompletionSource<ConnectResponse> tcs;
+
+        private TaskCompletionSource<VoidType> tcsConnectionFinish;
+
+        protected override Task OnConnectionResult(ConnectResultBase resultBase)
         {
-            return NaiveUtils.CompletedTask;
+            if (!resultBase.Ok) {
+                SetConnectResponse(new ConnectResult(resultBase.Adapter, ConnectResultEnum.Failed) { FailedReason = resultBase.FailedReason });
+                return NaiveUtils.CompletedTask;
+            }
+            var result = (ConnectResult)resultBase;
+            if (result.Stream == null) {
+                var lo = new LoopbackStream();
+                DataStream = lo;
+                result.Stream = lo.Another;
+                SetConnectResponse(result);
+                return NaiveUtils.CompletedTask;
+            } else {
+                SetConnectResponse(result);
+                tcsConnectionFinish = new TaskCompletionSource<VoidType>();
+                return tcsConnectionFinish.Task;
+            }
+        }
+
+        void SetConnectResponse(ConnectResult r)
+        {
+            tcs.SetResult(new ConnectResponse(r, this));
+        }
+
+        protected override Task OnFinish()
+        {
+            tcsConnectionFinish?.SetResult(0);
+            return base.OnFinish();
         }
 
         public static ConnectRequest Create(IAdapter inAdapter, AddrPort dest, Func<string> getInfoStr = null)
@@ -402,7 +442,12 @@ namespace NaiveSocks
         }
 
         public IPEndPoint destEP;
+
+        /// <summary>
+        /// If null, then the handler is requesting a client stream, otherwise the dest stream is provided.
+        /// </summary>
         public IMyStream Stream;
+
         public Task WhenCanRead = NaiveUtils.CompletedTask;
     }
 

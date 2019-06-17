@@ -642,7 +642,7 @@ namespace NaiveSocks
                 else
                     addstr = addstr + " [" + time + "]";
                 var response = new NaiveProtocol.Reply() {
-                    remoteEP = AddrPort.Parse(result.destEP.ToString()),
+                    remoteEP = AddrPort.Parse(result.destEP?.ToString() ?? "0:0"),
                     status = (byte)(result.Ok ? 0 : 1),
                     additionalString = addstr
                 };
@@ -654,6 +654,7 @@ namespace NaiveSocks
                 } else {
                     Channel.Close(new CloseOpt(CloseType.Close)).Forget();
                 }
+                await base.OnConnectionResult(resultBase);
             }
         }
     }

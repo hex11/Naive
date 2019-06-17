@@ -52,11 +52,6 @@ namespace NaiveSocks
         public static DnsResponse Empty(IAdapter adapter) => new DnsResponse(adapter, new IPAddress[] { });
     }
 
-    public interface IConnectionDialer
-    {
-        Task<ConnectResult> Connect(ConnectArgument arg);
-    }
-
     public class ConnectArgument
     {
         public override string ToString() => $"{{Request from {InAdapter} dest={Dest}}}";
@@ -94,7 +89,7 @@ namespace NaiveSocks
         public abstract Task HandleTcpConnection(InConnectionTcp connection);
     }
 
-    public abstract class OutAdapter2 : OutAdapter, IConnectionDialer, IConnectionHandler2
+    public abstract class OutAdapter2 : OutAdapter, IConnectionHandler2
     {
         public AdapterRef if_failed { get; set; }
 
@@ -184,7 +179,7 @@ namespace NaiveSocks
         }
     }
 
-    public class FailAdapter : OutAdapter, IConnectionDialer, IHttpRequestAsyncHandler
+    public class FailAdapter : OutAdapter, IHttpRequestAsyncHandler
     {
         public string reason { get; set; }
 

@@ -117,14 +117,14 @@ namespace NaiveSocks
                 }
             }
 
-            protected override Task OnConnectionResult(ConnectResultBase result)
+            protected override async Task OnConnectionResult(ConnectResultBase result)
             {
                 if (socks5svr != null) {
                     var tmp = socks5svr;
                     socks5svr = null;
-                    return tmp.WriteConnectionResult(new IPEndPoint(0, Dest.Port), (result.Ok) ? Socks5Server.Rep.succeeded : Socks5Server.Rep.Connection_refused);
+                    await tmp.WriteConnectionResult(new IPEndPoint(0, Dest.Port), (result.Ok) ? Socks5Server.Rep.succeeded : Socks5Server.Rep.Connection_refused);
                 }
-                return NaiveUtils.CompletedTask;
+                await base.OnConnectionResult(result);
             }
 
             public override string GetInfoStr() => _eppair.ToString();

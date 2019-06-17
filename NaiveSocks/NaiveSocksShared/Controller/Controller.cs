@@ -233,7 +233,7 @@ namespace NaiveSocks
             return CurrentConfig.DebugFlags.Contains(flag);
         }
 
-        public virtual Task HandleInConnection(InConnection inConnection)
+        public Task HandleInConnection(InConnection inConnection)
         {
             if (inConnection == null)
                 throw new ArgumentNullException(nameof(inConnection));
@@ -244,7 +244,7 @@ namespace NaiveSocks
             }
         }
 
-        public virtual Task HandleInConnection(InConnection inc, string outAdapterName)
+        public Task HandleInConnection(InConnection inc, string outAdapterName)
         {
             if (string.IsNullOrEmpty(outAdapterName))
                 throw new ArgumentException("outAdapterName is null or empty");
@@ -255,7 +255,7 @@ namespace NaiveSocks
             return HandleInConnection(inc, selectedAdapter);
         }
 
-        public virtual Task HandleInConnection(InConnection inc, AdapterRef outAdapterRef)
+        public Task HandleInConnection(InConnection inc, AdapterRef outAdapterRef)
         {
             if (outAdapterRef == null)
                 throw new ArgumentNullException(nameof(outAdapterRef));
@@ -266,7 +266,7 @@ namespace NaiveSocks
             return HandleInConnection(inc, adapter);
         }
 
-        public virtual async Task HandleInConnection(InConnection inc, IConnectionHandler outAdapter)
+        public async Task HandleInConnection(InConnection inc, IConnectionHandler outAdapter)
         {
             try {
                 if (outAdapter == null) {
@@ -310,7 +310,7 @@ namespace NaiveSocks
             }
         }
 
-        public virtual async Task<ConnectResponse> Connect(ConnectRequest request, IAdapter outAdapter)
+        public Task<ConnectResponse> Connect(ConnectRequest request, IAdapter outAdapter)
         {
             if (request == null)
                 throw new ArgumentNullException(nameof(request));
@@ -320,53 +320,14 @@ namespace NaiveSocks
             if (outAdapter == null) {
                 warning($"'{request.InAdapter.Name}' {request} -> (no out adapter)");
                 result = new ConnectResult(this, "no out adapter");
-                goto RETURN;
+                return Task.FromResult(new ConnectResponse(result, request));
             }
-            onConnectionBegin(request, outAdapter);
-            try {
-                int redirectCount = 0;
-                while (true) {
-                    AdapterRef redirected;
-                    ConnectResult r;
-                    request.RunningHandler = outAdapter;
-                    if (outAdapter is IConnectionDialer cp) {
-                        r = await cp.Connect(request).CAF();
-                    } else if (outAdapter is IConnectionHandler ch) {
-                        r = await OutAdapter2.ConnectWrapper(ch, request).CAF();
-                    } else {
-                        error($"{outAdapter} implement neither IConnectionProvider nor IConnectionHandler.");
-                        result = new ConnectResult(this, "wrong adapter");
-                        goto RETURN;
-                    }
-                    if (!r.IsRedirected) {
-                        await request.HandleAndGetStream(r);
-                        result = r;
-                        goto RETURN;
-                    }
-                    redirected = r.Redirected;
-                    if (++redirectCount >= 10) {
-                        error($"'{request.InAdapter.Name}' {request} too many redirects, last redirect: {outAdapter.Name}");
-                        result = new ConnectResult(this, "too many redirects");
-                        goto RETURN;
-                    }
-                    var nextAdapter = redirected.Adapter;
-                    if (nextAdapter == null) {
-                        warning($"'{request.InAdapter.Name}' {request} was redirected by '{outAdapter.Name}'" +
-                                $" to '{redirected}' which can not be found.");
-                        result = new ConnectResult(this, "redirect not found");
-                        goto RETURN;
-                    }
-                    outAdapter = nextAdapter;
-                    if (LoggingLevel <= Logging.Level.None)
-                        debug($"'{request.InAdapter.Name}' {request} was redirected to '{redirected}'");
-                }
-            } catch (Exception e) {
-                await onConnectionException(request, e);
-                await onConnectionEnd(request);
-                throw;
-            }
-            RETURN:
-            return new ConnectResponse(result, request);
+
+            request.tcs = new TaskCompletionSource<ConnectResponse>();
+
+            HandleInConnection(request, outAdapter as IConnectionHandler).Forget();
+
+            return request.tcs.Task;
         }
 
         public async Task<DnsResponse> ResolveName(IAdapter creator, AdapterRef handler, DnsRequest request)
