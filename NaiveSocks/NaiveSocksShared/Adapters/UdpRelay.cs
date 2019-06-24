@@ -15,6 +15,7 @@ namespace NaiveSocks
         public IPEndPoint redirect_dns { get; set; }
         public bool verbose { get; set; }
         public int max_maps { get; set; } = 256;
+        public int timeout { get; set; } = 60;
 
         SocketStream listenUdp;
 
@@ -80,14 +81,7 @@ namespace NaiveSocks
                     lock (list)
                         v = map.TryGetValue(clientEp, out cxn);
                     if (v == false) {
-                        cxn = new Connection(this, clientEp);
-                        lock (list) {
-                            map.Add(cxn.clientEP, cxn);
-                            list.AddFirst(cxn.node);
-                            if (list.Count > max_maps) {
-                                list.Last.Value.RemoveAndClose();
-                            }
-                        }
+                        cxn = NewConnection(clientEp);
                         await cxn.Send(new BytesSegment(buffer, cur, read - cur), dest);
                         cxn.StartReceive();
                     } else {
@@ -105,6 +99,55 @@ namespace NaiveSocks
             } finally {
                 listenUdp?.Close();
                 //if (buffer != null) BufferPool.GlobalPut(buffer);
+            }
+        }
+
+        private Connection NewConnection(IPEndPoint clientEp)
+        {
+            var cxn = new Connection(this, clientEp, CreateUdpSocket());
+            lock (list) {
+                map.Add(cxn.clientEP, cxn);
+                list.AddFirst(cxn.node);
+                if (list.Count > max_maps) {
+                    list.Last.Value.RemoveAndClose();
+                }
+                CheckTask();
+            }
+            return cxn;
+        }
+
+        bool taskRunning;
+
+        private void CheckTask()
+        {
+            bool shouldRun = list.Count > 0 && timeout > 0;
+            if (taskRunning == shouldRun) return;
+            if (shouldRun) {
+                taskRunning = true;
+                WebSocket.AddManagementTask(() => {
+                    lock (list) {
+                        var node = list.Last;
+                        if (node == null) {
+                            if (verbose) Logger.debugForce("management task stopped.");
+                            taskRunning = false;
+                            return true;
+                        }
+                        do {
+                            var cxn = node.Value;
+                            var prev = node.Previous;
+                            if (WebSocket.CurrentTimeRough - cxn.lastActive > timeout) {
+                                if (verbose) Logger.debugForce("timed out: " + cxn.clientEP);
+                                cxn.RemoveAndClose();
+                            } else {
+                                // No need to check the more active connections.
+                                break;
+                            }
+                            node = prev;
+                        } while (node != null);
+                        return false;
+                    }
+                });
+                if (verbose) Logger.debugForce("management task registered.");
             }
         }
 
@@ -153,6 +196,7 @@ namespace NaiveSocks
         // move to the first
         void ActiveConnection(Connection c)
         {
+            c.lastActive = WebSocket.CurrentTimeRough;
             if (list.First == c.node) return;
             lock (list) {
                 list.Remove(c.node);
@@ -173,41 +217,32 @@ namespace NaiveSocks
         {
             public UdpRelay relay { get; }
             public IPEndPoint clientEP { get; }
-            public SocketStream remoteUdp;
+            public IUdpSocket remoteUdp;
 
             public LinkedListNode<Connection> node;
 
-            int recv;
+            public int lastActive;
 
-            public Connection(UdpRelay relay, IPEndPoint clientEP)
+            public Connection(UdpRelay relay, IPEndPoint clientEP, IUdpSocket remoteUdp)
             {
                 this.node = new LinkedListNode<Connection>(this);
                 this.relay = relay;
                 this.clientEP = clientEP;
-                this.remoteUdp = CreateUdpSocket();
+                this.remoteUdp = remoteUdp;
             }
 
             public AwaitableWrapper Send(BytesSegment bs, IPEndPoint destEP)
             {
+                relay.ActiveConnection(this);
                 Interlocked.Increment(ref relay.sentPackets);
                 return remoteUdp?.WriteToAsyncR(bs, destEP) ?? AwaitableWrapper.GetCompleted();
             }
 
             public async void StartReceive()
             {
-                // Timed out if no any response from the dest in 60 seconds.
-                AsyncHelper.SetTimeout(this, 60 * 1000, (x) => {
-                    if (x.recv == 0) {
-                        if (relay.verbose)
-                            relay.Logger.debugForce("timed out for client " + clientEP);
-                        x.RemoveAndClose();
-                    }
-                });
-
                 try {
                     while (true) {
                         var r = await remoteUdp.ReadFromAsyncR(UdpBufferSize - headerLen, anyEp);
-                        recv++;
                         Interlocked.Increment(ref relay.receivedPackets);
                         var destEP = r.From;
                         if (relay.verbose)
