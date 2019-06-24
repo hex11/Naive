@@ -6,6 +6,34 @@ using Naive.HttpSvr;
 
 namespace NaiveSocks
 {
+    public abstract class InConnectionUdp : InConnection
+    {
+        protected InConnectionUdp(IAdapter creator) : base(creator)
+        {
+        }
+
+        public override string Type => "udp";
+
+        public new ConnectResultUdp ConnectResult
+        {
+            get { return base.ConnectResult as ConnectResultUdp; }
+            protected set { base.ConnectResult = value; }
+        }
+    }
+
+    public class ConnectResultUdp : ConnectResultBase
+    {
+        public ConnectResultUdp(IAdapter adapter, ConnectResultEnum result) : base(adapter, result)
+        {
+        }
+
+        public ConnectResultUdp(IAdapter adapter, string failedReason) : base(adapter, failedReason)
+        {
+        }
+
+        public IUdpSocket UdpSocket;
+    }
+
     public class InConnectionDns : InConnection
     {
         protected InConnectionDns(IAdapter creator) : base(creator)

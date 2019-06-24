@@ -36,6 +36,12 @@ namespace NaiveSocks
                 }
                 return ResolveNameCore(dns);
             }
+            if (connection is InConnectionUdp udp) {
+                var socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+                return connection.SetResult(new ConnectResultUdp(this, ConnectResultEnum.OK) {
+                    UdpSocket = GetMyStreamFromSocket(socket) as IUdpSocket
+                });
+            }
             return base.HandleConnection(connection);
         }
 
