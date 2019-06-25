@@ -100,6 +100,14 @@ namespace Naive
                 TryGetValue(item.Key, item.Value);
             }
         }
+
+        public Argument GetOrNull(string key)
+        {
+            if (TryGetValue(key, out var val)) {
+                return val;
+            }
+            return null;
+        }
     }
 
     internal class ArgumentDefine

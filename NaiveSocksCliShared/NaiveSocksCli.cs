@@ -50,12 +50,13 @@ Usage: {BuildInfo.AppName_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FIL
         [--cmd CMDLINE...]";
 
         internal static bool __magic_is_packed;
+        internal static bool GuiMode;
 
         public static Controller Controller { get; private set; }
 
         internal static void Main(string[] args)
         {
-            Console.Title = BuildInfo.AppName;
+            if (!GuiMode) Console.Title = BuildInfo.AppName;
             //Logging.HistroyEnabled = false;
             Logging.WriteLogToConsole = false;
             Logging.Logged += (log) => {
@@ -146,7 +147,7 @@ Usage: {BuildInfo.AppName_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FIL
                         }
                     }
                 }
-                var toRun = x.TryGetValue("update_title", Environment.OSVersion.Platform == PlatformID.Win32NT);
+                var toRun = x.TryGetValue("update_title", Environment.OSVersion.Platform == PlatformID.Win32NT) && !GuiMode;
                 if (toRun != titleUpdateRunning) {
                     if (toRun) {
                         titleUpdateRunning = true;
@@ -211,6 +212,11 @@ Usage: {BuildInfo.AppName_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FIL
                 WinForm.ControllerForm.RunGuiThread(controller);
             });
             //WinForm.ControllerForm.RunGuiThread(controller);
+            if (GuiMode) {
+                WinForm.ControllerForm.GuiThreadMain(controller);
+                Environment.Exit(0);
+                return;
+            }
 #endif
             if (!ar.ContainsKey("--no-cli")) {
                 var stdio = CmdConsole.StdIO;

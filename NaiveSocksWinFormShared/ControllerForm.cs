@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Text;
 using System.Windows.Forms;
 
@@ -14,7 +15,7 @@ namespace NaiveSocks.WinForm
             }) { Name = "GUI" }.Start();
         }
 
-        private static void GuiThreadMain(Controller controller)
+        public static void GuiThreadMain(Controller controller)
         {
             var form = new ControllerForm(controller);
             Application.EnableVisualStyles();
@@ -30,7 +31,35 @@ namespace NaiveSocks.WinForm
 
             connectionsView = new ConnectionsView(controller) { Dock = DockStyle.Fill };
             this.Controls.Add(connectionsView);
+
+            this.Menu = new MainMenu(new MenuItem[] {
+                new MenuItem("&Controller", new MenuItem[] {
+                    new MenuItem("&Reload", (s, e) => {
+                        Controller.Reload();
+                    }, Shortcut.CtrlR)
+                }),
+                new MenuItem("&View", new MenuItem[] {
+                    new MenuItem("&Configration file location", (s, e) => {
+                        OpenFolerAndShowFile(Controller.CurrentConfig.FilePath);
+                    }),
+                    new MenuItem("&Program file location", (s, e) => {
+                        OpenFolerAndShowFile(Process.GetCurrentProcess().MainModule.FileName);
+                    })
+                })
+            });
+
+            var about = new MenuItem("&About");
+            about.MenuItems.Add(new MenuItem("&GitHub page", (s, e) => {
+                Process.Start("https://github.com/hex11/Naive");
+            }));
+            about.MenuItems.Add(new MenuItem("-"));
+            about.MenuItems.Add(new MenuItem("Version " + BuildInfo.CurrentVersion) { Enabled = false });
+            if (BuildInfo.CurrentBuildText != null)
+                about.MenuItems.Add(new MenuItem(BuildInfo.CurrentBuildText) { Enabled = false });
+            Menu.MenuItems.Add(about);
         }
+
+        void OpenFolerAndShowFile(string fileName) => Process.Start("explorer", $"/select, \"{fileName}\"");
 
         public Controller Controller { get; }
 

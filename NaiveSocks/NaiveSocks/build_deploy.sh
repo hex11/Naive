@@ -49,7 +49,7 @@ cp ../naivesocks-example.tml "$deploydir/"
 STEP pack single file edition...
 
 has mono && MONO=mono || MONO=""
-$MONO "$deploydir/${binaries[0]}" --attach-dlls "$singlefile" "${dll_paths[@]}"
+$MONO "$deploydir/${binaries[0]}" --repack --output "$singlefile" --dlls "${dll_paths[@]}"
 
 if getopts "u:" opt; then
 	to_upload="$OPTARG"

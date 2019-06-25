@@ -38,6 +38,11 @@ namespace NZip
             return magic.Substring(magicBstart, magic[magicBcountPos]);
         }
 
+        public static Dict getMagicDict()
+        {
+            return Dict.Parse(getMagicB());
+        }
+
         public static byte[] genExe(char magicCh, bool? setGuiMode = null, string magicB = null, int exeLength = -1)
         {
             byte[] exe;
@@ -110,6 +115,37 @@ namespace NZip
                                  + 20 // COFF header
                                  + 68;
             return indexSubsystem;
+        }
+
+        public class Dict : Dictionary<string, string>
+        {
+            public static Dict Parse(string str)
+            {
+                var dict = new Dict();
+                var sb = new StringBuilder();
+                string key = null;
+                foreach (var ch in str) {
+                    if (ch == '=') {
+                        key = sb.ToString();
+                        sb.Clear();
+                    } else if (ch == ',') {
+                        dict[key] = sb.ToString();
+                        sb.Clear();
+                    } else {
+                        sb.Append(ch);
+                    }
+                }
+                return dict;
+            }
+
+            public override string ToString()
+            {
+                var sb = new StringBuilder();
+                foreach (var item in this) {
+                    sb.Append(item.Key).Append('=').Append(item.Value).Append(',');
+                }
+                return sb.ToString();
+            }
         }
     }
 

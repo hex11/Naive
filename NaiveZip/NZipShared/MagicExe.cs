@@ -16,28 +16,38 @@ namespace NZip
 
         public static void AttachExe(string exe, List<string> dlls, string outputPath)
         {
-            PackCore(exe, dlls, outputPath);
+            Pack(exe, dlls, outputPath);
         }
 
         public static void AttachDlls(List<string> dlls, string outputPath)
         {
-            PackCore(null, dlls, outputPath);
+            Pack(null, dlls, outputPath);
         }
 
-        static void PackCore(string exe, List<string> dlls, string outputPath)
+        public static void Pack(string exe, List<string> dlls, string outputPath, Magic.Dict addDict = null, bool? setGui = null)
         {
             using (var fs = File.Open(outputPath, FileMode.Create, FileAccess.ReadWrite, FileShare.None)) {
                 bool extExe = exe != null;
                 var list = new List<AddingFile>();
-                bool isGui = false;
                 byte[] exebuf;
                 if (extExe) {
                     exebuf = File.ReadAllBytes(exe);
-                    isGui = Magic.getSubsystem(exebuf) == 2;
+                    setGui = setGui ?? Magic.getSubsystem(exebuf) == 2;
                     list.Add(new AddingFile(exe, ExeName));
                 }
-                int exeLength = GetExeLength();
-                var selfexebuf = Magic.genExe(extExe ? 'm' : 'd', isGui, exeLength.ToString(), exeLength);
+                int selfExeLength = GetSelfExeLength();
+                var dict = Magic.getMagicDict();
+                if (addDict != null) {
+                    foreach (var item in addDict) {
+                        if (item.Value == null)
+                            dict.Remove(item.Key);
+                        else
+                            dict[item.Key] = item.Value;
+                    }
+                }
+                dict["pack"] = selfExeLength.ToString();
+                char magicCh = extExe ? 'm' : (dlls != null) ? 'd' : Magic.magic_char;
+                var selfexebuf = Magic.genExe(magicCh, setGui, dict.ToString(), selfExeLength);
                 fs.Write(selfexebuf, 0, selfexebuf.Length);
                 int i = 0;
                 if (dlls != null) {
@@ -46,13 +56,20 @@ namespace NZip
                         if (File.Exists(x)) {
                             var name = AssemblyName.GetAssemblyName(x).FullName;
                             list.Add(new AddingFile(x, NamePrefix + name));
-                        } else if (Directory.Exists(x)) {
-                            // TODO
-                            throw new NotImplementedException();
+                        } else {
+                            throw new Exception("File not found: " + x);
                         }
                     }
                 }
-                NZ.Create(fs, list, Console.Out);
+                var curMagicCh = Magic.magic_char;
+                if (exe != null || dlls != null) {
+                    NZ.Create(fs, list, Console.Out);
+                } else {
+                    using (var self = File.Open(Magic.GetSelfPath(), FileMode.Open, FileAccess.Read, FileShare.ReadWrite)) {
+                        self.Position = selfExeLength;
+                        self.CopyTo(fs, 64 * 1024);
+                    }
+                }
             }
         }
 
@@ -118,10 +135,10 @@ namespace NZip
 
         private static int GetPackOffset()
         {
-            return int.Parse(Magic.getMagicB());
+            return int.Parse(Magic.getMagicDict()["pack"]);
         }
 
-        private static int GetExeLength()
+        private static int GetSelfExeLength()
         {
             if (IsExeAttached || IsDllsAttached) {
                 return GetPackOffset();

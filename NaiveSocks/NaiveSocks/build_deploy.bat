@@ -17,7 +17,7 @@ copy ..\naivesocks-example.tml %deploydir%\ || goto :failed
 
 echo.
 call :info building single file edition...
-%bindir%\NaiveSocks.exe --attach-dlls %singlefile% %bindir%\Nett.dll %bindir%\NaiveSvrLib.dll || goto :failed
+%bindir%\NaiveSocks.exe --repack --output %singlefile% --dlls %bindir%\Nett.dll %bindir%\NaiveSvrLib.dll || goto :failed
 
 call :info Finished building deploy!!
 call :info2 [deploy dir]: %deploydir%
