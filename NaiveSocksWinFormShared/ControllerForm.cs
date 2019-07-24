@@ -29,14 +29,14 @@ namespace NaiveSocks.WinForm
             this.DoubleBuffered = true;
             this.Text = BuildInfo.AppName;
 
-            connectionsView = new ConnectionsView(controller) { Dock = DockStyle.Fill };
-            this.Controls.Add(connectionsView);
-
             this.Menu = new MainMenu(new MenuItem[] {
                 new MenuItem("&Controller", new MenuItem[] {
                     new MenuItem("&Reload", (s, e) => {
                         Controller.Reload();
-                    }, Shortcut.CtrlR)
+                    }, Shortcut.CtrlR),
+                    new MenuItem("&Exit", (s, e) => {
+                        Environment.Exit(0);
+                    }, Shortcut.CtrlQ)
                 }),
                 new MenuItem("&View", new MenuItem[] {
                     new MenuItem("&Configration file location", (s, e) => {
@@ -47,6 +47,11 @@ namespace NaiveSocks.WinForm
                     })
                 })
             });
+
+            AddTab(new ConnectionsView.Tab(controller));
+            AddTab(new LogView.Tab());
+
+            SwitchTab(tabs[0]);
 
             var about = new MenuItem("&About");
             about.MenuItems.Add(new MenuItem("&GitHub page", (s, e) => {
@@ -63,22 +68,22 @@ namespace NaiveSocks.WinForm
 
         public Controller Controller { get; }
 
-        ConnectionsView connectionsView;
         Timer timer;
 
         protected override void OnLoad(EventArgs e)
         {
             base.OnLoad(e);
-            Render();
+            OnTick();
             timer = new Timer() { Interval = 1000, Enabled = true };
-            timer.Tick += (s, ee) => Render();
+            timer.Tick += (s, ee) => OnTick();
         }
 
-        private void Render()
+        private void OnTick()
         {
             UpdateTitle();
-
-            connectionsView.Render();
+            foreach (var item in tabs) {
+                item.OnTick();
+            }
         }
 
         long lastPackets = 0, lastBytes = 0;
@@ -97,6 +102,59 @@ namespace NaiveSocks.WinForm
         {
             timer.Dispose();
             base.Dispose(disposing);
+        }
+
+        private List<TabBase> tabs = new List<TabBase>();
+        private TabBase currentTab;
+
+        private void AddTab(TabBase tab)
+        {
+            tab.menuItem = this.Menu.MenuItems.Add("[" + tab.Name + "]", (s, e) => {
+                SwitchTab(tab);
+            });
+            tabs.Add(tab);
+        }
+
+        private void SwitchTab(TabBase tab)
+        {
+            if (currentTab != null) {
+                currentTab.SetShowing(false);
+                this.Controls.RemoveAt(0);
+            }
+            currentTab = tab;
+            tab.View.Dock = DockStyle.Fill;
+            this.Controls.Add(tab.View);
+            tab.SetShowing(true);
+        }
+    }
+
+    public abstract class TabBase
+    {
+        internal MenuItem menuItem;
+
+        public abstract Control View { get; }
+        public abstract string Name { get; }
+
+        public bool Showing { get; private set; }
+
+        internal void SetShowing(bool show)
+        {
+            Showing = show;
+            menuItem.Enabled = !show;
+            if (show) OnShow();
+            else OnHide();
+        }
+
+        protected virtual void OnShow()
+        {
+        }
+
+        protected virtual void OnHide()
+        {
+        }
+
+        public virtual void OnTick()
+        {
         }
     }
 }

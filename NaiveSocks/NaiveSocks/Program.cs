@@ -14,7 +14,8 @@ namespace NaiveSocks
             if (NZip.MagicExe.IsDllsAttached) {
                 NZip.MagicExe.LoadAttachedDlls();
                 NaiveSocksCli.__magic_is_packed = true;
-            } else if (args.Length > 1 && args[0] == "--repack") {
+            }
+            if (args.Length > 1 && args[0] == "--repack") {
                 Repack(args);
                 return;
             }

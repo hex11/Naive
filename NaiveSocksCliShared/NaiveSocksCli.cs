@@ -52,6 +52,8 @@ Usage: {BuildInfo.AppName_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FIL
         internal static bool __magic_is_packed;
         internal static bool GuiMode;
 
+        public static bool LogStdout = true;
+
         public static Controller Controller { get; private set; }
 
         internal static void Main(string[] args)
@@ -60,6 +62,7 @@ Usage: {BuildInfo.AppName_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FIL
             //Logging.HistroyEnabled = false;
             Logging.WriteLogToConsole = false;
             Logging.Logged += (log) => {
+                if (!LogStdout) return;
                 lock (CmdConsole.ConsoleOnStdIO.Lock) {
                     if (CmdConsole.StdIO.LastCharIsNewline == false) {
                         Console.WriteLine();
@@ -86,14 +89,31 @@ Usage: {BuildInfo.AppName_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FIL
                 return;
             }
             if (ar.ContainsKey("--no-log-stdout")) {
-                Logging.WriteLogToConsole = false;
+                LogStdout = false;
             }
             if (ar.ContainsKey("--stdout-no-time") || ar.ContainsKey("--log-stdout-no-time")) {
                 Logging.WriteLogToConsoleWithTime = false;
             }
+
+            var controller = Controller = new Controller();
+            controller.Logger.ParentLogger = Logging.RootLogger;
+
+#if NS_WINFORM
+            if (GuiMode) {
+                var winform = new WinForm.WinFormController(controller);
+                winform.RunUIThread();
+                winform.ShowControllerForm(true);
+            }
+#endif
+
             ar.TryGetValue("--cmd", out var argcmd);
-            if (argcmd == null)
+            if (argcmd == null) {
                 Logging.info(NameWithVertionText);
+                if (GuiMode) {
+                    Logging.info("(GUI mode)");
+                    LogStdout = false;
+                }
+            }
             if (ar.TryGetValue("--log-file", out var logFile)) {
                 Logging.info($"Logging file: {logFile.FirstParaOrThrow}");
                 logWriter = new LogFileWriter(logFile.FirstParaOrThrow, Logging.RootLogger);
@@ -113,8 +133,6 @@ Usage: {BuildInfo.AppName_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FIL
                 MyStream.SetSocketImpl(socketImpl.FirstParaOrThrow);
             }
 
-            var controller = Controller = new Controller();
-            controller.Logger.ParentLogger = Logging.RootLogger;
             long lastPackets = 0, lastBytes = 0;
             void updateTitle()
             {
@@ -211,35 +229,43 @@ Usage: {BuildInfo.AppName_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FIL
             cmdHub.AddCmdHandler("gui", (cmd) => {
                 WinForm.ControllerForm.RunGuiThread(controller);
             });
-            //WinForm.ControllerForm.RunGuiThread(controller);
             if (GuiMode) {
-                WinForm.ControllerForm.GuiThreadMain(controller);
+                goto WAITFOREVER;
+            }
+#endif
+            if (ar.ContainsKey("--no-cli")) goto WAITFOREVER;
+            if (InteractiveConsole(cmdHub)) {
                 Environment.Exit(0);
                 return;
             }
+
+            WAITFOREVER:
+#if NS_WINFORM
+            if (GuiMode) return;
 #endif
-            if (!ar.ContainsKey("--no-cli")) {
-                var stdio = CmdConsole.StdIO;
-                stdio.Write("(Press [Enter] to start interactive interface)\n", Color32.FromConsoleColor(ConsoleColor.Green));
-                var sw = Stopwatch.StartNew();
-                var line = stdio.ReadLine();
-                sw.Stop();
-                if (line == null) {
-                    Logging.warning("Read an EOF from stdin");
-                    if (sw.ElapsedMilliseconds < 50) {
-                        Logging.warning("...within 50 ms. Keep running without interactive interface.");
-                        Logging.warning("Please use --no-cli option if the program do not run from a console.");
-                        goto WAIT;
-                    }
-                    Logging.warning("...exiting...");
-                } else {
-                    cmdHub.CmdLoop(CmdConsole.StdIO);
-                }
-                Environment.Exit(0);
-            }
-            WAIT:
             while (true)
                 Thread.Sleep(int.MaxValue);
+        }
+
+        private static bool InteractiveConsole(CommandHub cmdHub)
+        {
+            var stdio = CmdConsole.StdIO;
+            stdio.Write("(Press [Enter] to start interactive interface)\n", Color32.FromConsoleColor(ConsoleColor.Green));
+            var sw = Stopwatch.StartNew();
+            var line = stdio.ReadLine();
+            sw.Stop();
+            if (line == null) {
+                Logging.warning("Read an EOF from stdin");
+                if (sw.ElapsedMilliseconds < 50) {
+                    Logging.warning("...within 50 ms. Keep running without interactive interface.");
+                    Logging.warning("Please use --no-cli option if the program do not run from a console.");
+                    return false;
+                }
+                Logging.warning("...exiting...");
+            } else {
+                cmdHub.CmdLoop(CmdConsole.StdIO);
+            }
+            return true;
         }
 
         private static void HandleArgCmd(Argument argcmd, CommandHub cmdHub)
