@@ -70,15 +70,24 @@ namespace NaiveSocks.WinForm
         {
             lock (updateDelegate) {
                 pending = false;
+                BeginUpdate();
                 UpdateListSize();
             }
             ScrollToBottom();
+            EndUpdate();
         }
+
+        int listSizeErrorCount = 0;
 
         void UpdateListSize()
         {
             Logging.GetLogsStat(out var min, out var count);
-            VirtualListSize = min + count;
+            try {
+                VirtualListSize = min + count;
+            } catch (Exception e) {
+                if (listSizeErrorCount++ % 100 == 0)
+                    Logging.exception(e, Logging.Level.Warning, $"VirtualListSize bug have occurred {listSizeErrorCount} times.");
+            }
         }
 
         private void ScrollToBottom()
