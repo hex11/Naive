@@ -324,7 +324,7 @@ namespace NaiveSocksAndroid
         {
             // native binaries from shadowsocks-android release apk (too lazy to compile):
             // https://github.com/shadowsocks/shadowsocks-android/releases
-            // (v4.7.4)
+            // (v4.8.3)
 
             // tun -> socks. (executable)
             public const string SsTun2Socks = "libtun2socks.so";
