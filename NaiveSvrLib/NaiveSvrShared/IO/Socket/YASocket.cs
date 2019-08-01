@@ -761,6 +761,8 @@ namespace NaiveSocks
 
         public IEpollHandler RunningHandler { get; private set; }
 
+        public ContinuationRunner.Context ContRunnerContext { get; private set; }
+
         private ReaderWriterLockSlim mapLock = new ReaderWriterLockSlim(LockRecursionPolicy.NoRecursion);
         private Dictionary<int, IEpollHandler> mapFdToHandler = new Dictionary<int, IEpollHandler>();
         private HashSet<int> fdCleanupList = new HashSet<int>();
@@ -779,6 +781,7 @@ namespace NaiveSocks
 
         public void Run()
         {
+            ContRunnerContext = ContinuationRunner.CheckCurrentContext();
             PollLoop(ep);
         }
 

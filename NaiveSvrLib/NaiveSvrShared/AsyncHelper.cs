@@ -779,6 +779,8 @@ namespace Naive.HttpSvr
 
         public class Context : MyQueue<Action>
         {
+            public Action CurrentRunning { get; internal set; }
+
             public void CheckContinuation()
             {
                 while (TryDequeue(out var cont)) {
@@ -815,8 +817,7 @@ namespace Naive.HttpSvr
                 throw new ArgumentNullException(nameof(cont));
 
             if (InRunnerContext) {
-                if (CurrentContext == null)
-                    CurrentContext = new Context();
+                CheckCurrentContext();
                 CurrentContext.PutContinuation(cont);
                 Interlocked.Increment(ref InContextCount);
                 return;
@@ -827,13 +828,24 @@ namespace Naive.HttpSvr
             Context.End();
         }
 
+        public static Context CheckCurrentContext()
+        {
+            if (CurrentContext == null)
+                CurrentContext = new Context();
+            return CurrentContext;
+        }
+
         public static void RunDirectly(Action cont)
         {
+            if (CurrentContext != null)
+                CurrentContext.CurrentRunning = cont;
             try {
                 cont();
             } catch (Exception e) {
                 Logging.exception(e, Logging.Level.Error, "continuation");
             }
+            if (CurrentContext != null)
+                CurrentContext.CurrentRunning = null;
         }
     }
 }
