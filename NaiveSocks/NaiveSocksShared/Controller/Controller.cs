@@ -304,7 +304,6 @@ namespace NaiveSocks
                 }
             } catch (Exception e) {
                 await onConnectionException(inc, e).CAF();
-                throw;
             } finally {
                 await onConnectionEnd(inc).CAF();
             }

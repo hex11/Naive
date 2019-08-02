@@ -271,12 +271,13 @@ namespace NaiveSocks
                 async Task<NaiveProtocol.Reply> readReply()
                 {
                     var response = await result.GetReply(keepOpen: true).CAF();
-                    Logger?.info($"#{result.Channel.Parent.Id}ch{result.Channel.Id}" +
+                    Logger?.log($"#{result.Channel.Parent.Id}ch{result.Channel.Id}" +
                         $" req={(LogDest ? arg.Dest.ToString() : "***")}" +
                         $" reply={response.status}" +
                             (response.additionalString.IsNullOrEmpty()
                                 ? "" : $" ({response.additionalString})") +
-                        $" in {(DateTime.Now - beginTime).TotalMilliseconds:0} ms");
+                        $" in {(DateTime.Now - beginTime).TotalMilliseconds:0} ms",
+                        level: (response.status == 0) ? Logging.Level.Info : Logging.Level.Warning);
                     return response;
                 }
                 var readReplyTask = readReply();
@@ -318,9 +319,9 @@ namespace NaiveSocks
                 }
             } else if (req.additionalString == "speedtest") {
                 await HandleSpeedTest(request.Channel);
-            } else if (req.additionalString.StartsWith("dns:") == true) {
+            } else if (req.additionalString.StartsWith("dns:")) {
                 await HandleDns(request.Channel, req);
-            } else if (req.additionalString.StartsWith("network") == true) {
+            } else if (req.additionalString == "network") {
                 await HandleNetwork(request);
             } else {
                 Logger?.warning($"unknown cmd: '{req.additionalString}' from {request.Channel}.");
