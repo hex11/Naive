@@ -414,9 +414,24 @@ namespace NaiveSocks
     {
         public AdapterRef @out { get; set; }
 
+        public AdapterRef rdns { get; set; }
+
         protected Task HandleIncommingConnection(InConnection inConnection)
         {
-            return Controller.HandleInConnection(inConnection, @out.Adapter as IConnectionHandler);
+            return HandleIncommingConnection(inConnection, @out);
+        }
+
+        protected Task HandleIncommingConnection(InConnection inConnection, AdapterRef outRef)
+        {
+            if (rdns?.Adapter is DnsInAdapter dnsIn) {
+                try {
+                    dnsIn.HandleRdns(inConnection);
+                } catch (Exception e) {
+                    Logger.exception(e, Logging.Level.Error, "rdns handling");
+                }
+            }
+
+            return Controller.HandleInConnection(inConnection, outRef.Adapter as IConnectionHandler);
         }
     }
 

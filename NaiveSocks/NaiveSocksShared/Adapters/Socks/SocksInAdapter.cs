@@ -15,8 +15,6 @@ namespace NaiveSocks
 
         public User[] users { get; set; }
 
-        public AdapterRef rdns { get; set; }
-
         [ConfType]
         public struct User
         {
@@ -99,17 +97,10 @@ namespace NaiveSocks
                     this.Dest.Host = socks5svr.TargetAddr;
                     this.Dest.Port = socks5svr.TargetPort;
                     this.DataStream = _stream;
-                    if (_adapter.rdns?.Adapter is DnsInAdapter dnsIn) {
-                        try {
-                            dnsIn.HandleRdns(this);
-                        } catch (Exception e) {
-                            _adapter.Logger.exception(e, Logging.Level.Error, "rdns handling");
-                        }
-                    }
                     if (_adapter.fastreply)
                         await OnConnectionResult(new ConnectResult(null, ConnectResultEnum.OK)).CAF();
 
-                    await _adapter.Controller.HandleInConnection(this, outRef);
+                    await _adapter.HandleIncommingConnection(this, outRef);
                 } catch (Exception e) {
                     _adapter.Logger.exception(e, Logging.Level.Warning, "listener");
                 } finally {
