@@ -32,7 +32,7 @@ namespace NaiveSocks
 
             public const int SO_ORIGINAL_DST = 80;
 
-            [DllImport("libc")]
+            [DllImport("libc", SetLastError = true)]
             public static extern int getsockopt(int sockfd, int level, int optname,
                           void* optval, int* optlen);
 
@@ -51,13 +51,16 @@ namespace NaiveSocks
                 Unsafe.sockaddr_in addr;
                 int optLen = sizeof(Unsafe.sockaddr_in);
                 var ret = Unsafe.getsockopt(socket.Handle.ToInt32(), Unsafe.SOL_IP, Unsafe.SO_ORIGINAL_DST, &addr, &optLen);
-                var port = (ushort)(addr.port << 8) + (ushort)(addr.port >> 8);
+                var errno = Marshal.GetLastWin32Error();
+                var port = SwapEndian(addr.port);
                 logger.debug($"family={addr.family} port={port} addr={addr.addr}");
                 if (ret != 0)
-                    throw new Exception("getsockopt returns " + ret);
+                    throw new Exception("getsockopt returns " + ret + " errno " + errno);
                 dest = new AddrPort(new IPAddress(addr.addr).ToString(), port);
                 return dest;
             }
+
+            private static ushort SwapEndian(ushort val) => (ushort)((ushort)(val << 8) | (ushort)(val >> 8));
         }
     }
 }
