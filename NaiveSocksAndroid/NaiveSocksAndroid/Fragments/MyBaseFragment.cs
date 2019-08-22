@@ -145,5 +145,22 @@ namespace NaiveSocksAndroid
                 handler.RemoveCallbacks(callbackRunnable);
             }
         }
+
+        float? _dip;
+
+        public float Dip
+        {
+            get {
+                if (_dip == null) {
+                    _dip = Resources.DisplayMetrics.Density;
+                }
+                return _dip.Value;
+            }
+        }
+
+        public int DpInt(int dp)
+        {
+            return (int)(Dip * dp);
+        }
     }
 }

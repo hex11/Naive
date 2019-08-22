@@ -49,7 +49,7 @@ namespace NaiveSocksAndroid
             var View = inflater.Inflate(R.Layout.logs, container, false);
 
             recycler = View.FindViewById<RecyclerView>(R.Id.logparent);
-            recycler.SetPadding(0, 8, 0, 8);
+            recycler.SetPadding(0, DpInt(4), 0, DpInt(4));
             linearlayout = new LinearLayoutManager(this.Context) { StackFromEnd = true };
             recycler.SetLayoutManager(linearlayout);
             recycler.SetItemAnimator(null);
@@ -290,10 +290,13 @@ namespace NaiveSocksAndroid
         {
             MyData MyData;
 
+            float dip;
+
             public MyViewHolder(MyData myData) : base(new TextView(myData.Context))
             {
                 MyData = myData;
-                textView.SetPadding(8, 0, 8, 0);
+                dip = textView.Resources.DisplayMetrics.Density;
+                textView.SetPadding((int)(dip * 4), 0, (int)(dip * 4), 0);
                 textView.SetOnLongClickListener(this);
             }
 
@@ -324,7 +327,7 @@ namespace NaiveSocksAndroid
                     if (delta < 10) {
                         topMargin = 0;
                     } else {
-                        topMargin = (int)(Math.Log(delta / 10, 1.5) * 3);
+                        topMargin = (int)(Math.Log(delta / 10, 1.5) * 1.5 * dip);
                     }
                 }
                 textView.LayoutParameters = new LinearLayout.LayoutParams(-1, -2) { TopMargin = topMargin };

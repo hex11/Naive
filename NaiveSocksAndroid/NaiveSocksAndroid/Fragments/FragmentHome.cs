@@ -27,6 +27,8 @@ namespace NaiveSocksAndroid
 
         private LinearLayout itemsLayout;
 
+        private int pad;
+
         StringBuilder _sb = new StringBuilder();
         List<KeyValuePair<TextView, Action<StringBuilder>>> items = new List<KeyValuePair<TextView, Action<StringBuilder>>>();
 
@@ -34,16 +36,18 @@ namespace NaiveSocksAndroid
         {
             var match_parent = ViewGroup.LayoutParams.MatchParent;
 
+            pad = DpInt(4);
+
             rootLayout = new LinearLayout(Context);
             rootLayout.Orientation = Orientation.Vertical;
-            rootLayout.SetPadding(8, 0, 8, 0);
+            rootLayout.SetPadding(pad, 0, pad, 0);
 
             var itemsOuter = new ScrollView(Context);
             itemsOuter.LayoutParameters = new LinearLayout.LayoutParams(match_parent, 0, 1);
 
             itemsLayout = new LinearLayout(Context);
             itemsLayout.Orientation = Orientation.Vertical;
-            itemsLayout.SetPadding(0, 8, 0, 8);
+            itemsLayout.SetPadding(0, pad, 0, pad);
 
             itemsOuter.AddView(itemsLayout);
             rootLayout.AddView(itemsOuter);
@@ -152,7 +156,7 @@ namespace NaiveSocksAndroid
             TextView t = CreateDataTitleView(title);
 
             var c = new TextView(Context);
-            c.SetPadding(32, 8, 16, 8);
+            c.SetPadding(pad * 4, pad, pad * 2, pad);
 
             itemsLayout.AddView(t);
             itemsLayout.AddView(c);
@@ -163,7 +167,7 @@ namespace NaiveSocksAndroid
         private TextView CreateDataTitleView(string title)
         {
             var t = new TextView(Context);
-            t.SetPadding(16, 8, 16, 8);
+            t.SetPadding(pad * 2, pad, pad * 2, pad);
             t.SetBackgroundColor(new Android.Graphics.Color(unchecked((int)0xFF6FBFFF)));
             t.SetTextColor(Android.Graphics.Color.Black);
             t.Text = title;

@@ -148,7 +148,7 @@ namespace NaiveSocksAndroid
 
             if (toBeAdded.Count > 0) toBeAdded.Sort((a, b) => a.Id - b.Id);
             foreach (var item in toBeAdded) {
-                var newView = new ItemView(themeWrapper) { Connection = item };
+                var newView = new ItemView(this) { Connection = item };
                 newView.lastTime = lastUpdateTime;
                 displayingMap.Add(item.Id, newView);
                 displayingViews.Add(newView);
@@ -230,17 +230,17 @@ namespace NaiveSocksAndroid
 
         class ItemView : LinearLayout, View.IOnLongClickListener
         {
-            public ItemView(Context context) : base(context)
+            public ItemView(FragmentConnections frag) : base(frag.themeWrapper)
             {
                 this.Orientation = Orientation.Vertical;
 
-                tv1 = new TextView(context);
-                tv2 = new TextView(context);
+                tv1 = new TextView(frag.themeWrapper);
+                tv2 = new TextView(frag.themeWrapper);
 
                 tv2.Gravity = GravityFlags.End;
                 tv2.SetBackgroundColor(Color.Argb(30, 128, 128, 128));
 
-                this.LayoutParameters = new LinearLayout.LayoutParams(-1, -2) { BottomMargin = 8 };
+                this.LayoutParameters = new LinearLayout.LayoutParams(-1, -2) { BottomMargin = frag.DpInt(4) };
 
                 this.AddView(tv1);
                 this.AddView(tv2);

@@ -60,7 +60,7 @@ namespace NaiveSocksAndroid
                 Typeface = Typeface.Monospace,
                 TextSize = 12,
             };
-            textView.SetPadding(16, 16, 16, 16);
+            textView.SetPadding(DpInt(8), DpInt(8), DpInt(8), DpInt(8));
             textView.SetBackgroundColor(Color.Black);
             textView.SetTextColor(Color.LightGray);
             textView.SetText(ssb, TextView.BufferType.Spannable);

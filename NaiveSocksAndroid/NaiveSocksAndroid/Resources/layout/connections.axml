@@ -11,6 +11,6 @@
         android:orientation="vertical"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:padding="2sp"
+        android:padding="2dp"
         android:id="@+id/connparent" />
 </android.support.v4.widget.NestedScrollView>
