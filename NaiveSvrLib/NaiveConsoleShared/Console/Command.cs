@@ -278,7 +278,7 @@ namespace Naive.Console
         public static ConsoleOnStdIO StdIO { get; } = new ConsoleOnStdIO();
         public static CmdConsole Null { get; } = new nullConsole();
         protected abstract void WriteImpl(string text);
-        protected abstract void WriteLineImpl(string text);
+
         public abstract string ReadLine();
 
         public bool LastCharIsNewline;
@@ -352,6 +352,11 @@ namespace Naive.Console
         {
             CheckOutput(prompt);
             return ReadLineImpl(prompt);
+        }
+
+        protected virtual void WriteLineImpl(string text)
+        {
+            WriteImpl(text + "\n");
         }
 
         protected virtual string ReadLineImpl(string prompt)

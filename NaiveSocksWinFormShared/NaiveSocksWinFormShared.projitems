@@ -10,8 +10,11 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)ConnectionsView.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)ConsoleView.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)ControllerForm.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)LogView.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)TabForm.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)TabBase.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)WinFormController.cs" />
   </ItemGroup>
 </Project>

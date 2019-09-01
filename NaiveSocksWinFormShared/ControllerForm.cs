@@ -6,7 +6,7 @@ using System.Windows.Forms;
 
 namespace NaiveSocks.WinForm
 {
-    class ControllerForm : Form
+    class ControllerForm : TabForm
     {
         public static void RunGuiThread(Controller controller)
         {
@@ -51,7 +51,14 @@ namespace NaiveSocks.WinForm
             AddTab(new ConnectionsView.Tab(controller));
             AddTab(new LogView.Tab());
 
-            SwitchTab(tabs[0]);
+            SetTab(tabs[0]);
+
+            Menu.MenuItems.Add(new MenuItem("C&onsole", (s, e) => {
+                var con = new TabForm();
+                con.SetTab(new ConsoleView.Tab());
+                con.DestroyOnClose = true;
+                con.Show();
+            }));
 
             var about = new MenuItem("&About");
             about.MenuItems.Add(new MenuItem("&GitHub page", (s, e) => {
@@ -105,56 +112,18 @@ namespace NaiveSocks.WinForm
         }
 
         private List<TabBase> tabs = new List<TabBase>();
-        private TabBase currentTab;
 
         private void AddTab(TabBase tab)
         {
             tab.menuItem = this.Menu.MenuItems.Add("[" + tab.Name + "]", (s, e) => {
-                SwitchTab(tab);
+                SetTab(tab);
             });
             tabs.Add(tab);
         }
 
-        private void SwitchTab(TabBase tab)
+        protected override void OnTabChanged(TabBase tab)
         {
-            if (currentTab != null) {
-                currentTab.SetShowing(false);
-                this.Controls.RemoveAt(0);
-            }
-            currentTab = tab;
-            tab.View.Dock = DockStyle.Fill;
-            this.Controls.Add(tab.View);
-            tab.SetShowing(true);
-        }
-    }
 
-    public abstract class TabBase
-    {
-        internal MenuItem menuItem;
-
-        public abstract Control View { get; }
-        public abstract string Name { get; }
-
-        public bool Showing { get; private set; }
-
-        internal void SetShowing(bool show)
-        {
-            Showing = show;
-            menuItem.Enabled = !show;
-            if (show) OnShow();
-            else OnHide();
-        }
-
-        protected virtual void OnShow()
-        {
-        }
-
-        protected virtual void OnHide()
-        {
-        }
-
-        public virtual void OnTick()
-        {
         }
     }
 }

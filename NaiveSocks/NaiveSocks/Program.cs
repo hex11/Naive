@@ -13,7 +13,7 @@ namespace NaiveSocks
         {
             if (NZip.MagicExe.IsDllsAttached) {
                 NZip.MagicExe.LoadAttachedDlls();
-                NaiveSocksCli.__magic_is_packed = true;
+                NaiveSocksCli.SingleFile = true;
             }
             if (args.Length > 1 && args[0] == "--repack") {
                 Repack(args);

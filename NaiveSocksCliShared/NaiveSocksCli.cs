@@ -40,7 +40,8 @@ namespace NaiveSocks
         private static string NameWithVertionText
             => BuildInfo.AppName + " v" + BuildInfo.Version
                     + (BuildInfo.CurrentBuildText.IsNullOrEmpty() ? null : " " + BuildInfo.CurrentBuildText)
-                    + (__magic_is_packed ? " (single file)" : "");
+                    + (SingleFile ? " (single file)" : "")
+                    + (GuiMode ? " (GUI)" : "");
 
         private static string cmdHelpText => $@"{NameWithVertionText}
 
@@ -49,12 +50,14 @@ Usage: {BuildInfo.AppName_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FIL
         [--force-jit[-async]] [--socket-impl (1|2|fa|ya)]
         [--cmd CMDLINE...]";
 
-        internal static bool __magic_is_packed;
+        internal static bool SingleFile;
         internal static bool GuiMode;
 
         public static bool LogStdout = true;
 
         public static Controller Controller { get; private set; }
+
+        public static CommandHub CommandHub { get; private set; }
 
         internal static void Main(string[] args)
         {
@@ -197,6 +200,7 @@ Usage: {BuildInfo.AppName_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FIL
                 }
             }
             var cmdHub = new CommandHub();
+            CommandHub = cmdHub;
             cmdHub.Prompt = $"{BuildInfo.AppName}>";
             Commands.AddCommands(cmdHub, controller, null, new string[] { "all" });
             cmdHub.AddCmdHandler("newbie", (cmd) => Commands.NewbieWizard(cmd, controller, specifiedConfigPath ?? configFilePath));
@@ -227,7 +231,9 @@ Usage: {BuildInfo.AppName_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FIL
             }
 #if NS_WINFORM
             cmdHub.AddCmdHandler("gui", (cmd) => {
-                WinForm.ControllerForm.RunGuiThread(controller);
+                var winform = new WinForm.WinFormController(controller);
+                winform.RunUIThread();
+                winform.ShowControllerForm(false);
             });
             if (GuiMode) {
                 goto WAITFOREVER;
