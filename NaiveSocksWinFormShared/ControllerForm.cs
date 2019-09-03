@@ -31,21 +31,22 @@ namespace NaiveSocks.WinForm
 
             this.Menu = new MainMenu(new MenuItem[] {
                 new MenuItem("&Controller", new MenuItem[] {
+                    new MenuItem("Open &configration file location", (s, e) => {
+                        OpenFolerAndShowFile(Controller.CurrentConfig.FilePath);
+                    }),
+                    new MenuItem("Open &program file location", (s, e) => {
+                        OpenFolerAndShowFile(Process.GetCurrentProcess().MainModule.FileName);
+                    }),
+                    new MenuItem("-"),
                     new MenuItem("&Reload", (s, e) => {
                         Controller.Reload();
                     }, Shortcut.CtrlR),
+                    new MenuItem("-"),
                     new MenuItem("&Exit", (s, e) => {
                         Environment.Exit(0);
-                    }, Shortcut.CtrlQ)
+                    }, Shortcut.CtrlQ),
                 }),
-                new MenuItem("&View", new MenuItem[] {
-                    new MenuItem("&Configration file location", (s, e) => {
-                        OpenFolerAndShowFile(Controller.CurrentConfig.FilePath);
-                    }),
-                    new MenuItem("&Program file location", (s, e) => {
-                        OpenFolerAndShowFile(Process.GetCurrentProcess().MainModule.FileName);
-                    })
-                })
+                InitHttpMenu(),
             });
 
             AddTab(new ConnectionsView.Tab(controller));
@@ -61,11 +62,14 @@ namespace NaiveSocks.WinForm
             }));
 
             var about = new MenuItem("&About");
-            about.MenuItems.Add(new MenuItem("&GitHub page", (s, e) => {
+            about.MenuItems.Add(new MenuItem("&Project repo on GitHub", (s, e) => {
                 Process.Start("https://github.com/hex11/Naive");
             }));
             about.MenuItems.Add(new MenuItem("-"));
-            about.MenuItems.Add(new MenuItem("Version " + BuildInfo.CurrentVersion) { Enabled = false });
+            string version = "Version " + BuildInfo.CurrentVersion
+                    + (NaiveSocksCli.SingleFile ? " (single file)" : "")
+                    + (NaiveSocksCli.GuiMode ? " (GUI)" : "");
+            about.MenuItems.Add(new MenuItem(version) { Enabled = false });
             if (BuildInfo.CurrentBuildText != null)
                 about.MenuItems.Add(new MenuItem(BuildInfo.CurrentBuildText) { Enabled = false });
             Menu.MenuItems.Add(about);
@@ -123,7 +127,60 @@ namespace NaiveSocks.WinForm
 
         protected override void OnTabChanged(TabBase tab)
         {
+        }
 
+        private MenuItem InitHttpMenu()
+        {
+            var httpMenu = new MenuItem("&System proxy");
+            var items = httpMenu.MenuItems;
+            var none = items.Add("None", (s, e) => SystemProxy.Set(null));
+            var cur = items.Add("");
+            cur.Enabled = false;
+            var sep = items.Add("-");
+
+            httpMenu.Popup += (s, e) => {
+                for (int i = items.Count - 1; i >= 0; i--) {
+                    items.RemoveAt(i);
+                }
+                var curProxy = SystemProxy.Get();
+                int usingPort = -1;
+                items.Add(none);
+                none.Checked = curProxy.IsDefault;
+                if (curProxy.IsDefault == false) {
+                    cur.Checked = true;
+                    cur.Text = ("Current: " + curProxy);
+                    items.Add(cur);
+                    if (curProxy.Host == "127.0.0.1") { // This is not perfect
+                        usingPort = curProxy.Port;
+                    }
+                }
+                items.Add(sep);
+                bool hasNonProxyHttp = false;
+                foreach (var adapter in Controller.Adapters) {
+                    if (adapter is HttpInAdapter http) {
+                        if (http.@out == null) {
+                            hasNonProxyHttp = true;
+                            continue;
+                        }
+                        var menuItem = items.Add($"'{http.Name}' - {http.listen}");
+                        if (http.listen.Port > 0) {
+                            if (http.listen.Port == usingPort) {
+                                menuItem.Checked = true;
+                                cur.Checked = false;
+                            }
+                            menuItem.Click += (s2, e2) => {
+                                SystemProxy.Set("127.0.0.1:" + http.listen.Port);
+                            };
+                        } else {
+                            menuItem.Enabled = false;
+                        }
+                    }
+                }
+                if (hasNonProxyHttp) {
+                    items.Add("(Some adapters missing 'listen' or 'out' are not listed)").Enabled = false;
+                }
+            };
+            return httpMenu;
         }
     }
 }

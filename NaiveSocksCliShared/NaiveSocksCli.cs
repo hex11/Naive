@@ -37,7 +37,7 @@ namespace NaiveSocks
             return paths.Distinct().ToArray();
         }
 
-        private static string NameWithVertionText
+        public static string NameWithVertionText
             => BuildInfo.AppName + " v" + BuildInfo.Version
                     + (BuildInfo.CurrentBuildText.IsNullOrEmpty() ? null : " " + BuildInfo.CurrentBuildText)
                     + (SingleFile ? " (single file)" : "")
@@ -50,8 +50,8 @@ Usage: {BuildInfo.AppName_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FIL
         [--force-jit[-async]] [--socket-impl (1|2|fa|ya)]
         [--cmd CMDLINE...]";
 
-        internal static bool SingleFile;
-        internal static bool GuiMode;
+        public static bool SingleFile { get; internal set; }
+        public static bool GuiMode { get; internal set; }
 
         public static bool LogStdout = true;
 
