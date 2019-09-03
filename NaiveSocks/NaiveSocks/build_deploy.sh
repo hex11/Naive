@@ -46,6 +46,10 @@ STEP copy configration example...
 
 cp ../naivesocks-example.tml "$deploydir/"
 
+STEP copy repack script...
+
+cp build-singlefile-and-gui.bat "$deploydir/"
+
 STEP pack single file edition...
 
 has mono && MONO=mono || MONO=""
@@ -57,11 +61,11 @@ if getopts "u:" opt; then
 	echo "to_upload=$OPTARG"
 	mkdir -p "$to_upload"
 	to_upload=$(realpath "$to_upload")
+	mv "$singlefile" "$to_upload/"
 	pushd "$deploydir"
 	pack_zip "$to_upload/$packname.zip" ./
 	tar -czvf "$to_upload/$packname.tar.gz" ./
 	popd
-	mv "$singlefile" "$to_upload/"
 fi
 
 STEP finished!
