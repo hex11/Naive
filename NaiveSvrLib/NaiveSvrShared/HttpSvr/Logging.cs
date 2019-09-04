@@ -749,7 +749,8 @@ namespace Naive.HttpSvr
 
         public LogFileWriter(string logFile, Logger logger)
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(logFile));
+            var dir = Path.GetDirectoryName(logFile);
+            if (!dir.IsNullOrEmpty()) Directory.CreateDirectory(dir);
             var fs = File.Open(logFile, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
             sw = new StreamWriter(fs, NaiveUtils.UTF8Encoding);
             LogFile = logFile;
