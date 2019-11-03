@@ -282,7 +282,7 @@ namespace NaiveSocks
                     } else if (inc is InConnectionTcp tcp) {
                         await outAdapter.HandleTcpConnection(tcp).CAF();
                     } else {
-                        throw new Exception($"'{inc.InAdapter.Name}' cannot handle this type of connection.");
+                        throw new Exception($"'{outAdapter.Name}' cannot handle this type of connection.");
                     }
                     if (inc.IsHandled || !inc.IsRedirected) {
                         break;

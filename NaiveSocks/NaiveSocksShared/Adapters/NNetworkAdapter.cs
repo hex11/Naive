@@ -44,7 +44,7 @@ namespace NaiveSocks
         public override string ToString() => $"{{NClient tags={string.Join(",", tags)} ip={Ip} {(WhenDisconnected.IsCompleted ? " disconnected" : "")}}}";
     }
 
-    public class NNetworkAdapter : WebBaseAdapter, INetwork
+    public class NNetworkAdapter : WebBaseAdapter, INetwork, IConnectionHandler2
     {
         protected override void GetDetail(GetDetailContext ctx)
         {
@@ -104,6 +104,17 @@ namespace NaiveSocks
             return false;
         }
 
+        public Task HandleConnection(InConnection connection)
+        {
+            if (connection is InConnectionTcp tcp) {
+                return HandleTcpConnection(tcp);
+            } else if (connection is InConnectionDns dns) {
+                return HandleDnsConnection(dns);
+            } else {
+                throw new NotSupportedException("cannot handle this type of connection");
+            }
+        }
+
         static Random rd => NaiveUtils.Random;
 
         public override async Task HandleTcpConnection(InConnectionTcp connection)
@@ -149,23 +160,26 @@ namespace NaiveSocks
             await httpConnection.Process();
         }
 
-        //public Task<DnsResponse> ResolveName(DnsRequest req)
-        //{
-        //    //throw new NotImplementedException();
-        //    var name = TryGetName(req.Name);
-        //    if (name == null)
-        //        return (if_notmatch.Adapter as IDnsProvider).ResolveName(req);
-        //    if (name.Length == 0 || name == list_name)
-        //        return Task.FromResult(new DnsResponse(new IPAddress((long)listIp)));
-        //    var clis = FindClientsByName(name);
-        //    if (clis.Count > 0) {
-        //        return Task.FromResult(new DnsResponse(clis.Select(x => x.Ip).ToArray()));
-        //    } else {
-        //        if (if_notfound == null)
-        //            return Task.FromResult(DnsResponse.Empty);
-        //        return (if_notfound.Adapter as IDnsProvider).ResolveName(req);
-        //    }
-        //}
+        public Task HandleDnsConnection(InConnectionDns dns)
+        {
+            var req = dns.DnsRequest;
+            var name = TryGetName(req.Name);
+            if (name == null) {
+                dns.RedirectTo(if_notmatch);
+                return NaiveUtils.CompletedTask;
+            }
+            if (name.Length == 0 || name == list_name)
+                return dns.SetResult(new DnsResponse(this, new IPAddress((long)listIp)));
+            var clis = FindClientsByName(name);
+            if (clis.Count > 0) {
+                return dns.SetResult(new DnsResponse(this, clis.Select(x => x.Ip).ToArray()));
+            } else {
+                if (if_notfound == null)
+                    return dns.SetResult(DnsResponse.Empty(this));
+                dns.RedirectTo(if_notfound);
+                return NaiveUtils.CompletedTask;
+            }
+        }
 
         private string TryGetName(string host)
         {
