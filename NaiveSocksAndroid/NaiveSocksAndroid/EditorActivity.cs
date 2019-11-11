@@ -61,7 +61,7 @@ namespace NaiveSocksAndroid
 
             string[] paths = AppConfig.GetNaiveSocksConfigPaths(this);
             var path = paths.FirstOrDefault(x => File.Exists(x));
-            if (path == null) currentFilePath = paths[0];
+            if (path == null) path = paths[0];
             OpenFile(path);
             editText.TextChanged += EditText_TextChanged;
         }
