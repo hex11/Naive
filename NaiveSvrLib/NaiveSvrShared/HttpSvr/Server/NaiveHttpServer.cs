@@ -262,7 +262,7 @@ namespace Naive.HttpSvr
                 connection = this.CreateHttpConnectionObject(tcpClient, stream, epPair);
                 if (connection == null) {
                     try {
-                        tcpClient.Client.Close();
+                        tcpClient.Close();
                     } catch (Exception) { }
                     return;
                 }

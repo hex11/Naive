@@ -15,7 +15,7 @@ using static Naive.HttpSvr.HttpHeaders;
 
 namespace Naive.HttpSvr
 {
-    public class HttpConnection : ObjectWithTags, IDisposable
+    public class HttpConnection : ObjectWithTags
     {
         public HttpConnection(Stream stream, EPPair epPair, NaiveHttpServer server)
         {
@@ -40,7 +40,6 @@ namespace Naive.HttpSvr
         public Stream baseStream;
         public IMyStream myStream;
 
-        private Stream realInputStream => baseStream;
         private Stream realOutputStream => baseStream;
 
         private TextWriter realOutputWriter;
@@ -172,10 +171,10 @@ namespace Naive.HttpSvr
 
         public async Task Process()
         {
-            realOutputWriter = new StreamWriter(realOutputStream, NaiveUtils.UTF8Encoding);
-            realOutputWriter.NewLine = "\r\n";
-            ConnectionBegin?.Invoke(this);
             try {
+                realOutputWriter = new StreamWriter(realOutputStream, NaiveUtils.UTF8Encoding);
+                realOutputWriter.NewLine = "\r\n";
+                ConnectionBegin?.Invoke(this);
                 await _requestingLoop().CAF();
             } catch (DisconnectedException) {
 
@@ -557,36 +556,6 @@ namespace Naive.HttpSvr
             else
                 return $"{{HttpConn #{Id}({RequestCount})}}";
         }
-
-        #region IDisposable Support
-        private bool disposedValue = false;
-
-        protected virtual void Dispose(bool disposing)
-        {
-            if (!disposedValue) {
-                if (disposing) {
-                }
-
-                ResponseHeaders = null;
-                RequestHeaders = null;
-                outputStream = null;
-                outputWriter = null;
-
-                disposedValue = true;
-            }
-        }
-
-        ~HttpConnection()
-        {
-            Dispose(false);
-        }
-
-        public void Dispose()
-        {
-            Dispose(true);
-            GC.SuppressFinalize(this);
-        }
-        #endregion
     }
 
     public interface IHaveTags
