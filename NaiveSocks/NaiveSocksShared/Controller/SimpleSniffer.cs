@@ -65,8 +65,45 @@ namespace NaiveSocks
 
             if (Match(_bs, "SSH-")) {
                 Protocol = "SSH";
-            } else if (Match(_bs, "\x13BitTorrent protocol")) {
+                return;
+            }
+            if (Match(_bs, "\x0013BitTorrent protocol")) {
                 Protocol = "BitTorrent";
+                return;
+            }
+
+            if (_bs[0] == '<') {
+                // XML stream?
+                var bs = _bs.Sub(1);
+                if (Match(bs, "?xml version=")) {
+                    Protocol = "XML?";
+                    // skip xml declaration
+                    var end = Find(bs, (byte)'>');
+                    if (end != -1) {
+                        bs.Sub(end + 1);
+                    }
+                }
+                while (Match(bs, "\r") || Match(bs, "\n")) bs.SubSelf(1);
+                if (Match(bs, "<stream")) {
+                    Protocol = "XMPP?";
+                }
+            }
+
+            if (_bs.Len >= 2 && _bs[0] == 0x10) {
+                // MQTT CONNECT?
+                var remainingLength = _bs[1];
+                if (2 + remainingLength <= _bs.Len) {
+                    var payload = _bs.Sub(2, remainingLength);
+                    if (Match(payload, "\x0000\x0004MQTT")) {
+                        Protocol = "MQTT";
+                        if (payload.Len >= 7) {
+                            var version = payload[6];
+                            Protocol += version == 5 ? "(v5.0)" :
+                                version == 4 ? "(v3.1.1)" :
+                                $"(v{version})";
+                        }
+                    }
+                }
             }
         }
 
