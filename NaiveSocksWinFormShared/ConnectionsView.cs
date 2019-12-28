@@ -43,7 +43,8 @@ namespace NaiveSocks.WinForm
             col.Add("Creator", 70);
             col.Add("Dest", 150);
             col.Add("Handler", 70);
-            col.Add("Handler Stream", 250);
+            col.Add("Handler Stream", 220);
+            col.Add("Sniffer", 60);
         }
 
         public Controller Controller { get; }
@@ -130,9 +131,8 @@ namespace NaiveSocks.WinForm
             vItem.SubItems[idx++].Text = conn.InAdapter?.Name ?? "-";
             vItem.SubItems[idx++].Text = conn.Dest.ToString();
             vItem.SubItems[idx++].Text = conn.RunningHandler?.Name ?? "-";
-            if (conn is InConnectionTcp tcp) {
-                vItem.SubItems[idx++].Text = tcp.ConnectResult?.Stream?.ToString() ?? "-";
-            }
+            vItem.SubItems[idx++].Text = (conn as InConnectionTcp)?.ConnectResult?.Stream?.ToString() ?? "-";
+            vItem.SubItems[idx++].Text = conn.GetSniffingInfo();
         }
     }
 
