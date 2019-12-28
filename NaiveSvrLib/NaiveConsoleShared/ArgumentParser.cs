@@ -124,6 +124,9 @@ namespace Naive
         public bool HavePara => paras.Count > 0;
         public string FirstPara => paras.Count > 0 ? paras[0] : null;
         public string FirstParaOrThrow => paras.Count > 0 ? paras[0] : throw new CmdArgException($"missing first parameter for '{arg}'");
+
+        public string GetParaOrThrow(int i) => paras.Count > i ? paras[i] : throw new CmdArgException($"missing parameters[{i}] for '{arg}'");
+        public string GetParaOrNull(int i) => paras.Count > i ? paras[i] : null;
     }
 
     public class CmdArgException : Exception

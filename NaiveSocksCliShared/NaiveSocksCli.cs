@@ -48,6 +48,7 @@ namespace NaiveSocks
 Usage: {BuildInfo.AppName_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FILE] [--config-stdin]
         [--no-cli] [--no-log-stdout] [--log-file FILE] [--log-stdout-no-time]
         [--force-jit[-async]] [--socket-impl (1|2|fa|ya)]
+        [(--encrypt|--decrypt) ALGORITHM KEY [INPUT_FILE [OUTPUT_FILE]]]
         [--cmd CMDLINE...]";
 
         public static bool SingleFile { get; internal set; }
@@ -96,6 +97,11 @@ Usage: {BuildInfo.AppName_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FIL
             }
             if (ar.ContainsKey("--stdout-no-time") || ar.ContainsKey("--log-stdout-no-time")) {
                 Logging.WriteLogToConsoleWithTime = false;
+            }
+
+            if (ar.TryGetValue("--encrypt", out var encarg) || ar.TryGetValue("--decrypt", out encarg)) {
+                HandleEncrypt(encarg);
+                return;
             }
 
             var controller = Controller = new Controller();
@@ -281,6 +287,37 @@ Usage: {BuildInfo.AppName_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FIL
             var cmdrun = Command.FromArray(argcmd.paras.ToArray());
             cmdHub.HandleCommand(CmdConsole.StdIO, cmdrun);
             Environment.Exit(cmdrun.statusCode);
+        }
+
+        private static void HandleEncrypt(Argument arg)
+        {
+            var isEncrypting = arg.arg == "--encrypt";
+
+            var alg = arg.GetParaOrThrow(0);
+            var key = arg.GetParaOrThrow(1);
+
+            var inputFile = arg.GetParaOrNull(2);
+            var outputFile = arg.GetParaOrNull(3) ?? (inputFile != null ? inputFile + ".enc" : null);
+            var input = inputFile.IsNullOrEmpty() ? Console.OpenStandardInput() : File.OpenRead(inputFile);
+            var output = outputFile.IsNullOrEmpty() ? Console.OpenStandardOutput() : File.Open(outputFile, FileMode.Create);
+
+            var encryptStreamFunc = Ss.GetCipherByName(alg).GetEncryptionStreamFunc(key);
+
+            IMyStream from, to;
+
+            if (isEncrypting) {
+                from = MyStream.FromStream(input);
+                to = encryptStreamFunc(MyStream.FromStream(output));
+            } else {
+                from = encryptStreamFunc(MyStream.FromStream(input));
+                to = MyStream.FromStream(output);
+            }
+
+            Task.Run(async () => {
+                await MyStream.StreamCopy(from, to, -1, true);
+                await output.FlushAsync();
+                output.Dispose();
+            }).Wait();
         }
 
         private static void ForceJit()
