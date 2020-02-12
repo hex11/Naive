@@ -31,7 +31,11 @@ namespace Naive.HttpSvr
         {
             var timeoutTask = Task.Delay(timeout);
             return Task.WhenAny(task, timeoutTask)
-                .Wrap(timeoutTask, (completedTask, timedoutTask) => completedTask == timedoutTask);
+                .Wrap(timeoutTask, (completedTask, timedoutTask) => {
+                    if (completedTask == timedoutTask) return true;
+                    completedTask.GetAwaiter().GetResult(); // throws if the task faulted
+                    return false;
+                });
         }
 
         public static WrappedAwaiter<TR, TState, TNR>.Awaitable Wrap<TR, TState, TNR>(this Task<TR> task, TState state, Func<TR, TState, TNR> func)
