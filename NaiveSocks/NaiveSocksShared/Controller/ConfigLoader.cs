@@ -148,7 +148,9 @@ namespace NaiveSocks
                             failedCount++;
                         }
                     }
-                foreach (var r in refs.Where(x => x.IsTable)) {
+                for (int rIdx = 0; rIdx < refs.Count; rIdx++) {
+                    AdapterRef r = refs[rIdx];
+                    if (r.IsTable == false) continue;
                     var tt = r.Ref as TomlTable;
                     try {
                         string name = null;
