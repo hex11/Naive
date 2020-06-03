@@ -63,8 +63,8 @@ if getopts "u:" opt; then
 	to_upload=$(realpath "$to_upload")
 	mv "$singlefile" "$to_upload/"
 	pushd "$deploydir"
-	pack_zip "$to_upload/$packname.zip" ./
-	tar -czvf "$to_upload/$packname.tar.gz" ./
+	pack_zip "$to_upload/$packname.zip" .
+	tar -cavf "$to_upload/$packname.tar.gz" .
 	popd
 fi
 
