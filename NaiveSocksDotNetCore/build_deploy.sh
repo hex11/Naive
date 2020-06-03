@@ -43,7 +43,7 @@ for x in "${buildrids[@]}"; do
 	publishdir="bin/publish-$rid"
 
 	if ! dotnet publish -c Release -o "$publishdir/bin" -r $rid ; then
-		[[ -d $publishdir ]] && rm -rf $publishdir
+		[[ -d $publishdir ]] && rm -rf "$publishdir"
 		continue
 	fi
 
@@ -73,9 +73,9 @@ function pack_zip() {
 	zip=$1
 	dir=$2
 	if has zip ; then
-		zip -r $zip $dir || return 1
+		zip -r "$zip" "$dir" || return 1
 	else
-		7z a $zip $dir || return 1
+		7z a "$zip" "$dir" || return 1
 	fi
 }
 
@@ -91,14 +91,14 @@ if getopts "u:" opt; then
 	for x in "${buildrids[@]}"; do
 		rid=${x%/*}
 		packtype=${x#*/}
-		publishdir=publish-$rid
-		[[ -d $publishdir ]] || continue
+		publishdir="publish-$rid"
+		[[ -d "$publishdir" ]] || continue
 		case $packtype in
 			zip)
-				pack_zip "packs/${packname}_$rid.zip" $publishdir
+				pack_zip "packs/${packname}_$rid.zip" "$publishdir"
 			;;
 			tar*)
-				tar -cavf "packs/${packname}_$rid.$packtype" $publishdir
+				tar cavf "packs/${packname}_$rid.$packtype" "$publishdir"
 			;;
 		esac
 	done
