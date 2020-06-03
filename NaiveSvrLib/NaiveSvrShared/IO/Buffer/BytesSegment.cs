@@ -65,6 +65,8 @@ namespace Naive.HttpSvr
             return buf;
         }
 
+        public BytesView ToBytesView() => new BytesView(Bytes, Offset, Len);
+
         public byte this[int index]
         {
             get => Bytes[Offset + index];

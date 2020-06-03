@@ -9,7 +9,8 @@
     <Import_RootNamespace>NaiveSocksShared</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="$(MSBuildThisFileDirectory)Adapters\Direct\TProxyInAdapter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)**\*.cs" />
+    <!-- <Compile Include="$(MSBuildThisFileDirectory)Adapters\Direct\TProxyInAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\Dns\DnsDb.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\Dns\DnsInAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\Dns\DnsCache.cs" />
@@ -65,7 +66,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\Socks\SocksInAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\Ss\Ss.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Controller\SimpleSniffer.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Utils.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Utils.cs" /> -->
   </ItemGroup>
   <ItemGroup>
     <Folder Include="$(MSBuildThisFileDirectory)Adapters\Socks\" />
