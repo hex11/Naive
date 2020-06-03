@@ -54,7 +54,8 @@ namespace NaiveSocks
 
                     var r = await GetMsgStream(p, settings, req);
                     if (r == null) return;
-                    var (msgStream, imux) = r;
+                    var msgStream = r.Item1;
+                    var imux = r.Item2;
 
                     var nms = new NaiveMChannels(new NaiveMultiplexing(msgStream)) {
                         Adapter = this,
