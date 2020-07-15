@@ -1,9 +1,9 @@
 ﻿// chacha20-ietf implementation
-// https://github.com/sbennett1990/ChaCha20-csharp/blob/master/ChaCha20Cipher.cs
-// (modified)
+// Based on https://github.com/sbennett1990/ChaCha20-csharp/blob/master/ChaCha20Cipher.cs
+// 
 
 /*
- * Copyright (c) 2015 Scott Bennett, 2017 - 2018 Hex Eleven
+ * Copyright (c) 2015 Scott Bennett, 2017 - 2020 Hex Eleven
  * All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
@@ -59,19 +59,10 @@ namespace NaiveSocks
         /// </param>
         public ChaCha20IetfEncryptor(byte[] key/*, byte[] nonce, uint counter*/)
         {
-            ctx = (Context*)Marshal.AllocHGlobal(sizeof(Context));
             KeySetup(key);
         }
 
-        ~ChaCha20IetfEncryptor()
-        {
-            Marshal.FreeHGlobal((IntPtr)ctx);
-        }
-
         public static ChaCha20IetfEncryptor Create(byte[] key) => new ChaCha20IetfEncryptor(key);
-
-        static readonly byte[] sigma = Encoding.ASCII.GetBytes("expand 32-byte k");
-        static readonly byte[] tau = Encoding.ASCII.GetBytes("expand 16-byte k");
 
         /// <summary>
         /// Set up the ChaCha state with the given key. A 32-byte key is required 
@@ -92,25 +83,23 @@ namespace NaiveSocks
 
             // These are the same constants defined in the reference implementation
             // see http://cr.yp.to/streamciphers/timings/estreambench/submissions/salsa20/chacha8/ref/chacha.c
-            byte[] constants = (key.Length == 32) ? sigma : tau;
             int keyIndex = key.Length - 16;
-            uint* state = ctx->state;
-            fixed (byte* c = constants)
+            fixed (uint* state = ctx.state)
             fixed (byte* k = key) {
-                state[4] = U8To32Little(k, 0);
-                state[5] = U8To32Little(k, 4);
-                state[6] = U8To32Little(k, 8);
-                state[7] = U8To32Little(k, 12);
+                state[0] = Chacha.Constants[0];
+                state[1] = Chacha.Constants[1];
+                state[2] = Chacha.Constants[2];
+                state[3] = Chacha.Constants[3];
 
-                state[8] = U8To32Little(k, keyIndex + 0);
-                state[9] = U8To32Little(k, keyIndex + 4);
-                state[10] = U8To32Little(k, keyIndex + 8);
-                state[11] = U8To32Little(k, keyIndex + 12);
+                state[4] = Chacha.U8To32Little(k, 0);
+                state[5] = Chacha.U8To32Little(k, 4);
+                state[6] = Chacha.U8To32Little(k, 8);
+                state[7] = Chacha.U8To32Little(k, 12);
 
-                state[0] = U8To32Little(c, 0);
-                state[1] = U8To32Little(c, 4);
-                state[2] = U8To32Little(c, 8);
-                state[3] = U8To32Little(c, 12);
+                state[8] = Chacha.U8To32Little(k, 16);
+                state[9] = Chacha.U8To32Little(k, 20);
+                state[10] = Chacha.U8To32Little(k, 24);
+                state[11] = Chacha.U8To32Little(k, 28);
             }
         }
 
@@ -137,28 +126,27 @@ namespace NaiveSocks
                 );
             }
             _iv = nonce;
-            uint* state = ctx->state;
             fixed (byte* n = nonce) {
-                state[12] = counter;
-                state[13] = U8To32Little(n, 0);
-                state[14] = U8To32Little(n, 4);
-                state[15] = U8To32Little(n, 8);
+                ctx.state[12] = counter;
+                ctx.state[13] = Chacha.U8To32Little(n, 0);
+                ctx.state[14] = Chacha.U8To32Little(n, 4);
+                ctx.state[15] = Chacha.U8To32Little(n, 8);
             }
         }
 
         public uint Counter
         {
             get {
-                return ctx->state[12];
+                return ctx.state[12];
             }
             set {
-                ctx->state[12] = value;
+                ctx.state[12] = value;
             }
         }
 
         public override int IVLength => 12;
 
-        Context* ctx;
+        Context ctx;
 
         private unsafe struct Context
         {
@@ -179,7 +167,7 @@ namespace NaiveSocks
             bs.CheckAsParameter();
             var pos = (uint)bs.Offset;
             var end = pos + (uint)bs.Len;
-            var ksb = ctx->keyStreamBuffer;
+            fixed (Context* ctx = &this.ctx)
             fixed (byte* bytes = bs.Bytes) {
                 while (pos < end) {
                     var remainningKeystream = KeystreamBufferSize - keystreamBufferPos;
@@ -190,7 +178,7 @@ namespace NaiveSocks
                     }
                     var count = end - pos;
                     count = count < remainningKeystream ? count : remainningKeystream;
-                    NaiveUtils.XorBytesUnsafe(ksb + keystreamBufferPos, bytes + pos, count);
+                    NaiveUtils.XorBytesUnsafe(ctx->keyStreamBuffer + keystreamBufferPos, bytes + pos, count);
                     pos += count;
                     keystreamBufferPos += count;
                 }
@@ -199,9 +187,27 @@ namespace NaiveSocks
 
         private static void NextKeystreamBuffer(Context* ctx)
         {
+            Chacha.ChachaBlockFunction(ctx->state, (uint*)ctx->keyStreamBuffer, 20 / 2);
+            ctx->state[12]++;
+        }
+    }
+
+    public static unsafe class Chacha
+    {
+        public static readonly uint[] Constants = new uint[] {
+            0x61707865, 0x3320646e, 0x79622d32, 0x6b206574
+        };
+
+        /// <summary>
+        /// Perform ChaCha iterations on `state` and store the result to `dst`.
+        /// Note that `state` and `dst` could be the same address.
+        /// </summary>
+        /// <param name="iterations">Should be 10 for ChaCha20</param>
+        /// <see cref="https://tools.ietf.org/html/rfc7539#section-2.3"/>
+        public static void ChachaBlockFunction(uint* state, uint* dst, int iterations)
+        {
+            // Load state into local variables (which are stored in CPU registers, hopefully)
             uint x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, xa, xb, xc, xd, xe, xf;
-            var state = ctx->state;
-            var keyStreamBuffer = ctx->keyStreamBuffer;
             {
                 int i = 0;
                 x0 = state[i++];
@@ -221,75 +227,81 @@ namespace NaiveSocks
                 xe = state[i++];
                 xf = state[i++];
             }
-            for (int i = 0; i < 10; i++) {
 
-                x0 += x4; xc = ((xc ^ x0) << 16) | ((xc ^ x0) >> (32 - 16));
-                x8 += xc; x4 = ((x4 ^ x8) << 12) | ((x4 ^ x8) >> (32 - 12));
-                x0 += x4; xc = ((xc ^ x0) << 8) | ((xc ^ x0) >> (32 - 8));
-                x8 += xc; x4 = ((x4 ^ x8) << 7) | ((x4 ^ x8) >> (32 - 7));
+            // Do ChaCha block iterations
+            for (int i = 0; i < iterations; i++)
+            {
+                // These lines of code are inlined and reordered manually.
 
-                x1 += x5; xd = ((xd ^ x1) << 16) | ((xd ^ x1) >> (32 - 16));
-                x9 += xd; x5 = ((x5 ^ x9) << 12) | ((x5 ^ x9) >> (32 - 12));
-                x1 += x5; xd = ((xd ^ x1) << 8) | ((xd ^ x1) >> (32 - 8));
-                x9 += xd; x5 = ((x5 ^ x9) << 7) | ((x5 ^ x9) >> (32 - 7));
+                //// a "column round":
+                // QUARTERROUND ( 0, 4, 8,12)
+                // QUARTERROUND ( 1, 5, 9,13)
+                // QUARTERROUND ( 2, 6,10,14)
+                // QUARTERROUND ( 3, 7,11,15)
+                x0 += x4; xc ^= x0; xc = (xc << 16) | (xc >> (32 - 16));
+                x1 += x5; xd ^= x1; xd = (xd << 16) | (xd >> (32 - 16));
+                x2 += x6; xe ^= x2; xe = (xe << 16) | (xe >> (32 - 16));
+                x3 += x7; xf ^= x3; xf = (xf << 16) | (xf >> (32 - 16));
+                x8 += xc; x4 ^= x8; x4 = (x4 << 12) | (x4 >> (32 - 12));
+                x9 += xd; x5 ^= x9; x5 = (x5 << 12) | (x5 >> (32 - 12));
+                xa += xe; x6 ^= xa; x6 = (x6 << 12) | (x6 >> (32 - 12));
+                xb += xf; x7 ^= xb; x7 = (x7 << 12) | (x7 >> (32 - 12));
+                x0 += x4; xc ^= x0; xc = (xc << 8) | (xc >> (32 - 8));
+                x1 += x5; xd ^= x1; xd = (xd << 8) | (xd >> (32 - 8));
+                x2 += x6; xe ^= x2; xe = (xe << 8) | (xe >> (32 - 8));
+                x3 += x7; xf ^= x3; xf = (xf << 8) | (xf >> (32 - 8));
+                x8 += xc; x4 ^= x8; x4 = (x4 << 7) | (x4 >> (32 - 7));
+                x9 += xd; x5 ^= x9; x5 = (x5 << 7) | (x5 >> (32 - 7));
+                xa += xe; x6 ^= xa; x6 = (x6 << 7) | (x6 >> (32 - 7));
+                xb += xf; x7 ^= xb; x7 = (x7 << 7) | (x7 >> (32 - 7));
 
-                x2 += x6; xe = ((xe ^ x2) << 16) | ((xe ^ x2) >> (32 - 16));
-                xa += xe; x6 = ((x6 ^ xa) << 12) | ((x6 ^ xa) >> (32 - 12));
-                x2 += x6; xe = ((xe ^ x2) << 8) | ((xe ^ x2) >> (32 - 8));
-                xa += xe; x6 = ((x6 ^ xa) << 7) | ((x6 ^ xa) >> (32 - 7));
 
-                x3 += x7; xf = ((xf ^ x3) << 16) | ((xf ^ x3) >> (32 - 16));
-                xb += xf; x7 = ((x7 ^ xb) << 12) | ((x7 ^ xb) >> (32 - 12));
-                x3 += x7; xf = ((xf ^ x3) << 8) | ((xf ^ x3) >> (32 - 8));
-                xb += xf; x7 = ((x7 ^ xb) << 7) | ((x7 ^ xb) >> (32 - 7));
+                //// a "diagonal round":
+                // QUARTERROUND ( 0, 5,10,15)
+                // QUARTERROUND ( 1, 6,11,12)
+                // QUARTERROUND ( 2, 7, 8,13)
+                // QUARTERROUND ( 3, 4, 9,14)
+                x0 += x5; xf ^= x0; xf = (xf << 16) | (xf >> (32 - 16));
+                x1 += x6; xc ^= x1; xc = (xc << 16) | (xc >> (32 - 16));
+                x2 += x7; xd ^= x2; xd = (xd << 16) | (xd >> (32 - 16));
+                x3 += x4; xe ^= x3; xe = (xe << 16) | (xe >> (32 - 16));
+                xa += xf; x5 ^= xa; x5 = (x5 << 12) | (x5 >> (32 - 12));
+                xb += xc; x6 ^= xb; x6 = (x6 << 12) | (x6 >> (32 - 12));
+                x8 += xd; x7 ^= x8; x7 = (x7 << 12) | (x7 >> (32 - 12));
+                x9 += xe; x4 ^= x9; x4 = (x4 << 12) | (x4 >> (32 - 12));
+                x0 += x5; xf ^= x0; xf = (xf << 8) | (xf >> (32 - 8));
+                x1 += x6; xc ^= x1; xc = (xc << 8) | (xc >> (32 - 8));
+                x2 += x7; xd ^= x2; xd = (xd << 8) | (xd >> (32 - 8));
+                x3 += x4; xe ^= x3; xe = (xe << 8) | (xe >> (32 - 8));
+                xa += xf; x5 ^= xa; x5 = (x5 << 7) | (x5 >> (32 - 7));
+                xb += xc; x6 ^= xb; x6 = (x6 << 7) | (x6 >> (32 - 7));
+                x8 += xd; x7 ^= x8; x7 = (x7 << 7) | (x7 >> (32 - 7));
+                x9 += xe; x4 ^= x9; x4 = (x4 << 7) | (x4 >> (32 - 7));
 
-                /////////////////
-
-                x0 += x5; xf = ((xf ^ x0) << 16) | ((xf ^ x0) >> (32 - 16));
-                xa += xf; x5 = ((x5 ^ xa) << 12) | ((x5 ^ xa) >> (32 - 12));
-                x0 += x5; xf = ((xf ^ x0) << 8) | ((xf ^ x0) >> (32 - 8));
-                xa += xf; x5 = ((x5 ^ xa) << 7) | ((x5 ^ xa) >> (32 - 7));
-
-                x1 += x6; xc = ((xc ^ x1) << 16) | ((xc ^ x1) >> (32 - 16));
-                xb += xc; x6 = ((x6 ^ xb) << 12) | ((x6 ^ xb) >> (32 - 12));
-                x1 += x6; xc = ((xc ^ x1) << 8) | ((xc ^ x1) >> (32 - 8));
-                xb += xc; x6 = ((x6 ^ xb) << 7) | ((x6 ^ xb) >> (32 - 7));
-
-                x2 += x7; xd = ((xd ^ x2) << 16) | ((xd ^ x2) >> (32 - 16));
-                x8 += xd; x7 = ((x7 ^ x8) << 12) | ((x7 ^ x8) >> (32 - 12));
-                x2 += x7; xd = ((xd ^ x2) << 8) | ((xd ^ x2) >> (32 - 8));
-                x8 += xd; x7 = ((x7 ^ x8) << 7) | ((x7 ^ x8) >> (32 - 7));
-
-                x3 += x4; xe = ((xe ^ x3) << 16) | ((xe ^ x3) >> (32 - 16));
-                x9 += xe; x4 = ((x4 ^ x9) << 12) | ((x4 ^ x9) >> (32 - 12));
-                x3 += x4; xe = ((xe ^ x3) << 8) | ((xe ^ x3) >> (32 - 8));
-                x9 += xe; x4 = ((x4 ^ x9) << 7) | ((x4 ^ x9) >> (32 - 7));
             }
-            uint* ksAsUint = (uint*)keyStreamBuffer;
+
+            // Store results to dst
             {
                 int i = 0;
-                ksAsUint[i] = x0 + state[i]; i++;
-                ksAsUint[i] = x1 + state[i]; i++;
-                ksAsUint[i] = x2 + state[i]; i++;
-                ksAsUint[i] = x3 + state[i]; i++;
-                ksAsUint[i] = x4 + state[i]; i++;
-                ksAsUint[i] = x5 + state[i]; i++;
-                ksAsUint[i] = x6 + state[i]; i++;
-                ksAsUint[i] = x7 + state[i]; i++;
-                ksAsUint[i] = x8 + state[i]; i++;
-                ksAsUint[i] = x9 + state[i]; i++;
-                ksAsUint[i] = xa + state[i]; i++;
-                ksAsUint[i] = xb + state[i]; i++;
-                ksAsUint[i] = xc + state[i]; i++;
-                ksAsUint[i] = xd + state[i]; i++;
-                ksAsUint[i] = xe + state[i]; i++;
-                ksAsUint[i] = xf + state[i];
-            }
-            if (++state[12] == 0) {
-                /* Stopping at 2^70 bytes per nonce is the user's responsibility */
-                state[13]++;
+                dst[i] = x0 + state[i]; i++;
+                dst[i] = x1 + state[i]; i++;
+                dst[i] = x2 + state[i]; i++;
+                dst[i] = x3 + state[i]; i++;
+                dst[i] = x4 + state[i]; i++;
+                dst[i] = x5 + state[i]; i++;
+                dst[i] = x6 + state[i]; i++;
+                dst[i] = x7 + state[i]; i++;
+                dst[i] = x8 + state[i]; i++;
+                dst[i] = x9 + state[i]; i++;
+                dst[i] = xa + state[i]; i++;
+                dst[i] = xb + state[i]; i++;
+                dst[i] = xc + state[i]; i++;
+                dst[i] = xd + state[i]; i++;
+                dst[i] = xe + state[i]; i++;
+                dst[i] = xf + state[i];
             }
         }
+
 
         /// <summary>
         /// Convert four bytes of the input buffer into an unsigned 
@@ -305,6 +317,15 @@ namespace NaiveSocks
                    ((uint)p[inputOffset + 1] << 8) |
                    ((uint)p[inputOffset + 2] << 16) |
                    ((uint)p[inputOffset + 3] << 24));
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void U8From32Little(uint u32, byte* p, int outputOffset)
+        {
+            p[outputOffset] = (byte)u32;
+            p[outputOffset + 1] = (byte)(u32 >> 8);
+            p[outputOffset + 2] = (byte)(u32 >> 16);
+            p[outputOffset + 3] = (byte)(u32 >> 24);
         }
     }
 }
