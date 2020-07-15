@@ -199,6 +199,35 @@ namespace NaiveSocks
         };
 
         /// <summary>
+        /// Compute HChaCha subkey
+        /// </summary>
+        /// <param name="key">256-bit key input</param>
+        /// <param name="nonce">128-bit nonce input</param>
+        /// <param name="dst">256-bit output</param>
+        /// <param name="iterations">ChaCha block function iterations. It's 10 for HChaCha20.</param>
+        /// <see cref="https://tools.ietf.org/html/draft-arciszewski-xchacha-03#section-2.2"/>"/>
+        public static void HChacha(byte* key, byte* nonce, byte* dst, int iterations)
+        {
+            // Prepare for input of ChaCha block function
+            var state = stackalloc uint[16];
+            for (int i = 0; i < 4; i++)
+                state[i] = Constants[i];
+            for (int i = 0; i < 8; i++)
+                state[4 + i] = U8To32Little(key, i * 4);
+            for (int i = 0; i < 4; i++)
+                state[24 + i] = U8To32Little(nonce, i * 4);
+
+            // Perform ChaCha block iterations
+            ChachaBlockFunction(state, state, iterations);
+
+            // Store resultant HChaCha subkey
+            for (int i = 0; i < 4; i++)
+                U8From32Little(state[i], dst, i * 4);
+            for (int i = 0; i < 4; i++)
+                U8From32Little(state[12 + i], dst, 16 + i * 4);
+        }
+
+        /// <summary>
         /// Perform ChaCha iterations on `state` and store the result to `dst`.
         /// Note that `state` and `dst` could be the same address.
         /// </summary>
