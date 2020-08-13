@@ -23,7 +23,6 @@ namespace NaiveSocks
             public Func<string, INetwork> networkProvider { get; set; }
             public int imux_max { get; set; } = -1;
             public AdapterRef @out { get; set; }
-
             public virtual INetwork GetNetwork(string str)
             {
                 return networkProvider?.Invoke(str);
@@ -36,12 +35,11 @@ namespace NaiveSocks
                 if (token == null)
                     throw new ArgumentNullException(nameof(token));
 
-                var realKey = settings.realKey;
                 NaiveProtocol.Request req;
                 try {
                     var bytes = Convert.FromBase64String(token);
-                    if (realKey != null) {
-                        bytes = NaiveProtocol.EncryptOrDecryptBytes(false, realKey, bytes);
+                    if (settings.realKey != null) {
+                        bytes = NaiveProtocol.EncryptOrDecryptBytes(false, settings.realKey, bytes);
                     }
                     req = NaiveProtocol.Request.Parse(bytes);
                 } catch (Exception e) {
@@ -56,26 +54,9 @@ namespace NaiveSocks
                     if (r == null) return;
                     var msgStream = r.Item1;
                     var imux = r.Item2;
-
-                    var nms = new NaiveMChannels(new NaiveMultiplexing(msgStream)) {
-                        Adapter = this,
-                        InConnectionFastCallback = fastopen,
-                        Logger = this.Logger
-                    };
-                    nms.ConnectionHandler = (settings.@out != null) ? settings.@out.Adapter : @out.Adapter;
-                    nms.NetworkProvider = settings.GetNetwork;
-                    lock (nmsList)
-                        nmsList.Add(nms);
                     try {
-                        if (req.extraStrings.Length > 1) {
-                            nms.PerChannelEncryption = req.extraStrings[1];
-                            if (nms.PerChannelEncryption.IsNullOrEmpty() == false)
-                                nms.PerChannelEncryptionKey = realKey;
-                        }
-                        await nms.Start();
+                        await HandleNaiveProtocol(msgStream, settings, req);
                     } finally {
-                        lock (nmsList)
-                            nmsList.Remove(nms);
                         if (imux != null) {
                             lock (imuxSessions)
                                 imuxSessions.Remove(imux.SessionId);
@@ -89,6 +70,30 @@ namespace NaiveSocks
                 if (p.ConnectionState == HttpConnection.States.Processing) {
                     p.Handled = false;
                 }
+            }
+        }
+
+        public async Task HandleNaiveProtocol(IMsgStream msgStream, Settings settings, NaiveProtocol.Request req)
+        {
+            var nms = new NaiveMChannels(new NaiveMultiplexing(msgStream)) {
+                Adapter = this,
+                InConnectionFastCallback = fastopen,
+                Logger = this.Logger
+            };
+            nms.ConnectionHandler = (settings.@out != null) ? settings.@out.Adapter : @out.Adapter;
+            nms.NetworkProvider = settings.GetNetwork;
+            lock (nmsList)
+                nmsList.Add(nms);
+            try {
+                if (req.extraStrings.Length > 1) {
+                    nms.PerChannelEncryption = req.extraStrings[1];
+                    if (nms.PerChannelEncryption.IsNullOrEmpty() == false)
+                        nms.PerChannelEncryptionKey = settings.realKey;
+                }
+                await nms.Start();
+            } finally {
+                lock (nmsList)
+                    nmsList.Remove(nms);
             }
         }
 
@@ -216,6 +221,38 @@ namespace NaiveSocks
                         return true;
                     }
                     return false;
+                }
+            }
+        }
+
+        class Session
+        {
+            public NaiveMServerBase Adapter;
+            public Settings Settings;
+            public NaiveProtocol.Request Request;
+            public IMsgStream MsgStream;
+
+            public async Task HandleNaiveProtocol()
+            {
+                var nms = new NaiveMChannels(new NaiveMultiplexing(MsgStream)) {
+                    Adapter = this.Adapter,
+                    InConnectionFastCallback = Adapter.fastopen,
+                    Logger = this.Adapter.Logger
+                };
+                nms.ConnectionHandler = (Settings.@out != null) ? Settings.@out.Adapter : Adapter.@out.Adapter;
+                nms.NetworkProvider = Settings.GetNetwork;
+                lock (Adapter.nmsList)
+                    Adapter.nmsList.Add(nms);
+                try {
+                    if (Request.extraStrings.Length > 1) {
+                        nms.PerChannelEncryption = Request.extraStrings[1];
+                        if (nms.PerChannelEncryption.IsNullOrEmpty() == false)
+                            nms.PerChannelEncryptionKey = Settings.realKey;
+                    }
+                    await nms.Start();
+                } finally {
+                    lock (Adapter.nmsList)
+                        Adapter.nmsList.Remove(nms);
                 }
             }
         }
