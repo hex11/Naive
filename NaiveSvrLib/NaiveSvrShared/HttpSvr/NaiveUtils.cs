@@ -1169,10 +1169,10 @@ namespace Naive.HttpSvr
             var splits = line.Split(new[] { ' ' }, 3);
             response.StatusCode = splits[1];
             response.ReasonPhrase = splits[2];
-            var headers = new Dictionary<string, string>();
+            var headers = new HttpHeaderCollection();
             while (!string.IsNullOrEmpty(line = input.ReadLine())) {
                 splits = line.Split(new[] { ':' }, 2);
-                headers.Add(splits[0], splits[1].TrimStart(' '));
+                headers[splits[0]] = splits[1].TrimStart(' ');
             }
             if (line == null) {
                 throw new Exception("unexpected EOF");
@@ -1190,10 +1190,10 @@ namespace Naive.HttpSvr
             var splits = line.Split(new[] { ' ' }, 3);
             response.StatusCode = splits[1];
             response.ReasonPhrase = splits[2];
-            var headers = new Dictionary<string, string>();
+            var headers = new HttpHeaderCollection();
             while (!string.IsNullOrEmpty(line = await input.ReadLineAsync())) {
                 splits = line.Split(new[] { ':' }, 2);
-                headers.Add(splits[0], splits[1].TrimStart(' '));
+                headers[splits[0]] = splits[1].TrimStart(' ');
             }
             if (line == null)
                 throw new Exception("unexpected EOF");
@@ -1213,11 +1213,11 @@ namespace Naive.HttpSvr
     {
         public string StatusCode;
         public string ReasonPhrase;
-        public IDictionary<string, string> Headers;
+        public HttpHeaderCollection Headers;
 
         public bool TestHeader(string key, string value)
         {
-            return Headers.TryGetValue(key, out var val) && string.Equals(val, value, StringComparison.CurrentCultureIgnoreCase);
+            return string.Equals(Headers[key], value, StringComparison.CurrentCultureIgnoreCase);
         }
     }
 
