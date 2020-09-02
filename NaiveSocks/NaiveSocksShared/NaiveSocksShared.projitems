@@ -6,10 +6,12 @@
     <SharedGUID>fffcf1f9-7c24-425b-bf68-a12f26abb42d</SharedGUID>
   </PropertyGroup>
   <PropertyGroup Label="Configuration">
-    <Import_RootNamespace>NaiveSocksShared</Import_RootNamespace>
+    <Import_RootNamespace>NaiveSocks</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)**\*.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Adapters\NaiveFrags\NaiveFrags.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Adapters\NaiveFrags\NaiveFragsOutAdapter.cs" />
     <!-- <Compile Include="$(MSBuildThisFileDirectory)Adapters\Direct\TProxyInAdapter.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\Dns\DnsDb.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Adapters\Dns\DnsInAdapter.cs" />
