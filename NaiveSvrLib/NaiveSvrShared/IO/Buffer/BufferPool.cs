@@ -33,6 +33,11 @@ namespace Naive.HttpSvr
                 return new BytesSegment(GlobalGet(size));
         }
 
+        public static Handle GlobalGetHandle(int size)
+        {
+            return new Handle(GlobalPool, GlobalGetBs(size));
+        }
+
         public static void GlobalPut(byte[] buffer)
         {
             var ok = GlobalPool?.Put(buffer) == true;
@@ -41,6 +46,24 @@ namespace Naive.HttpSvr
             //} else {
             //    Logging.debug("put " + buffer.Length + " failed");
             //}
+        }
+
+        public struct Handle : IDisposable
+        {
+            public Handle(BufferPool pool, BytesSegment buffer)
+            {
+                Pool = pool;
+                Buffer = buffer;
+            }
+
+            public BufferPool Pool { get; }
+            public BytesSegment Buffer { get; }
+
+            public void Dispose()
+            {
+                Pool.Put(Buffer.Bytes);
+                Buffer.ResetSelf();
+            }
         }
 
         public BufferPool(int maxBuffers, int maxTotalSize, int maxBufferSize)
@@ -79,16 +102,20 @@ namespace Naive.HttpSvr
 
             int itemIndex = -1;
             Item item = new Item() { buffer = null, size = Int32.MaxValue };
-            lock (pool) {
+            lock (pool)
+            {
                 if (bufferCount == 0)
                     return null;
-                for (int i = 0; i < pool.Length; i++) {
-                    if (pool[i].size >= minSize && pool[i].size < item.size) {
+                for (int i = 0; i < pool.Length; i++)
+                {
+                    if (pool[i].size >= minSize && pool[i].size < item.size)
+                    {
                         itemIndex = i;
                         item = pool[i];
                     }
                 }
-                if (itemIndex >= 0) {
+                if (itemIndex >= 0)
+                {
                     pool[itemIndex] = new Item();
                     bufferCount--;
                     CurrentTotalSize -= item.size;
@@ -113,11 +140,14 @@ namespace Naive.HttpSvr
             if (bufferCount >= pool.Length || CurrentTotalSize + bufLen > MaxTotalSize)
                 return false;
 
-            lock (pool) {
+            lock (pool)
+            {
                 if (bufferCount >= pool.Length || CurrentTotalSize + bufLen > MaxTotalSize)
                     return false;
-                for (int i = 0; i < pool.Length; i++) {
-                    if (pool[i].size == 0) {
+                for (int i = 0; i < pool.Length; i++)
+                {
+                    if (pool[i].size == 0)
+                    {
                         pool[i] = new Item { size = bufLen, buffer = buffer };
                         bufferCount++;
                         CurrentTotalSize += bufLen;
@@ -130,10 +160,12 @@ namespace Naive.HttpSvr
 
         public void Clear()
         {
-            lock (pool) {
+            lock (pool)
+            {
                 if (bufferCount == 0)
                     return;
-                for (int i = 0; i < pool.Length; i++) {
+                for (int i = 0; i < pool.Length; i++)
+                {
                     pool[i] = new Item();
                 }
                 bufferCount = 0;
