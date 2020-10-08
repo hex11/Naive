@@ -1,6 +1,8 @@
-﻿using System;
+﻿using Naive.HttpSvr;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Text;
 using System.Windows.Forms;
 
@@ -31,14 +33,28 @@ namespace NaiveSocks.WinForm
 
             this.Menu = new MainMenu(new MenuItem[] {
                 new MenuItem("&Controller", new MenuItem[] {
-                    new MenuItem("&Open configuration file", (s, e) => {
-                        Process.Start(Controller.CurrentConfig.FilePath);
+                    new MenuItem("&Load configuration file...", (s, e) => {
+                        var fd = new OpenFileDialog() {
+                            Filter = "TOML file (*.tml)|*.*"
+                        };
+                        if (Controller.CurrentConfig.FilePath.IsNullOrEmpty() == false) {
+                            try {
+                                fd.InitialDirectory = Path.GetDirectoryName(Controller.CurrentConfig.FilePath);
+                                fd.FileName = Path.GetFileName(Controller.CurrentConfig.FilePath);
+                            } catch (Exception) { }
+                        }
+                        if (fd.ShowDialog() == DialogResult.OK) {
+                            Controller.Reload(NaiveSocks.Controller.ConfigFile.FromPath(fd.FileName));
+                        }
                     }),
                     new MenuItem("-"),
-                    new MenuItem("Open &configuration file location", (s, e) => {
+                    new MenuItem("&Edit configuration file", (s, e) => {
+                        Process.Start(Controller.CurrentConfig.FilePath);
+                    }),
+                    new MenuItem("Reveal &configuration in File Explorer", (s, e) => {
                         OpenFolerAndShowFile(Controller.CurrentConfig.FilePath);
                     }),
-                    new MenuItem("Open &program file location", (s, e) => {
+                    new MenuItem("Reveal &program file in File Explorer", (s, e) => {
                         OpenFolerAndShowFile(Process.GetCurrentProcess().MainModule.FileName);
                     }),
                     new MenuItem("-"),

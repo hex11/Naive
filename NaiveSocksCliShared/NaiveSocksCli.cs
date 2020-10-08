@@ -79,7 +79,6 @@ Usage: {BuildInfo.AppName_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FIL
                 }
             };
 
-            LogFileWriter logWriter = null;
 
             var argumentParser = new ArgumentParser();
             argumentParser.AddArg(ParasPara.OnePara, "-c", "--config");
@@ -112,12 +111,20 @@ Usage: {BuildInfo.AppName_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FIL
 
 #if NS_WINFORM
             if (GuiMode) {
+                new Thread(() => {
+                    MainContinued(ar, controller);
+                }) { Name = "MainContinued" }.Start();
                 var winform = new WinForm.WinFormController(controller);
-                winform.RunUIThread();
-                winform.ShowControllerForm(true);
+                winform.RunAsUIThread(() => {
+                    winform.ShowControllerForm(true);
+                });
             }
 #endif
+            MainContinued(ar, controller);
+        }
 
+        static void MainContinued(ArgParseResult ar, Controller controller) {
+            LogFileWriter logWriter = null;
             ar.TryGetValue("--cmd", out var argcmd);
             if (argcmd == null) {
                 Logging.info(NameWithVertionText);
@@ -241,12 +248,10 @@ Usage: {BuildInfo.AppName_NoDebug} [-h|--help] [-V|--version] [(-c|--config) FIL
 #if NS_WINFORM
             cmdHub.AddCmdHandler("gui", (cmd) => {
                 var winform = new WinForm.WinFormController(controller);
-                winform.RunUIThread();
-                winform.ShowControllerForm(false);
+                winform.StartUIThread();
+                winform.Invoke(() => winform.ShowControllerForm(false));
             });
-            if (GuiMode) {
-                goto WAITFOREVER;
-            }
+            if (GuiMode) return;
 #endif
             if (ar.ContainsKey("--no-cli")) goto WAITFOREVER;
             if (InteractiveConsole(cmdHub)) {

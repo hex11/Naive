@@ -12,7 +12,7 @@ namespace NaiveSocks.WinForm
 
         WindowsFormsSynchronizationContext context;
 
-        ManualResetEvent contextInited;
+        ManualResetEvent contextInited = new ManualResetEvent(false);
 
         public WinFormController()
         {
@@ -24,32 +24,37 @@ namespace NaiveSocks.WinForm
             this.Controller = controller;
         }
 
-        public void RunUIThread()
+        public void StartUIThread()
         {
-            contextInited = new ManualResetEvent(false);
-            new System.Threading.Thread(this.Run) { Name = "GUI" }.Start();
+            new System.Threading.Thread(() => this.RunAsUIThread()) { Name = "GUI" }.Start();
             if (!contextInited.WaitOne(60000))
                 throw new TimeoutException("UI thread context hasn't been initialized in 1 minute.");
         }
 
-        void Run()
+        public void RunAsUIThread(Action beforeRun = null)
         {
             context = new WindowsFormsSynchronizationContext();
             contextInited.Set();
             Application.EnableVisualStyles();
+            beforeRun?.Invoke();
             Application.Run();
         }
 
         public void ShowControllerForm(bool exitOnClose)
         {
+            var form = new ControllerForm(Controller);
+            form.Show();
+            if (exitOnClose) {
+                form.FormClosed += (s2, e2) => {
+                    Environment.Exit(0);
+                };
+            }
+        }
+
+        public void Invoke(Action callback)
+        {
             context.Post((s) => {
-                var form = new ControllerForm(Controller);
-                form.Show();
-                if (exitOnClose) {
-                    form.FormClosed += (s2, e2) => {
-                        Environment.Exit(0);
-                    };
-                }
+                callback();
             }, null);
         }
     }
