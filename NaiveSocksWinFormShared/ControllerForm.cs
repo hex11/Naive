@@ -31,7 +31,11 @@ namespace NaiveSocks.WinForm
 
             this.Menu = new MainMenu(new MenuItem[] {
                 new MenuItem("&Controller", new MenuItem[] {
-                    new MenuItem("Open &configration file location", (s, e) => {
+                    new MenuItem("&Open configuration file", (s, e) => {
+                        Process.Start(Controller.CurrentConfig.FilePath);
+                    }),
+                    new MenuItem("-"),
+                    new MenuItem("Open &configuration file location", (s, e) => {
                         OpenFolerAndShowFile(Controller.CurrentConfig.FilePath);
                     }),
                     new MenuItem("Open &program file location", (s, e) => {
