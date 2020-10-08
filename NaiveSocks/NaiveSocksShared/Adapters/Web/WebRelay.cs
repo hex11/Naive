@@ -849,7 +849,7 @@ var WebRelayCli = function (url, options) {
 					+ window.location.host + window.location.pathname;
 			}
 			if (!url) {
-				msgView.info('Cannot determine connection configration.\nPlease input: <url> [room_name]');
+				msgView.info('Cannot determine connection configuration.\nPlease input: <url> [room_name]');
 			} else {
 				start(url, room);
 			}

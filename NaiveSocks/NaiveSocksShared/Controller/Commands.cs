@@ -95,7 +95,7 @@ namespace NaiveSocks
             cmd.WriteLine();
             cmd.Write(str, ConsoleColor.White);
             cmd.WriteLine();
-            cmd.WriteLine("Configration generated.");
+            cmd.WriteLine("Configuration generated.");
             if (cmd.YesOrNo($"Save to '{configFilePath}'?", true)) {
                 if (File.Exists(configFilePath)
                     && !cmd.YesOrNo($"But '{configFilePath}' already exists, override?", false)) {

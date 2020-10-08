@@ -62,6 +62,6 @@ Run `run.sh` or `run.bat` in `NaiveSocks_dotnetcore.zip/tar.gz`.
 
 Install `NaiveSocksAndroid.apk` and run.
 
-# Configration Example
+# Configuration Example
 
 See [NaiveSocks/naivesocks-example.tml](NaiveSocks/naivesocks-example.tml)
