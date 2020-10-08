@@ -27,7 +27,7 @@ namespace NaiveSocks.WinForm
         public ControllerForm(Controller controller)
         {
             Controller = controller;
-            this.Size = new System.Drawing.Size(700, 400);
+            this.Size = new System.Drawing.Size(760, 430);
             this.DoubleBuffered = true;
             this.Text = BuildInfo.AppName;
 

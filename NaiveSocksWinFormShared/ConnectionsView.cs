@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Runtime.InteropServices.ComTypes;
 using System.Text;
 using System.Windows.Forms;
 
@@ -42,6 +43,7 @@ namespace NaiveSocks.WinForm
             col.Add("Time", 40);
             col.Add("Creator", 70);
             col.Add("Dest", 150);
+            col.Add("Speed", 60);
             col.Add("Handler", 70);
             col.Add("Handler Stream", 220);
             col.Add("Sniffer", 60);
@@ -61,6 +63,8 @@ namespace NaiveSocks.WinForm
             public InConnection conn;
             public int mark;
             public long lastPackets;
+            public long lastBytes;
+            public int speed;
         }
 
         public void Render()
@@ -100,19 +104,21 @@ namespace NaiveSocks.WinForm
                     }
                     var vItem = item.viewItem;
                     var conn = item.conn;
+                    var ctr = conn.BytesCountersRW.TotalValue;
                     if (item.mark == justcreated) {
                         vItem.BackColor = Color.LightGreen;
                     } else {
-                        BytesCounterValue ctr = conn.BytesCountersRW.TotalValue;
                         if (ctr.Packets != item.lastPackets) {
-                            item.lastPackets = ctr.Packets;
                             vItem.BackColor = Color.LightSkyBlue;
                         } else if (vItem.BackColor != Color.Transparent) {
                             vItem.BackColor = Color.Transparent;
                         }
                     }
+                    item.speed = (int)(ctr.Bytes - item.lastBytes);
+                    item.lastPackets = ctr.Packets;
+                    item.lastBytes = ctr.Bytes;
 
-                    UpdateViewItem(vItem, conn);
+                    UpdateViewItem(item, conn);
                 }
                 foreach (var item in queue) {
                     shownItems.Remove(item.id);
@@ -124,12 +130,14 @@ namespace NaiveSocks.WinForm
             }
         }
 
-        private static void UpdateViewItem(ListViewItem vItem, InConnection conn)
+        private static void UpdateViewItem(Item item, InConnection conn)
         {
+            var vItem = item.viewItem;
             var idx = 1;
             vItem.SubItems[idx++].Text = (WebSocket.CurrentTime - conn.CreateTime).ToString();
             vItem.SubItems[idx++].Text = conn.InAdapter?.Name ?? "-";
             vItem.SubItems[idx++].Text = conn.Dest.ToString();
+            vItem.SubItems[idx++].Text = item.speed == 0 ? "" : item.speed < 1024 ? "< 1 KB/s" : $"{item.speed / 1024:N0} KB/s";
             vItem.SubItems[idx++].Text = conn.RunningHandler?.Name ?? "-";
             vItem.SubItems[idx++].Text = (conn as InConnectionTcp)?.ConnectResult?.Stream?.ToString() ?? "-";
             vItem.SubItems[idx++].Text = conn.GetSniffingInfo();
