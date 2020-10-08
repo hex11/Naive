@@ -22,7 +22,7 @@ namespace NaiveSocks
         {
             string userDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
             string userAppData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-            string[] paths = {
+            var paths = (new[]{
                 ".",
                 Path.Combine(userDir, ".config", "nsocks"),
                 Path.Combine(userDir, ".config"),
@@ -30,8 +30,11 @@ namespace NaiveSocks
                 userAppData,
                 Path.Combine(userDir, "nsocks"),
                 userDir,
-            };
-            for (int i = 0; i < paths.Length; i++) {
+            }).ToList();
+            try {
+                paths.Insert(1, Path.GetDirectoryName(Process.GetCurrentProcess().MainModule.FileName));
+            } catch (Exception) { }
+            for (int i = 0; i < paths.Count; i++) {
                 paths[i] = Path.Combine(paths[i], configFilePath);
             }
             return paths.Distinct().ToArray();
