@@ -1,6 +1,7 @@
 ﻿using Naive.HttpSvr;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.Runtime.InteropServices.ComTypes;
 using System.Text;
@@ -47,6 +48,19 @@ namespace NaiveSocks.WinForm
             col.Add("Handler", 70);
             col.Add("Handler Stream", 220);
             col.Add("Sniffer", 60);
+
+            MenuItem menuCloseConnections;
+            listView.ContextMenu = new ContextMenu(new MenuItem[] {
+                menuCloseConnections = new MenuItem("Close selected connections", (s, e) => {
+                    foreach (ListViewItem vItem in listView.SelectedItems) {
+                        var item = vItem.Tag as Item;
+                        item.conn.Stop();
+	                }
+                })
+            });
+            listView.ContextMenu.Popup += (s, e) => {
+                menuCloseConnections.Visible = listView.SelectedItems.Count > 0;
+            };
         }
 
         public Controller Controller { get; }
@@ -90,6 +104,7 @@ namespace NaiveSocks.WinForm
                     var conn = item.conn;
                     shownItems.Add(item.id, item);
                     var vItem = item.viewItem = new ListViewItem();
+                    vItem.Tag = item;
                     for (int i = 0; i < listView.Columns.Count; i++) {
                         vItem.SubItems.Add(new ListViewItem.ListViewSubItem());
                     }
@@ -106,10 +121,10 @@ namespace NaiveSocks.WinForm
                     var conn = item.conn;
                     var ctr = conn.BytesCountersRW.TotalValue;
                     if (item.mark == justcreated) {
-                        vItem.BackColor = Color.LightGreen;
+                        vItem.BackColor = Color.FromArgb(unchecked((int)0xffccffcc));
                     } else {
                         if (ctr.Packets != item.lastPackets) {
-                            vItem.BackColor = Color.LightSkyBlue;
+                            vItem.BackColor = Color.FromArgb(unchecked((int)0xffbbddff));
                         } else if (vItem.BackColor != Color.Transparent) {
                             vItem.BackColor = Color.Transparent;
                         }
