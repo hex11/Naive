@@ -957,7 +957,7 @@ namespace Naive.HttpSvr
         {
             return new EPPair() {
                 LocalEP = socket.LocalEndPoint as IPEndPoint,
-                RemoteEP = socket.RemoteEndPoint as IPEndPoint
+                RemoteEP = socket.Connected ? socket.RemoteEndPoint as IPEndPoint : default
             };
         }
 
