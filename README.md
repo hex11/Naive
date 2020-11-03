@@ -58,6 +58,12 @@ Run `NaiveSocks.exe` in `NaiveSocks_net45.zip/tar.gz` or `NaiveSocks_SingleFile.
 
 Run `run.sh` or `run.bat` in `NaiveSocks_dotnetcore.zip/tar.gz`.
 
+### Docker
+
+```
+docker run -it -v ./naivesocks.tml:/app/naivesocks.tml hex0011/naivesocks
+```
+
 ### Android
 
 Install `NaiveSocksAndroid.apk` and run.
