@@ -1,11 +1,18 @@
-Build status:
+# The NaiveSocks with Related Projects
 
-[![Appveyor build status](https://ci.appveyor.com/api/projects/status/brdxtqcek50ny38b?svg=true)](https://ci.appveyor.com/project/hex11/naive) (latest commit)
-[![Appveyor build status](https://ci.appveyor.com/api/projects/status/brdxtqcek50ny38b/branch/master?svg=true)](https://ci.appveyor.com/project/hex11/naive/branch/master) (master branch)
+NaiveSocks is an all-in-one networking tool operating at the transport layer.
+
+It can serve as proxy server/client, port forwarder, DNS server/client, HTTP file server and more...
+
+## Build Status
+
+[![Appveyor build status](https://img.shields.io/appveyor/build/hex11/Naive/dev?label=dev)](https://ci.appveyor.com/project/hex11/naive)
+[![Appveyor build status](https://img.shields.io/appveyor/build/hex11/Naive/master?label=master)](https://ci.appveyor.com/project/hex11/naive/branch/master)
+[![Docker Cloud Build Status](https://img.shields.io/docker/cloud/build/hex0011/naivesocks)](https://hub.docker.com/r/hex0011/naivesocks)
 
 [**GitHub Releases**](https://github.com/hex11/Naive/releases)
 
-# Feature & Future
+## Feature & Future
 
 - [x] Interactive CLI
 - [x] Configuration file using TOML
@@ -27,23 +34,24 @@ Build status:
   - [x] 'webfile' - Static website / file server
   - [x] 'webauth' - Basic HTTP authentication
   - [x] 'webcon' - Web console
-  - [ ] Advanced configuration UI
 - [x] Linux
   - [x] Async socket implementation using epoll
   - [x] 'tproxy' (in) - Transparent proxy support
 - [x] Android
   - [x] UI: Status / Adapters / Connections / Log / Console
   - [x] Simple text configuration editor
-  - [ ] Advanced configuration UI
   - [x] VpnService implementation using tun2socks
+  - [ ] Configuration management UI
 - [ ] Windows
-  - [ ] GUI with systray
+  - [x] UI: Connections / Log / Console
+  - [ ] Systray
+  - [ ] Configuration management UI
 - [ ] UDP support
   - [ ] 'direct'
   - [ ] 'socks5'
   - [ ] 'naive'
 
-# Download & Run
+## Download & Run
 
 Download from
 [**GitHub Releases**](https://github.com/hex11/Naive/releases)
@@ -58,16 +66,24 @@ Run `NaiveSocks.exe` in `NaiveSocks_net45.zip/tar.gz` or `NaiveSocks_SingleFile.
 
 Run `run.sh` or `run.bat` in `NaiveSocks_dotnetcore.zip/tar.gz`.
 
+### Android
+
+Install `NaiveSocksAndroid.apk` and run.
+
 ### Docker
 
 ```
 docker run -it -v ./naivesocks.tml:/app/naivesocks.tml hex0011/naivesocks
 ```
 
-### Android
-
-Install `NaiveSocksAndroid.apk` and run.
-
-# Configuration Example
+## Configuration Example
 
 See [NaiveSocks/naivesocks-example.tml](NaiveSocks/naivesocks-example.tml)
+
+## Related Projects
+
+`NaiveSvrLib`: HTTP server implementation and socket helpers
+
+`NaiveZip`: A simple archiver that can bundle .NET Framework apps into a single excutable.
+
+`Nett`: [A customized fork](https://github.com/hex11/Nett) of the TOML library [Nett](https://github.com/paiden/Nett)
