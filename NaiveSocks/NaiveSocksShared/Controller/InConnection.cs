@@ -111,6 +111,8 @@ namespace NaiveSocks
             var dataStream = DataStream;
             if (dataStream != null)
                 MyStream.CloseWithTimeout(dataStream).Forget();
+            if (ConnectResult?.Stream != null)
+                MyStream.CloseWithTimeout(ConnectResult.Stream).Forget();
             return base.OnFinish();
         }
 
