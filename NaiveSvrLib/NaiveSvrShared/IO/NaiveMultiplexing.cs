@@ -139,6 +139,7 @@ namespace NaiveSocks
                 await (_mainReadTask = MainReadLoop()).CAF();
                 Logging.warning($"{this} stopped.");
             } catch (Exception e) {
+                if (Closed) return;
                 if (e.IsConnectionException()) {
                     Logging.error($"{this} stopped: {e.Message}");
                 } else {

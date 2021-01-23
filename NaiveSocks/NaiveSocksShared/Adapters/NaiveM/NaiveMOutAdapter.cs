@@ -30,7 +30,7 @@ namespace NaiveSocks
         public int pool_min_free { get; set; } = 1;
         public int pool_concurrency { get; set; } = 32;
         public int pool_max { get; set; } = 0;
-        public int pool_max_free { get; set; } = 2;
+        public int pool_max_free { get; set; } = 8;
         public bool pool_prefer_connected { get; set; } = false;
 
         public int connect_delay { get; set; } = 1;
@@ -161,10 +161,8 @@ namespace NaiveSocks
         }
 
         static readonly string[] UAs = new[] {
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:60.0) Gecko/20100101 Firefox/60.0",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/61.0.3163.100 Safari/537.36",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/62.0.3165.0 Safari/537.36",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/63.0.3239.84 Safari/537.36"
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:78.0) Gecko/20100101 Firefox/78.0",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.96 Safari/537.36",
         };
 
         protected override void OnInit()
@@ -232,17 +230,21 @@ namespace NaiveSocks
                     return;
                 int avaliable = 0;
                 int idle = 0;
+                int max_idle = pool_max_free >= 0 ? Math.Max(pool_min_free, pool_max_free) : -1;
                 foreach (var item in ncsPool) {
                     if (item.connectTask?.IsCompleted == true && item.nms == null) {
                         Logger.warning("found a strange pool item, removing. (mono bug?)");
                         (toBeRemoved ?? (toBeRemoved = new List<PoolItem>())).Add(item);
                         continue;
-                    } else if (item.ConnectionsCount + (item?.nms?.BaseChannels.TotalRemoteChannels ?? 0) < pool_concurrency) {
+                    }
+                    int localCh = item.ConnectionsCount;
+                    int remoteCh = item?.nms?.BaseChannels.TotalRemoteChannels ?? 0;
+                    if (localCh + remoteCh < pool_concurrency) {
                         avaliable++;
                     }
-                    if (item.ConnectionsCount == 0 && item?.nms?.BaseChannels.TotalRemoteChannels == 0) {
+                    if (localCh == 0 && remoteCh == 0) {
                         idle++;
-                        if (idle > pool_max_free) {
+                        if (max_idle >= 0 && idle > max_idle) {
                             (toBeRemoved ?? (toBeRemoved = new List<PoolItem>())).Add(item);
                         }
                     }
