@@ -61,6 +61,8 @@ namespace NaiveSocks
 
         public string network { get; set; } // name1[,name2...][@networkA][ nameB1,nameB2[@networkB]...]
 
+        private DateTime lastFailedNetworkJoin = DateTime.MinValue;
+
         public bool fastopen { get; set; } = true;
 
         public bool log_dest { get; set; } = true;
@@ -411,13 +413,16 @@ namespace NaiveSocks
                     nms.InConnectionFastCallback = adapter.fastopen;
                     Logger.info($"connected: {nms.BaseChannels} in {(DateTime.Now - beginTime).TotalMilliseconds:0} ms");
                     state = 3;
-                    if (adapter.network != null)
+                    if (adapter.network != null && adapter.lastFailedNetworkJoin < DateTime.Now.AddMinutes(5))
                         NaiveUtils.RunAsyncTask(async () => {
                             try {
                                 await nms.JoinNetworks(adapter.network.Split(' '));
                                 Logger.info($"{nms.BaseChannels} joined network(s).");
                             } catch (Exception e) {
-                                Logger.error($"{nms.BaseChannels}: joining network(s) error: {e.Message}");
+                                if (adapter.lastFailedNetworkJoin < DateTime.Now.AddMinutes(5))
+                                    Logger.error($"{nms.BaseChannels}: joining network(s) error: {e.Message}");
+                                if (!nms.BaseChannels.Closed)
+                                    adapter.lastFailedNetworkJoin = DateTime.Now;
                             }
                         }).Forget();
                     this.nms = nms;
