@@ -282,7 +282,8 @@ namespace NaiveSocks
         {
             Adapter = adapter;
             BaseListener = baseListener;
-            Logger.ParentLogger = adapter.GetAdapter().Logger;
+            if (adapter != null)
+                Logger.ParentLogger = adapter.GetAdapter().Logger;
         }
 
         bool stopping = false;
