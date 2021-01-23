@@ -29,7 +29,8 @@ namespace NaiveSocks
         public bool connect_on_start { get; set; } = false;
         public int pool_min_free { get; set; } = 1;
         public int pool_concurrency { get; set; } = 32;
-        public int pool_max { get; set; } = 5;
+        public int pool_max { get; set; } = 0;
+        public bool pool_prefer_connected { get; set; } = false;
 
         public int connect_delay { get; set; } = 1;
         public int connect_delay_multiplier { get; set; } = 2;
@@ -215,7 +216,7 @@ namespace NaiveSocks
         {
             lock (ncsPool) {
                 List<PoolItem> toBeRemoved = null;
-                if (ncsPool.Count >= pool_max)
+                if (pool_max > 0 && ncsPool.Count >= pool_max)
                     return;
                 int avaliable = 0;
                 foreach (var item in ncsPool) {
@@ -281,10 +282,11 @@ namespace NaiveSocks
                             result = item;
                         }
                     }
-                    if (result != null)
+                    if (pool_prefer_connected && result != null)
                         break;
                 }
             }
+            Logger.warning("GetPoolItem() " + result);
             return result;
         }
 
