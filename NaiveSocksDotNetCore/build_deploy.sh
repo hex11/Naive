@@ -73,9 +73,9 @@ function pack_zip() {
 	zip=$1
 	dir=$2
 	if has zip ; then
-		zip -r "$zip" "$dir" || return 1
+		(cd "$dir" ; zip -r "$zip" .) || return 1
 	else
-		7z a "$zip" "$dir" || return 1
+		(cd "$dir" ; 7z a "$zip" .) || return 1
 	fi
 }
 
@@ -86,7 +86,7 @@ if getopts "u:" opt; then
 	pushd "$dotnetdir/bin"
 	mkdir -p packs
 	pack_zip "packs/${packname}.zip" publish
-	tar -cavf "packs/${packname}.tar.gz" publish
+	tar -cavf "packs/${packname}.tar.gz" -C publish .
 
 	for x in "${buildrids[@]}"; do
 		rid=${x%/*}
@@ -98,7 +98,7 @@ if getopts "u:" opt; then
 				pack_zip "packs/${packname}_$rid.zip" "$publishdir"
 			;;
 			tar*)
-				tar cavf "packs/${packname}_$rid.$packtype" "$publishdir"
+				tar cavf "packs/${packname}_$rid.$packtype" -C "$publishdir" .
 			;;
 		esac
 	done
