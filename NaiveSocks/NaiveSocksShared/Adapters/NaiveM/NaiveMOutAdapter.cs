@@ -30,6 +30,7 @@ namespace NaiveSocks
         public int pool_min_free { get; set; } = 1;
         public int pool_concurrency { get; set; } = 32;
         public int pool_max { get; set; } = 0;
+        public int pool_max_free { get; set; } = 2;
         public bool pool_prefer_connected { get; set; } = false;
 
         public int connect_delay { get; set; } = 1;
@@ -187,6 +188,17 @@ namespace NaiveSocks
             }
         }
 
+        protected override void OnStop()
+        {
+            base.OnStop();
+            lock (ncsPool) {
+                for (int i = ncsPool.Count - 1; i >= 0; i--) {
+                    PoolItem item = ncsPool[i];
+                    CloseAndRemoveItem(item);
+                }
+            }
+        }
+
         object timerLock = new object();
         Timer timer;
         int timerCurrentDueTime = -1;
@@ -219,17 +231,25 @@ namespace NaiveSocks
                 if (pool_max > 0 && ncsPool.Count >= pool_max)
                     return;
                 int avaliable = 0;
+                int idle = 0;
                 foreach (var item in ncsPool) {
                     if (item.connectTask?.IsCompleted == true && item.nms == null) {
                         Logger.warning("found a strange pool item, removing. (mono bug?)");
                         (toBeRemoved ?? (toBeRemoved = new List<PoolItem>())).Add(item);
+                        continue;
                     } else if (item.ConnectionsCount + (item?.nms?.BaseChannels.TotalRemoteChannels ?? 0) < pool_concurrency) {
                         avaliable++;
+                    }
+                    if (item.ConnectionsCount == 0 && item?.nms?.BaseChannels.TotalRemoteChannels == 0) {
+                        idle++;
+                        if (idle > pool_max_free) {
+                            (toBeRemoved ?? (toBeRemoved = new List<PoolItem>())).Add(item);
+                        }
                     }
                 }
                 if (toBeRemoved != null)
                     foreach (var item in toBeRemoved) {
-                        ncsPool.Remove(item);
+                        CloseAndRemoveItem(item);
                     }
                 int countToCreate = pool_min_free - avaliable;
                 for (int i = 0; i < countToCreate; i++) {
@@ -256,6 +276,16 @@ namespace NaiveSocks
                 AddPoolItem(pi);
                 Task.Run(pi.ConnectIfNot);
                 return pi;
+            }
+        }
+
+        private void CloseAndRemoveItem(PoolItem item)
+        {
+            ncsPool.Remove(item);
+            try {
+                item.nms.BaseChannels.Close(true);
+            } catch (Exception e) {
+                Logger.exception(e, Logging.Level.Error, "Error closing channels");
             }
         }
 
@@ -286,7 +316,6 @@ namespace NaiveSocks
                         break;
                 }
             }
-            Logger.warning("GetPoolItem() " + result);
             return result;
         }
 
