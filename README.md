@@ -16,6 +16,7 @@ It can serve as proxy server/client, port forwarder, DNS server/client, HTTP fil
 
 - [x] Interactive CLI
 - [x] Configuration file using TOML
+- [ ] Documentation / tutorials
 - [x] Supported protocols
   - [x] 'direct' (in/out)
   - [x] 'socks5' (in/out)
