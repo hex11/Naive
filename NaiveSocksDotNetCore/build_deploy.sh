@@ -25,12 +25,25 @@ dotnet publish -c Release -o bin/publish/bin || exit 1
 
 cat > "bin/publish/run.sh" << 'EOF'
 #!/bin/sh
-exec dotnet "$(dirname $0)/bin/NaiveSocksDotNetCore.dll" $*
+SCRIPT=$(readlink -f "$0")
+exec dotnet "$(dirname "$SCRIPT")/bin/NaiveSocksDotNetCore.dll" $*
 EOF
 chmod +x "bin/publish/run.sh"
 
 cat > "bin/publish/run.bat" << 'EOF'
 @dotnet "%~dp0bin/NaiveSocksDotNetCore.dll" %*
+EOF
+
+cat > "bin/publish/install.sh" << 'EOF'
+#!/bin/sh
+SCRIPT=$(readlink -f "$0")
+cd "$(dirname "$SCRIPT")"
+echo Copying to /opt/nsocks ...
+cp -r . /opt/nsocks/
+echo Making run.sh executable ...
+chmod +x /opt/nsocks/run.sh
+echo Creating symbol link at /usr/bin/nsocks ...
+ln -s /opt/nsocks/run.sh /usr/bin/nsocks
 EOF
 
 for x in "${buildrids[@]}"; do
@@ -70,7 +83,7 @@ function has() {
 }
 
 function pack_zip() {
-	zip=$1
+	zip="$(pwd)/$1"
 	dir=$2
 	if has zip ; then
 		(cd "$dir" ; zip -r "$zip" .) || return 1
