@@ -83,6 +83,27 @@ namespace NaiveSocks
 
         internal List<PoolItem> ncsPool = new List<PoolItem>();
 
+        private NaiveMChannels.ConnectingSettings connectingSettings;
+
+        private void UpdateConnectingSettings()
+        {
+            connectingSettings = new NaiveMChannels.ConnectingSettings {
+                // Note that Headers may be modified in NaiveMChannels.ConnectTo()
+                Headers = new Dictionary<string, string>(headers),
+                Host = server,
+                KeyString = key,
+                Encryption = encryption,
+                EncryptionPerChannel = encryption_per_ch,
+                TlsEnabled = tls,
+                Path = path,
+                ImuxWsConnections = imux_ws,
+                ImuxHttpConnections = imux_http,
+                ImuxWsSendOnlyConnections = imux_wsso,
+                ImuxConnectionsDelay = imux_delay,
+                Timeout = timeout
+            };
+        }
+
         public NaiveMOutAdapter()
         {
             CheckDefaultEncryption();
@@ -183,6 +204,7 @@ namespace NaiveSocks
         protected override void OnStart()
         {
             base.OnStart();
+            UpdateConnectingSettings();
             if (connect_on_start || network != null) {
                 CheckPoolWithDelay();
             }
@@ -256,8 +278,11 @@ namespace NaiveSocks
                         CloseAndRemoveItem(item);
                     }
                 int countToCreate = pool_min_free - avaliable;
-                for (int i = 0; i < countToCreate; i++) {
-                    NewPoolItem();
+                if (countToCreate > 0) {
+                    Logger.info($"creating {countToCreate} connections...");
+                    for (int i = 0; i < countToCreate; i++) {
+                        NewPoolItem();
+                    }
                 }
             }
 
@@ -376,29 +401,13 @@ namespace NaiveSocks
                 this.adapter = adapter;
             }
 
-
             private async Task Connect()
             {
                 try {
                     var beginTime = DateTime.Now;
-                    Logger.info("connecting...");
-                    var settings = new NaiveMChannels.ConnectingSettings {
-                        Headers = new Dictionary<string, string>(adapter.headers),
-                        Host = adapter.server,
-                        KeyString = adapter.key,
-                        Encryption = adapter.encryption,
-                        EncryptionPerChannel = adapter.encryption_per_ch,
-                        TlsEnabled = adapter.tls,
-                        Path = adapter.path,
-                        ImuxWsConnections = adapter.imux_ws,
-                        ImuxHttpConnections = adapter.imux_http,
-                        ImuxWsSendOnlyConnections = adapter.imux_wsso,
-                        ImuxConnectionsDelay = adapter.imux_delay,
-                        Timeout = adapter.timeout
-                    };
                     state = 1;
                     var ct = new CancellationTokenSource(30 * 1000).Token;
-                    var nms = await NaiveMChannels.ConnectTo(settings, ct);
+                    var nms = await NaiveMChannels.ConnectTo(adapter.connectingSettings, ct);
                     state = 2;
                     nms.Adapter = adapter;
                     nms.Logger = Logger;

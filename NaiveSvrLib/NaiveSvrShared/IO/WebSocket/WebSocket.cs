@@ -128,11 +128,6 @@ namespace Naive.HttpSvr
         public int ManagedCloseTimeout = 60;
 
         public bool IsTimeout => _manageState == ManageState.TimedoutClosed;
-        void throwIfTimeout()
-        {
-            if (IsTimeout)
-                throw getTimeoutException();
-        }
 
         private DisconnectedException getTimeoutException()
             => new DisconnectedException($"timeout ({ManagedCloseTimeout} seconds)");
@@ -241,13 +236,7 @@ namespace Naive.HttpSvr
             if (ConnectionState == States.Closed) {
                 throw new DisconnectedException("read on closed connection");
             }
-            try {
-                return await _readAsyncR(new BytesSegment() { Bytes = buf }.Sub(offset)); // buf can be null
-            } catch (Exception) {
-                throwIfTimeout();
-                Close();
-                throw;
-            }
+            return await _readAsyncR(new BytesSegment() { Bytes = buf }.Sub(offset)); // buf can be null
         }
 
         public void Read(out int opcode, out byte[] payload, out bool fin)
@@ -269,13 +258,7 @@ namespace Naive.HttpSvr
             if (ConnectionState == States.Closed) {
                 throw new DisconnectedException("read on closed connection");
             }
-            try {
-                return _readAsync().RunSync();
-            } catch (Exception) {
-                throwIfTimeout();
-                Close();
-                throw;
-            }
+            return _readAsync().RunSync();
         }
 
         public struct FrameValue
@@ -342,100 +325,106 @@ namespace Naive.HttpSvr
                 BytesView bv = new BytesView();
                 var wf = new FrameValue();
 
-                REREAD:
+                while (true) {
+                    var stream = BaseStream;
+                    var buf = _read_buf;
 
-                var stream = BaseStream;
-                var buf = _read_buf;
-
-                await _readBaseAsync(2).CAF();
-                wf.fin = (buf[0] & 0x80) > 0;
-                wf.opcode = (buf[0] & 0x0F);
-                var mask = (buf[1] & 0x80) > 0;
-                var payloadlen = (int)(buf[1] & 0x7F);
-                if (payloadlen == 126) {
                     await _readBaseAsync(2).CAF();
-                    payloadlen = (int)buf[0] << 8 | buf[1];
-                } else if (payloadlen == 127) {
-                    await _readBaseAsync(8).CAF();
-                    ulong longlen = 0;
-                    int cur = 0;
-                    for (int i = 8 - 1; i >= 0; i--)
-                        longlen |= (ulong)buf[cur++] << (i * 8);
-                    if (longlen > int.MaxValue)
-                        throw new NotImplementedException($"payload is large than Int32.MaxValue ({longlen} > {int.MaxValue})");
-                    payloadlen = (int)longlen;
-                }
-                if (payloadlen > MaxMessageLength)
-                    throw new Exception($"message length limit exceeded ({payloadlen} > {MaxMessageLength})");
-                if (optionalBuffer.Bytes != null && payloadlen > optionalBuffer.Len)
-                    throw new Exception($"payload is larger than buffer ({payloadlen} > {optionalBuffer.Len})");
-                var maskkey = buf;
-                if (mask) {
-                    await _readBaseAsync(4).CAF();
-                }
-                byte[] payload;
-                int payloadOffset;
-                if (optionalBuffer.Bytes != null) {
-                    payload = optionalBuffer.Bytes;
-                    payloadOffset = optionalBuffer.Offset;
-                } else {
-                    payload = BufferPool.GlobalGet(payloadlen);
-                    payloadOffset = 0;
-                }
-                bv.Set(payload, payloadOffset, payloadlen);
-                if (payloadlen > 0) {
-                    await _readBaseAsync(stream, payload, payloadOffset, payloadlen).CAF();
+                    wf.fin = (buf[0] & 0x80) > 0;
+                    wf.opcode = (buf[0] & 0x0F);
+                    var mask = (buf[1] & 0x80) > 0;
+                    var payloadlen = (int)(buf[1] & 0x7F);
+                    if (payloadlen == 126) {
+                        await _readBaseAsync(2).CAF();
+                        payloadlen = (int)buf[0] << 8 | buf[1];
+                    } else if (payloadlen == 127) {
+                        await _readBaseAsync(8).CAF();
+                        ulong longlen = 0;
+                        int cur = 0;
+                        for (int i = 8 - 1; i >= 0; i--)
+                            longlen |= (ulong)buf[cur++] << (i * 8);
+                        if (longlen > int.MaxValue)
+                            throw new NotImplementedException($"payload is large than Int32.MaxValue ({longlen} > {int.MaxValue})");
+                        payloadlen = (int)longlen;
+                    }
+                    if (payloadlen > MaxMessageLength)
+                        throw new Exception($"message length limit exceeded ({payloadlen} > {MaxMessageLength})");
+                    if (optionalBuffer.Bytes != null && payloadlen > optionalBuffer.Len)
+                        throw new Exception($"payload is larger than buffer ({payloadlen} > {optionalBuffer.Len})");
+                    var maskkey = buf;
                     if (mask) {
-                        for (int i = 0; i < payloadlen; i++) {
-                            payload[payloadOffset + i] ^= maskkey[i % 4];
-                        }
+                        await _readBaseAsync(4).CAF();
                     }
-                    if (HaveReadFilter) {
-                        var oldlen = bv.len;
-                        OnRead(bv);
-                        if (optionalBuffer.Bytes != null && bv.bytes != optionalBuffer.Bytes) {
-                            if (bv.nextNode != null) {
-                                throw new NotImplementedException("bv.nextNode != null");
+                    byte[] payload;
+                    int payloadOffset;
+                    if (optionalBuffer.Bytes != null) {
+                        payload = optionalBuffer.Bytes;
+                        payloadOffset = optionalBuffer.Offset;
+                    } else {
+                        payload = BufferPool.GlobalGet(payloadlen);
+                        payloadOffset = 0;
+                    }
+                    bv.Set(payload, payloadOffset, payloadlen);
+                    if (payloadlen > 0) {
+                        await _readBaseAsync(stream, payload, payloadOffset, payloadlen).CAF();
+                        if (mask) {
+                            for (int i = 0; i < payloadlen; i++) {
+                                payload[payloadOffset + i] ^= maskkey[i % 4];
                             }
-                            bv.bytes.CopyTo(optionalBuffer.Bytes, payloadOffset);
+                        }
+                        if (HaveReadFilter) {
+                            var oldlen = bv.len;
+                            OnRead(bv);
+                            if (optionalBuffer.Bytes != null && bv.bytes != optionalBuffer.Bytes) {
+                                if (bv.nextNode != null) {
+                                    throw new NotImplementedException("bv.nextNode != null");
+                                }
+                                bv.bytes.CopyTo(optionalBuffer.Bytes, payloadOffset);
+                            }
                         }
                     }
+
+                    wf.payload = bv.bytes;
+                    wf.offset = bv.offset;
+                    wf.len = bv.tlen;
+                    wf.bv = bv;
+
+                    if (wf.opcode != 0x8)
+                        OnActivated();
+                    switch (wf.opcode) {
+                        case 0x8: // close
+                            try {
+                                ConnectionState = States.Closing;
+                                SendMsg(0x8, null, 0, 0);
+                            } catch (Exception) { }
+                            break;
+                        case 0x9: // ping
+                            OnPingReceived();
+                            var b = bv.GetBytes();
+                            await SendMsgAsync(0xA, new BytesView(b)).CAF();
+                            break;
+                        case 0xA: // pong
+                            OnPongReceived();
+                            break;
+                        default:
+                            _loopR_request.Reset();
+                            _loopR_result.SetResult(wf);
+                            goto START;
+                    }
                 }
-
-                wf.payload = bv.bytes;
-                wf.offset = bv.offset;
-                wf.len = bv.tlen;
-                wf.bv = bv;
-
-                if (wf.opcode != 0x8)
-                    OnActivated();
-                switch (wf.opcode) {
-                    case 0x8: // close
-                        try {
-                            ConnectionState = States.Closing;
-                            SendMsg(0x8, null, 0, 0);
-                        } catch (Exception) { }
-                        break;
-                    case 0x9: // ping
-                        OnPingReceived();
-                        var b = bv.GetBytes();
-                        await SendMsgAsync(0xA, new BytesView(b)).CAF();
-                        break;
-                    case 0xA: // pong
-                        OnPongReceived();
-                        break;
-                    default:
-                        _loopR_request.Reset();
-                        _loopR_result.SetResult(wf);
-                        goto START;
-                }
-
-                goto REREAD;
-
             } catch (Exception e) {
-                _loopR_request.Reset();
-                _loopR_result.SetException(e);
-                return;
+                try {
+                    var toThrow = e;
+                    if (IsTimeout) {
+                        toThrow = getTimeoutException();
+                    }
+                    _loopR_request.Reset();
+                    _loopR_result.SetException(toThrow);
+                    Close();
+                } catch (Exception ex) {
+                    Logging.exception(ex, Logging.Level.Error, "Error handling loopR() exception");
+                    Logging.exception(e, Logging.Level.Error, "(The original exception)");
+                }
             }
         }
 

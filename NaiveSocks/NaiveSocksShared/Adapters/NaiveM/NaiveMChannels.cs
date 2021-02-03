@@ -110,8 +110,8 @@ namespace NaiveSocks
             int wsCount = settings.ImuxWsConnections; // sending and recving (index following by wssoCount)
             int httpCount = settings.ImuxHttpConnections; // recving only
             int count = wssoCount + wsCount + httpCount;
-            string sid = Guid.NewGuid().ToString("N").Substring(0, 8);
             if (count > 1) {
+                string sid = Guid.NewGuid().ToString("N").Substring(0, 8);
                 int httpStart = count - httpCount;
                 var myCts = new CancellationTokenSource();
                 var fail = new TaskCompletionSource<int>();
@@ -163,6 +163,8 @@ namespace NaiveSocks
                     msgStream = new InverseMuxStream(streams);
                 } else {
                     foreach (WebSocket ws in streams.Take(wssoCount)) {
+                        // While it should never receive sth from the server,
+                        // call ReadAsync() once to start handle ping/close frames.
                         ws.ReadAsync().Forget();
                     }
                     msgStream = new InverseMuxStream(
