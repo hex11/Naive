@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Net.Sockets;
 using System.Threading.Tasks;
 using Naive.HttpSvr;
 
@@ -12,6 +13,8 @@ namespace NaiveSocks
         }
 
         public IMyStream BaseStream { get; }
+
+        public override MyStreamState State { get => BaseStream.State; }
 
         public BytesSegment Queue;
 
@@ -154,6 +157,16 @@ namespace NaiveSocks
             Queue.SubSelf(len);
             if (Queue.Len == 0)
                 Queue.ResetSelf();
+        }
+
+        public override Task Close()
+        {
+            return BaseStream.Close();
+        }
+
+        public override Task Shutdown(SocketShutdown direction)
+        {
+            return BaseStream.Shutdown(direction);
         }
 
         public override string ToString()
