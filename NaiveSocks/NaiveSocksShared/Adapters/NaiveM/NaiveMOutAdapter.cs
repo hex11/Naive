@@ -216,7 +216,7 @@ namespace NaiveSocks
             lock (ncsPool) {
                 for (int i = ncsPool.Count - 1; i >= 0; i--) {
                     PoolItem item = ncsPool[i];
-                    CloseAndRemoveItem(item);
+                    CloseAndRemoveItem_NoLock(item);
                 }
             }
         }
@@ -275,7 +275,7 @@ namespace NaiveSocks
                 }
                 if (toBeRemoved != null)
                     foreach (var item in toBeRemoved) {
-                        CloseAndRemoveItem(item);
+                        CloseAndRemoveItem_NoLock(item);
                     }
                 int countToCreate = pool_min_free - avaliable;
                 if (countToCreate > 0) {
@@ -308,7 +308,7 @@ namespace NaiveSocks
             }
         }
 
-        private void CloseAndRemoveItem(PoolItem item)
+        private void CloseAndRemoveItem_NoLock(PoolItem item)
         {
             ncsPool.Remove(item);
             try {

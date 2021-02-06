@@ -82,7 +82,7 @@ namespace NaiveSocks
 
         private Task _mainReadTask;
 
-        private Channel getChannelById(int id)
+        private Channel getChannelById_NoLock(int id)
         {
             Channels.TryGetValue(id, out var ch); // ch == null if not found
             return ch;
@@ -182,7 +182,7 @@ namespace NaiveSocks
                     if (id > findMax) {
                         id = 1;
                     }
-                    if (getChannelById(id) == null) {
+                    if (getChannelById_NoLock(id) == null) {
                         _latestId = id;
                         return CreateChannel(id);
                     }
@@ -208,7 +208,7 @@ namespace NaiveSocks
                 lock (_sendLock)
                     while (id > currentMaxId)
                         extendChannels_NoSendLock();
-                if (getChannelById(id) != null)
+                if (getChannelById_NoLock(id) != null)
                     throw new Exception($"channel {id} already exists in {this}.");
                 ch = new Channel(this, id);
                 addChannel_NoLock(ch);
@@ -252,7 +252,7 @@ namespace NaiveSocks
                 }
                 Channel ch;
                 lock (_channelsLock)
-                    ch = getChannelById(frame.Id);
+                    ch = getChannelById_NoLock(frame.Id);
                 if (ch != null) {
                     ch.MsgReceived(msg);
                 } else {
@@ -290,7 +290,9 @@ namespace NaiveSocks
                 }
                 return;
             }
-            var ch = getChannelById(chid);
+            Channel ch;
+            lock (_channelsLock)
+                ch = getChannelById_NoLock(chid);
             if (ch == null) {
                 var opcode = (Channel.Opcode)data[cur]; // no ++ here
                 if (opcode != Channel.Opcode.Create) {
