@@ -930,7 +930,7 @@ namespace NaiveSocks
         public int Count => queue.Count;
 
         private SpinLock _lock = new SpinLock(false);
-        private const int lockTimeout = 3000;
+        private const int lockTimeout = 120 * 1000;
 
         public bool IsWaiting => isWaiting;
 
@@ -938,6 +938,7 @@ namespace NaiveSocks
         {
             bool lt = false;
             _lock.TryEnter(lockTimeout, ref lt);
+            if (!lt) throw new Exception("_lock.TryEnter() timeout");
             if (isWaiting) {
                 isWaiting = false;
                 _lock.Exit();
@@ -958,6 +959,7 @@ namespace NaiveSocks
             }
             awaiter.Reset();
             _lock.TryEnter(lockTimeout, ref lt);
+            if (!lt) throw new Exception("_lock.TryEnter() timeout");
             if (queue.Count > 0) {
                 var result = queue.Dequeue();
                 _lock.Exit();
@@ -976,6 +978,7 @@ namespace NaiveSocks
         {
             bool lt = false;
             _lock.TryEnter(lockTimeout, ref lt);
+            if (!lt) throw new Exception("_lock.TryEnter() timeout");
             if (queue.Count > 0) {
                 value = queue.Dequeue();
                 _lock.Exit();
