@@ -63,23 +63,63 @@ or
 
 Run `NaiveSocks.exe` in `NaiveSocks_net45.zip/tar.gz` or `NaiveSocks_SingleFile.exe`.
 
-### .NET Core (2.1 or above)
+### .NET Core (3.1 or above)
 
 Run `run.sh` or `run.bat` in `NaiveSocks_dotnetcore.zip/tar.gz`.
 
+### Linux (with bundled runtime)
+
+Install the latest stable version that bundled with .NET Core runtime for Linux x64:
+```shell
+nsocks_pack="https://github.com/hex11/Naive/releases/latest/download/NaiveSocks_dotnetcore_linux-x64.tar.gz" \
+  wget $nsocks_pack -O nsocks.tar.gz \
+  && sudo tar xvf nsocks.tar.gz -C /opt/nsocks/ && sudo sh /opt/nsocks/install.sh
+```
+
+### Linux
+
+Ensure that the required [.NET Core](https://dotnet.microsoft.com/download) runtime is installed.
+
+Install the latest stable version:
+```shell
+nsocks_pack="https://github.com/hex11/Naive/releases/latest/download/NaiveSocks_dotnetcore.tar.gz" \
+# ...
+```
+
+Install the latest dev version:
+```shell
+nsocks_pack="https://ci.appveyor.com/api/projects/hex11/Naive/artifacts/bin%2Fupload%2FNaiveSocks_dotnetcore.tar.gz" \
+# ...
+```
+
 ### Android
 
-Install `NaiveSocksAndroid.apk` and run.
+Install [NaiveSocksAndroid.apk](https://github.com/hex11/Naive/releases/latest/download/NaiveSocksAndroid.apk) and run.
 
 ### Docker
 
 ```
-docker run -it -v ./naivesocks.tml:/app/naivesocks.tml hex0011/naivesocks
+docker run -it --network host -v $(pwd)/config:/app/config hex0011/naivesocks
 ```
 
-## Configuration Example
+## Configuration
 
-See [NaiveSocks/naivesocks-example.tml](NaiveSocks/naivesocks-example.tml)
+See [NaiveSocks/naivesocks-example.tml](NaiveSocks/naivesocks-example.tml) for example.
+
+### Configuration Paths
+
+NaiveSocks finds the configuration file in the following paths, if no path specified by the command line argument `-c`.
+
+* <b>\[Current working folder\]/</b>naivesocks.tml
+* <b>\[Program folder\]/config/</b>naivesocks.tml
+* <b>\[Program folder\]/</b>naivesocks.tml
+* <b>\[User folder\]/.config/nsocks/</b>naivesocks.tml
+* <b>\[User folder\]/.config/</b>naivesocks.tml
+* <b>\[User AppData folder\]/nsocks/</b>naivesocks.tml
+* <b>\[User AppData folder\]/</b>naivesocks.tml
+* <b>\[User folder\]/nsocks/</b>naivesocks.tml
+* <b>\[User folder\]/</b>naivesocks.tml
+
 
 ## Related Projects
 
