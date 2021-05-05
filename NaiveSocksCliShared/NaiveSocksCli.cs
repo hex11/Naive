@@ -32,7 +32,9 @@ namespace NaiveSocks
                 userDir,
             }).ToList();
             try {
-                paths.Insert(1, Path.GetDirectoryName(Process.GetCurrentProcess().MainModule.FileName));
+                string progDir = Path.GetDirectoryName(Process.GetCurrentProcess().MainModule.FileName);
+                paths.Insert(1, Path.Combine(progDir, "config"));
+                paths.Insert(1, progDir);
             } catch (Exception) { }
             for (int i = 0; i < paths.Count; i++) {
                 paths[i] = Path.Combine(paths[i], configFilePath);
