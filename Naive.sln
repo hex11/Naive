@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 16
-VisualStudioVersion = 16.0.30002.166
+# Visual Studio Version 17
+VisualStudioVersion = 17.7.34031.279
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NaiveSocks", "NaiveSocks\NaiveSocks\NaiveSocks.csproj", "{489D2BC7-5344-4CBA-BBE0-F104F955199C}"
 EndProject
@@ -44,28 +44,6 @@ EndProject
 Project("{D954291E-2A0B-460D-934E-DC6B0785DB48}") = "NaiveSocksWinFormShared", "NaiveSocksWinFormShared\NaiveSocksWinFormShared.shproj", "{C2F86BE8-E7B9-4111-BE36-4021AEE54075}"
 EndProject
 Global
-	GlobalSection(SharedMSBuildProjectFiles) = preSolution
-		NaiveSvrLib\NaiveSvrShared\NaiveSvrShared.projitems*{0b623dfc-5129-419c-bb03-823809f9178d}*SharedItemsImports = 13
-		NaiveZip\NZipShared\NZipShared.projitems*{104b1bf6-4740-4f18-8adc-7b2f730e6000}*SharedItemsImports = 4
-		dns\DNSShared\DNSShared.projitems*{489d2bc7-5344-4cba-bbe0-f104f955199c}*SharedItemsImports = 4
-		NaiveSocksCliShared\NaiveSocksCliShared.projitems*{489d2bc7-5344-4cba-bbe0-f104f955199c}*SharedItemsImports = 4
-		NaiveSocksWinFormShared\NaiveSocksWinFormShared.projitems*{489d2bc7-5344-4cba-bbe0-f104f955199c}*SharedItemsImports = 4
-		NaiveSocks\NaiveSocksShared\NaiveSocksShared.projitems*{489d2bc7-5344-4cba-bbe0-f104f955199c}*SharedItemsImports = 4
-		NaiveZip\NZipShared\NZipShared.projitems*{489d2bc7-5344-4cba-bbe0-f104f955199c}*SharedItemsImports = 4
-		NaiveSvrLib\NaiveConsoleShared\NaiveConsoleShared.projitems*{a6d5add3-5b85-4cd8-be28-6ac19b8f6786}*SharedItemsImports = 5
-		NaiveSvrLib\NaiveSvrShared\NaiveSvrShared.projitems*{a6d5add3-5b85-4cd8-be28-6ac19b8f6786}*SharedItemsImports = 5
-		NaiveZip\NZipShared\NZipShared.projitems*{a8493ec4-38ac-45bf-9a52-d3822a962bd6}*SharedItemsImports = 13
-		NaiveSvrLib\NaiveConsoleShared\NaiveConsoleShared.projitems*{a92bc4fa-7794-4694-a814-74f3ced1cfad}*SharedItemsImports = 13
-		NaiveSvrLib\NaiveConsoleShared\NaiveConsoleShared.projitems*{b6fdce48-2582-4cbc-b1ed-4a6952e183d2}*SharedItemsImports = 4
-		NaiveSvrLib\NaiveSvrShared\NaiveSvrShared.projitems*{b6fdce48-2582-4cbc-b1ed-4a6952e183d2}*SharedItemsImports = 4
-		NaiveSocksWinFormShared\NaiveSocksWinFormShared.projitems*{c2f86be8-e7b9-4111-be36-4021aee54075}*SharedItemsImports = 13
-		dns\DNSShared\DNSShared.projitems*{f172074f-c119-47fd-bc38-173847ed2083}*SharedItemsImports = 5
-		NaiveSocksCliShared\NaiveSocksCliShared.projitems*{f172074f-c119-47fd-bc38-173847ed2083}*SharedItemsImports = 5
-		NaiveSocks\NaiveSocksShared\NaiveSocksShared.projitems*{f172074f-c119-47fd-bc38-173847ed2083}*SharedItemsImports = 5
-		dns\DNSShared\DNSShared.projitems*{f20d9e39-cc91-4ff0-bfd0-a5b7b0fbc5c1}*SharedItemsImports = 13
-		NaiveSocksCliShared\NaiveSocksCliShared.projitems*{f8975733-0b83-4af3-bf4e-8bcdafee4a70}*SharedItemsImports = 13
-		NaiveSocks\NaiveSocksShared\NaiveSocksShared.projitems*{fffcf1f9-7c24-425b-bf68-a12f26abb42d}*SharedItemsImports = 13
-	EndGlobalSection
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
 		Release(Debug)|Any CPU = Release(Debug)|Any CPU
@@ -127,5 +105,27 @@ Global
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {0BAEFEEE-0666-494C-9B5A-A75BF2B43B94}
+	EndGlobalSection
+	GlobalSection(SharedMSBuildProjectFiles) = preSolution
+		NaiveSvrLib\NaiveSvrShared\NaiveSvrShared.projitems*{0b623dfc-5129-419c-bb03-823809f9178d}*SharedItemsImports = 13
+		NaiveZip\NZipShared\NZipShared.projitems*{104b1bf6-4740-4f18-8adc-7b2f730e6000}*SharedItemsImports = 4
+		dns\DNSShared\DNSShared.projitems*{489d2bc7-5344-4cba-bbe0-f104f955199c}*SharedItemsImports = 4
+		NaiveSocksCliShared\NaiveSocksCliShared.projitems*{489d2bc7-5344-4cba-bbe0-f104f955199c}*SharedItemsImports = 4
+		NaiveSocksWinFormShared\NaiveSocksWinFormShared.projitems*{489d2bc7-5344-4cba-bbe0-f104f955199c}*SharedItemsImports = 4
+		NaiveSocks\NaiveSocksShared\NaiveSocksShared.projitems*{489d2bc7-5344-4cba-bbe0-f104f955199c}*SharedItemsImports = 4
+		NaiveZip\NZipShared\NZipShared.projitems*{489d2bc7-5344-4cba-bbe0-f104f955199c}*SharedItemsImports = 4
+		NaiveSvrLib\NaiveConsoleShared\NaiveConsoleShared.projitems*{a6d5add3-5b85-4cd8-be28-6ac19b8f6786}*SharedItemsImports = 5
+		NaiveSvrLib\NaiveSvrShared\NaiveSvrShared.projitems*{a6d5add3-5b85-4cd8-be28-6ac19b8f6786}*SharedItemsImports = 5
+		NaiveZip\NZipShared\NZipShared.projitems*{a8493ec4-38ac-45bf-9a52-d3822a962bd6}*SharedItemsImports = 13
+		NaiveSvrLib\NaiveConsoleShared\NaiveConsoleShared.projitems*{a92bc4fa-7794-4694-a814-74f3ced1cfad}*SharedItemsImports = 13
+		NaiveSvrLib\NaiveConsoleShared\NaiveConsoleShared.projitems*{b6fdce48-2582-4cbc-b1ed-4a6952e183d2}*SharedItemsImports = 4
+		NaiveSvrLib\NaiveSvrShared\NaiveSvrShared.projitems*{b6fdce48-2582-4cbc-b1ed-4a6952e183d2}*SharedItemsImports = 4
+		NaiveSocksWinFormShared\NaiveSocksWinFormShared.projitems*{c2f86be8-e7b9-4111-be36-4021aee54075}*SharedItemsImports = 13
+		dns\DNSShared\DNSShared.projitems*{f172074f-c119-47fd-bc38-173847ed2083}*SharedItemsImports = 5
+		NaiveSocksCliShared\NaiveSocksCliShared.projitems*{f172074f-c119-47fd-bc38-173847ed2083}*SharedItemsImports = 5
+		NaiveSocks\NaiveSocksShared\NaiveSocksShared.projitems*{f172074f-c119-47fd-bc38-173847ed2083}*SharedItemsImports = 5
+		dns\DNSShared\DNSShared.projitems*{f20d9e39-cc91-4ff0-bfd0-a5b7b0fbc5c1}*SharedItemsImports = 13
+		NaiveSocksCliShared\NaiveSocksCliShared.projitems*{f8975733-0b83-4af3-bf4e-8bcdafee4a70}*SharedItemsImports = 13
+		NaiveSocks\NaiveSocksShared\NaiveSocksShared.projitems*{fffcf1f9-7c24-425b-bf68-a12f26abb42d}*SharedItemsImports = 13
 	EndGlobalSection
 EndGlobal
