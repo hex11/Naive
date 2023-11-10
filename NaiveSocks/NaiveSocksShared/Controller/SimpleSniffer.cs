@@ -173,14 +173,12 @@ namespace NaiveSocks
         {
             if (Tls.Version != 0) {
                 sb.Append("TLS(");
-                if (!(Tls.Alpn == "h2" && Tls.Version == 0x0303)) {
-                    sb.Append(Tls.Version == 0x0301 ? "1.0" :
-                        Tls.Version == 0x0302 ? "1.1" :
-                        Tls.Version == 0x0303 ? "1.2" :
-                        Tls.Version == 0x0304 ? "1.3" :
-                        $"0x{Tls.Version:x4}");
-                    sb.Append(',');
-                }
+                sb.Append(Tls.Version == 0x0301 ? "1.0" :
+                    Tls.Version == 0x0302 ? "1.1" :
+                    Tls.Version == 0x0303 ? "1.2" :
+                    Tls.Version == 0x0304 ? "1.3" :
+                    $"0x{Tls.Version:x4}");
+                sb.Append(',');
                 if (Tls.Sni == null) {
                     sb.Append("noSNI,");
                 } else if (Tls.Sni == probablySNI) {
