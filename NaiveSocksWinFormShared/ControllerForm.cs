@@ -51,11 +51,13 @@ namespace NaiveSocks.WinForm
                     new MenuItem("&Edit configuration file", (s, e) => {
                         Process.Start(Controller.CurrentConfig.FilePath);
                     }),
-                    new MenuItem("Reveal &configuration in File Explorer", (s, e) => {
-                        OpenFolerAndShowFile(Controller.CurrentConfig.FilePath);
-                    }),
-                    new MenuItem("Reveal &program file in File Explorer", (s, e) => {
-                        OpenFolerAndShowFile(Process.GetCurrentProcess().MainModule.FileName);
+                    new MenuItem("Re&veal...", new [] {
+                        new MenuItem("&Configuration file", (s, e) => {
+                            OpenFolerAndShowFile(Controller.CurrentConfig.FilePath);
+                        }),
+                        new MenuItem("&Program file", (s, e) => {
+                            OpenFolerAndShowFile(Process.GetCurrentProcess().MainModule.FileName);
+                        }),
                     }),
                     new MenuItem("-"),
                     new MenuItem("&Reload", (s, e) => {
