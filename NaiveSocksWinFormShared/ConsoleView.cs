@@ -82,15 +82,16 @@ namespace NaiveSocks.WinForm
         private void Inputbox_KeyDown(object sender, KeyEventArgs e)
         {
             if (e.Modifiers == Keys.Control && e.KeyCode == Keys.D) {
+                e.Handled = true;
                 inputbox.Text = "";
                 this.console.Input(null);
                 outputBox.AppendText("^D\r\n");
             } else if (e.KeyCode == Keys.Up) {
-                if (string.IsNullOrEmpty(lastInput) == false) {
-                    inputbox.Text = lastInput;
-                    inputbox.SelectionLength = 0;
-                    inputbox.SelectionStart = lastInput.Length + 1;
-                }
+                e.Handled = true;
+                navigateInputHistory(Direction.Up);
+            } else if (e.KeyCode == Keys.Down) {
+                e.Handled = true;
+                navigateInputHistory(Direction.Down);
             }
         }
 
@@ -102,7 +103,35 @@ namespace NaiveSocks.WinForm
             }
         }
 
-        string lastInput;
+        List<string> inputHistory = new List<string>();
+        int inputHistoryPosition = 0;
+
+        enum Direction
+        {
+            Up,
+            Down,
+        }
+
+        void navigateInputHistory(Direction direction)
+        {
+            if (direction == Direction.Up) {
+                if (inputHistoryPosition + 1 < inputHistory.Count) {
+                    if (inputHistoryPosition == 0) {
+                        inputHistory.Insert(0, inputbox.Text);
+                    }
+                    inputbox.Text = inputHistory[++inputHistoryPosition];
+                }
+            } else {
+                if (inputHistoryPosition - 1 >= 0) {
+                    inputbox.Text = inputHistory[--inputHistoryPosition];
+                    if (inputHistoryPosition == 0) {
+                        inputHistory.RemoveAt(0);
+                    }
+                }
+            }
+            inputbox.SelectionLength = 0;
+            inputbox.SelectionStart = inputbox.Text.Length + 1;
+        }
 
         private void enter()
         {
@@ -110,8 +139,13 @@ namespace NaiveSocks.WinForm
             this.console.Input(text);
             inputbox.Text = "";
             if (text != "") {
-                lastInput = text;
+                if (inputHistoryPosition != 0) {
+                    inputHistory.RemoveAt(inputHistoryPosition);
+                    inputHistory.RemoveAt(0);
+                }
+                inputHistory.Insert(0, text);
             }
+            inputHistoryPosition = 0;
         }
 
         public void Write(string text)
